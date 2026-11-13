@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { bladeHitsEllipse, type Blade } from '../combat/blade';
 import { Enemy } from '../combat/Enemy';
 import {
   DEPTH_LIGHTING,
@@ -14,6 +15,7 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config';
+import { lungeProgress, locomotionRate } from '../entities/movement';
 import { Character } from '../entities/Character';
 import { ActionButton } from '../ui/ActionButton';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
@@ -41,8 +43,9 @@ export class GameScene extends Phaser.Scene {
   private attackKeys: Phaser.Input.Keyboard.Key[] = [];
   /** 게임 시계(ms). update()에서만 흐른다. */
   private now = 0;
-  private pendingHit?: { at: number; stage: number };
+  private attackTrace?: { startedAt: number; stage: number; previous: Blade; elapsed: number; hit: Set<Enemy> };
   private nextAttackAt = 0;
+  private attackLunge?: { startedAt: number; stage: number; facing: number; progress: number };
   private comboStage = 0;
   private comboExpiresAt = 0;
   private dodgeButton!: ActionButton;
@@ -97,12 +100,9 @@ export class GameScene extends Phaser.Scene {
     const time = this.now;
     const dt = step / 1000;
 
-    if (this.pendingHit && time >= this.pendingHit.at) {
-      const { stage } = this.pendingHit;
-      this.pendingHit = undefined;
-      this.resolvePlayerAttack(stage);
-    }
+    this.updateAttackLunge(time);
     this.updatePlayer(time, dt);
+    this.updateAttackTrace(time);
     for (const enemy of this.enemies) {
       enemy.update(time, dt, this.player, this.walkArea, this.onEnemyStrike);
       this.applyKnockback(enemy.character, dt);
@@ -363,8 +363,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (this.wantsAttack() && time >= this.nextAttackAt) this.startAttack(time, v.x);
+    // 초 단위 애니메이션과 밀리초 시계의 부동소수점 오차로 한 프레임 쉬지 않게 한다.
+    if (this.wantsAttack() && time + 1e-6 >= this.nextAttackAt) this.startAttack(time, v.x);
 
+    const fromX = player.x;
+    const fromY = player.y;
     if (force > 0) {
       const speed = PLAYER_SPEED * (player.isAttacking ? PLAYER.attackMoveRatio : 1);
       const next = this.walkArea.move(
@@ -377,7 +380,8 @@ export class GameScene extends Phaser.Scene {
       player.placeAt(next.x, next.y);
       this.dismissHint();
     }
-    player.setMotion(force > 0, v.x, force);
+    const rate = locomotionRate(player.x - fromX, player.y - fromY, dt, PLAYER_SPEED);
+    player.setMotion(rate > 0, v.x, rate);
   }
 
   private dismissHint(): void {
@@ -412,7 +416,8 @@ export class GameScene extends Phaser.Scene {
     const player = this.player;
     this.dismissHint();
     player.endAttack();
-    this.pendingHit = undefined;
+    this.attackTrace = undefined;
+    this.attackLunge = undefined;
     this.comboStage = 0;
 
     if (input.lengthSq() > 0.04) {
@@ -492,41 +497,81 @@ export class GameScene extends Phaser.Scene {
     }
 
     player.playAttack(stage + 1);
-    player.knockback.set(player.facing * combo.lunge, 0);
-    this.pendingHit = { at: time + combo.hitDelayMs, stage };
+    this.attackLunge = { startedAt: time, stage, facing: player.facing, progress: 0 };
+    const rig = player.sprite;
+    if (rig instanceof HeroRig) {
+      this.attackTrace = { startedAt: time, stage, previous: rig.getBlade(), elapsed: 0, hit: new Set() };
+    }
   }
 
-  private resolvePlayerAttack(stage: number): void {
-    const player = this.player;
-    if (!player.alive) return;
-    const facing = player.facing;
-    const combo = PLAYER.combo[stage];
-    const finisher = stage === PLAYER.combo.length - 1;
+  /** 전진 진행도의 차이를 적용해 프레임 속도와 관계없이 같은 거리를 이동한다. */
+  private updateAttackLunge(time: number): void {
+    const lunge = this.attackLunge;
+    if (!lunge) return;
+    if (!this.player.alive || !this.player.isAttacking) {
+      this.attackLunge = undefined;
+      return;
+    }
+    const combo = PLAYER.combo[lunge.stage];
+    const progress = lungeProgress(time - lunge.startedAt, combo.lungeStartMs, combo.lungeEndMs);
+    const dx = (progress - lunge.progress) * combo.lungeDistance * lunge.facing;
+    lunge.progress = progress;
+    const next = this.walkArea.move(this.player.x, this.player.y, dx, 0, this.scratch);
+    this.player.placeAt(next.x, next.y);
+    if (progress === 1) this.attackLunge = undefined;
+  }
 
-    const slash = this.add
-      .image(player.x + facing * 95, player.y - 88, 'slash')
-      .setFlipX(facing === -1)
-      .setFlipY(stage === 1)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(player.y + 2)
-      .setScale(finisher ? 1.15 : 0.85);
-    if (finisher) slash.setTint(0xffb35a);
-    this.tweens.add({
-      targets: slash,
-      alpha: 0,
-      scale: finisher ? 1.5 : 1.1,
-      x: slash.x + facing * 26,
-      duration: 170,
-      onComplete: () => slash.destroy(),
-    });
+  /** 시각 효과와 명중 판정이 같은 검날 좌표를 사용한다. 적마다 한 공격에 한 번만 맞는다. */
+  private updateAttackTrace(time: number): void {
+    const trace = this.attackTrace;
+    const player = this.player;
+    const rig = player.sprite;
+    if (!trace) return;
+    if (!player.alive || !player.isAttacking || !(rig instanceof HeroRig)) {
+      this.attackTrace = undefined;
+      return;
+    }
+    const combo = PLAYER.combo[trace.stage];
+    const elapsed = time - trace.startedAt;
+    const current = rig.getBlade();
+    const previous = trace.previous;
+    trace.previous = current;
+    const lastElapsed = trace.elapsed;
+    trace.elapsed = elapsed;
+    if (elapsed < combo.hitDelayMs) return;
+    if (lastElapsed >= combo.hitDelayMs + PLAYER.hitWindowMs) {
+      this.attackTrace = undefined;
+      return;
+    }
+    const finisher = trace.stage === PLAYER.combo.length - 1;
+    const color = finisher ? 0xffb35a : 0xfff3d6;
+    const effect = this.add.graphics().setDepth(player.y + 2).setBlendMode(Phaser.BlendModes.ADD);
+    effect.setData('attackStage', trace.stage + 1);
+    if (finisher) {
+      // 찌르기는 검날 방향으로 곧게 뻗는 빛과 검끝의 이동선으로 표현한다.
+      effect.lineStyle(9, color, 0.2).lineBetween(current.base.x, current.base.y, current.tip.x, current.tip.y);
+      effect.lineStyle(3, 0xffffff, 0.9).lineBetween(current.base.x, current.base.y, current.tip.x, current.tip.y);
+    } else {
+      effect.fillStyle(color, 0.22).beginPath();
+      effect.moveTo(previous.base.x, previous.base.y);
+      effect.lineTo(previous.tip.x, previous.tip.y);
+      effect.lineTo(current.tip.x, current.tip.y);
+      effect.lineTo(current.base.x, current.base.y);
+      effect.closePath().fillPath();
+      effect.lineStyle(3, color, 0.9).lineBetween(previous.tip.x, previous.tip.y, current.tip.x, current.tip.y);
+    }
+    this.tweens.add({ targets: effect, alpha: 0, duration: 110, onComplete: () => effect.destroy() });
 
     let hitAny = false;
     for (const enemy of this.enemies) {
       const c = enemy.character;
-      if (!c.alive) continue;
-      const forward = (c.x - player.x) * facing;
-      if (forward < -PLAYER.attackBack || forward > PLAYER.attackReach * combo.reach) continue;
+      if (!c.alive || trace.hit.has(enemy)) continue;
+      // 높이 방향의 레인을 유지해 화면상 겹쳐 보이는 다른 줄의 적을 치지 않는다.
       if (Math.abs(c.y - player.y) > PLAYER.attackLane) continue;
+      const bounds = c.sprite.getBounds();
+      if (!bladeHitsEllipse(previous, current, { x: bounds.centerX, y: bounds.centerY },
+        bounds.width * 0.42 + PLAYER.bladeRadius, bounds.height * 0.42 + PLAYER.bladeRadius)) continue;
+      trace.hit.add(enemy);
 
       hitAny = true;
       const damage = Math.round(Phaser.Math.Between(PLAYER.damageMin, PLAYER.damageMax) * combo.damage);
@@ -536,7 +581,7 @@ export class GameScene extends Phaser.Scene {
         enemy.kill();
         this.time.delayedCall(ENEMY.respawnMs, () => this.respawnEnemy(enemy));
       } else {
-        c.knockback.set(facing * PLAYER.knockback * combo.knockback, 0);
+        c.knockback.set(player.facing * PLAYER.knockback * combo.knockback, 0);
         enemy.interrupt(this.now);
       }
     }

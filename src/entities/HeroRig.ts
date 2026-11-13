@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { Blade } from '../combat/blade';
 import rigData from '../assets/hero/rig.json';
 // `?inline`: 이미지를 코드 안에 포함시켜서 어떤 방식으로 배포해도 별도 파일 요청이 없게 한다.
 import rigSheet from '../assets/hero/rig.png?inline';
@@ -66,6 +67,7 @@ export class HeroRig extends Phaser.GameObjects.Container {
   private animation = 'idle';
   private time = 0;
   private finished = false;
+  private transitionFrom: Pose = {};
   /** 동작이 바뀔 때 뚝 끊기지 않도록, 목표 자세를 향해 부드럽게 따라간다. */
   private readonly current: Record<string, number> = {};
   private offsetX = 0;
@@ -117,6 +119,8 @@ export class HeroRig extends Phaser.GameObjects.Container {
     for (const bone of this.bones) {
       this.current[bone.name] = Phaser.Math.Angle.WrapDegrees(this.current[bone.name]);
     }
+    // 공격 연결 시 현재 자세에서 출발해 기본 자세를 거치지 않는다.
+    this.transitionFrom = { ...this.current, x: this.offsetX, y: this.offsetY };
     this.animation = name;
     this.time = 0;
     this.finished = false;
@@ -144,6 +148,16 @@ export class HeroRig extends Phaser.GameObjects.Container {
     return this;
   }
 
+  /** 검 이미지의 가드와 끝을 실제 컨테이너 배율·좌우 반전까지 적용한 월드 좌표로 반환한다. */
+  getBlade(): Blade {
+    const image = this.slots.find((slot) => slot.bone.name === 'sword')!.image;
+    const matrix = image.getWorldTransformMatrix();
+    const point = (x: number, y: number) => matrix.transformPoint(
+      (x - image.originX) * image.width, (y - image.originY) * image.height,
+    );
+    return { base: point(0.5, 0.32), tip: point(0.5, 0.98) };
+  }
+
   /** 지금 자세 그대로 멈춘 잔상을 만든다 (회피 연출용). */
   spawnGhost(x: number, y: number, depth: number, tint: number, alpha: number): Phaser.GameObjects.Container {
     const ghost = this.scene.add.container(x, y).setDepth(depth).setAlpha(alpha);
@@ -167,26 +181,36 @@ export class HeroRig extends Phaser.GameObjects.Container {
     this.time += dt * (animation.loop ? this.anims.timeScale : 1);
 
     let phase = this.time / animation.duration;
+    let complete = false;
     if (animation.loop) {
       phase %= 1;
     } else if (phase >= 1) {
       phase = 1;
       if (!this.finished) {
         this.finished = true;
-        this.emit(Phaser.Animations.Events.ANIMATION_COMPLETE);
+        complete = true;
       }
     }
 
     const target = animation.pose(phase);
-    const follow = Math.min(1, dt * animation.follow);
+    const attack = this.animation.startsWith('attack');
+    // 공격 키프레임에는 이미 가감속이 있다. 추가 추종 지연 없이 타격 자세를 맞춘다.
+    const follow = attack ? 1 : Math.min(1, dt * animation.follow);
+    const blend = attack ? Math.min(1, this.time / 0.06) : 1;
     for (const bone of this.bones) {
       const name = bone.name as keyof Pose;
-      const goal = target[name] ?? REST[name] ?? 0;
+      const value = target[name] ?? REST[name] ?? 0;
+      const from = this.transitionFrom[name] ?? REST[name] ?? 0;
+      const goal = from + (value - from) * blend;
       this.current[bone.name] += ((goal as number) - this.current[bone.name]) * follow;
     }
-    this.offsetX += ((target.x ?? 0) - this.offsetX) * follow;
-    this.offsetY += ((target.y ?? 0) - this.offsetY) * follow;
+    const x = (this.transitionFrom.x ?? 0) * (1 - blend) + (target.x ?? 0) * blend;
+    const y = (this.transitionFrom.y ?? 0) * (1 - blend) + (target.y ?? 0) * blend;
+    this.offsetX += (x - this.offsetX) * follow;
+    this.offsetY += (y - this.offsetY) * follow;
     this.applyPose();
+    // 콜백이 다음 동작을 시작해도 이전 동작의 자세로 덮어쓰지 않는다.
+    if (complete) this.emit(Phaser.Animations.Events.ANIMATION_COMPLETE);
   }
 
   /** 뼈의 회전값을 부모에서 자식 순서로 누적해서 각 그림의 위치와 각도를 정한다. */

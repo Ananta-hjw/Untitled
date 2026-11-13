@@ -25,21 +25,22 @@ export const PLAYER = {
   damageMax: 13,
   /**
    * 콤보 단계별 설정. 버튼을 누르고 있거나 연타하면 1 → 2 → 3타로 이어진다.
-   *  - intervalMs: 다음 공격이 나갈 수 있을 때까지의 시간
+   *  - intervalMs: 다음 공격으로 연결 가능한 시간(1·2타는 복귀 동작 전)
    *  - hitDelayMs: 동작 시작 후 실제로 타격이 들어가는 시점
-   *  - damage / knockback / reach: 기본값에 곱하는 배율
-   *  - lunge: 공격하며 앞으로 내딛는 속도(px/초)
+   *  - damage / knockback: 기본값에 곱하는 배율
+   *  - lungeDistance: 휘두르는 구간에서 전진할 거리(px)
+   *  - lungeStartMs / lungeEndMs: 전진 구간(공격 시작 기준)
    */
   combo: [
-    { intervalMs: 420, hitDelayMs: 220, damage: 1, knockback: 0.7, reach: 1, lunge: 90 },
-    { intervalMs: 330, hitDelayMs: 130, damage: 1.1, knockback: 0.8, reach: 1, lunge: 120 },
-    { intervalMs: 560, hitDelayMs: 150, damage: 2, knockback: 1.7, reach: 1.25, lunge: 320 },
+    { intervalMs: 336, hitDelayMs: 220, damage: 1, knockback: 0.7, lungeDistance: 13, lungeStartMs: 168, lungeEndMs: 265 },
+    { intervalMs: 237, hitDelayMs: 105, damage: 1.1, knockback: 0.8, lungeDistance: 17, lungeStartMs: 64, lungeEndMs: 186 },
+    { intervalMs: 400, hitDelayMs: 180, damage: 2, knockback: 1.7, lungeDistance: 46, lungeStartMs: 112, lungeEndMs: 200 },
   ],
   /** 이 시간 안에 다음 공격을 이어야 콤보가 유지된다 (이전 공격이 끝난 뒤부터) */
   comboWindowMs: 380,
-  /** 타격 범위: 바라보는 쪽으로 reach, 뒤로 back, 위아래로 lane */
-  attackReach: 155,
-  attackBack: 25,
+  /** 타격 자세 이후 검날을 추적할 시간(ms), 검날 두께 보정(px), 위아래 레인(px) */
+  hitWindowMs: 55,
+  bladeRadius: 6,
   attackLane: 52,
   /** 공격 중 이동 속도 비율 */
   attackMoveRatio: 0.3,

@@ -421,22 +421,6 @@ export function createPlaceholderArt(scene: Phaser.Scene): void {
 
   g.destroy();
 
-  // 베기 이펙트: 오른쪽으로 휘어진 초승달
-  const slash = scene.textures.createCanvas('slash', 150, 190);
-  if (slash) {
-    const ctx = slash.getContext();
-    const gradient = ctx.createLinearGradient(40, 0, 150, 0);
-    gradient.addColorStop(0, 'rgba(255,255,255,0)');
-    gradient.addColorStop(1, 'rgba(255,246,214,0.95)');
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(30, 95, 112, -1.15, 1.15);
-    ctx.arc(-20, 95, 128, 0.82, -0.82, true);
-    ctx.closePath();
-    ctx.fill();
-    slash.refresh();
-  }
-
   radialTexture(scene, 'shadow', 128, 40, [
     [0, 'rgba(0,0,0,0.9)'],
     [0.6, 'rgba(0,0,0,0.55)'],

@@ -158,7 +158,7 @@ export class Character extends Phaser.GameObjects.Container {
       this.moving = moving;
       this.sprite.play(`${this.key}-${moving ? 'walk' : 'idle'}`);
     }
-    this.sprite.anims.timeScale = moving ? Phaser.Math.Clamp(animSpeed, 0.45, 1.2) : 1;
+    this.sprite.anims.timeScale = moving ? Phaser.Math.Clamp(animSpeed, 0, 1.2) : 1;
   }
 
   /** 공격 동작(콤보 단계 1~)을 한 번 재생하고, 끝나면 원래 동작으로 돌아간다. */
