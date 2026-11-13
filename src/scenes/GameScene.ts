@@ -259,7 +259,7 @@ export class GameScene extends Phaser.Scene {
 
     const font = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
     this.badge = this.add
-      .text(0, 18, '프로토타입 v0.7', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
+      .text(0, 18, '프로토타입 v0.8', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
       .setOrigin(1, 0)
       .setAlpha(0.7)
       .setScrollFactor(0)

@@ -81,17 +81,17 @@
   "torso": {
    "x": 212,
    "y": 192,
-   "w": 62,
-   "h": 95
+   "w": 67,
+   "h": 100
   },
   "sash": {
-   "x": 276,
+   "x": 281,
    "y": 192,
    "w": 94,
    "h": 139
   },
   "head": {
-   "x": 372,
+   "x": 377,
    "y": 192,
    "w": 100,
    "h": 108
@@ -344,8 +344,8 @@
   {
    "part": "torso",
    "bone": "chest",
-   "originX": 0.52,
-   "originY": 0.94,
+   "originX": 0.6,
+   "originY": 0.95,
    "rotation": 0
   },
   {
@@ -367,7 +367,7 @@
    "bone": "sword",
    "originX": 0.5,
    "originY": 0.11,
-   "rotation": 37
+   "rotation": 5
   },
   {
    "part": "hand_r_grip",

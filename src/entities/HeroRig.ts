@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import rigData from '../assets/hero/rig.json';
 // `?inline`: 이미지를 코드 안에 포함시켜서 어떤 방식으로 배포해도 별도 파일 요청이 없게 한다.
 import rigSheet from '../assets/hero/rig.png?inline';
-import { HERO_ANIMATIONS, type Pose } from './heroAnimations';
+import { HERO_ANIMATIONS, REST, type Pose } from './heroAnimations';
 
 /**
  * 뼈대 애니메이션 캐릭터.
@@ -180,7 +180,8 @@ export class HeroRig extends Phaser.GameObjects.Container {
     const target = animation.pose(phase);
     const follow = Math.min(1, dt * animation.follow);
     for (const bone of this.bones) {
-      const goal = target[bone.name as keyof Pose] ?? 0;
+      const name = bone.name as keyof Pose;
+      const goal = target[name] ?? REST[name] ?? 0;
       this.current[bone.name] += ((goal as number) - this.current[bone.name]) * follow;
     }
     this.offsetX += ((target.x ?? 0) - this.offsetX) * follow;

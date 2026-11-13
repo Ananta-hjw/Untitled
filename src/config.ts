@@ -31,8 +31,8 @@ export const PLAYER = {
    *  - lunge: 공격하며 앞으로 내딛는 속도(px/초)
    */
   combo: [
-    { intervalMs: 330, hitDelayMs: 110, damage: 1, knockback: 0.7, reach: 1, lunge: 90 },
-    { intervalMs: 330, hitDelayMs: 100, damage: 1.1, knockback: 0.8, reach: 1, lunge: 120 },
+    { intervalMs: 420, hitDelayMs: 220, damage: 1, knockback: 0.7, reach: 1, lunge: 90 },
+    { intervalMs: 330, hitDelayMs: 130, damage: 1.1, knockback: 0.8, reach: 1, lunge: 120 },
     { intervalMs: 560, hitDelayMs: 150, damage: 2, knockback: 1.7, reach: 1.25, lunge: 320 },
   ],
   /** 이 시간 안에 다음 공격을 이어야 콤보가 유지된다 (이전 공격이 끝난 뒤부터) */

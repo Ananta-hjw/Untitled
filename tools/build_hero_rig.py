@@ -50,14 +50,9 @@ BONES = {
     "scabbard": ("chest", (458, 356)),
 }
 
-# 파츠에서 지울 영역(원본 PNG 좌표의 다각형).
-# torso.png에는 양쪽 소매가 같이 그려져 있어서, 따로 있는 팔 파츠와 겹쳐 위팔이 두 개로 보인다.
-ERASE = {
-    "torso": [
-        [(56, 88), (40, 96), (0, 140), (0, 270), (71, 270), (75, 205), (70, 150), (62, 110)],
-        [(203, 90), (222, 100), (251, 135), (251, 270), (197, 270), (195, 205), (199, 150), (201, 110)],
-    ],
-}
+# 파츠에서 지울 영역(원본 PNG 좌표의 다각형). 다른 파츠와 겹쳐 그려진 부분이 있을 때 쓴다.
+# 예: "torso": [[(0, 140), (0, 270), (71, 270), (75, 205)]]
+ERASE: dict[str, list[list[tuple[int, int]]]] = {}
 
 # 슬롯: 뒤에서 앞으로 그리는 순서.
 #   fit=(시작점, 끝점, 끝 관절)  파츠 안의 두 점(0~1 비율)을 뼈의 관절과 다음 관절에 맞춘다.
@@ -77,11 +72,11 @@ SLOTS = [
     dict(part="thigh_r", bone="thigh_r", fit=((0.58, 0.08), (0.42, 0.92), (566, 1010)), wide=1.2),
     dict(part="shin_r", bone="shin_r", fit=((0.50, 0.14), (0.50, 0.93), (548, 1172)), wide=1.4),
     dict(part="pelvis", bone="hip", pivot=(0.50, 0.24), scale=1.34, rot=0),
-    dict(part="torso", bone="chest", pivot=(0.52, 0.94), scale=1.3, rot=0),
+    dict(part="torso", bone="chest", pivot=(0.60, 0.95), scale=0.31, rot=0),
     dict(part="sash", bone="sash", pivot=(0.62, 0.10), scale=1.45, rot=-6),
     dict(part="head", bone="head", pivot=(0.62, 0.90), scale=1.32, rot=0),
     # 검 든 팔은 머리보다 앞에 그린다 (휘두를 때 머리 뒤로 숨지 않게).
-    dict(part="sword", bone="sword", pivot=(0.5, 0.11), scale=1.55, rot=37),
+    dict(part="sword", bone="sword", pivot=(0.5, 0.11), scale=1.55, rot=5),
     dict(part="hand_r_grip", bone="hand_r", pivot=(0.48, 0.10), scale=0.6, rot=14),
     dict(part="forearm_r", bone="forearm_r", fit=((0.62, 0.10), (0.34, 0.90), (468, 782)), wide=1.0),
     dict(part="upper_arm_r", bone="upper_arm_r", fit=((0.62, 0.22), (0.28, 0.86), (516, 640)), wide=0.90),
