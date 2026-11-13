@@ -16,6 +16,8 @@ export interface HumanPalette {
   trim: number;
   cape: number;
   pants: number;
+  /** 검을 들고 있는지 */
+  sword?: boolean;
 }
 
 interface HumanPose {
@@ -25,9 +27,13 @@ interface HumanPose {
   frontLift: number;
   backLift: number;
   arm: number;
+  /** 손을 들어 올린 높이 */
+  handLift?: number;
+  /** 검의 각도(도). 0 = 정면, -90 = 위 */
+  sword?: number;
 }
 
-const HUMAN_W = 120;
+const HUMAN_W = 220;
 const HUMAN_H = 180;
 const SLIME_W = 110;
 const SLIME_H = 90;
@@ -81,11 +87,26 @@ function drawHuman(g: Phaser.GameObjects.Graphics, p: HumanPalette, pose: HumanP
   g.fillStyle(p.trim);
   g.fillRect(cx - 19, 118 + b, 38, 7);
 
-  // 팔
+  // 팔 (어깨에서 손까지) + 검
+  const handX = cx - 1 + pose.arm * 1.3;
+  const handY = 126 + b - (pose.handLift ?? 0);
+  if (p.sword) {
+    const angle = Phaser.Math.DegToRad(pose.sword ?? -78);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    g.lineStyle(13, outline);
+    g.lineBetween(handX, handY, handX + cos * 82, handY + sin * 82);
+    g.lineStyle(8, 0xdfe6f0);
+    g.lineBetween(handX + cos * 6, handY + sin * 6, handX + cos * 79, handY + sin * 79);
+    g.lineStyle(7, 0xc9a13f);
+    g.lineBetween(handX + cos * 10 - sin * 13, handY + sin * 10 + cos * 13, handX + cos * 10 + sin * 13, handY + sin * 10 - cos * 13);
+  }
+  g.lineStyle(15, shade(p.armor, 0.8));
+  g.lineBetween(cx - 1, 92 + b, handX, handY);
   g.fillStyle(shade(p.armor, 0.8));
-  g.fillRoundedRect(cx - 8 + pose.arm, 84 + b, 14, 40, 7);
+  g.fillCircle(cx - 1, 92 + b, 8);
   g.fillStyle(p.skin);
-  g.fillCircle(cx - 1 + pose.arm * 1.3, 126 + b, 7);
+  g.fillCircle(handX, handY, 8);
 
   // 머리
   g.fillStyle(outline);
@@ -312,6 +333,26 @@ function registerHuman(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, key:
     frameRate: 9,
     repeat: -1,
   });
+
+  if (!palette.sword) return;
+  // 공격: 뒤로 젖힘 → 내려침 → 마무리
+  const attack: HumanPose[] = [
+    { bob: -2, frontLeg: 0, backLeg: -8, frontLift: 0, backLift: 0, arm: -10, handLift: 44, sword: -125 },
+    { bob: 2, frontLeg: 14, backLeg: -12, frontLift: 0, backLift: 0, arm: 22, handLift: 22, sword: -18 },
+    { bob: 3, frontLeg: 16, backLeg: -12, frontLift: 0, backLift: 0, arm: 20, handLift: 0, sword: 38 },
+    { bob: 1, frontLeg: 10, backLeg: -8, frontLift: 0, backLift: 0, arm: 12, handLift: 0, sword: 20 },
+  ];
+  attack.forEach((pose, i) => {
+    g.clear();
+    drawHuman(g, palette, pose);
+    g.generateTexture(`${key}-attack${i}`, HUMAN_W, HUMAN_H);
+  });
+  scene.anims.create({
+    key: `${key}-attack`,
+    frames: attack.map((_, i) => ({ key: `${key}-attack${i}` })),
+    frameRate: 15,
+    repeat: 0,
+  });
 }
 
 function registerSlime(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, key: string, color: number): void {
@@ -335,7 +376,7 @@ function registerSlime(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, key:
 }
 
 export const HUMANS: Record<string, HumanPalette> = {
-  hero: { skin: 0xf1c9a0, hair: 0xe2b93b, armor: 0x9aa3b5, trim: 0x5b4326, cape: 0x2f4a86, pants: 0x4a4f5c },
+  hero: { skin: 0xf1c9a0, hair: 0xe2b93b, armor: 0x9aa3b5, trim: 0x5b4326, cape: 0x2f4a86, pants: 0x4a4f5c, sword: true },
   mage: { skin: 0xf1c9a0, hair: 0xd9d4cf, armor: 0x3b3340, trim: 0x8a2c2c, cape: 0x23202a, pants: 0x2b2730 },
   bard: { skin: 0xf4d2b0, hair: 0xb98fa6, armor: 0xa33c3c, trim: 0x6b3f1e, cape: 0x7a2a2a, pants: 0x5a3a2a },
   archer: { skin: 0xe9bf98, hair: 0xcfc7b2, armor: 0x56683e, trim: 0x4a3420, cape: 0x3c4a2a, pants: 0x4a3f2e },
@@ -355,6 +396,22 @@ export function createPlaceholderArt(scene: Phaser.Scene): void {
   registerSlime(scene, g, 'slime-blue', 0x5a9fd6);
 
   g.destroy();
+
+  // 베기 이펙트: 오른쪽으로 휘어진 초승달
+  const slash = scene.textures.createCanvas('slash', 150, 190);
+  if (slash) {
+    const ctx = slash.getContext();
+    const gradient = ctx.createLinearGradient(40, 0, 150, 0);
+    gradient.addColorStop(0, 'rgba(255,255,255,0)');
+    gradient.addColorStop(1, 'rgba(255,246,214,0.95)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(30, 95, 112, -1.15, 1.15);
+    ctx.arc(-20, 95, 128, 0.82, -0.82, true);
+    ctx.closePath();
+    ctx.fill();
+    slash.refresh();
+  }
 
   radialTexture(scene, 'shadow', 128, 40, [
     [0, 'rgba(0,0,0,0.9)'],

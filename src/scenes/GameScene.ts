@@ -1,8 +1,12 @@
 import Phaser from 'phaser';
+import { Enemy } from '../combat/Enemy';
 import {
   DEPTH_LIGHTING,
   DEPTH_UI,
+  ENEMY,
   FLOOR_TOP,
+  KNOCKBACK_DAMPING,
+  PLAYER,
   PLAYER_SPEED,
   VERTICAL_SPEED_RATIO,
   VIEW_HEIGHT,
@@ -10,17 +14,14 @@ import {
   WORLD_WIDTH,
 } from '../config';
 import { Character } from '../entities/Character';
+import { ActionButton } from '../ui/ActionButton';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { createPlaceholderArt } from '../world/placeholderArt';
 import { WalkArea } from '../world/walkArea';
 
-interface Wanderer {
-  character: Character;
-  target: Phaser.Math.Vector2;
-  speed: number;
-  waitUntil: number;
-}
-
+/** 화면 왼쪽 위 체력 막대 */
+const HUD = { x: 44, y: 26, width: 300, height: 26 };
+const PLAYER_SPAWN = { x: 1180, y: 620 };
 const COUNTER = { left: 900, right: 1460, front: 505 };
 const TABLES = [
   { x: 520, y: 600 },
@@ -31,7 +32,12 @@ export class GameScene extends Phaser.Scene {
   private player!: Character;
   private joystick!: VirtualJoystick;
   private walkArea!: WalkArea;
-  private wanderers: Wanderer[] = [];
+  private attackButton!: ActionButton;
+  private enemies: Enemy[] = [];
+  private attackKeys: Phaser.Input.Keyboard.Key[] = [];
+  private nextAttackAt = 0;
+  private hud!: Phaser.GameObjects.Graphics;
+  private hudText!: Phaser.GameObjects.Text;
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   private readonly input2 = new Phaser.Math.Vector2();
   private readonly scratch = new Phaser.Math.Vector2();
@@ -66,8 +72,12 @@ export class GameScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     const dt = Math.min(delta, 50) / 1000;
-    this.updatePlayer(dt);
-    this.updateWanderers(time, dt);
+    this.updatePlayer(time, dt);
+    for (const enemy of this.enemies) {
+      enemy.update(time, dt, this.player, this.walkArea, this.onEnemyStrike);
+      this.applyKnockback(enemy.character, dt);
+    }
+    this.applyKnockback(this.player, dt);
   }
 
   // ---------------------------------------------------------------- 월드
@@ -150,22 +160,21 @@ export class GameScene extends Phaser.Scene {
     new Character(this, 690, 615, { key: 'bard', name: '음유시인', level: 24 }).sprite.setFlipX(true);
     new Character(this, 2060, 640, { key: 'archer', name: '궁수', level: 25 }).sprite.setFlipX(true);
 
-    // 돌아다니는 몬스터 (Y정렬 확인용)
     const slimes: Array<[string, number, number]> = [
-      ['slime-green', 1000, 640],
-      ['slime-blue', 1500, 600],
-      ['slime-green', 1750, 520],
+      ['slime-green', 760, 665],
+      ['slime-blue', 1680, 560],
+      ['slime-green', 1720, 670],
+      ['slime-blue', 2180, 560],
     ];
-    for (const [key, x, y] of slimes) {
-      this.wanderers.push({
-        character: new Character(this, x, y, { key, shadowWidth: 100 }),
-        target: new Phaser.Math.Vector2(x, y),
-        speed: Phaser.Math.Between(50, 85),
-        waitUntil: Phaser.Math.Between(300, 1800),
-      });
-    }
+    for (const [key, x, y] of slimes) this.enemies.push(new Enemy(this, key, x, y));
 
-    this.player = new Character(this, 1180, 620, { key: 'hero', name: '용사', level: 1 });
+    this.player = new Character(this, PLAYER_SPAWN.x, PLAYER_SPAWN.y, {
+      key: 'hero',
+      name: '용사',
+      level: 1,
+      labelOffset: 188,
+      maxHp: PLAYER.maxHp,
+    });
   }
 
   private buildLighting(): void {
@@ -183,8 +192,14 @@ export class GameScene extends Phaser.Scene {
     this.input.addPointer(2); // 동시에 3개 터치까지
     this.joystick = new VirtualJoystick(this, { x: 190, y: VIEW_HEIGHT - 170 });
 
+    this.attackButton = new ActionButton(this, { x: 0, y: VIEW_HEIGHT - 170, label: '공격' });
+
     const keyboard = this.input.keyboard;
     if (keyboard) {
+      this.attackKeys = [
+        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J),
+      ];
       this.keys = keyboard.addKeys({
         up: Phaser.Input.Keyboard.KeyCodes.UP,
         down: Phaser.Input.Keyboard.KeyCodes.DOWN,
@@ -199,7 +214,7 @@ export class GameScene extends Phaser.Scene {
 
     const font = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
     this.badge = this.add
-      .text(0, 18, '프로토타입 v0.1', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
+      .text(0, 18, '프로토타입 v0.2', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
       .setOrigin(1, 0)
       .setAlpha(0.7)
       .setScrollFactor(0)
@@ -207,7 +222,7 @@ export class GameScene extends Phaser.Scene {
       .setResolution(2);
 
     this.hint = this.add
-      .text(0, 90, '왼쪽 아래 패드를 드래그해서 이동하세요', {
+      .text(0, 90, '왼쪽 패드로 이동, 오른쪽 버튼으로 공격', {
         fontFamily: font,
         fontSize: '24px',
         fontStyle: 'bold',
@@ -219,6 +234,37 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(DEPTH_UI)
       .setResolution(2);
+
+    this.hud = this.add.graphics().setScrollFactor(0).setDepth(DEPTH_UI);
+    this.hudText = this.add
+      .text(HUD.x + 10, HUD.y + HUD.height / 2, '', {
+        fontFamily: font,
+        fontSize: '17px',
+        fontStyle: 'bold',
+        color: '#f5ead2',
+        stroke: '#1a1008',
+        strokeThickness: 4,
+      })
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_UI + 1)
+      .setResolution(2);
+    this.drawHud();
+  }
+
+  private drawHud(): void {
+    const { x, y, width, height } = HUD;
+    const ratio = this.player.hp / this.player.maxHp;
+    this.hud.clear();
+    this.hud.fillStyle(0x1a1008, 0.85);
+    this.hud.fillRoundedRect(x - 3, y - 3, width + 6, height + 6, 9);
+    this.hud.fillStyle(0x3a1512);
+    this.hud.fillRoundedRect(x, y, width, height, 7);
+    if (ratio > 0) {
+      this.hud.fillStyle(ratio > 0.3 ? 0xc8443a : 0xe07a2e);
+      this.hud.fillRoundedRect(x, y, Math.max(14, width * ratio), height, 7);
+    }
+    this.hudText.setText(`HP ${this.player.hp} / ${this.player.maxHp}`);
   }
 
   /** 화면 너비가 바뀔 때(회전, 창 크기 변경) 화면에 고정된 요소를 다시 배치한다. */
@@ -227,6 +273,7 @@ export class GameScene extends Phaser.Scene {
     this.dim.setSize(width, height);
     this.vignette.setDisplaySize(width, height);
     this.badge.setX(width - 22);
+    this.attackButton.setPosition(width - 180, VIEW_HEIGHT - 170);
     this.hint?.setX(width / 2);
   }
 
@@ -245,53 +292,205 @@ export class GameScene extends Phaser.Scene {
     return v;
   }
 
-  private updatePlayer(dt: number): void {
+  private updatePlayer(time: number, dt: number): void {
+    const player = this.player;
+    if (!player.alive) return;
+
     const v = this.readInput();
     const force = v.length();
+
+    if (this.wantsAttack() && time >= this.nextAttackAt) this.startAttack(time, v.x);
+
     if (force > 0) {
+      const speed = PLAYER_SPEED * (player.isAttacking ? PLAYER.attackMoveRatio : 1);
       const next = this.walkArea.move(
-        this.player.x,
-        this.player.y,
-        v.x * PLAYER_SPEED * dt,
-        v.y * PLAYER_SPEED * VERTICAL_SPEED_RATIO * dt,
+        player.x,
+        player.y,
+        v.x * speed * dt,
+        v.y * speed * VERTICAL_SPEED_RATIO * dt,
         this.scratch,
       );
-      this.player.placeAt(next.x, next.y);
-
-      if (this.hint) {
-        const hint = this.hint;
-        this.hint = undefined;
-        this.tweens.add({ targets: hint, alpha: 0, duration: 500, onComplete: () => hint.destroy() });
-      }
+      player.placeAt(next.x, next.y);
+      this.dismissHint();
     }
-    this.player.setMotion(force > 0, v.x, force);
+    player.setMotion(force > 0, v.x, force);
   }
 
-  private updateWanderers(time: number, dt: number): void {
-    for (const w of this.wanderers) {
-      const c = w.character;
-      if (time < w.waitUntil) {
-        c.setMotion(false);
-        continue;
-      }
-      const dx = w.target.x - c.x;
-      const dy = w.target.y - c.y;
-      const distance = Math.hypot(dx, dy);
-      if (distance < 6) {
-        this.walkArea.randomPoint(w.target);
-        w.waitUntil = time + Phaser.Math.Between(600, 2400);
-        continue;
-      }
-      const step = w.speed * dt;
-      const next = this.walkArea.move(c.x, c.y, (dx / distance) * step, (dy / distance) * step, this.scratch);
-      if (next.x === c.x && next.y === c.y) {
-        // 막혔으면 다른 목적지를 고른다.
-        this.walkArea.randomPoint(w.target);
-        continue;
-      }
-      c.placeAt(next.x, next.y);
-      c.setMotion(true, dx);
+  private dismissHint(): void {
+    const hint = this.hint;
+    if (!hint) return;
+    this.hint = undefined;
+    this.tweens.add({ targets: hint, alpha: 0, duration: 500, onComplete: () => hint.destroy() });
+  }
+
+  /** 밀려남을 적용하고 서서히 줄인다. 벽은 통과하지 못한다. */
+  private applyKnockback(character: Character, dt: number): void {
+    const k = character.knockback;
+    if (k.lengthSq() < 4) {
+      k.set(0, 0);
+      return;
     }
+    if (character.alive) {
+      const next = this.walkArea.move(character.x, character.y, k.x * dt, k.y * dt, this.scratch);
+      character.placeAt(next.x, next.y);
+    }
+    k.scale(Math.max(0, 1 - KNOCKBACK_DAMPING * dt));
+  }
+
+  // ---------------------------------------------------------------- 전투
+
+  private wantsAttack(): boolean {
+    return this.attackButton.isDown || this.attackKeys.some((key) => key.isDown);
+  }
+
+  private startAttack(time: number, inputX: number): void {
+    const player = this.player;
+    this.nextAttackAt = time + PLAYER.attackIntervalMs;
+    this.dismissHint();
+
+    // 방향 입력이 있으면 그쪽으로, 없으면 가까운 적 쪽으로 돌아선다.
+    if (Math.abs(inputX) > 0.25) {
+      player.face(inputX);
+    } else {
+      let nearest = PLAYER.autoFaceRange;
+      for (const enemy of this.enemies) {
+        const c = enemy.character;
+        if (!c.alive || Math.abs(c.y - player.y) > PLAYER.attackLane * 1.6) continue;
+        const distance = Math.abs(c.x - player.x);
+        if (distance < nearest) {
+          nearest = distance;
+          player.face(c.x - player.x);
+        }
+      }
+    }
+
+    player.playAttack();
+    this.time.delayedCall(PLAYER.attackHitDelayMs, () => this.resolvePlayerAttack());
+  }
+
+  private resolvePlayerAttack(): void {
+    const player = this.player;
+    if (!player.alive) return;
+    const facing = player.facing;
+
+    const slash = this.add
+      .image(player.x + facing * 95, player.y - 88, 'slash')
+      .setFlipX(facing === -1)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(player.y + 2)
+      .setScale(0.85);
+    this.tweens.add({
+      targets: slash,
+      alpha: 0,
+      scale: 1.1,
+      x: slash.x + facing * 26,
+      duration: 170,
+      onComplete: () => slash.destroy(),
+    });
+
+    let hitAny = false;
+    for (const enemy of this.enemies) {
+      const c = enemy.character;
+      if (!c.alive) continue;
+      const forward = (c.x - player.x) * facing;
+      if (forward < -PLAYER.attackBack || forward > PLAYER.attackReach) continue;
+      if (Math.abs(c.y - player.y) > PLAYER.attackLane) continue;
+
+      hitAny = true;
+      const damage = Phaser.Math.Between(PLAYER.damageMin, PLAYER.damageMax);
+      const died = c.hurt(damage);
+      this.showDamage(c.x, c.y - 100, damage, '#fff3c4');
+      if (died) {
+        enemy.kill();
+        this.time.delayedCall(ENEMY.respawnMs, () => this.respawnEnemy(enemy));
+      } else {
+        c.knockback.set(facing * PLAYER.knockback, 0);
+        enemy.interrupt(this.time.now);
+      }
+    }
+    if (hitAny) this.cameras.main.shake(70, 0.004);
+  }
+
+  /** 몬스터의 돌진이 닿는 순간. 화살표 함수라서 콜백으로 그대로 넘길 수 있다. */
+  private readonly onEnemyStrike = (enemy: Enemy): void => {
+    const player = this.player;
+    const c = enemy.character;
+    const now = this.time.now;
+    if (!player.alive || now < player.invulnerableUntil) return;
+
+    const forward = (player.x - c.x) * c.facing;
+    if (forward < -20 || forward > ENEMY.strikeRangeX) return;
+    if (Math.abs(player.y - c.y) > ENEMY.strikeRangeY) return;
+
+    player.invulnerableUntil = now + PLAYER.invulnerableMs;
+    const died = player.hurt(ENEMY.damage, 0xff5a4a);
+    player.knockback.set(c.facing * ENEMY.knockback, 0);
+    this.showDamage(player.x, player.y - 190, ENEMY.damage, '#ff8a7a');
+    this.cameras.main.shake(110, 0.007);
+    this.drawHud();
+    if (died) this.onPlayerDeath();
+  };
+
+  private onPlayerDeath(): void {
+    const player = this.player;
+    player.playDeath();
+
+    const { width } = this.scale.gameSize;
+    const message = this.add
+      .text(width / 2, VIEW_HEIGHT / 2 - 40, '쓰러졌습니다', {
+        fontFamily: 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+        fontSize: '54px',
+        fontStyle: 'bold',
+        color: '#f5ead2',
+        stroke: '#1a1008',
+        strokeThickness: 8,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_UI + 5)
+      .setResolution(2)
+      .setAlpha(0);
+    this.tweens.add({ targets: message, alpha: 1, duration: 300 });
+
+    this.time.delayedCall(PLAYER.respawnMs, () => {
+      message.destroy();
+      player.revive(PLAYER_SPAWN.x, PLAYER_SPAWN.y);
+      player.invulnerableUntil = this.time.now + 1500;
+      this.drawHud();
+    });
+  }
+
+  private respawnEnemy(enemy: Enemy): void {
+    // 플레이어 바로 옆에서 다시 나타나지 않게 한다.
+    const point = this.scratch;
+    for (let i = 0; i < 20; i++) {
+      this.walkArea.randomPoint(point);
+      if (Math.abs(point.x - this.player.x) > ENEMY.aggroX + 80) break;
+    }
+    enemy.respawn(point.x, point.y);
+  }
+
+  private showDamage(x: number, y: number, amount: number, color: string): void {
+    const text = this.add
+      .text(x + Phaser.Math.Between(-14, 14), y, String(amount), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '34px',
+        fontStyle: 'bold',
+        color,
+        stroke: '#1a1008',
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH_LIGHTING + 5)
+      .setResolution(2);
+    this.tweens.add({
+      targets: text,
+      y: y - 60,
+      alpha: { from: 1, to: 0 },
+      duration: 650,
+      ease: 'Quad.easeOut',
+      onComplete: () => text.destroy(),
+    });
   }
 
   // ---------------------------------------------------------------- 디버그
