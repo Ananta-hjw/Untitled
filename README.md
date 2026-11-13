@@ -53,3 +53,26 @@ python3 tools/build_hero_rig.py art/hero_parts/images --preview preview.png
 ```
 
 `preview.png`에서 조립된 모습을 확인할 수 있다.
+
+## 안드로이드 APK
+
+Capacitor로 웹 빌드를 안드로이드 앱으로 감싼다 (`android/`, `capacitor.config.ts`).
+푸시하면 GitHub Actions(`.github/workflows/android-apk.yml`)가 테스트용 APK를 만든다.
+저장소의 Actions 탭 → 해당 실행 → Artifacts의 `untitled-rpg-apk`에서 받을 수 있다 (GitHub 로그인 필요, zip으로 내려온다).
+
+안드로이드 스튜디오가 설치된 PC에서 직접 만들 때:
+
+```bash
+npm run build
+```
+
+```bash
+npx cap sync android
+```
+
+```bash
+cd android && ./gradlew assembleDebug
+```
+
+결과물은 `android/app/build/outputs/apk/debug/app-debug.apk`.
+이 APK는 테스트용 키(`android/app/debug.keystore`)로 서명되며 스토어 출시용이 아니다.
