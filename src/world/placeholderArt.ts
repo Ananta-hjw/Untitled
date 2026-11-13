@@ -412,7 +412,11 @@ export function createPlaceholderArt(scene: Phaser.Scene): void {
 
   drawProps(scene, g);
 
-  for (const [key, palette] of Object.entries(HUMANS)) registerHuman(scene, g, key, palette);
+  for (const [key, palette] of Object.entries(HUMANS)) {
+    // 실제 그림이 이미 등록된 캐릭터는 건너뛴다.
+    if (scene.anims.exists(`${key}-idle`)) continue;
+    registerHuman(scene, g, key, palette);
+  }
   registerSlime(scene, g, 'slime-green', 0x6fbf5a);
   registerSlime(scene, g, 'slime-blue', 0x5a9fd6);
 

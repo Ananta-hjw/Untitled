@@ -11,6 +11,13 @@ export interface CharacterOptions {
   maxHp?: number;
   /** 맞았을 때 머리 위에 체력 막대를 보여줄지 */
   showHpBar?: boolean;
+  /** 그림을 화면에 그릴 때의 배율 */
+  scale?: number;
+  /**
+   * 그림에 없는 움직임을 코드로 보탠다.
+   * 대기 중 숨쉬기, 공격 시 몸 기울이기. 전용 프레임이 있는 캐릭터는 끈다.
+   */
+  procedural?: boolean;
 }
 
 const HP_BAR_WIDTH = 70;
@@ -36,6 +43,10 @@ export class Character extends Phaser.GameObjects.Container {
   invulnerableUntil = 0;
 
   private readonly key: string;
+  private readonly baseScale: number;
+  private readonly procedural: boolean;
+  private breathing?: Phaser.Tweens.Tween;
+  private lean?: Phaser.Tweens.TweenChain;
   private readonly shadow: Phaser.GameObjects.Image;
   private readonly hpBar?: Phaser.GameObjects.Graphics;
   private readonly hpBarY: number;
@@ -47,6 +58,8 @@ export class Character extends Phaser.GameObjects.Container {
   constructor(scene: Phaser.Scene, x: number, y: number, options: CharacterOptions) {
     super(scene, x, y);
     this.key = options.key;
+    this.baseScale = options.scale ?? 1;
+    this.procedural = options.procedural ?? false;
     this.maxHp = options.maxHp ?? 1;
     this.hp = this.maxHp;
 
@@ -54,14 +67,28 @@ export class Character extends Phaser.GameObjects.Container {
     this.shadow.setDisplaySize(options.shadowWidth ?? 90, (options.shadowWidth ?? 90) * 0.3);
     this.add(this.shadow);
 
-    this.sprite = scene.add.sprite(0, 0, `${options.key}-idle0`).setOrigin(0.5, 1);
+    const first = scene.anims.get(`${options.key}-idle`)!.frames[0]!;
+    this.sprite = scene.add
+      .sprite(0, 0, first.textureKey, first.textureFrame)
+      .setOrigin(0.5, 1)
+      .setScale(this.baseScale);
     this.sprite.play(`${options.key}-idle`);
+    if (this.procedural) {
+      this.breathing = scene.tweens.add({
+        targets: this.sprite,
+        scaleY: this.baseScale * 1.025,
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
     this.sprite.on(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       if (this.attacking) this.endAttack();
     });
     this.add(this.sprite);
 
-    const top = -(options.labelOffset ?? this.sprite.height + 8);
+    const top = -(options.labelOffset ?? this.sprite.displayHeight + 8);
     this.hpBarY = top;
 
     if (options.name) {
@@ -132,12 +159,38 @@ export class Character extends Phaser.GameObjects.Container {
     this.attacking = true;
     this.sprite.anims.timeScale = 1;
     this.sprite.play(`${this.key}-attack${stage}`);
+    if (this.procedural) this.playLean(stage);
+  }
+
+  /** 공격 프레임이 없는 캐릭터용: 뒤로 젖혔다가 앞으로 기울이는 것으로 휘두르는 느낌을 낸다. */
+  private playLean(stage: number): void {
+    const sprite = this.sprite;
+    const heavy = stage >= 3;
+    this.stopLean();
+    this.breathing?.pause();
+    sprite.setScale(this.baseScale);
+    this.lean = this.scene.tweens.chain({
+      targets: sprite,
+      tweens: [
+        { angle: this.facing * (heavy ? -14 : -8), duration: heavy ? 110 : 70, ease: 'Quad.easeOut' },
+        { angle: this.facing * (heavy ? 22 : 14), duration: 80, ease: 'Quad.easeIn' },
+        { angle: 0, duration: heavy ? 150 : 110, ease: 'Quad.easeOut' },
+      ],
+    });
+  }
+
+  private stopLean(): void {
+    this.lean?.stop();
+    this.lean = undefined;
+    this.sprite.setAngle(0);
   }
 
   /** 공격 동작을 중간에 끊는다 (회피 등). */
   endAttack(): void {
     if (!this.attacking) return;
     this.attacking = false;
+    this.stopLean();
+    this.breathing?.resume();
     this.sprite.play(`${this.key}-${this.moving ? 'walk' : 'idle'}`);
   }
 
@@ -145,8 +198,15 @@ export class Character extends Phaser.GameObjects.Container {
   setDodging(dodging: boolean): void {
     if (dodging === this.dodging) return;
     this.dodging = dodging;
-    if (dodging) this.sprite.setScale(1.08, 0.74).setAngle(this.facing * 14).setAlpha(0.8);
-    else this.sprite.setScale(1).setAngle(0).setAlpha(1);
+    const s = this.baseScale;
+    if (dodging) {
+      this.stopLean();
+      this.breathing?.pause();
+      this.sprite.setScale(s * 1.08, s * 0.74).setAngle(this.facing * 14).setAlpha(0.8);
+    } else {
+      this.sprite.setScale(s).setAngle(0).setAlpha(1);
+      this.breathing?.resume();
+    }
   }
 
   /** 발 위치를 옮기고 깊이(Y정렬)를 갱신한다. */
@@ -171,25 +231,36 @@ export class Character extends Phaser.GameObjects.Container {
     this.attacking = false;
     this.knockback.set(0, 0);
     this.hpBar?.setVisible(false);
+    this.stopLean();
+    this.breathing?.pause();
     this.scene.tweens.add({
       targets: [this.sprite, this.shadow],
       alpha: 0,
       duration: 380,
       ease: 'Quad.easeIn',
     });
-    this.scene.tweens.add({ targets: this.sprite, scaleY: 0.25, scaleX: 1.3, duration: 380, ease: 'Quad.easeIn' });
+    this.scene.tweens.add({
+      targets: this.sprite,
+      scaleY: this.baseScale * 0.25,
+      scaleX: this.baseScale * 1.3,
+      duration: 380,
+      ease: 'Quad.easeIn',
+    });
   }
 
   revive(x: number, y: number): void {
-    this.scene.tweens.killTweensOf([this.sprite, this.shadow]);
+    for (const tween of this.scene.tweens.getTweensOf([this.sprite, this.shadow])) {
+      if (tween !== this.breathing) tween.stop();
+    }
     this.alive = true;
     this.hp = this.maxHp;
     this.attacking = false;
     this.dodging = false;
     this.moving = false;
     this.knockback.set(0, 0);
-    this.sprite.setScale(1).setAngle(0).setAlpha(1).setPosition(0, 0);
+    this.sprite.setScale(this.baseScale).setAngle(0).setAlpha(1).setPosition(0, 0);
     this.sprite.play(`${this.key}-idle`);
+    this.breathing?.resume();
     this.shadow.setAlpha(0.45);
     this.hpBar?.setVisible(false);
     this.placeAt(x, y);

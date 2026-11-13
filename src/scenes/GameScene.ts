@@ -17,6 +17,7 @@ import {
 import { Character } from '../entities/Character';
 import { ActionButton } from '../ui/ActionButton';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
+import { HERO, preloadHero, registerHero } from '../world/heroArt';
 import { createPlaceholderArt } from '../world/placeholderArt';
 import { WalkArea } from '../world/walkArea';
 
@@ -62,7 +63,12 @@ export class GameScene extends Phaser.Scene {
     super('game');
   }
 
+  preload(): void {
+    preloadHero(this);
+  }
+
   create(): void {
+    registerHero(this);
     createPlaceholderArt(this);
     this.buildRoom();
     this.buildWalkArea();
@@ -192,10 +198,12 @@ export class GameScene extends Phaser.Scene {
     for (const [key, x, y] of slimes) this.enemies.push(new Enemy(this, key, x, y));
 
     this.player = new Character(this, PLAYER_SPAWN.x, PLAYER_SPAWN.y, {
-      key: 'hero',
+      key: HERO.key,
       name: '용사',
       level: 1,
-      labelOffset: 188,
+      scale: HERO.scale,
+      procedural: true,
+      shadowWidth: 110,
       maxHp: PLAYER.maxHp,
     });
   }
@@ -249,7 +257,7 @@ export class GameScene extends Phaser.Scene {
 
     const font = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
     this.badge = this.add
-      .text(0, 18, '프로토타입 v0.3', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
+      .text(0, 18, '프로토타입 v0.4', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
       .setOrigin(1, 0)
       .setAlpha(0.7)
       .setScrollFactor(0)
@@ -440,7 +448,7 @@ export class GameScene extends Phaser.Scene {
       this.nextGhostAt = time + 45;
       const sprite = player.sprite;
       const ghost = this.add
-        .image(player.x, player.y, sprite.texture.key)
+        .image(player.x, player.y, sprite.texture.key, sprite.frame.name)
         .setOrigin(0.5, 1)
         .setFlipX(sprite.flipX)
         .setScale(sprite.scaleX, sprite.scaleY)
