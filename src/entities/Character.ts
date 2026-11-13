@@ -13,11 +13,10 @@ export interface CharacterOptions {
   showHpBar?: boolean;
   /** 그림을 화면에 그릴 때의 배율 */
   scale?: number;
-  /**
-   * 그림에 없는 움직임을 코드로 보탠다.
-   * 대기 중 숨쉬기, 공격 시 몸 기울이기. 전용 프레임이 있는 캐릭터는 끈다.
-   */
-  procedural?: boolean;
+  /** 대기 프레임이 한 장뿐일 때 숨쉬는 움직임을 코드로 보탠다. */
+  breathe?: boolean;
+  /** 공격 프레임이 없을 때 몸을 기울여 휘두르는 느낌을 낸다. */
+  leanAttack?: boolean;
 }
 
 const HP_BAR_WIDTH = 70;
@@ -44,7 +43,7 @@ export class Character extends Phaser.GameObjects.Container {
 
   private readonly key: string;
   private readonly baseScale: number;
-  private readonly procedural: boolean;
+  private readonly leanAttack: boolean;
   private breathing?: Phaser.Tweens.Tween;
   private lean?: Phaser.Tweens.TweenChain;
   private readonly shadow: Phaser.GameObjects.Image;
@@ -59,7 +58,7 @@ export class Character extends Phaser.GameObjects.Container {
     super(scene, x, y);
     this.key = options.key;
     this.baseScale = options.scale ?? 1;
-    this.procedural = options.procedural ?? false;
+    this.leanAttack = options.leanAttack ?? false;
     this.maxHp = options.maxHp ?? 1;
     this.hp = this.maxHp;
 
@@ -73,7 +72,7 @@ export class Character extends Phaser.GameObjects.Container {
       .setOrigin(0.5, 1)
       .setScale(this.baseScale);
     this.sprite.play(`${options.key}-idle`);
-    if (this.procedural) {
+    if (options.breathe) {
       this.breathing = scene.tweens.add({
         targets: this.sprite,
         scaleY: this.baseScale * 1.025,
@@ -159,7 +158,9 @@ export class Character extends Phaser.GameObjects.Container {
     this.attacking = true;
     this.sprite.anims.timeScale = 1;
     this.sprite.play(`${this.key}-attack${stage}`);
-    if (this.procedural) this.playLean(stage);
+    this.breathing?.pause();
+    this.sprite.setScale(this.baseScale);
+    if (this.leanAttack) this.playLean(stage);
   }
 
   /** 공격 프레임이 없는 캐릭터용: 뒤로 젖혔다가 앞으로 기울이는 것으로 휘두르는 느낌을 낸다. */
@@ -167,8 +168,6 @@ export class Character extends Phaser.GameObjects.Container {
     const sprite = this.sprite;
     const heavy = stage >= 3;
     this.stopLean();
-    this.breathing?.pause();
-    sprite.setScale(this.baseScale);
     this.lean = this.scene.tweens.chain({
       targets: sprite,
       tweens: [

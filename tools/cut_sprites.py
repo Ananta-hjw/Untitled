@@ -1,7 +1,7 @@
 """캐릭터 시트(투명 또는 흰 배경)에서 한 줄을 잘라 게임용 스프라이트 시트로 만든다.
 
 사용법:
-    python3 tools/cut_sprites.py <입력 이미지> <행 번호(0부터)> <출력 PNG> [출력 높이]
+    python3 tools/cut_sprites.py <입력 이미지> <행 번호(0부터)> <출력 PNG> [캐릭터 키(px)]
 
 - 가장자리와 이어진 흰색만 지우므로 캐릭터 안쪽의 흰 옷은 남는다.
 - 각 프레임은 같은 크기의 칸에 넣고, 발이 칸의 가로 가운데·맨 아래에 오도록 맞춘다.
@@ -114,10 +114,11 @@ def main() -> None:
         sheet.paste(crop, (x, y))
 
     if out_height:
-        scale = out_height / cell_h
+        # 무기를 치켜든 프레임은 키가 커 보이므로, 가장 낮은 프레임(= 몸만 있는 키)을 기준으로 맞춘다.
+        scale = out_height / min(crop.height for crop, _ in anchored)
         cell_w = round(cell_w * scale)
-        sheet = sheet.resize((cell_w * len(anchored), out_height), Image.LANCZOS)
-        cell_h = out_height
+        cell_h = round(cell_h * scale)
+        sheet = sheet.resize((cell_w * len(anchored), cell_h), Image.LANCZOS)
     sheet.save(target)
     print(f"saved {target}: frame {cell_w}x{cell_h}, {len(anchored)} frames")
 
