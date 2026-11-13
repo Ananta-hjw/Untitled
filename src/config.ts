@@ -21,12 +21,22 @@ export const DEPTH_UI = 10000;
 
 export const PLAYER = {
   maxHp: 100,
-  /** 공격 버튼을 누르고 있을 때 다음 공격까지의 간격 */
-  attackIntervalMs: 400,
-  /** 공격 동작 시작 후 실제로 타격이 들어가는 시점 */
-  attackHitDelayMs: 110,
   damageMin: 9,
   damageMax: 13,
+  /**
+   * 콤보 단계별 설정. 버튼을 누르고 있거나 연타하면 1 → 2 → 3타로 이어진다.
+   *  - intervalMs: 다음 공격이 나갈 수 있을 때까지의 시간
+   *  - hitDelayMs: 동작 시작 후 실제로 타격이 들어가는 시점
+   *  - damage / knockback / reach: 기본값에 곱하는 배율
+   *  - lunge: 공격하며 앞으로 내딛는 속도(px/초)
+   */
+  combo: [
+    { intervalMs: 330, hitDelayMs: 110, damage: 1, knockback: 0.7, reach: 1, lunge: 90 },
+    { intervalMs: 330, hitDelayMs: 100, damage: 1.1, knockback: 0.8, reach: 1, lunge: 120 },
+    { intervalMs: 560, hitDelayMs: 150, damage: 2, knockback: 1.7, reach: 1.25, lunge: 320 },
+  ],
+  /** 이 시간 안에 다음 공격을 이어야 콤보가 유지된다 (이전 공격이 끝난 뒤부터) */
+  comboWindowMs: 380,
   /** 타격 범위: 바라보는 쪽으로 reach, 뒤로 back, 위아래로 lane */
   attackReach: 155,
   attackBack: 25,
@@ -39,6 +49,15 @@ export const PLAYER = {
   /** 맞은 뒤 무적 시간 */
   invulnerableMs: 700,
   respawnMs: 2200,
+};
+
+/** 회피: 짧게 미끄러지듯 이동하며 그동안은 맞지 않는다. */
+export const DODGE = {
+  distance: 250,
+  durationMs: 300,
+  cooldownMs: 900,
+  /** 회피가 끝난 직후에도 잠깐 더 무적 */
+  graceMs: 80,
 };
 
 export const ENEMY = {

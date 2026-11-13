@@ -335,23 +335,44 @@ function registerHuman(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, key:
   });
 
   if (!palette.sword) return;
-  // 공격: 뒤로 젖힘 → 내려침 → 마무리
-  const attack: HumanPose[] = [
-    { bob: -2, frontLeg: 0, backLeg: -8, frontLift: 0, backLift: 0, arm: -10, handLift: 44, sword: -125 },
-    { bob: 2, frontLeg: 14, backLeg: -12, frontLift: 0, backLift: 0, arm: 22, handLift: 22, sword: -18 },
-    { bob: 3, frontLeg: 16, backLeg: -12, frontLift: 0, backLift: 0, arm: 20, handLift: 0, sword: 38 },
-    { bob: 1, frontLeg: 10, backLeg: -8, frontLift: 0, backLift: 0, arm: 12, handLift: 0, sword: 20 },
+  const leg = { frontLift: 0, backLift: 0 };
+  const combos: HumanPose[][] = [
+    // 1타: 뒤로 젖힘 → 내려침 → 마무리
+    [
+      { ...leg, bob: -2, frontLeg: 0, backLeg: -8, arm: -10, handLift: 44, sword: -125 },
+      { ...leg, bob: 2, frontLeg: 14, backLeg: -12, arm: 22, handLift: 22, sword: -18 },
+      { ...leg, bob: 3, frontLeg: 16, backLeg: -12, arm: 20, handLift: 0, sword: 38 },
+      { ...leg, bob: 1, frontLeg: 10, backLeg: -8, arm: 12, handLift: 0, sword: 20 },
+    ],
+    // 2타: 아래에서 위로 올려 베기
+    [
+      { ...leg, bob: 3, frontLeg: 14, backLeg: -12, arm: 6, handLift: -4, sword: 70 },
+      { ...leg, bob: 0, frontLeg: 16, backLeg: -12, arm: 24, handLift: 20, sword: -5 },
+      { ...leg, bob: -3, frontLeg: 14, backLeg: -10, arm: 18, handLift: 46, sword: -75 },
+      { ...leg, bob: -1, frontLeg: 8, backLeg: -8, arm: 6, handLift: 30, sword: -95 },
+    ],
+    // 3타(마무리): 크게 당겼다가 깊게 찌르기
+    [
+      { ...leg, bob: 2, frontLeg: -4, backLeg: -14, arm: -16, handLift: 26, sword: -170 },
+      { ...leg, bob: 3, frontLeg: -2, backLeg: -16, arm: -18, handLift: 24, sword: -10 },
+      { ...leg, bob: 4, frontLeg: 24, backLeg: -20, arm: 34, handLift: 24, sword: 0 },
+      { ...leg, bob: 4, frontLeg: 24, backLeg: -20, arm: 36, handLift: 24, sword: 2 },
+      { ...leg, bob: 2, frontLeg: 14, backLeg: -12, arm: 16, handLift: 12, sword: -20 },
+    ],
   ];
-  attack.forEach((pose, i) => {
-    g.clear();
-    drawHuman(g, palette, pose);
-    g.generateTexture(`${key}-attack${i}`, HUMAN_W, HUMAN_H);
-  });
-  scene.anims.create({
-    key: `${key}-attack`,
-    frames: attack.map((_, i) => ({ key: `${key}-attack${i}` })),
-    frameRate: 15,
-    repeat: 0,
+  combos.forEach((poses, c) => {
+    const stage = c + 1;
+    poses.forEach((pose, i) => {
+      g.clear();
+      drawHuman(g, palette, pose);
+      g.generateTexture(`${key}-atk${stage}-${i}`, HUMAN_W, HUMAN_H);
+    });
+    scene.anims.create({
+      key: `${key}-attack${stage}`,
+      frames: poses.map((_, i) => ({ key: `${key}-atk${stage}-${i}` })),
+      frameRate: 15,
+      repeat: 0,
+    });
   });
 }
 

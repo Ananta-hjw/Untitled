@@ -41,6 +41,7 @@ export class Character extends Phaser.GameObjects.Container {
   private readonly hpBarY: number;
   private moving = false;
   private attacking = false;
+  private dodging = false;
   private flashTimer?: Phaser.Time.TimerEvent;
 
   constructor(scene: Phaser.Scene, x: number, y: number, options: CharacterOptions) {
@@ -55,6 +56,9 @@ export class Character extends Phaser.GameObjects.Container {
 
     this.sprite = scene.add.sprite(0, 0, `${options.key}-idle0`).setOrigin(0.5, 1);
     this.sprite.play(`${options.key}-idle`);
+    this.sprite.on(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      if (this.attacking) this.endAttack();
+    });
     this.add(this.sprite);
 
     const top = -(options.labelOffset ?? this.sprite.height + 8);
@@ -123,16 +127,26 @@ export class Character extends Phaser.GameObjects.Container {
     this.sprite.anims.timeScale = moving ? Phaser.Math.Clamp(animSpeed, 0.45, 1.2) : 1;
   }
 
-  /** 공격 동작을 한 번 재생하고, 끝나면 원래 동작으로 돌아간다. */
-  playAttack(): void {
+  /** 공격 동작(콤보 단계 1~)을 한 번 재생하고, 끝나면 원래 동작으로 돌아간다. */
+  playAttack(stage = 1): void {
     this.attacking = true;
     this.sprite.anims.timeScale = 1;
-    this.sprite.play(`${this.key}-attack`);
-    this.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
-      if (!this.attacking) return;
-      this.attacking = false;
-      this.sprite.play(`${this.key}-${this.moving ? 'walk' : 'idle'}`);
-    });
+    this.sprite.play(`${this.key}-attack${stage}`);
+  }
+
+  /** 공격 동작을 중간에 끊는다 (회피 등). */
+  endAttack(): void {
+    if (!this.attacking) return;
+    this.attacking = false;
+    this.sprite.play(`${this.key}-${this.moving ? 'walk' : 'idle'}`);
+  }
+
+  /** 회피 중 자세. 전용 그림이 생기면 여기서 `dodge` 애니메이션을 재생하면 된다. */
+  setDodging(dodging: boolean): void {
+    if (dodging === this.dodging) return;
+    this.dodging = dodging;
+    if (dodging) this.sprite.setScale(1.08, 0.74).setAngle(this.facing * 14).setAlpha(0.8);
+    else this.sprite.setScale(1).setAngle(0).setAlpha(1);
   }
 
   /** 발 위치를 옮기고 깊이(Y정렬)를 갱신한다. */
@@ -171,9 +185,10 @@ export class Character extends Phaser.GameObjects.Container {
     this.alive = true;
     this.hp = this.maxHp;
     this.attacking = false;
+    this.dodging = false;
     this.moving = false;
     this.knockback.set(0, 0);
-    this.sprite.setScale(1).setAlpha(1).setPosition(0, 0);
+    this.sprite.setScale(1).setAngle(0).setAlpha(1).setPosition(0, 0);
     this.sprite.play(`${this.key}-idle`);
     this.shadow.setAlpha(0.45);
     this.hpBar?.setVisible(false);

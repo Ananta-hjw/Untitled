@@ -21,6 +21,8 @@ export class Enemy {
   private readonly scratch = new Phaser.Math.Vector2();
   private readonly wanderSpeed: number;
   private timer = 0;
+  /** 씬의 게임 시계. update()에서 받아 둔다. */
+  private now = 0;
   private strike?: Phaser.Tweens.TweenChain;
 
   constructor(scene: Phaser.Scene, key: string, x: number, y: number) {
@@ -40,6 +42,7 @@ export class Enemy {
   /** onStrike: 돌진이 닿는 순간 호출된다. 실제로 맞았는지는 씬이 판정한다. */
   update(time: number, dt: number, player: Character, area: WalkArea, onStrike: (enemy: Enemy) => void): void {
     const c = this.character;
+    this.now = time;
     if (this.state === 'dead') return;
 
     const dx = player.x - c.x;
@@ -146,7 +149,7 @@ export class Enemy {
       onComplete: () => {
         if (this.state !== 'windup') return;
         this.state = 'recover';
-        this.timer = this.scene.time.now + ENEMY.recoverMs;
+        this.timer = this.now + ENEMY.recoverMs;
       },
     });
   }

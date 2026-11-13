@@ -6,6 +6,8 @@ export interface ActionButtonOptions {
   y: number;
   radius?: number;
   label: string;
+  color?: number;
+  fontSize?: number;
 }
 
 /**
@@ -16,6 +18,9 @@ export interface ActionButtonOptions {
 export class ActionButton {
   isDown = false;
 
+  private pressed = false;
+  private enabled = true;
+
   private readonly radius: number;
   private readonly image: Phaser.GameObjects.Image;
   private readonly text: Phaser.GameObjects.Text;
@@ -23,7 +28,8 @@ export class ActionButton {
 
   constructor(scene: Phaser.Scene, options: ActionButtonOptions) {
     this.radius = options.radius ?? 78;
-    const key = `button-${this.radius}`;
+    const color = options.color ?? 0x8a2c2c;
+    const key = `button-${this.radius}-${color}`;
 
     if (!scene.textures.exists(key)) {
       const pad = 6;
@@ -31,7 +37,7 @@ export class ActionButton {
       const g = scene.make.graphics({}, false);
       g.fillStyle(0x000000, 0.5);
       g.fillCircle(size / 2, size / 2, this.radius);
-      g.fillStyle(0x8a2c2c, 0.85);
+      g.fillStyle(color, 0.85);
       g.fillCircle(size / 2, size / 2, this.radius - 10);
       g.lineStyle(4, 0xe9d7b0, 0.9);
       g.strokeCircle(size / 2, size / 2, this.radius);
@@ -43,7 +49,7 @@ export class ActionButton {
     this.text = scene.add
       .text(options.x, options.y, options.label, {
         fontFamily: 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
-        fontSize: '30px',
+        fontSize: `${options.fontSize ?? 30}px`,
         fontStyle: 'bold',
         color: '#f5ead2',
         stroke: '#1a1008',
@@ -61,6 +67,7 @@ export class ActionButton {
       const dy = pointer.y - this.image.y;
       if (dx * dx + dy * dy > reach * reach) return;
       this.pointerId = pointer.id;
+      this.pressed = true;
       this.setPressed(true);
     };
     const onUp = (pointer: Phaser.Input.Pointer) => {
@@ -89,9 +96,28 @@ export class ActionButton {
     this.text.setPosition(x, y);
   }
 
+  /** 눌린 순간을 한 번만 알려준다. (누르고 있어도 반복되지 않는다) */
+  consumePress(): boolean {
+    const pressed = this.pressed;
+    this.pressed = false;
+    return pressed;
+  }
+
+  /** 재사용 대기 중에는 흐리게 표시한다. */
+  setEnabled(enabled: boolean): void {
+    if (enabled === this.enabled) return;
+    this.enabled = enabled;
+    this.refresh();
+  }
+
   private setPressed(pressed: boolean): void {
     this.isDown = pressed;
-    this.image.setAlpha(pressed ? 1 : 0.7).setScale(pressed ? 0.93 : 1);
-    this.text.setScale(pressed ? 0.93 : 1);
+    this.refresh();
+  }
+
+  private refresh(): void {
+    const scale = this.isDown ? 0.93 : 1;
+    this.image.setAlpha(!this.enabled ? 0.3 : this.isDown ? 1 : 0.7).setScale(scale);
+    this.text.setAlpha(this.enabled ? 1 : 0.4).setScale(scale);
   }
 }

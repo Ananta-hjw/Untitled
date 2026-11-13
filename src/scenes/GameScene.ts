@@ -3,6 +3,7 @@ import { Enemy } from '../combat/Enemy';
 import {
   DEPTH_LIGHTING,
   DEPTH_UI,
+  DODGE,
   ENEMY,
   FLOOR_TOP,
   KNOCKBACK_DAMPING,
@@ -35,7 +36,18 @@ export class GameScene extends Phaser.Scene {
   private attackButton!: ActionButton;
   private enemies: Enemy[] = [];
   private attackKeys: Phaser.Input.Keyboard.Key[] = [];
+  /** 게임 시계(ms). update()에서만 흐른다. */
+  private now = 0;
+  private pendingHit?: { at: number; stage: number };
   private nextAttackAt = 0;
+  private comboStage = 0;
+  private comboExpiresAt = 0;
+  private dodgeButton!: ActionButton;
+  private dodgeKeys: Phaser.Input.Keyboard.Key[] = [];
+  private dodgeUntil = 0;
+  private dodgeReadyAt = 0;
+  private nextGhostAt = 0;
+  private readonly dodgeDirection = new Phaser.Math.Vector2();
   private hud!: Phaser.GameObjects.Graphics;
   private hudText!: Phaser.GameObjects.Text;
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
@@ -70,8 +82,19 @@ export class GameScene extends Phaser.Scene {
     if (new URLSearchParams(location.search).has('debug')) this.drawDebug();
   }
 
-  update(time: number, delta: number): void {
-    const dt = Math.min(delta, 50) / 1000;
+  update(_time: number, delta: number): void {
+    // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
+    // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
+    const step = Math.min(delta, 50);
+    this.now += step;
+    const time = this.now;
+    const dt = step / 1000;
+
+    if (this.pendingHit && time >= this.pendingHit.at) {
+      const { stage } = this.pendingHit;
+      this.pendingHit = undefined;
+      this.resolvePlayerAttack(stage);
+    }
     this.updatePlayer(time, dt);
     for (const enemy of this.enemies) {
       enemy.update(time, dt, this.player, this.walkArea, this.onEnemyStrike);
@@ -193,12 +216,24 @@ export class GameScene extends Phaser.Scene {
     this.joystick = new VirtualJoystick(this, { x: 190, y: VIEW_HEIGHT - 170 });
 
     this.attackButton = new ActionButton(this, { x: 0, y: VIEW_HEIGHT - 170, label: '공격' });
+    this.dodgeButton = new ActionButton(this, {
+      x: 0,
+      y: VIEW_HEIGHT - 95,
+      radius: 56,
+      label: '회피',
+      color: 0x2f4a86,
+      fontSize: 24,
+    });
 
     const keyboard = this.input.keyboard;
     if (keyboard) {
       this.attackKeys = [
         keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
         keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J),
+      ];
+      this.dodgeKeys = [
+        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
+        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K),
       ];
       this.keys = keyboard.addKeys({
         up: Phaser.Input.Keyboard.KeyCodes.UP,
@@ -214,7 +249,7 @@ export class GameScene extends Phaser.Scene {
 
     const font = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
     this.badge = this.add
-      .text(0, 18, '프로토타입 v0.2', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
+      .text(0, 18, '프로토타입 v0.3', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
       .setOrigin(1, 0)
       .setAlpha(0.7)
       .setScrollFactor(0)
@@ -222,7 +257,7 @@ export class GameScene extends Phaser.Scene {
       .setResolution(2);
 
     this.hint = this.add
-      .text(0, 90, '왼쪽 패드로 이동, 오른쪽 버튼으로 공격', {
+      .text(0, 90, '왼쪽 패드로 이동, 오른쪽 버튼으로 공격과 회피', {
         fontFamily: font,
         fontSize: '24px',
         fontStyle: 'bold',
@@ -273,7 +308,8 @@ export class GameScene extends Phaser.Scene {
     this.dim.setSize(width, height);
     this.vignette.setDisplaySize(width, height);
     this.badge.setX(width - 22);
-    this.attackButton.setPosition(width - 180, VIEW_HEIGHT - 170);
+    this.attackButton.setPosition(width - 170, VIEW_HEIGHT - 185);
+    this.dodgeButton.setPosition(width - 330, VIEW_HEIGHT - 105);
     this.hint?.setX(width / 2);
   }
 
@@ -294,10 +330,28 @@ export class GameScene extends Phaser.Scene {
 
   private updatePlayer(time: number, dt: number): void {
     const player = this.player;
-    if (!player.alive) return;
+    if (!player.alive) {
+      this.dodgeButton.consumePress(); // 쓰러진 동안 누른 입력은 버린다
+      return;
+    }
 
     const v = this.readInput();
     const force = v.length();
+
+    const dodgePressed =
+      this.dodgeButton.consumePress() || this.dodgeKeys.some((key) => Phaser.Input.Keyboard.JustDown(key));
+    this.dodgeButton.setEnabled(time >= this.dodgeReadyAt);
+
+    if (time < this.dodgeUntil) {
+      this.updateDodge(time, dt);
+      return;
+    }
+    player.setDodging(false);
+
+    if (dodgePressed && time >= this.dodgeReadyAt) {
+      this.startDodge(time, v);
+      return;
+    }
 
     if (this.wantsAttack() && time >= this.nextAttackAt) this.startAttack(time, v.x);
 
@@ -343,9 +397,69 @@ export class GameScene extends Phaser.Scene {
     return this.attackButton.isDown || this.attackKeys.some((key) => key.isDown);
   }
 
+  /** 회피 시작. 조이스틱 방향으로, 입력이 없으면 바라보는 쪽으로 미끄러진다. */
+  private startDodge(time: number, input: Phaser.Math.Vector2): void {
+    const player = this.player;
+    this.dismissHint();
+    player.endAttack();
+    this.pendingHit = undefined;
+    this.comboStage = 0;
+
+    if (input.lengthSq() > 0.04) {
+      this.dodgeDirection.copy(input).normalize();
+      player.face(input.x);
+    } else {
+      this.dodgeDirection.set(player.facing, 0);
+    }
+
+    this.dodgeUntil = time + DODGE.durationMs;
+    this.dodgeReadyAt = time + DODGE.cooldownMs;
+    this.nextAttackAt = Math.max(this.nextAttackAt, this.dodgeUntil);
+    this.nextGhostAt = 0;
+    player.invulnerableUntil = Math.max(player.invulnerableUntil, this.dodgeUntil + DODGE.graceMs);
+    player.knockback.set(0, 0);
+    player.setDodging(true);
+    this.dodgeButton.setEnabled(false);
+  }
+
+  private updateDodge(time: number, dt: number): void {
+    const player = this.player;
+    // 처음에 빠르고 끝으로 갈수록 느려진다 (평균 속도 = 거리 / 시간).
+    const remaining = (this.dodgeUntil - time) / DODGE.durationMs;
+    const speed = (DODGE.distance / (DODGE.durationMs / 1000)) * (0.4 + 1.2 * remaining);
+    const next = this.walkArea.move(
+      player.x,
+      player.y,
+      this.dodgeDirection.x * speed * dt,
+      this.dodgeDirection.y * speed * VERTICAL_SPEED_RATIO * dt,
+      this.scratch,
+    );
+    player.placeAt(next.x, next.y);
+
+    if (time >= this.nextGhostAt) {
+      this.nextGhostAt = time + 45;
+      const sprite = player.sprite;
+      const ghost = this.add
+        .image(player.x, player.y, sprite.texture.key)
+        .setOrigin(0.5, 1)
+        .setFlipX(sprite.flipX)
+        .setScale(sprite.scaleX, sprite.scaleY)
+        .setAngle(sprite.angle)
+        .setTint(0x9fc4ff)
+        .setAlpha(0.4)
+        .setDepth(player.y - 1);
+      this.tweens.add({ targets: ghost, alpha: 0, duration: 220, onComplete: () => ghost.destroy() });
+    }
+  }
+
   private startAttack(time: number, inputX: number): void {
     const player = this.player;
-    this.nextAttackAt = time + PLAYER.attackIntervalMs;
+    if (time > this.comboExpiresAt) this.comboStage = 0;
+    const stage = this.comboStage;
+    const combo = PLAYER.combo[stage];
+    this.nextAttackAt = time + combo.intervalMs;
+    this.comboExpiresAt = this.nextAttackAt + PLAYER.comboWindowMs;
+    this.comboStage = (stage + 1) % PLAYER.combo.length;
     this.dismissHint();
 
     // 방향 입력이 있으면 그쪽으로, 없으면 가까운 적 쪽으로 돌아선다.
@@ -364,25 +478,30 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    player.playAttack();
-    this.time.delayedCall(PLAYER.attackHitDelayMs, () => this.resolvePlayerAttack());
+    player.playAttack(stage + 1);
+    player.knockback.set(player.facing * combo.lunge, 0);
+    this.pendingHit = { at: time + combo.hitDelayMs, stage };
   }
 
-  private resolvePlayerAttack(): void {
+  private resolvePlayerAttack(stage: number): void {
     const player = this.player;
     if (!player.alive) return;
     const facing = player.facing;
+    const combo = PLAYER.combo[stage];
+    const finisher = stage === PLAYER.combo.length - 1;
 
     const slash = this.add
       .image(player.x + facing * 95, player.y - 88, 'slash')
       .setFlipX(facing === -1)
+      .setFlipY(stage === 1)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(player.y + 2)
-      .setScale(0.85);
+      .setScale(finisher ? 1.15 : 0.85);
+    if (finisher) slash.setTint(0xffb35a);
     this.tweens.add({
       targets: slash,
       alpha: 0,
-      scale: 1.1,
+      scale: finisher ? 1.5 : 1.1,
       x: slash.x + facing * 26,
       duration: 170,
       onComplete: () => slash.destroy(),
@@ -393,29 +512,29 @@ export class GameScene extends Phaser.Scene {
       const c = enemy.character;
       if (!c.alive) continue;
       const forward = (c.x - player.x) * facing;
-      if (forward < -PLAYER.attackBack || forward > PLAYER.attackReach) continue;
+      if (forward < -PLAYER.attackBack || forward > PLAYER.attackReach * combo.reach) continue;
       if (Math.abs(c.y - player.y) > PLAYER.attackLane) continue;
 
       hitAny = true;
-      const damage = Phaser.Math.Between(PLAYER.damageMin, PLAYER.damageMax);
+      const damage = Math.round(Phaser.Math.Between(PLAYER.damageMin, PLAYER.damageMax) * combo.damage);
       const died = c.hurt(damage);
-      this.showDamage(c.x, c.y - 100, damage, '#fff3c4');
+      this.showDamage(c.x, c.y - 100, damage, finisher ? '#ffb35a' : '#fff3c4', finisher ? 46 : 34);
       if (died) {
         enemy.kill();
         this.time.delayedCall(ENEMY.respawnMs, () => this.respawnEnemy(enemy));
       } else {
-        c.knockback.set(facing * PLAYER.knockback, 0);
-        enemy.interrupt(this.time.now);
+        c.knockback.set(facing * PLAYER.knockback * combo.knockback, 0);
+        enemy.interrupt(this.now);
       }
     }
-    if (hitAny) this.cameras.main.shake(70, 0.004);
+    if (hitAny) this.cameras.main.shake(finisher ? 130 : 70, finisher ? 0.009 : 0.004);
   }
 
   /** 몬스터의 돌진이 닿는 순간. 화살표 함수라서 콜백으로 그대로 넘길 수 있다. */
   private readonly onEnemyStrike = (enemy: Enemy): void => {
     const player = this.player;
     const c = enemy.character;
-    const now = this.time.now;
+    const now = this.now;
     if (!player.alive || now < player.invulnerableUntil) return;
 
     const forward = (player.x - c.x) * c.facing;
@@ -455,7 +574,7 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(PLAYER.respawnMs, () => {
       message.destroy();
       player.revive(PLAYER_SPAWN.x, PLAYER_SPAWN.y);
-      player.invulnerableUntil = this.time.now + 1500;
+      player.invulnerableUntil = this.now + 1500;
       this.drawHud();
     });
   }
@@ -470,11 +589,11 @@ export class GameScene extends Phaser.Scene {
     enemy.respawn(point.x, point.y);
   }
 
-  private showDamage(x: number, y: number, amount: number, color: string): void {
+  private showDamage(x: number, y: number, amount: number, color: string, size = 34): void {
     const text = this.add
       .text(x + Phaser.Math.Between(-14, 14), y, String(amount), {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '34px',
+        fontSize: `${size}px`,
         fontStyle: 'bold',
         color,
         stroke: '#1a1008',
