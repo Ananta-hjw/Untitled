@@ -4,7 +4,7 @@
 
 가상 조이스틱(화면에 고정된 원형 패드)으로 한 장짜리 배경 위를 360도로 돌아다니고,
 공격 버튼(누르고 있으면 3단 콤보)과 회피 버튼으로 몬스터와 실시간으로 싸운다.
-주인공은 실제 그림(걷기 4프레임, 공격 5프레임)을 쓰고, 나머지는 코드로 그린 임시 그래픽이다.
+주인공은 부위별 그림을 뼈대에 붙여 움직이는 방식이고, 나머지는 코드로 그린 임시 그래픽이다.
 
 ## 실행
 
@@ -36,7 +36,20 @@ PC에서는 방향키나 WASD로 움직이고 스페이스바나 J로 공격, Sh
 | `src/combat/Enemy.ts` | 몬스터 AI (배회 → 추격 → 준비 동작 → 돌진) |
 | `src/world/walkArea.ts` | 이동 가능 영역(다각형)과 장애물(타원) |
 | `src/entities/Character.ts` | 플레이어·NPC·몬스터 공통 틀, Y정렬 |
-| `src/world/heroArt.ts` | 주인공 그림 등록 (`src/assets/hero/`) |
+| `src/entities/HeroRig.ts` | 뼈대 캐릭터: 부위 그림을 뼈에 붙여 그린다 |
+| `src/entities/heroAnimations.ts` | 주인공 동작(대기, 걷기, 공격 3종, 회피). 숫자를 바꾸면 움직임이 달라진다 |
+| `art/hero_parts/` | 주인공 부위별 원본 PNG |
+| `tools/build_hero_rig.py` | 원본 부위를 조립해 `src/assets/hero/rig.png`, `rig.json` 생성 |
 | `tools/cut_sprites.py` | 캐릭터 시트에서 한 줄을 잘라 게임용 스프라이트 시트로 변환 |
 | `src/world/placeholderArt.ts` | 임시 그래픽. 실제 아트로 교체할 부분 |
 | `src/scenes/GameScene.ts` | 맵 배치, 입력, 이동, 카메라, 타격 판정 |
+
+## 주인공 그림을 고쳤을 때
+
+`art/hero_parts/images/`의 PNG를 바꾸거나 `tools/build_hero_rig.py` 안의 조립 수치를 고친 뒤 다시 만든다.
+
+```bash
+python3 tools/build_hero_rig.py art/hero_parts/images --preview preview.png
+```
+
+`preview.png`에서 조립된 모습을 확인할 수 있다.

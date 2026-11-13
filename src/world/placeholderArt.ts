@@ -397,7 +397,6 @@ function registerSlime(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, key:
 }
 
 export const HUMANS: Record<string, HumanPalette> = {
-  hero: { skin: 0xf1c9a0, hair: 0xe2b93b, armor: 0x9aa3b5, trim: 0x5b4326, cape: 0x2f4a86, pants: 0x4a4f5c, sword: true },
   mage: { skin: 0xf1c9a0, hair: 0xd9d4cf, armor: 0x3b3340, trim: 0x8a2c2c, cape: 0x23202a, pants: 0x2b2730 },
   bard: { skin: 0xf4d2b0, hair: 0xb98fa6, armor: 0xa33c3c, trim: 0x6b3f1e, cape: 0x7a2a2a, pants: 0x5a3a2a },
   archer: { skin: 0xe9bf98, hair: 0xcfc7b2, armor: 0x56683e, trim: 0x4a3420, cape: 0x3c4a2a, pants: 0x4a3f2e },

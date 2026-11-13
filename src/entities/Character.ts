@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { HeroRig } from './HeroRig';
 
 export interface CharacterOptions {
   /** 텍스처/애니메이션 키 접두어. `${key}-idle`, `${key}-walk` 애니메이션이 있어야 한다. */
@@ -17,6 +18,8 @@ export interface CharacterOptions {
   breathe?: boolean;
   /** 공격 프레임이 없을 때 몸을 기울여 휘두르는 느낌을 낸다. */
   leanAttack?: boolean;
+  /** 스프라이트 대신 뼈대 캐릭터를 쓴다. 애니메이션 이름은 같은 규칙(`${key}-idle` 등)을 따른다. */
+  rig?: boolean;
 }
 
 const HP_BAR_WIDTH = 70;
@@ -31,7 +34,8 @@ const HP_BAR_WIDTH = 70;
  * 같은 이름의 애니메이션(`idle`, `walk`, `attack`)으로 등록하면 이 클래스는 그대로 쓸 수 있다.
  */
 export class Character extends Phaser.GameObjects.Container {
-  readonly sprite: Phaser.GameObjects.Sprite;
+  /** 캐릭터의 몸. 프레임 스프라이트이거나 뼈대 캐릭터다. */
+  readonly sprite: Phaser.GameObjects.Sprite | HeroRig;
   readonly maxHp: number;
   hp: number;
   alive = true;
@@ -66,11 +70,15 @@ export class Character extends Phaser.GameObjects.Container {
     this.shadow.setDisplaySize(options.shadowWidth ?? 90, (options.shadowWidth ?? 90) * 0.3);
     this.add(this.shadow);
 
-    const first = scene.anims.get(`${options.key}-idle`)!.frames[0]!;
-    this.sprite = scene.add
-      .sprite(0, 0, first.textureKey, first.textureFrame)
-      .setOrigin(0.5, 1)
-      .setScale(this.baseScale);
+    if (options.rig) {
+      this.sprite = new HeroRig(scene).setScale(this.baseScale);
+    } else {
+      const first = scene.anims.get(`${options.key}-idle`)!.frames[0]!;
+      this.sprite = scene.add
+        .sprite(0, 0, first.textureKey, first.textureFrame)
+        .setOrigin(0.5, 1)
+        .setScale(this.baseScale);
+    }
     this.sprite.play(`${options.key}-idle`);
     if (options.breathe) {
       this.breathing = scene.tweens.add({
@@ -198,7 +206,11 @@ export class Character extends Phaser.GameObjects.Container {
     if (dodging === this.dodging) return;
     this.dodging = dodging;
     const s = this.baseScale;
-    if (dodging) {
+    if (this.sprite instanceof HeroRig) {
+      // 뼈대 캐릭터는 전용 자세가 있다.
+      this.sprite.setAlpha(dodging ? 0.85 : 1);
+      this.sprite.play(`${this.key}-${dodging ? 'dodge' : this.moving ? 'walk' : 'idle'}`);
+    } else if (dodging) {
       this.stopLean();
       this.breathing?.pause();
       this.sprite.setScale(s * 1.08, s * 0.74).setAngle(this.facing * 14).setAlpha(0.8);

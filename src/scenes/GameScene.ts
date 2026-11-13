@@ -17,12 +17,14 @@ import {
 import { Character } from '../entities/Character';
 import { ActionButton } from '../ui/ActionButton';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
-import { HERO, preloadHero, registerHero } from '../world/heroArt';
+import { HERO_RIG_HEIGHT, HeroRig, preloadHeroRig } from '../entities/HeroRig';
 import { createPlaceholderArt } from '../world/placeholderArt';
 import { WalkArea } from '../world/walkArea';
 
 /** 화면 왼쪽 위 체력 막대 */
 const HUD = { x: 44, y: 26, width: 300, height: 26 };
+/** 뼈대 캐릭터(키 400)를 화면에 그릴 때의 배율 */
+const HERO_SCALE = 0.5;
 const PLAYER_SPAWN = { x: 1180, y: 620 };
 const COUNTER = { left: 900, right: 1460, front: 505 };
 const TABLES = [
@@ -64,11 +66,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    preloadHero(this);
+    preloadHeroRig(this);
   }
 
   create(): void {
-    registerHero(this);
     createPlaceholderArt(this);
     this.buildRoom();
     this.buildWalkArea();
@@ -198,11 +199,12 @@ export class GameScene extends Phaser.Scene {
     for (const [key, x, y] of slimes) this.enemies.push(new Enemy(this, key, x, y));
 
     this.player = new Character(this, PLAYER_SPAWN.x, PLAYER_SPAWN.y, {
-      key: HERO.key,
+      key: 'hero',
       name: '용사',
       level: 1,
-      scale: HERO.scale,
-      breathe: true,
+      rig: true,
+      scale: HERO_SCALE,
+      labelOffset: HERO_RIG_HEIGHT * HERO_SCALE + 8,
       shadowWidth: 110,
       maxHp: PLAYER.maxHp,
     });
@@ -257,7 +259,7 @@ export class GameScene extends Phaser.Scene {
 
     const font = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
     this.badge = this.add
-      .text(0, 18, '프로토타입 v0.5', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
+      .text(0, 18, '프로토타입 v0.6', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
       .setOrigin(1, 0)
       .setAlpha(0.7)
       .setScrollFactor(0)
@@ -447,15 +449,18 @@ export class GameScene extends Phaser.Scene {
     if (time >= this.nextGhostAt) {
       this.nextGhostAt = time + 45;
       const sprite = player.sprite;
-      const ghost = this.add
-        .image(player.x, player.y, sprite.texture.key, sprite.frame.name)
-        .setOrigin(0.5, 1)
-        .setFlipX(sprite.flipX)
-        .setScale(sprite.scaleX, sprite.scaleY)
-        .setAngle(sprite.angle)
-        .setTint(0x9fc4ff)
-        .setAlpha(0.4)
-        .setDepth(player.y - 1);
+      const ghost =
+        sprite instanceof HeroRig
+          ? sprite.spawnGhost(player.x, player.y, player.y - 1, 0x9fc4ff, 0.35)
+          : this.add
+              .image(player.x, player.y, sprite.texture.key, sprite.frame.name)
+              .setOrigin(0.5, 1)
+              .setFlipX(sprite.flipX)
+              .setScale(sprite.scaleX, sprite.scaleY)
+              .setAngle(sprite.angle)
+              .setTint(0x9fc4ff)
+              .setAlpha(0.4)
+              .setDepth(player.y - 1);
       this.tweens.add({ targets: ghost, alpha: 0, duration: 220, onComplete: () => ghost.destroy() });
     }
   }
