@@ -17,7 +17,7 @@ import os
 import sys
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFilter
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "assets", "hero")
 
@@ -38,8 +38,8 @@ BONES = {
     "hand_r": ("forearm_r", (468, 782)),
     "sword": ("hand_r", (452, 826)),
     "upper_arm_l": ("chest", (742, 500)),
-    "forearm_l": ("upper_arm_l", (790, 640)),
-    "hand_l": ("forearm_l", (826, 772)),
+    "forearm_l": ("upper_arm_l", (776, 642)),
+    "hand_l": ("forearm_l", (804, 774)),
     "thigh_r": ("hip", (598, 800)),
     "shin_r": ("thigh_r", (566, 1010)),
     "foot_r": ("shin_r", (548, 1172)),
@@ -48,6 +48,15 @@ BONES = {
     "foot_l": ("shin_l", (726, 1172)),
     "sash": ("hip", (724, 706)),
     "scabbard": ("chest", (458, 356)),
+}
+
+# 파츠에서 지울 영역(원본 PNG 좌표의 다각형).
+# torso.png에는 양쪽 소매가 같이 그려져 있어서, 따로 있는 팔 파츠와 겹쳐 위팔이 두 개로 보인다.
+ERASE = {
+    "torso": [
+        [(56, 88), (40, 96), (0, 140), (0, 270), (71, 270), (75, 205), (70, 150), (62, 110)],
+        [(203, 90), (222, 100), (251, 135), (251, 270), (197, 270), (195, 205), (199, 150), (201, 110)],
+    ],
 }
 
 # 슬롯: 뒤에서 앞으로 그리는 순서.
@@ -59,8 +68,8 @@ SLOTS = [
     dict(part="hair_ponytail", bone="ponytail", pivot=(0.80, 0.33), scale=1.5, rot=-6),
     dict(part="scabbard", bone="scabbard", pivot=(0.5, 0.06), scale=0.95, rot=-38),
     dict(part="hand_l", bone="hand_l", pivot=(0.45, 0.06), scale=0.58, rot=-8),
-    dict(part="forearm_l", bone="forearm_l", fit=((0.42, 0.10), (0.62, 0.92), (826, 772)), wide=1.0),
-    dict(part="upper_arm_l", bone="upper_arm_l", fit=((0.50, 0.14), (0.36, 0.88), (790, 640)), wide=0.9),
+    dict(part="forearm_l", bone="forearm_l", fit=((0.42, 0.10), (0.62, 0.92), (804, 774)), wide=1.0),
+    dict(part="upper_arm_l", bone="upper_arm_l", fit=((0.50, 0.14), (0.36, 0.88), (776, 642)), wide=0.9),
     dict(part="foot_l", bone="foot_l", pivot=(0.34, 0.36), scale=0.62, rot=0),
     dict(part="thigh_l", bone="thigh_l", fit=((0.58, 0.08), (0.48, 0.92), (716, 1010)), wide=1.25),
     dict(part="shin_l", bone="shin_l", fit=((0.50, 0.14), (0.50, 0.93), (726, 1172)), wide=1.4),
@@ -70,11 +79,12 @@ SLOTS = [
     dict(part="pelvis", bone="hip", pivot=(0.50, 0.24), scale=1.34, rot=0),
     dict(part="torso", bone="chest", pivot=(0.52, 0.94), scale=1.3, rot=0),
     dict(part="sash", bone="sash", pivot=(0.62, 0.10), scale=1.45, rot=-6),
+    dict(part="head", bone="head", pivot=(0.62, 0.90), scale=1.32, rot=0),
+    # 검 든 팔은 머리보다 앞에 그린다 (휘두를 때 머리 뒤로 숨지 않게).
     dict(part="sword", bone="sword", pivot=(0.5, 0.11), scale=1.55, rot=37),
     dict(part="hand_r_grip", bone="hand_r", pivot=(0.48, 0.10), scale=0.6, rot=14),
     dict(part="forearm_r", bone="forearm_r", fit=((0.62, 0.10), (0.34, 0.90), (468, 782)), wide=1.0),
     dict(part="upper_arm_r", bone="upper_arm_r", fit=((0.62, 0.22), (0.28, 0.86), (516, 640)), wide=0.90),
-    dict(part="head", bone="head", pivot=(0.62, 0.90), scale=1.32, rot=0),
 ]
 
 
@@ -107,6 +117,14 @@ def largest_blob(mask: np.ndarray) -> np.ndarray:
 def load_part(folder: str, name: str) -> Image.Image:
     """희미한 잡티(거의 투명한 유색 픽셀)를 지우고 내용물에 맞게 자른다."""
     image = Image.open(os.path.join(folder, f"{name}.png")).convert("RGBA")
+    if name in ERASE:
+        keep = Image.new("L", image.size, 255)
+        draw = ImageDraw.Draw(keep)
+        for polygon in ERASE[name]:
+            draw.polygon(polygon, fill=0)
+        keep = keep.filter(ImageFilter.GaussianBlur(0.8))
+        alpha = np.asarray(image.getchannel("A")).astype(np.float32) * np.asarray(keep) / 255
+        image.putalpha(Image.fromarray(alpha.astype(np.uint8)))
     data = np.asarray(image).copy()
     data[data[:, :, 3] < 24] = 0
     data[~largest_blob(data[:, :, 3] > 24)] = 0  # 본체와 떨어진 점 같은 잡티 제거
@@ -213,6 +231,7 @@ def render_preview(images, slots, target: str, reference: str | None) -> None:
         backdrop.alpha_composite(ref)
         both.alpha_composite(backdrop, (width, 0))
         canvas = both
+    canvas = canvas.resize((canvas.width * 2, canvas.height * 2), Image.LANCZOS)
     canvas.save(target)
 
 

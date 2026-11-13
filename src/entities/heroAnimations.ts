@@ -5,6 +5,8 @@
  * 회전은 화면에서 시계 방향이 +이고, 캐릭터는 오른쪽을 보고 있다.
  *   - 아래로 늘어진 팔다리: +는 뒤로(왼쪽), -는 앞으로(오른쪽)
  *   - 위로 선 몸통·머리:   +는 앞으로 숙임, -는 뒤로 젖힘
+ *   - 팔꿈치(forearm):    -가 접는 방향. +로 주면 반대로 꺾여 보인다.
+ *   - 무릎(shin):         +가 접는 방향
  * x, y는 골반 전체를 옮기는 값(리그 좌표, y는 아래가 +)이다.
  *
  * 숫자를 바꾸면 바로 움직임이 달라진다. 뼈 이름은 src/assets/hero/rig.json 참고.
@@ -80,6 +82,7 @@ const idle: RigAnimation = {
       chest: s * 1.2,
       head: -s * 1.2,
       upper_arm_r: 2 + s * 1.5,
+      forearm_r: -8 - s * 2,
       upper_arm_l: -2 - s * 1.5,
       forearm_l: -4,
       hair_back: late * 2.5,
@@ -115,7 +118,7 @@ const walk: RigAnimation = {
       shin_l: bendL * 38 + 4,
       foot_l: -bendL * 10,
       upper_arm_r: s * 16,
-      forearm_r: -8,
+      forearm_r: -18 - Math.max(0, -s) * 16,
       upper_arm_l: -s * 18,
       forearm_l: -14 - Math.max(0, s) * 10,
       hair_back: 9 + twice * 4,
@@ -133,10 +136,10 @@ const attack1: RigAnimation = {
   follow: 38,
   pose: keyframes([
     [0, {}],
-    [0.22, { upper_arm_r: 165, forearm_r: 25, hand_r: 15, chest: -8, head: -4, hair_back: -8, thigh_r: -4, x: -3 }],
-    [0.42, { upper_arm_r: 255, forearm_r: 8, hand_r: -6, chest: 6, head: 2, upper_arm_l: 20, x: 5, y: 3 }],
-    [0.6, { upper_arm_r: 318, forearm_r: 0, hand_r: -10, chest: 13, head: 4, upper_arm_l: 30, hair_back: 14, ponytail: 16, sash: 16, thigh_l: -10, shin_l: 12, x: 8, y: 6 }],
-    [1, { upper_arm_r: 360, chest: 3, hair_back: 6, ponytail: 6, sash: 6, y: 2 }],
+    [0.22, { upper_arm_r: 160, forearm_r: -40, hand_r: 25, chest: -8, head: -4, hair_back: -8, thigh_r: -4, x: -3 }],
+    [0.42, { upper_arm_r: 250, forearm_r: -35, hand_r: -10, chest: 6, head: 2, upper_arm_l: 20, x: 5, y: 3 }],
+    [0.6, { upper_arm_r: 322, forearm_r: -8, hand_r: -14, chest: 13, head: 4, upper_arm_l: 30, hair_back: 14, ponytail: 16, sash: 16, thigh_l: -10, shin_l: 12, x: 8, y: 6 }],
+    [1, { upper_arm_r: 360, forearm_r: -8, chest: 3, hair_back: 6, ponytail: 6, sash: 6, y: 2 }],
   ]),
 };
 
@@ -147,11 +150,11 @@ const attack2: RigAnimation = {
   follow: 38,
   pose: keyframes([
     [0, {}],
-    [0.2, { upper_arm_r: 30, forearm_r: -10, chest: 10, head: 4, x: 2, y: 6, thigh_l: -8, shin_l: 12 }],
-    [0.42, { upper_arm_r: -85, forearm_r: -10, hand_r: -12, chest: 4, x: 6, y: 3 }],
-    [0.6, { upper_arm_r: -175, forearm_r: -15, hand_r: -8, chest: -9, head: -6, upper_arm_l: 24, hair_back: -10, ponytail: -10, sash: -8, x: 6 }],
-    [0.8, { upper_arm_r: -260, forearm_r: -20, chest: -4, hair_back: -4 }],
-    [1, { upper_arm_r: -360 }],
+    [0.2, { upper_arm_r: 30, forearm_r: -25, chest: 10, head: 4, x: 2, y: 6, thigh_l: -8, shin_l: 12 }],
+    [0.42, { upper_arm_r: -80, forearm_r: -30, hand_r: -12, chest: 4, x: 6, y: 3 }],
+    [0.6, { upper_arm_r: -160, forearm_r: -60, hand_r: -10, chest: -9, head: -6, upper_arm_l: 24, hair_back: -10, ponytail: -10, sash: -8, x: 6 }],
+    [0.8, { upper_arm_r: -250, forearm_r: -70, chest: -4, hair_back: -4 }],
+    [1, { upper_arm_r: -360, forearm_r: -8 }],
   ]),
 };
 
@@ -165,7 +168,7 @@ const attack3: RigAnimation = {
     [0.28, { upper_arm_r: 50, forearm_r: -100, hand_r: -8, chest: -10, head: -4, upper_arm_l: -30, forearm_l: -30, x: -8, y: 5, thigh_r: 6, hair_back: -6 }],
     [0.42, { upper_arm_r: -104, forearm_r: -12, hand_r: -22, chest: 18, head: -8, upper_arm_l: 55, forearm_l: -10, x: 20, y: 14, thigh_l: -42, shin_l: 46, foot_l: -6, thigh_r: 26, shin_r: 6, hair_back: 24, ponytail: 26, sash: 26 }],
     [0.72, { upper_arm_r: -100, forearm_r: -10, hand_r: -22, chest: 16, head: -6, upper_arm_l: 50, forearm_l: -10, x: 18, y: 13, thigh_l: -40, shin_l: 44, foot_l: -6, thigh_r: 24, shin_r: 6, hair_back: 12, ponytail: 12, sash: 14 }],
-    [1, { y: 2 }],
+    [1, { y: 2, forearm_r: -8 }],
   ]),
 };
 
@@ -186,7 +189,7 @@ const dodge: RigAnimation = {
     shin_r: 34,
     foot_r: 10,
     upper_arm_r: 34,
-    forearm_r: 6,
+    forearm_r: -35,
     upper_arm_l: 30,
     forearm_l: -40,
     hair_back: 34,
