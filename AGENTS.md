@@ -28,7 +28,7 @@ Run `npm test` on Node.js 24 or later for movement, combat timing, blade collisi
 
 ## Asset Workflow
 
-For the active hero, run `python3 tools/build_hero_frames.py` after changing measured frame/foot/blade anchors. Keep source sheets intact and inspect all four walking directions, both attack facings, and dodge. Source attribution is in `src/assets/hero/academy/README.md`.
+For the active hero, run `python3 tools/build_hero_frames.py` after changing measured frame/foot/blade anchors. Keep source sheets intact and inspect all eight walking directions, all six attack directions, and dodge. Source attribution is in `src/assets/hero/academy/README.md`.
 
 For the legacy rig, after editing hero parts or rig assembly settings, run `python3 tools/build_hero_rig.py art/hero_parts/images --preview preview.png` with Pillow available. Review the preview and corresponding `rig.png`/`rig.json` changes together. Keep generated build directories and the ignored preview image out of commits.
 

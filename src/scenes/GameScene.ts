@@ -19,6 +19,7 @@ import { Character } from '../entities/Character';
 import { ActionButton } from '../ui/ActionButton';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { HERO_SPRITE_HEIGHT, HeroSprite, preloadHeroSprite } from '../entities/HeroSprite';
+import { attackFacingFor, attackVector, insideAttackLane, movementFacing } from '../entities/heroFrames';
 import { createPlaceholderArt } from '../world/placeholderArt';
 import type { WalkArea } from '../world/walkArea';
 import { NavGrid } from '../world/navGrid';
@@ -43,11 +44,11 @@ export class GameScene extends Phaser.Scene {
   private enemyRespawns: Array<{ at: number; enemy: Enemy }> = [];
   private playerRespawnAt?: number;
   private deathMessage?: Phaser.GameObjects.Text;
-  private attackTrace?: { startedAt: number; stage: number; previous: Blade; elapsed: number; hit: Set<Enemy>; effect?: AttackEffect };
+  private attackTrace?: { startedAt: number; stage: number; direction: { x: number; y: number }; previous: Blade; elapsed: number; hit: Set<Enemy>; effect?: AttackEffect };
   private nextAttackAt = 0;
   private attackBufferedUntil?: number;
   private keyboardAttackPressed = false;
-  private attackLunge?: { startedAt: number; stage: number; facing: number; progress: number };
+  private attackLunge?: { startedAt: number; stage: number; direction: { x: number; y: number }; progress: number };
   private comboStage = 0;
   private comboExpiresAt = 0;
   private dodgeButton!: ActionButton;
@@ -287,7 +288,7 @@ export class GameScene extends Phaser.Scene {
 
     // 초 단위 애니메이션과 밀리초 시계의 부동소수점 오차로 한 프레임 쉬지 않게 한다.
     if (this.wantsAttack(time) && time + 1e-6 >= this.nextAttackAt) {
-      this.startAttack(time, v.x);
+      this.startAttack(time, v.x, v.y);
       this.attackBufferedUntil = undefined;
     }
 
@@ -417,7 +418,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private startAttack(time: number, inputX: number): void {
+  private startAttack(time: number, inputX: number, inputY = 0): void {
     const player = this.player;
     if (time > this.comboExpiresAt) this.comboStage = 0;
     const stage = this.comboStage;
@@ -427,28 +428,34 @@ export class GameScene extends Phaser.Scene {
     this.comboStage = (stage + 1) % PLAYER.combo.length;
     this.dismissHint();
 
-    // 방향 입력이 있으면 그쪽으로, 없으면 가까운 적 쪽으로 돌아선다.
-    if (Math.abs(inputX) > 0.25) {
-      player.face(inputX);
+    const hero = player.sprite;
+    if (!(hero instanceof HeroSprite)) return;
+    let facing = attackFacingFor(hero.lookDirection, player.facing);
+    // Input wins. Otherwise retain the last facing unless an aimable enemy is nearby.
+    if (Math.hypot(inputX, inputY) > 0.25) {
+      facing = attackFacingFor(movementFacing(inputX, inputY, hero.lookDirection, false), player.facing);
     } else {
       let nearest = PLAYER.autoFaceRange;
       for (const enemy of this.enemies) {
         const c = enemy.character;
-        if (!c.alive || Math.abs(c.y - player.y) > PLAYER.attackLane * 1.6) continue;
-        const distance = Math.abs(c.x - player.x);
+        if (!c.alive) continue;
+        const dx = c.x - player.x, dy = (c.y - player.y) / VERTICAL_SPEED_RATIO;
+        const candidate = movementFacing(dx, dy, hero.lookDirection, false);
+        if (candidate === 'up' || candidate === 'down') continue;
+        const distance = Math.hypot(dx, dy);
         if (distance < nearest) {
           nearest = distance;
-          player.face(c.x - player.x);
+          facing = candidate;
         }
       }
     }
 
+    const direction = attackVector(facing);
+    player.face(direction.x);
+    hero.setAttackFacing(facing);
     player.playAttack(stage + 1);
-    this.attackLunge = { startedAt: time, stage, facing: player.facing, progress: 0 };
-    const rig = player.sprite;
-    if (rig instanceof HeroSprite) {
-      this.attackTrace = { startedAt: time, stage, previous: rig.getBlade(), elapsed: 0, hit: new Set() };
-    }
+    this.attackLunge = { startedAt: time, stage, direction, progress: 0 };
+    this.attackTrace = { startedAt: time, stage, direction, previous: hero.getBlade(), elapsed: 0, hit: new Set() };
   }
 
   /** 전진 진행도의 차이를 적용해 프레임 속도와 관계없이 같은 거리를 이동한다. */
@@ -461,9 +468,10 @@ export class GameScene extends Phaser.Scene {
     }
     const combo = PLAYER.combo[lunge.stage];
     const progress = lungeProgress(time - lunge.startedAt, combo.lungeStartMs, combo.lungeEndMs);
-    const dx = (progress - lunge.progress) * combo.lungeDistance * lunge.facing;
+    const distance = (progress - lunge.progress) * combo.lungeDistance;
     lunge.progress = progress;
-    const next = this.walkArea.move(this.player.x, this.player.y, dx, 0, this.scratch);
+    const next = this.walkArea.move(this.player.x, this.player.y,
+      distance * lunge.direction.x, distance * lunge.direction.y * VERTICAL_SPEED_RATIO, this.scratch);
     this.player.placeAt(next.x, next.y);
     if (progress === 1) this.attackLunge = undefined;
   }
@@ -497,8 +505,9 @@ export class GameScene extends Phaser.Scene {
     for (const enemy of this.enemies) {
       const c = enemy.character;
       if (!c.alive || trace.hit.has(enemy)) continue;
-      // 높이 방향의 레인을 유지해 화면상 겹쳐 보이는 다른 줄의 적을 치지 않는다.
-      if (Math.abs(c.y - player.y) > PLAYER.attackLane) continue;
+      // Use a corridor around the locked attack direction, then test the visible blade.
+      if (!insideAttackLane(c.x - player.x, c.y - player.y, trace.direction,
+        PLAYER.attackLane, VERTICAL_SPEED_RATIO)) continue;
       const bounds = c.sprite.getBounds(this.boundsScratch);
       if (!bladeHitsEllipse(sweep.previous, sweep.current, { x: bounds.centerX, y: bounds.centerY },
         bounds.width * 0.42 + PLAYER.bladeRadius, bounds.height * 0.42 + PLAYER.bladeRadius)) continue;
@@ -512,7 +521,8 @@ export class GameScene extends Phaser.Scene {
         enemy.kill();
         this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
       } else {
-        c.knockback.set(player.facing * PLAYER.knockback * combo.knockback, 0);
+        const push = PLAYER.knockback * combo.knockback;
+        c.knockback.set(trace.direction.x * push, trace.direction.y * push * VERTICAL_SPEED_RATIO);
         enemy.interrupt(this.now);
       }
     }

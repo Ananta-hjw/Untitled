@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { ACTION_DURATION, heroFrame, movementFacing } from '../src/entities/heroFrames.ts';
+import { ACTION_DURATION, attackVector, heroFrame, insideAttackLane, movementFacing } from '../src/entities/heroFrames.ts';
 import { PLAYER } from '../src/config.ts';
 
 const root = new URL('../src/assets/hero/academy/', import.meta.url);
@@ -18,11 +18,12 @@ test('원본 4방향 시트는 Unity 아래쪽 좌표를 Phaser 위쪽 좌표로
   }
 });
 
-test('32개 프레임의 영역과 발·검 기준점은 원본 시트 안에 있다', () => {
-  assert.equal(data.frames.length, 32);
-  assert.equal(new Set(data.frames.map((f) => f.name)).size, 32);
-  const pngs = new Map(['walk', 'combat'].map((name) => {
-    const png = readFileSync(new URL(`player_${name}.png`, root));
+test('72개 프레임의 영역과 발·검 기준점은 원본 시트 안에 있다', () => {
+  assert.equal(data.frames.length, 72);
+  assert.equal(new Set(data.frames.map((f) => f.name)).size, 72);
+  const pngs = new Map(['walk', 'combat', 'diagonal', 'attack-down', 'attack-up'].map((name) => {
+    const file = name === 'diagonal' ? 'player_walk_diagonal.png' : `player_${name.replace('-', '_')}.png`;
+    const png = readFileSync(new URL(file, root));
     return [`hero-academy-${name}`, { w: png.readUInt32BE(16), h: png.readUInt32BE(20) }];
   }));
   for (const frame of data.frames) {
@@ -45,13 +46,26 @@ test('걷기는 방향별 실제 그림과 8fps의 1→2→3→2 순서를 사�
     assert.deepEqual([0, 125, 250, 375, 500].map((t) => heroFrame('walk', facing, t)),
       [1, 2, 3, 2, 1].map((col) => `walk-${row * 4 + col}`));
   }
+  for (const [row, facing] of ['down-left', 'down-right', 'up-left', 'up-right'].entries()) {
+    assert.equal(heroFrame('idle', facing, 900), `diagonal-${row * 4}`);
+    assert.deepEqual([0, 125, 250, 375, 500].map((t) => heroFrame('walk', facing, t)),
+      [1, 2, 3, 2, 1].map((col) => `diagonal-${row * 4 + col}`));
+  }
   assert.equal(movementFacing(0, 0, 'up', true), 'up');
   assert.equal(movementFacing(0, -2, 'down', false), 'up');
   assert.equal(movementFacing(0, 2, 'up', false), 'down');
   assert.equal(movementFacing(-2, 0, 'down', false), 'left');
   assert.equal(movementFacing(2, 0, 'down', false), 'right');
-  assert.equal(movementFacing(1, 1.1, 'right', true), 'right');
-  assert.equal(movementFacing(1, 1.3, 'right', true), 'down');
+  assert.equal(movementFacing(-1, 1, 'down', false), 'down-left');
+  assert.equal(movementFacing(1, 1, 'down', false), 'down-right');
+  assert.equal(movementFacing(-1, -1, 'up', false), 'up-left');
+  assert.equal(movementFacing(1, -1, 'up', false), 'up-right');
+  assert.equal(movementFacing(0, 0, 'up-left', true), 'up-left');
+  assert.equal(movementFacing(1, .5, 'right', true), 'right');
+  assert.equal(movementFacing(1, .7, 'right', true), 'down-right');
+  assert.equal(movementFacing(1, .3, 'down-right', true), 'down-right');
+  assert.equal(movementFacing(1, .2, 'down-right', true), 'right');
+  assert.equal(movementFacing(-1, -.1, 'left', true), 'left');
 });
 
 test('각 콤보의 실제 타격 그림은 명중 구간 안에 표시되고 3타는 다음 콤보 전에 끝난다', () => {
@@ -63,4 +77,27 @@ test('각 콤보의 실제 타격 그림은 명중 구간 안에 표시되고 3�
     assert.ok(ACTION_DURATION[action] >= PLAYER.combo[stage].intervalMs);
   }
   assert.equal(ACTION_DURATION.attack3, PLAYER.combo[2].intervalMs);
+});
+
+test('대각선 4방향은 각 콤보에서 전용 타격 그림을 선택한다', () => {
+  for (const facing of ['down-left', 'down-right', 'up-left', 'up-right']) {
+    for (let stage = 0; stage < 3; stage++) {
+      const frame = heroFrame(`attack${stage + 1}`, facing, PLAYER.combo[stage].hitDelayMs + 30);
+      assert.equal(frame, `attack-${facing.startsWith('up') ? 'up' : 'down'}-${stage * 4 + 2}`);
+      assert.ok(data.frames.find((f) => f.name === frame).blade);
+    }
+  }
+});
+
+test('회전한 타격 레인은 앞쪽만 허용하고 뒤쪽·옆 레인은 제외한다', () => {
+  for (const facing of ['left', 'right', 'down-left', 'down-right', 'up-left', 'up-right']) {
+    const direction = attackVector(facing);
+    assert.ok(Math.abs(Math.hypot(direction.x, direction.y) - 1) < 1e-9);
+    const x = direction.x * 100, y = direction.y * 100 * .7;
+    assert.equal(insideAttackLane(x, y, direction, 52, .7), true, facing);
+    assert.equal(insideAttackLane(-x, -y, direction, 52, .7), false, facing);
+    const length = Math.hypot(x, y);
+    assert.equal(insideAttackLane(x - y / length * 53, y + x / length * 53, direction, 52, .7), false, facing);
+  }
+  assert.equal(insideAttackLane(100, 52, { x: 1, y: 0 }, 52, .7), true);
 });

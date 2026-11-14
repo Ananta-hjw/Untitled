@@ -40,7 +40,7 @@ export const PLAYER = {
   comboWindowMs: 380,
   /** 다음 공격이 가능해지기 직전의 짧은 입력을 기억할 시간(ms) */
   attackBufferMs: 150,
-  /** 타격 자세 이후 검날을 추적할 시간(ms), 검날 두께 보정(px), 위아래 레인(px) */
+  /** 타격 자세 이후 검날 추적 시간(ms), 검날 두께(px), 공격 방향을 기준으로 한 레인 반폭(px) */
   hitWindowMs: 55,
   bladeRadius: 6,
   attackLane: 52,

@@ -4,7 +4,7 @@
 
 가상 조이스틱(화면에 고정된 원형 패드)으로 한 장짜리 배경 위를 360도로 돌아다니고,
 공격 버튼(누르고 있으면 3단 콤보)과 회피 버튼으로 몬스터와 실시간으로 싸운다.
-주인공은 천무학관의 4방향 대기·걷기 시트와 같은 디자인으로 추가한 3단 공격·회피 시트를 사용한다. 나머지는 코드로 그린 임시 그래픽이다.
+주인공은 천무학관 기반의 상하좌우·대각선 8방향 대기·걷기 시트와 같은 디자인의 좌우·대각선 3단 공격 및 회피 시트를 사용한다. 나머지는 코드로 그린 임시 그래픽이다.
 
 ## 실행
 
@@ -48,7 +48,7 @@ npm run test:browser
 | `src/world/walkArea.ts` | 이동 가능 영역(다각형)과 장애물(타원) |
 | `src/entities/Character.ts` | 플레이어·NPC·몬스터 공통 틀, Y정렬 |
 | `src/entities/HeroSprite.ts` | 원본 프레임 표시, 발·검날 좌표, 좌우 공격, 잔상 복사 |
-| `src/entities/heroFrames.ts` | 4방향 선택, 8fps 걷기 순서, 공격·회피 프레임 시점 |
+| `src/entities/heroFrames.ts` | 8방향 선택, 공격 방향·타격 레인, 걷기·공격·회피 프레임 시점 |
 | `src/assets/hero/academy/` | 현재 사용하는 캐릭터 시트·프레임 좌표·출처 |
 | `art/hero_parts/` | 이전 뼈대 캐릭터의 부위별 원본 PNG 보관 |
 | `tools/build_hero_rig.py` | 원본 부위를 조립해 `src/assets/hero/rig.png`, `rig.json` 생성 |
@@ -60,8 +60,8 @@ npm run test:browser
 
 ## 주인공 그림을 고쳤을 때
 
-현재 캐릭터는 `src/assets/hero/academy/`의 `player_walk.png`와 `player_combat.png`를 사용한다.
-원본 시트를 편집하지 않고 프레임 영역과 발·검날 기준점을 별도 JSON으로 관리한다.
+현재 캐릭터는 `src/assets/hero/academy/`의 `player_walk.png`, `player_walk_diagonal.png`, `player_combat.png`, `player_attack_down.png`, `player_attack_up.png`를 사용한다.
+원본 시트를 편집하지 않고 프레임 영역과 발·검날 기준점을 별도 JSON으로 관리한다. 공격은 이동 입력을 우선하고, 입력이 없으면 근처 적 또는 마지막 방향을 사용한다. 한 타격 동안 방향을 고정하며 전진·넉백·검날 판정이 같은 방향을 따른다.
 공격 그림을 교체할 때는 `tools/build_hero_frames.py`의 `ANCHORS`와 파츠 영역도 다시 측정한다.
 
 ```bash
@@ -72,7 +72,7 @@ npm run test:browser
 ```
 
 `heroFrames.ts`의 공격 프레임 시점은 `src/config.ts`의 콤보 명중 구간과 함께 조정한다.
-게임 화면에서 네 방향 이동·정지, 좌우 3단 공격, 회피, 발 높이와 이름표를 확인한다.
+게임 화면에서 여덟 방향 이동·정지, 좌우·대각선 4방향의 3단 공격, 회피, 발 높이와 이름표를 확인한다.
 이전 뼈대 조립 도구와 파츠는 보관하며 현재 주인공 표시에는 사용하지 않는다.
 
 ## 안드로이드 APK

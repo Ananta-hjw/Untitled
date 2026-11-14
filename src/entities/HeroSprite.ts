@@ -3,7 +3,10 @@ import type { Blade } from '../combat/blade';
 import data from '../assets/hero/academy/frames.json';
 import walkSheet from '../assets/hero/academy/player_walk.png?inline';
 import combatSheet from '../assets/hero/academy/player_combat.png?inline';
-import { ACTION_DURATION, heroFrame, movementFacing, type Facing, type HeroAction } from './heroFrames';
+import diagonalSheet from '../assets/hero/academy/player_walk_diagonal.png?inline';
+import attackDownSheet from '../assets/hero/academy/player_attack_down.png?inline';
+import attackUpSheet from '../assets/hero/academy/player_attack_up.png?inline';
+import { ACTION_DURATION, attackFacingFor, heroFrame, movementFacing, type AttackFacing, type Facing, type HeroAction } from './heroFrames';
 
 export const HERO_SPRITE_HEIGHT = data.height;
 interface SpriteFrame {
@@ -15,6 +18,9 @@ const FRAMES = new Map<string, SpriteFrame>(data.frames.map((f) => [f.name, f]))
 export function preloadHeroSprite(scene: Phaser.Scene): void {
   if (!scene.textures.exists('hero-academy-walk')) scene.load.image('hero-academy-walk', walkSheet);
   if (!scene.textures.exists('hero-academy-combat')) scene.load.image('hero-academy-combat', combatSheet);
+  if (!scene.textures.exists('hero-academy-diagonal')) scene.load.image('hero-academy-diagonal', diagonalSheet);
+  if (!scene.textures.exists('hero-academy-attack-down')) scene.load.image('hero-academy-attack-down', attackDownSheet);
+  if (!scene.textures.exists('hero-academy-attack-up')) scene.load.image('hero-academy-attack-up', attackUpSheet);
 }
 
 /** Whole-character frames keep the academy artwork intact, with measured foot and sword anchors. */
@@ -24,6 +30,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   private readonly image: Phaser.GameObjects.Image;
   private animation: HeroAction = 'idle';
   private facing: Facing = 'down';
+  private attackFacing: AttackFacing = 'right';
   private time = 0;
   private finished = false;
   private moving = false;
@@ -59,6 +66,15 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     const next = movementFacing(dx, dy, this.facing, this.moving);
     this.moving = Math.abs(dx) + Math.abs(dy) >= 0.001;
     if (next !== this.facing) { this.facing = next; this.time = 0; }
+    this.attackFacing = attackFacingFor(this.facing, this.flipX ? -1 : 1);
+    this.applyFrame();
+  }
+
+  get lookDirection(): Facing { return this.facing; }
+
+  setAttackFacing(facing: AttackFacing): void {
+    this.attackFacing = facing;
+    this.facing = facing;
     this.applyFrame();
   }
 
@@ -109,10 +125,11 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   }
 
   private applyFrame(): void {
-    const frame = FRAMES.get(heroFrame(this.animation, this.facing, this.time))!;
-    const action = this.animation !== 'idle' && this.animation !== 'walk';
+    const attacking = this.animation.startsWith('attack');
+    const frame = FRAMES.get(heroFrame(this.animation, attacking ? this.attackFacing : this.facing, this.time))!;
+    const mirrored = attacking ? this.attackFacing.includes('left') : this.animation === 'dodge' && this.flipX;
     this.frame = frame;
     this.image.setTexture(frame.texture, frame.name).setOrigin(frame.originX, frame.originY)
-      .setScale(frame.scale * (action && this.flipX ? -1 : 1), frame.scale);
+      .setScale(frame.scale * (mirrored ? -1 : 1), frame.scale);
   }
 }

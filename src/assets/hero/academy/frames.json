@@ -4,11 +4,11 @@
     {
       "name": "walk-0",
       "texture": "hero-academy-walk",
-      "x": 77,
-      "y": 8,
-      "w": 172,
-      "h": 302,
-      "originX": 0.5,
+      "x": 84,
+      "y": 11,
+      "w": 161,
+      "h": 296,
+      "originX": 0.4906832298136646,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -16,11 +16,11 @@
     {
       "name": "walk-1",
       "texture": "hero-academy-walk",
-      "x": 391,
-      "y": 8,
-      "w": 172,
-      "h": 304,
-      "originX": 0.5,
+      "x": 405,
+      "y": 11,
+      "w": 154,
+      "h": 299,
+      "originX": 0.4675324675324675,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -28,11 +28,11 @@
     {
       "name": "walk-2",
       "texture": "hero-academy-walk",
-      "x": 705,
-      "y": 9,
-      "w": 171,
-      "h": 300,
-      "originX": 0.5,
+      "x": 718,
+      "y": 11,
+      "w": 155,
+      "h": 296,
+      "originX": 0.46774193548387094,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -40,11 +40,11 @@
     {
       "name": "walk-3",
       "texture": "hero-academy-walk",
-      "x": 1019,
-      "y": 9,
-      "w": 171,
-      "h": 302,
-      "originX": 0.5,
+      "x": 1030,
+      "y": 11,
+      "w": 156,
+      "h": 299,
+      "originX": 0.4775641025641026,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -52,11 +52,11 @@
     {
       "name": "walk-4",
       "texture": "hero-academy-walk",
-      "x": 77,
-      "y": 319,
-      "w": 178,
-      "h": 301,
-      "originX": 0.5,
+      "x": 79,
+      "y": 323,
+      "w": 167,
+      "h": 294,
+      "originX": 0.5209580838323353,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -64,11 +64,11 @@
     {
       "name": "walk-5",
       "texture": "hero-academy-walk",
-      "x": 391,
-      "y": 319,
-      "w": 179,
-      "h": 296,
-      "originX": 0.5,
+      "x": 392,
+      "y": 324,
+      "w": 170,
+      "h": 288,
+      "originX": 0.5205882352941177,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -76,11 +76,11 @@
     {
       "name": "walk-6",
       "texture": "hero-academy-walk",
-      "x": 704,
-      "y": 320,
-      "w": 178,
-      "h": 299,
-      "originX": 0.5,
+      "x": 706,
+      "y": 324,
+      "w": 169,
+      "h": 292,
+      "originX": 0.514792899408284,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -88,11 +88,11 @@
     {
       "name": "walk-7",
       "texture": "hero-academy-walk",
-      "x": 1018,
-      "y": 319,
-      "w": 180,
-      "h": 296,
-      "originX": 0.5,
+      "x": 1020,
+      "y": 323,
+      "w": 169,
+      "h": 289,
+      "originX": 0.5207100591715976,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -100,11 +100,11 @@
     {
       "name": "walk-8",
       "texture": "hero-academy-walk",
-      "x": 66,
-      "y": 632,
-      "w": 176,
-      "h": 300,
-      "originX": 0.5,
+      "x": 73,
+      "y": 637,
+      "w": 167,
+      "h": 293,
+      "originX": 0.48502994011976047,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -112,11 +112,11 @@
     {
       "name": "walk-9",
       "texture": "hero-academy-walk",
-      "x": 381,
-      "y": 632,
-      "w": 174,
-      "h": 293,
-      "originX": 0.5,
+      "x": 387,
+      "y": 637,
+      "w": 167,
+      "h": 291,
+      "originX": 0.48502994011976047,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -124,11 +124,11 @@
     {
       "name": "walk-10",
       "texture": "hero-academy-walk",
-      "x": 695,
-      "y": 632,
-      "w": 174,
-      "h": 300,
-      "originX": 0.5,
+      "x": 699,
+      "y": 637,
+      "w": 169,
+      "h": 293,
+      "originX": 0.4911242603550296,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -136,11 +136,11 @@
     {
       "name": "walk-11",
       "texture": "hero-academy-walk",
-      "x": 1010,
-      "y": 632,
-      "w": 172,
-      "h": 293,
-      "originX": 0.5,
+      "x": 1013,
+      "y": 637,
+      "w": 169,
+      "h": 290,
+      "originX": 0.4911242603550296,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -148,11 +148,11 @@
     {
       "name": "walk-12",
       "texture": "hero-academy-walk",
-      "x": 88,
-      "y": 950,
-      "w": 161,
-      "h": 286,
-      "originX": 0.5,
+      "x": 95,
+      "y": 952,
+      "w": 128,
+      "h": 284,
+      "originX": 0.57421875,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -161,10 +161,10 @@
       "name": "walk-13",
       "texture": "hero-academy-walk",
       "x": 402,
-      "y": 949,
-      "w": 161,
-      "h": 288,
-      "originX": 0.5,
+      "y": 952,
+      "w": 135,
+      "h": 285,
+      "originX": 0.5962962962962963,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -172,11 +172,11 @@
     {
       "name": "walk-14",
       "texture": "hero-academy-walk",
-      "x": 716,
-      "y": 950,
-      "w": 160,
-      "h": 286,
-      "originX": 0.5,
+      "x": 721,
+      "y": 952,
+      "w": 131,
+      "h": 285,
+      "originX": 0.5725190839694656,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -184,11 +184,11 @@
     {
       "name": "walk-15",
       "texture": "hero-academy-walk",
-      "x": 1033,
-      "y": 949,
-      "w": 158,
-      "h": 288,
-      "originX": 0.5,
+      "x": 1031,
+      "y": 952,
+      "w": 135,
+      "h": 285,
+      "originX": 0.6,
       "originY": 1,
       "scale": 1,
       "blade": null
@@ -196,41 +196,41 @@
     {
       "name": "combat-0",
       "texture": "hero-academy-combat",
-      "x": 52,
-      "y": 43,
-      "w": 212,
-      "h": 251,
-      "originX": 0.4339622641509434,
+      "x": 54,
+      "y": 42,
+      "w": 207,
+      "h": 255,
+      "originX": 0.43478260869565216,
       "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 105,
-          "y": 192
+          "x": 103,
+          "y": 193
         },
         "tip": {
-          "x": 211,
-          "y": 237
+          "x": 206,
+          "y": 238
         }
       }
     },
     {
       "name": "combat-1",
       "texture": "hero-academy-combat",
-      "x": 352,
+      "x": 353,
       "y": 26,
-      "w": 194,
-      "h": 268,
-      "originX": 0.4896907216494845,
+      "w": 193,
+      "h": 271,
+      "originX": 0.48704663212435234,
       "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 93,
+          "x": 92,
           "y": 83
         },
         "tip": {
-          "x": 193,
+          "x": 192,
           "y": 0
         }
       }
@@ -238,63 +238,63 @@
     {
       "name": "combat-2",
       "texture": "hero-academy-combat",
-      "x": 665,
-      "y": 47,
-      "w": 259,
-      "h": 247,
-      "originX": 0.37065637065637064,
+      "x": 667,
+      "y": 46,
+      "w": 253,
+      "h": 251,
+      "originX": 0.3715415019762846,
       "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 158,
-          "y": 186
+          "x": 156,
+          "y": 187
         },
         "tip": {
-          "x": 259,
-          "y": 233
+          "x": 252,
+          "y": 234
         }
       }
     },
     {
       "name": "combat-3",
       "texture": "hero-academy-combat",
-      "x": 980,
-      "y": 43,
-      "w": 200,
-      "h": 251,
-      "originX": 0.46,
+      "x": 979,
+      "y": 44,
+      "w": 203,
+      "h": 252,
+      "originX": 0.458128078817734,
       "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 112,
-          "y": 190
+          "x": 113,
+          "y": 189
         },
         "tip": {
-          "x": 199,
-          "y": 236
+          "x": 202,
+          "y": 235
         }
       }
     },
     {
       "name": "combat-4",
       "texture": "hero-academy-combat",
-      "x": 52,
-      "y": 357,
-      "w": 212,
-      "h": 251,
-      "originX": 0.4339622641509434,
+      "x": 51,
+      "y": 356,
+      "w": 209,
+      "h": 253,
+      "originX": 0.4449760765550239,
       "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 105,
-          "y": 191
+          "x": 106,
+          "y": 192
         },
         "tip": {
-          "x": 211,
-          "y": 236
+          "x": 208,
+          "y": 237
         }
       }
     },
@@ -302,104 +302,104 @@
       "name": "combat-5",
       "texture": "hero-academy-combat",
       "x": 346,
-      "y": 369,
-      "w": 242,
-      "h": 238,
-      "originX": 0.44214876033057854,
-      "originY": 1.004201680672269,
+      "y": 367,
+      "w": 244,
+      "h": 242,
+      "originX": 0.4385245901639344,
+      "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
           "x": 145,
-          "y": 199
+          "y": 201
         },
         "tip": {
-          "x": 242,
-          "y": 226
+          "x": 243,
+          "y": 228
         }
       }
     },
     {
       "name": "combat-6",
       "texture": "hero-academy-combat",
-      "x": 658,
-      "y": 357,
-      "w": 269,
-      "h": 251,
-      "originX": 0.3643122676579926,
+      "x": 657,
+      "y": 356,
+      "w": 268,
+      "h": 254,
+      "originX": 0.3694029850746269,
       "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 177,
-          "y": 110
+          "x": 178,
+          "y": 111
         },
         "tip": {
-          "x": 269,
-          "y": 63
+          "x": 267,
+          "y": 64
         }
       }
     },
     {
       "name": "combat-7",
       "texture": "hero-academy-combat",
-      "x": 965,
-      "y": 353,
+      "x": 964,
+      "y": 355,
       "w": 268,
-      "h": 255,
-      "originX": 0.376865671641791,
+      "h": 254,
+      "originX": 0.3805970149253731,
       "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 193,
-          "y": 88
+          "x": 194,
+          "y": 86
         },
         "tip": {
           "x": 267,
-          "y": 11
+          "y": 9
         }
       }
     },
     {
       "name": "combat-8",
       "texture": "hero-academy-combat",
-      "x": 52,
-      "y": 670,
-      "w": 212,
+      "x": 50,
+      "y": 671,
+      "w": 211,
       "h": 251,
-      "originX": 0.4339622641509434,
+      "originX": 0.44549763033175355,
       "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 105,
-          "y": 192
+          "x": 107,
+          "y": 191
         },
         "tip": {
-          "x": 211,
-          "y": 237
+          "x": 210,
+          "y": 236
         }
       }
     },
     {
       "name": "combat-9",
       "texture": "hero-academy-combat",
-      "x": 346,
-      "y": 674,
-      "w": 207,
-      "h": 247,
-      "originX": 0.5024154589371981,
+      "x": 345,
+      "y": 673,
+      "w": 211,
+      "h": 249,
+      "originX": 0.4976303317535545,
       "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 95,
-          "y": 165
+          "x": 96,
+          "y": 166
         },
         "tip": {
-          "x": 205,
-          "y": 164
+          "x": 210,
+          "y": 165
         }
       }
     },
@@ -407,40 +407,40 @@
       "name": "combat-10",
       "texture": "hero-academy-combat",
       "x": 659,
-      "y": 686,
-      "w": 288,
-      "h": 234,
-      "originX": 0.3541666666666667,
-      "originY": 1.0042735042735043,
+      "y": 683,
+      "w": 290,
+      "h": 240,
+      "originX": 0.35172413793103446,
+      "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
           "x": 190,
-          "y": 144
+          "y": 147
         },
         "tip": {
           "x": 288,
-          "y": 145
+          "y": 148
         }
       }
     },
     {
       "name": "combat-11",
       "texture": "hero-academy-combat",
-      "x": 970,
+      "x": 971,
       "y": 671,
-      "w": 229,
-      "h": 250,
-      "originX": 0.45414847161572053,
+      "w": 241,
+      "h": 251,
+      "originX": 0.42738589211618255,
       "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 130,
+          "x": 129,
           "y": 160
         },
         "tip": {
-          "x": 229,
+          "x": 240,
           "y": 160
         }
       }
@@ -448,21 +448,21 @@
     {
       "name": "combat-12",
       "texture": "hero-academy-combat",
-      "x": 49,
-      "y": 1007,
-      "w": 200,
-      "h": 227,
-      "originX": 0.45,
-      "originY": 1.0044052863436124,
+      "x": 46,
+      "y": 1006,
+      "w": 204,
+      "h": 230,
+      "originX": 0.45588235294117646,
+      "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 102,
-          "y": 194
+          "x": 105,
+          "y": 195
         },
         "tip": {
-          "x": 197,
-          "y": 223
+          "x": 203,
+          "y": 224
         }
       }
     },
@@ -470,62 +470,758 @@
       "name": "combat-13",
       "texture": "hero-academy-combat",
       "x": 358,
-      "y": 1007,
-      "w": 192,
-      "h": 228,
-      "originX": 0.4947916666666667,
+      "y": 1009,
+      "w": 191,
+      "h": 226,
+      "originX": 0.4973821989528796,
       "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
           "x": 96,
-          "y": 186
+          "y": 184
         },
         "tip": {
-          "x": 189,
-          "y": 223
+          "x": 190,
+          "y": 221
         }
       }
     },
     {
       "name": "combat-14",
       "texture": "hero-academy-combat",
-      "x": 658,
-      "y": 1013,
-      "w": 243,
+      "x": 661,
+      "y": 1014,
+      "w": 241,
       "h": 221,
-      "originX": 0.42386831275720166,
-      "originY": 1.004524886877828,
+      "originX": 0.4149377593360996,
+      "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 160,
-          "y": 180
+          "x": 157,
+          "y": 179
         },
         "tip": {
-          "x": 238,
-          "y": 217
+          "x": 240,
+          "y": 216
         }
       }
     },
     {
       "name": "combat-15",
       "texture": "hero-academy-combat",
-      "x": 977,
-      "y": 983,
-      "w": 211,
+      "x": 980,
+      "y": 984,
+      "w": 209,
       "h": 252,
-      "originX": 0.4597156398104265,
+      "originX": 0.44976076555023925,
       "originY": 1.0,
       "scale": 1.2,
       "blade": {
         "base": {
-          "x": 127,
-          "y": 195
+          "x": 124,
+          "y": 194
         },
         "tip": {
           "x": 208,
-          "y": 240
+          "y": 239
+        }
+      }
+    },
+    {
+      "name": "diagonal-0",
+      "texture": "hero-academy-diagonal",
+      "x": 81,
+      "y": 9,
+      "w": 181,
+      "h": 298,
+      "originX": 0.3729281767955801,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-1",
+      "texture": "hero-academy-diagonal",
+      "x": 394,
+      "y": 9,
+      "w": 180,
+      "h": 299,
+      "originX": 0.38055555555555554,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-2",
+      "texture": "hero-academy-diagonal",
+      "x": 707,
+      "y": 10,
+      "w": 181,
+      "h": 297,
+      "originX": 0.3784530386740331,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-3",
+      "texture": "hero-academy-diagonal",
+      "x": 1022,
+      "y": 11,
+      "w": 180,
+      "h": 295,
+      "originX": 0.36944444444444446,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-4",
+      "texture": "hero-academy-diagonal",
+      "x": 67,
+      "y": 319,
+      "w": 190,
+      "h": 300,
+      "originX": 0.6394736842105263,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-5",
+      "texture": "hero-academy-diagonal",
+      "x": 379,
+      "y": 321,
+      "w": 188,
+      "h": 298,
+      "originX": 0.6569148936170213,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-6",
+      "texture": "hero-academy-diagonal",
+      "x": 691,
+      "y": 322,
+      "w": 188,
+      "h": 297,
+      "originX": 0.6622340425531915,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-7",
+      "texture": "hero-academy-diagonal",
+      "x": 998,
+      "y": 322,
+      "w": 194,
+      "h": 298,
+      "originX": 0.6726804123711341,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-8",
+      "texture": "hero-academy-diagonal",
+      "x": 85,
+      "y": 632,
+      "w": 172,
+      "h": 300,
+      "originX": 0.46511627906976744,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-9",
+      "texture": "hero-academy-diagonal",
+      "x": 395,
+      "y": 634,
+      "w": 177,
+      "h": 298,
+      "originX": 0.4745762711864407,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-10",
+      "texture": "hero-academy-diagonal",
+      "x": 709,
+      "y": 635,
+      "w": 169,
+      "h": 296,
+      "originX": 0.4911242603550296,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-11",
+      "texture": "hero-academy-diagonal",
+      "x": 1022,
+      "y": 633,
+      "w": 171,
+      "h": 299,
+      "originX": 0.4853801169590643,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-12",
+      "texture": "hero-academy-diagonal",
+      "x": 80,
+      "y": 947,
+      "w": 170,
+      "h": 294,
+      "originX": 0.55,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-13",
+      "texture": "hero-academy-diagonal",
+      "x": 391,
+      "y": 947,
+      "w": 176,
+      "h": 294,
+      "originX": 0.5482954545454546,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-14",
+      "texture": "hero-academy-diagonal",
+      "x": 698,
+      "y": 947,
+      "w": 180,
+      "h": 294,
+      "originX": 0.5694444444444444,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "diagonal-15",
+      "texture": "hero-academy-diagonal",
+      "x": 1017,
+      "y": 947,
+      "w": 173,
+      "h": 294,
+      "originX": 0.5578034682080925,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "attack-down-0",
+      "texture": "hero-academy-attack-down",
+      "x": 52,
+      "y": 24,
+      "w": 227,
+      "h": 320,
+      "originX": 0.44493392070484583,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 119,
+          "y": 237
+        },
+        "tip": {
+          "x": 226,
+          "y": 295
+        }
+      }
+    },
+    {
+      "name": "attack-down-1",
+      "texture": "hero-academy-attack-down",
+      "x": 404,
+      "y": 17,
+      "w": 208,
+      "h": 327,
+      "originX": 0.5120192307692307,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 82,
+          "y": 88
+        },
+        "tip": {
+          "x": 208,
+          "y": 0
+        }
+      }
+    },
+    {
+      "name": "attack-down-2",
+      "texture": "hero-academy-attack-down",
+      "x": 752,
+      "y": 38,
+      "w": 295,
+      "h": 310,
+      "originX": 0.3254237288135593,
+      "originY": 0.9870967741935484,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 191,
+          "y": 237
+        },
+        "tip": {
+          "x": 294,
+          "y": 309
+        }
+      }
+    },
+    {
+      "name": "attack-down-3",
+      "texture": "hero-academy-attack-down",
+      "x": 1125,
+      "y": 26,
+      "w": 234,
+      "h": 318,
+      "originX": 0.42948717948717946,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 127,
+          "y": 237
+        },
+        "tip": {
+          "x": 233,
+          "y": 302
+        }
+      }
+    },
+    {
+      "name": "attack-down-4",
+      "texture": "hero-academy-attack-down",
+      "x": 51,
+      "y": 389,
+      "w": 229,
+      "h": 314,
+      "originX": 0.44541484716157204,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 120,
+          "y": 234
+        },
+        "tip": {
+          "x": 228,
+          "y": 295
+        }
+      }
+    },
+    {
+      "name": "attack-down-5",
+      "texture": "hero-academy-attack-down",
+      "x": 393,
+      "y": 406,
+      "w": 279,
+      "h": 296,
+      "originX": 0.3763440860215054,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 169,
+          "y": 247
+        },
+        "tip": {
+          "x": 278,
+          "y": 278
+        }
+      }
+    },
+    {
+      "name": "attack-down-6",
+      "texture": "hero-academy-attack-down",
+      "x": 752,
+      "y": 390,
+      "w": 304,
+      "h": 314,
+      "originX": 0.35526315789473684,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 190,
+          "y": 210
+        },
+        "tip": {
+          "x": 303,
+          "y": 291
+        }
+      }
+    },
+    {
+      "name": "attack-down-7",
+      "texture": "hero-academy-attack-down",
+      "x": 1118,
+      "y": 391,
+      "w": 296,
+      "h": 312,
+      "originX": 0.3935810810810811,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 214,
+          "y": 105
+        },
+        "tip": {
+          "x": 295,
+          "y": 22
+        }
+      }
+    },
+    {
+      "name": "attack-down-8",
+      "texture": "hero-academy-attack-down",
+      "x": 50,
+      "y": 751,
+      "w": 230,
+      "h": 315,
+      "originX": 0.45217391304347826,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 121,
+          "y": 237
+        },
+        "tip": {
+          "x": 229,
+          "y": 295
+        }
+      }
+    },
+    {
+      "name": "attack-down-9",
+      "texture": "hero-academy-attack-down",
+      "x": 386,
+      "y": 754,
+      "w": 215,
+      "h": 312,
+      "originX": 0.5348837209302325,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 82,
+          "y": 209
+        },
+        "tip": {
+          "x": 214,
+          "y": 217
+        }
+      }
+    },
+    {
+      "name": "attack-down-10",
+      "texture": "hero-academy-attack-down",
+      "x": 729,
+      "y": 771,
+      "w": 321,
+      "h": 294,
+      "originX": 0.3177570093457944,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 206,
+          "y": 219
+        },
+        "tip": {
+          "x": 320,
+          "y": 293
+        }
+      }
+    },
+    {
+      "name": "attack-down-11",
+      "texture": "hero-academy-attack-down",
+      "x": 1117,
+      "y": 754,
+      "w": 254,
+      "h": 312,
+      "originX": 0.4448818897637795,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 132,
+          "y": 218
+        },
+        "tip": {
+          "x": 253,
+          "y": 231
+        }
+      }
+    },
+    {
+      "name": "attack-up-0",
+      "texture": "hero-academy-attack-up",
+      "x": 50,
+      "y": 30,
+      "w": 253,
+      "h": 316,
+      "originX": 0.41699604743083,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 189,
+          "y": 221
+        },
+        "tip": {
+          "x": 252,
+          "y": 255
+        }
+      }
+    },
+    {
+      "name": "attack-up-1",
+      "texture": "hero-academy-attack-up",
+      "x": 406,
+      "y": 3,
+      "w": 248,
+      "h": 343,
+      "originX": 0.4536290322580645,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 192,
+          "y": 90
+        },
+        "tip": {
+          "x": 246,
+          "y": 0
+        }
+      }
+    },
+    {
+      "name": "attack-up-2",
+      "texture": "hero-academy-attack-up",
+      "x": 756,
+      "y": 35,
+      "w": 297,
+      "h": 309,
+      "originX": 0.3686868686868687,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 224,
+          "y": 132
+        },
+        "tip": {
+          "x": 296,
+          "y": 66
+        }
+      }
+    },
+    {
+      "name": "attack-up-3",
+      "texture": "hero-academy-attack-up",
+      "x": 1145,
+      "y": 33,
+      "w": 243,
+      "h": 313,
+      "originX": 0.3991769547325103,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 173,
+          "y": 219
+        },
+        "tip": {
+          "x": 242,
+          "y": 266
+        }
+      }
+    },
+    {
+      "name": "attack-up-4",
+      "texture": "hero-academy-attack-up",
+      "x": 47,
+      "y": 392,
+      "w": 256,
+      "h": 315,
+      "originX": 0.42578125,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 193,
+          "y": 224
+        },
+        "tip": {
+          "x": 255,
+          "y": 259
+        }
+      }
+    },
+    {
+      "name": "attack-up-5",
+      "texture": "hero-academy-attack-up",
+      "x": 408,
+      "y": 411,
+      "w": 263,
+      "h": 294,
+      "originX": 0.3840304182509506,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 186,
+          "y": 227
+        },
+        "tip": {
+          "x": 262,
+          "y": 262
+        }
+      }
+    },
+    {
+      "name": "attack-up-6",
+      "texture": "hero-academy-attack-up",
+      "x": 776,
+      "y": 403,
+      "w": 285,
+      "h": 302,
+      "originX": 0.3087719298245614,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 210,
+          "y": 110
+        },
+        "tip": {
+          "x": 284,
+          "y": 51
+        }
+      }
+    },
+    {
+      "name": "attack-up-7",
+      "texture": "hero-academy-attack-up",
+      "x": 1136,
+      "y": 379,
+      "w": 271,
+      "h": 327,
+      "originX": 0.3726937269372694,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 200,
+          "y": 81
+        },
+        "tip": {
+          "x": 270,
+          "y": 0
+        }
+      }
+    },
+    {
+      "name": "attack-up-8",
+      "texture": "hero-academy-attack-up",
+      "x": 49,
+      "y": 755,
+      "w": 255,
+      "h": 315,
+      "originX": 0.4215686274509804,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 190,
+          "y": 221
+        },
+        "tip": {
+          "x": 254,
+          "y": 258
+        }
+      }
+    },
+    {
+      "name": "attack-up-9",
+      "texture": "hero-academy-attack-up",
+      "x": 408,
+      "y": 757,
+      "w": 237,
+      "h": 313,
+      "originX": 0.459915611814346,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 155,
+          "y": 193
+        },
+        "tip": {
+          "x": 236,
+          "y": 191
+        }
+      }
+    },
+    {
+      "name": "attack-up-10",
+      "texture": "hero-academy-attack-up",
+      "x": 746,
+      "y": 769,
+      "w": 325,
+      "h": 301,
+      "originX": 0.33384615384615385,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 249,
+          "y": 126
+        },
+        "tip": {
+          "x": 324,
+          "y": 99
+        }
+      }
+    },
+    {
+      "name": "attack-up-11",
+      "texture": "hero-academy-attack-up",
+      "x": 1131,
+      "y": 759,
+      "w": 263,
+      "h": 311,
+      "originX": 0.42015209125475284,
+      "originY": 1.0,
+      "scale": 0.9375,
+      "blade": {
+        "base": {
+          "x": 185,
+          "y": 212
+        },
+        "tip": {
+          "x": 262,
+          "y": 234
         }
       }
     }

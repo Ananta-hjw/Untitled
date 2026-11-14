@@ -392,7 +392,8 @@ test('실제 이동 방향에 맞는 원본 프레임을 표시하고 정지·�
   const result = await evaluate(`(() => {
     const s = window.__game.scene.getScene('game'), p = s.player, hero = p.sprite, runs = [];
     s.enemies = []; s.now = 1000;
-    for (const [name, x, y] of [['up', 0, -1], ['down', 0, 1], ['left', -1, 0], ['right', 1, 0]]) {
+    for (const [name, x, y] of [['up', 0, -1], ['down', 0, 1], ['left', -1, 0], ['right', 1, 0],
+      ['down-left', -.707, .707], ['down-right', .707, .707], ['up-left', -.707, -.707], ['up-right', .707, -.707]]) {
       p.revive(1000, 640); s.joystick.vector.set(x, y);
       for (let i = 0; i < 3; i++) { hero.onSceneUpdate(0, 50); s.updatePlayer(s.now += 50, .05); }
       const moving = hero.image.frame.name;
@@ -403,7 +404,7 @@ test('실제 이동 방향에 맞는 원본 프레임을 표시하고 정지·�
     }
     hero.play('dodge'); hero.onSceneUpdate(0, 150);
     const ghost = hero.spawnGhost(p.x, p.y, p.y - 1, 0x9fc4ff, .35);
-    hero.play('walk'); hero.setMovement(-1, 0);
+    hero.play('walk'); hero.setMovement(-1, -1);
     hero.spawnGhost(p.x, p.y, p.y - 1, 0x9fc4ff, .35, ghost);
     const copy = ghost.getAt(0);
     const reused = copy.texture.key === hero.image.texture.key && copy.frame.name === hero.image.frame.name;
@@ -414,6 +415,13 @@ test('실제 이동 방향에 맞는 원본 프레임을 표시하고 정지·�
     const run = result.runs.find((r) => r.name === name);
     assert.equal(Math.floor(Number(run.moving.slice(5)) / 4), row);
     assert.equal(run.idle, `walk-${row * 4}`);
+    assert.equal(run.mirrored, false);
+    assert.ok(run.error < 0.001);
+  }
+  for (const [row, name] of ['down-left', 'down-right', 'up-left', 'up-right'].entries()) {
+    const run = result.runs.find((r) => r.name === name);
+    assert.equal(Math.floor(Number(run.moving.slice(9)) / 4), row);
+    assert.equal(run.idle, `diagonal-${row * 4}`);
     assert.equal(run.mirrored, false);
     assert.ok(run.error < 0.001);
   }
@@ -441,4 +449,71 @@ test('새 공격 그림의 실제 검날은 20·30·60·120fps와 좌우 모든 
   })()`);
   assert.equal(result.length, 24);
   for (const run of result) assert.equal(run.hits, 1, JSON.stringify(run));
+});
+
+test('대각선 4방향의 모든 콤보는 20·30·60·120fps에서 앞쪽만 명중하고 같은 방향으로 전진·넉백한다', async () => {
+  await load();
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player, hero = p.sprite, enemies = s.enemies, runs = [];
+    s.joystick.vector.set(0, 0);
+    const directions = [['down-left', -1, 1], ['down-right', 1, 1], ['up-left', -1, -1], ['up-right', 1, -1]];
+    for (const fps of [20, 30, 60, 120]) for (const [facing, signX, signY] of directions) for (const stage of [0, 1, 2]) {
+      const x = signX * Math.SQRT1_2, y = signY * Math.SQRT1_2;
+      const worldX = x * 110, worldY = y * 110 * .7, length = Math.hypot(worldX, worldY);
+      const offsets = [[worldX, worldY], [-worldX, -worldY],
+        [worldX - worldY / length * 100, worldY + worldX / length * 100], [worldX * 4, worldY * 4]];
+      p.revive(1000, 640); s.enemies = enemies;
+      const hits = [0, 0, 0, 0];
+      enemies.forEach((enemy, i) => {
+        enemy.character.revive(1000 + offsets[i][0], 640 + offsets[i][1]);
+        enemy.character.hurt = () => { hits[i]++; return false; }; enemy.interrupt = () => {};
+      });
+      s.comboStage = stage; s.comboExpiresAt = 10000; s.now = 1000;
+      s.startAttack(1000, x, y);
+      const texture = hero.image.texture.key, mirrored = hero.image.scaleX < 0;
+      for (let i = 1; i <= Math.ceil(fps * .32); i++) {
+        hero.onSceneUpdate(0, 1000 / fps); s.now = 1000 + i * 1000 / fps;
+        s.updateAttackLunge(s.now); s.updateAttackTrace(s.now);
+      }
+      const knockback = enemies[0].character.knockback;
+      runs.push({ fps, facing, stage, hits, texture, mirrored,
+        dx: p.x - 1000, dy: p.y - 640, kx: knockback.x, ky: knockback.y });
+    }
+    return runs;
+  })()`);
+  assert.equal(result.length, 48);
+  for (const run of result) {
+    assert.deepEqual(run.hits, [1, 0, 0, 0], JSON.stringify(run));
+    assert.equal(run.texture, `hero-academy-attack-${run.facing.startsWith('up') ? 'up' : 'down'}`);
+    assert.equal(run.mirrored, run.facing.includes('left'));
+    assert.equal(Math.sign(run.dx), run.facing.includes('left') ? -1 : 1);
+    assert.equal(Math.sign(run.dy), run.facing.startsWith('up') ? -1 : 1);
+    assert.ok(Math.abs(Math.abs(run.dy / run.dx) - .7) < 0.001);
+    assert.equal(Math.sign(run.kx), Math.sign(run.dx));
+    assert.equal(Math.sign(run.ky), Math.sign(run.dy));
+    assert.ok(Math.abs(Math.abs(run.ky / run.kx) - .7) < 0.001);
+  }
+});
+
+test('마지막 대각선과 자동 조준을 사용하고 공격 도중 반대 입력이 들어와도 검과 판정 방향은 고정된다', async () => {
+  await load();
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player, hero = p.sprite, enemy = s.enemies[0];
+    s.enemies = []; p.revive(1000, 640);
+    hero.setMovement(-1, -1); hero.setMovement(0, 0);
+    s.startAttack(1000, 0, 0);
+    hero.onSceneUpdate(0, 50);
+    const before = { frame: hero.image.frame.name, scale: hero.image.scaleX, blade: hero.getBlade(), direction: {...s.attackTrace.direction} };
+    hero.setMovement(1, 1); p.face(1);
+    const after = { frame: hero.image.frame.name, scale: hero.image.scaleX, blade: hero.getBlade(), direction: {...s.attackTrace.direction} };
+    p.endAttack(); p.revive(1000, 640); s.comboExpiresAt = 0;
+    enemy.character.revive(1080, 695); s.enemies = [enemy];
+    s.startAttack(2000, 0, 0);
+    return { before, after, aimed: hero.image.texture.key, direction: s.attackTrace.direction };
+  })()`);
+  assert.ok(result.before.frame.startsWith('attack-up-'));
+  assert.ok(result.before.scale < 0);
+  assert.deepEqual(result.after, result.before);
+  assert.equal(result.aimed, 'hero-academy-attack-down');
+  assert.ok(result.direction.x > 0 && result.direction.y > 0);
 });
