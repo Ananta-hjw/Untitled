@@ -1,5 +1,16 @@
 import Phaser from 'phaser';
 import heroNeutral from '../assets/hero/dialogue/neutral-768.png?url';
+import serenaPortrait from '../assets/characters/serena/dialogue-768.webp?url';
+import siaPortrait from '../assets/characters/sia/dialogue-768.webp?url';
+import lineaPortrait from '../assets/characters/linea/dialogue-768.webp?url';
+import ruanPortrait from '../assets/characters/ruan/dialogue-768.webp?url';
+import hermanPortrait from '../assets/characters/herman/dialogue-768.webp?url';
+import eilaPortrait from '../assets/characters/eila/dialogue-768.webp?url';
+import merinaPortrait from '../assets/characters/merina/dialogue-768.webp?url';
+import doranPortrait from '../assets/characters/doran/dialogue-768.webp?url';
+import rosettaPortrait from '../assets/characters/rosetta/dialogue-768.webp?url';
+import vernelPortrait from '../assets/characters/vernel/dialogue-768.webp?url';
+import teonPortrait from '../assets/characters/teon/dialogue-768.webp?url';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 import type { DialogueLine, Portrait } from '../story/dialogues';
 
@@ -14,6 +25,17 @@ import type { DialogueLine, Portrait } from '../story/dialogues';
 const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 const PORTRAITS: Record<Portrait, { key: string; url: string }> = {
   'hero-neutral': { key: 'portrait-hero-neutral', url: heroNeutral },
+  serena: { key: 'portrait-serena', url: serenaPortrait },
+  sia: { key: 'portrait-sia', url: siaPortrait },
+  linea: { key: 'portrait-linea', url: lineaPortrait },
+  ruan: { key: 'portrait-ruan', url: ruanPortrait },
+  herman: { key: 'portrait-herman', url: hermanPortrait },
+  eila: { key: 'portrait-eila', url: eilaPortrait },
+  merina: { key: 'portrait-merina', url: merinaPortrait },
+  doran: { key: 'portrait-doran', url: doranPortrait },
+  rosetta: { key: 'portrait-rosetta', url: rosettaPortrait },
+  vernel: { key: 'portrait-vernel', url: vernelPortrait },
+  teon: { key: 'portrait-teon', url: teonPortrait },
 };
 /** 초당 나오는 글자 수 */
 const CHARS_PER_SECOND = 38;

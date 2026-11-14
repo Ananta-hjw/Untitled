@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { HOME, OBSTACLES, PLAYER_SPAWN, PROPS, WALK_BOUNDS } from '../src/world/villageLayout.ts';
+import {
+  BUILDINGS, HOME, OBSTACLES, PLAYER_SPAWN, PROPS, SOUTH_GATE_PASSAGE, WALK_BOUNDS,
+} from '../src/world/villageLayout.ts';
 import { insideObstacle } from '../src/world/obstacles.ts';
 import { NavGrid } from '../src/world/navGrid.ts';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../src/config.ts';
@@ -9,48 +11,84 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from '../src/config.ts';
 const contains = (x, y) => x >= WALK_BOUNDS.left && x <= WALK_BOUNDS.right &&
   y >= WALK_BOUNDS.top && y <= WALK_BOUNDS.bottom && !OBSTACLES.some((o) => insideObstacle(o, x, y));
 
-test('집 앞 시작점과 현관 접근점은 걸을 수 있다', () => {
+test('시작점과 모든 건물의 문 앞은 걸을 수 있고, 건물의 벽은 막는다', () => {
   assert.ok(WALK_BOUNDS.right < WORLD_WIDTH && WALK_BOUNDS.bottom < WORLD_HEIGHT);
-  for (const point of [PLAYER_SPAWN, HOME.entrance]) {
-    assert.equal(contains(point.x, point.y), true, JSON.stringify(point));
+  assert.equal(HOME.frame, 'family-house');
+  assert.equal(contains(PLAYER_SPAWN.x, PLAYER_SPAWN.y), true);
+  assert.equal(new Set(BUILDINGS.map((b) => b.frame)).size, 8);
+  for (const b of BUILDINGS) {
+    assert.equal(contains(b.door.x, b.door.y), true, `${b.frame} door`);
+    for (const wall of b.footprint) {
+      if (wall.y < WALK_BOUNDS.bottom) assert.equal(contains(wall.x, wall.y), false, `${b.frame} wall`);
+      assert.ok(wall.y + wall.ry <= b.y + 40, `${b.frame} wall below the art`);
+    }
   }
-  assert.equal(contains(HOME.footprint.x, HOME.footprint.y), false);
 });
 
-test('집의 네모난 벽과 나무·바위의 바닥 접점은 막고 넓은 잎·장식용 돌은 통과한다', () => {
-  const wall = HOME.footprint;
-  assert.equal(insideObstacle(wall, wall.x + wall.rx - 1, wall.y + wall.ry - 1), true);
-  assert.equal(insideObstacle(wall, wall.x + wall.rx + 1, wall.y), false);
+test('건물 벽은 서로 겹치지 않고, 건물 그림은 맵 안에 있다', () => {
+  const walls = BUILDINGS.flatMap((b) => b.footprint.map((w) => ({ ...w, frame: b.frame })));
+  for (let i = 0; i < walls.length; i++) {
+    for (let j = i + 1; j < walls.length; j++) {
+      const a = walls[i], c = walls[j];
+      const apart = Math.abs(a.x - c.x) >= a.rx + c.rx || Math.abs(a.y - c.y) >= a.ry + c.ry;
+      assert.ok(apart || a.frame === c.frame, `${a.frame} / ${c.frame}`);
+    }
+  }
+  for (const b of BUILDINGS) assert.ok(b.x - b.width / 2 >= 0 && b.x + b.width / 2 <= WORLD_WIDTH && b.y <= WORLD_HEIGHT, b.frame);
+});
+
+test('남쪽 입구는 아치 기둥 사이로만 지나간다', () => {
+  const y = 1540;
+  for (let x = 900; x <= 1460; x += 8) {
+    const open = x >= SOUTH_GATE_PASSAGE.left && x <= SOUTH_GATE_PASSAGE.right;
+    assert.equal(contains(x, y), open, `x=${x}`);
+  }
+});
+
+test('나무·바위의 바닥 접점은 막고 넓은 잎은 통과한다', () => {
   const tree = PROPS.find((p) => p.frame === 'oak');
-  const trunk = OBSTACLES.find((o) => o.x === tree.x);
+  const trunk = OBSTACLES.find((o) => o.x === tree.x && o.shape !== 'rect');
   assert.equal(insideObstacle(trunk, trunk.x, trunk.y), true);
   assert.equal(insideObstacle(trunk, trunk.x + 100, trunk.y - 150), false);
-  assert.equal(contains(1180, 506), true);
 });
 
-test('집 뒤에서 집 앞까지 건물을 뚫지 않고 우회 경로를 찾는다', () => {
+test('촌장 집 뒤에서 시작점까지 건물을 뚫지 않고 돌아간다', () => {
   const b = WALK_BOUNDS;
   const nav = new NavGrid(b.left, b.top, b.right, b.bottom, 32, contains);
   nav.setTarget(PLAYER_SPAWN.x, PLAYER_SPAWN.y);
-  const point = { x: HOME.x, y: 290 }, next = { x: 0, y: 0 };
+  const chief = BUILDINGS.find((x) => x.frame === 'chief-house');
+  const wall = chief.footprint[0];
+  const point = { x: chief.x, y: 290 }, next = { x: 0, y: 0 };
   let steps = 0, around = false;
   while (nav.next(point.x, point.y, next)) {
     assert.equal(contains(next.x, next.y), true);
     point.x = next.x; point.y = next.y;
-    around ||= Math.abs(point.x - HOME.x) >= HOME.footprint.rx;
-    assert.ok(++steps < 200);
+    around ||= Math.abs(point.x - wall.x) >= wall.rx;
+    assert.ok(++steps < 300);
   }
   assert.equal(around, true);
   assert.ok(Math.hypot(point.x - PLAYER_SPAWN.x, point.y - PLAYER_SPAWN.y) < 50);
 });
 
-test('집과 여덟 소품의 프레임은 각 원본 PNG 내부에 있다', () => {
+/** VP8X(투명 WebP) 머리에서 그림 크기를 읽는다. */
+function webpSize(buffer) {
+  assert.equal(buffer.toString('ascii', 0, 4), 'RIFF');
+  assert.equal(buffer.toString('ascii', 12, 16), 'VP8X');
+  return { width: buffer.readUIntLE(24, 3) + 1, height: buffer.readUIntLE(27, 3) + 1 };
+}
+
+test('소품과 건물 프레임은 각 그림 안에 있다', () => {
   const root = new URL('../src/assets/village/', import.meta.url);
   const { frames } = JSON.parse(readFileSync(new URL('frames.json', root)));
-  assert.equal(frames.length, 9);
   for (const frame of frames) {
     const source = readFileSync(new URL(frame.texture === 'village-home' ? 'home.png' : 'props.png', root));
-    assert.ok(frame.w > 0 && frame.h > 0);
     assert.ok(frame.x >= 0 && frame.y >= 0 && frame.x + frame.w <= source.readUInt32BE(16) && frame.y + frame.h <= source.readUInt32BE(20));
+  }
+  const buildings = JSON.parse(readFileSync(new URL('rowen/buildings.json', root))).frames;
+  const size = webpSize(readFileSync(new URL('rowen/buildings.webp', root)));
+  assert.deepEqual(buildings.map((f) => f.name).sort(), BUILDINGS.map((b) => b.frame).sort());
+  for (const f of buildings) {
+    assert.ok(f.w > 100 && f.h > 100, f.name);
+    assert.ok(f.x >= 0 && f.y >= 0 && f.x + f.w <= size.width && f.y + f.h <= size.height, f.name);
   }
 });

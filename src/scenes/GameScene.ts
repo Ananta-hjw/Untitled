@@ -38,8 +38,9 @@ import { DamageNumbers } from '../ui/DamageNumbers';
 import { DialogueBox, preloadDialogue } from '../ui/DialogueBox';
 import { PauseMenu } from '../ui/PauseMenu';
 import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings } from '../ui/settingsData';
-import { DIALOGUES } from '../story/dialogues';
+import { DIALOGUES, HERO_NAME } from '../story/dialogues';
 import { findInteractable, type Interactable } from '../world/interactables';
+import { Npc, preloadNpcs } from '../entities/Npc';
 import { ProgressEffects } from '../ui/ProgressEffects';
 
 /** Scale shared by all academy frames. */
@@ -124,6 +125,10 @@ export class GameScene extends Phaser.Scene {
   /** 다른 맵으로 옮겨 가는 중(화면이 어두워지는 동안). 그동안 게임은 멈춘다. */
   private traveling = false;
   private nav!: NavGrid;
+  /** 이 맵의 마을 사람들 */
+  private npcs: Npc[] = [];
+  /** 말을 걸 수 있는 대상: 맵의 표지판·문과 마을 사람들 */
+  private interactables: Interactable[] = [];
   private readonly boundsScratch = new Phaser.Geom.Rectangle();
   private keys?: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   private readonly input2 = new Phaser.Math.Vector2();
@@ -155,6 +160,8 @@ export class GameScene extends Phaser.Scene {
 
   private resetState(): void {
     this.enemies = [];
+    this.npcs = [];
+    this.interactables = [];
     this.attackKeys = [];
     this.dodgeKeys = [];
     this.keys = undefined;
@@ -193,6 +200,7 @@ export class GameScene extends Phaser.Scene {
   preload(): void {
     preloadHeroSprite(this);
     preloadVillage(this);
+    preloadNpcs(this, MAPS.village.npcs);
     preloadDialogue(this);
   }
 
@@ -305,6 +313,7 @@ export class GameScene extends Phaser.Scene {
       this.applyKnockback(enemy.character, dt);
     }
     this.separateEnemies(dt);
+    for (const npc of this.npcs) npc.update(time, dt, this.player, this.walkArea);
     this.applyKnockback(this.player, dt);
     this.damageNumbers.update(gameStep);
     this.updateInteraction(time);
@@ -314,11 +323,13 @@ export class GameScene extends Phaser.Scene {
 
   private buildCharacters(): void {
     for (const spawn of this.map.enemies) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y));
+    this.npcs = this.map.npcs.map((def) => new Npc(this, def));
+    this.interactables = [...this.map.interactables, ...this.npcs.map((npc) => npc.spot)];
 
     const start = this.arrival ?? this.map.spawn;
     this.player = new Character(this, start.x, start.y, {
       key: 'hero',
-      name: '용사',
+      name: HERO_NAME,
       level: this.progress.level,
       hero: true,
       scale: HERO_SCALE,
@@ -846,7 +857,7 @@ export class GameScene extends Phaser.Scene {
   private updateInteraction(time: number): void {
     const player = this.player;
     const free = player.alive && !player.isAttacking && this.dodgeProgress >= 1 && !this.inCombat();
-    const target = free ? findInteractable(player.x, player.y, this.map.interactables) : undefined;
+    const target = free ? findInteractable(player.x, player.y, this.interactables) : undefined;
     this.talkButton.setVisible(!!target);
 
     const marker = this.talkMarker;

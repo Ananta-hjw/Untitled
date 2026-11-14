@@ -524,7 +524,7 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
   const result = await evaluate(`(() => {
     const g = window.__game, s = g.scene.getScene('game'), p = s.player, camera = s.cameras.main;
     const ground = s.children.list.find(o => o.texture?.key === 'village-ground');
-    const home = s.children.list.find(o => o.texture?.key === 'village-home');
+    const home = s.children.list.find(o => o.texture?.key === 'village-buildings' && o.frame.name === 'family-house');
     const initial = { x: p.x, y: p.y, walkable: s.walkArea.contains(p.x, p.y),
       safe: s.enemies.every(e => Math.hypot(e.character.x - p.x, e.character.y - p.y) > 600) };
     s.enemies = []; p.placeAt(1180, 1500); camera.centerOn(p.x, p.y - 170);
@@ -532,14 +532,14 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
     const south = { scroll: camera.scrollY, bottom: camera.scrollY + camera.height / camera.zoom };
     p.placeAt(1180, s.walkArea.bounds.top); camera.centerOn(p.x, p.y - 170);
     g.step(performance.now(), 0);
-    const nameTop = p.list.find(o => o.text === '용사').getBounds().top;
+    const nameTop = p.list.find(o => o.text === '시온').getBounds().top;
     return { initial, home: !!home, ground: { width: ground.displayWidth, height: ground.displayHeight },
       oldRoom: s.children.list.some(o => o.texture?.key === 'room'),
       ui: { width: s.scale.gameSize.width, attack: s.attackButton.image.x, dodge: s.dodgeButton.image.x, hp: s.hud.hpText.text },
       scroll: south.scroll, bottom: south.bottom, nameTop,
       boundsHeight: camera.getBounds().height };
   })()`);
-  assert.deepEqual(result.initial, { x: 1180, y: 620, walkable: true, safe: true });
+  assert.deepEqual(result.initial, { x: 430, y: 640, walkable: true, safe: true });
   assert.equal(result.home, true);
   assert.deepEqual(result.ground, { width: 2400, height: 1600 });
   assert.equal(result.oldRoom, false);
@@ -561,7 +561,7 @@ test('이동·긴 회피 거리는 집과 바위를 통과하지 않고 나무 �
     const out = new p.knockback.constructor();
     s.walkArea.move(home.x, home.y + home.ry + 80, 0, -500, out);
     const houseJump = { y: out.y, inside: !s.walkArea.contains(out.x, out.y) };
-    const rockImage = s.children.list.find(o => o.frame?.name === 'boulders');
+    const rockImage = s.children.list.find(o => o.frame?.name === 'rock');
     const rock = s.walkArea.obstacles.find(o => o.x === rockImage.x);
     s.walkArea.move(rock.x - rock.rx - 60, rock.y, rock.rx * 2 + 120, 0, out);
     const rockJump = { x: out.x, edge: rock.x - rock.rx, inside: !s.walkArea.contains(out.x, out.y) };
@@ -796,6 +796,47 @@ test('느린 화면 중의 공격도 맞고, 칼이 닿으면 게임 시간이 �
   assert.equal(result.settled, true);
 });
 
+test('로웬 마을 사람들은 이름표를 달고, 장사꾼은 제자리에 있고, 리네아·시아·루안은 걸어 다닌다', async () => {
+  await load('village');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    let t = performance.now();
+    s.player.placeAt(1180, 1440);
+    const start = Object.fromEntries(s.npcs.map(n => [n.def.id, { x: n.x, y: n.y }]));
+    const names = Object.fromEntries(s.npcs.map(n => [n.def.id, n.list.find(o => o.text !== undefined)?.text]));
+    const visible = s.npcs.every(n => n.list.some(o => o.texture && o.texture.key !== 'shadow' && o.texture.key !== '__MISSING' && o.displayHeight > 100));
+    for (let i = 0; i < 600; i++) g.step(t += 16, 16);
+    const moved = Object.fromEntries(s.npcs.map(n => [n.def.id, Math.round(Math.hypot(n.x - start[n.def.id].x, n.y - start[n.def.id].y))]));
+    const onGround = s.npcs.every(n => s.walkArea.contains(n.x, n.y));
+    // 루안 옆에 서면 루안이 멈추고, 대화하면 루안의 이름과 그림이 나온다.
+    const ruan = s.npcs.find(n => n.def.id === 'ruan');
+    s.player.placeAt(ruan.x + 60, ruan.y + 10);
+    g.step(t += 16, 16);
+    const stoppedAt = { x: ruan.x, y: ruan.y };
+    for (let i = 0; i < 60; i++) g.step(t += 16, 16);
+    const stayed = ruan.x === stoppedAt.x && ruan.y === stoppedAt.y;
+    const spotFollows = ruan.spot.x === ruan.x && ruan.spot.y === ruan.y;
+    s.openDialogue(ruan.spot);
+    g.step(t += 16, 16);
+    const dialogue = { open: s.dialogue.isOpen, name: s.dialogue.nameText.text, portrait: s.dialogue.portrait.texture.key };
+    s.dialogue.close();
+    return { count: s.npcs.length, names, visible, moved, onGround, stayed, spotFollows, dialogue,
+      talkable: s.interactables.filter(i => i.id.startsWith('npc-')).length };
+  })()`);
+  assert.equal(result.count, 11);
+  assert.equal(result.talkable, 11);
+  assert.equal(result.visible, true);
+  assert.deepEqual(result.names, {
+    serena: '세레나', sia: '시아', linea: '리네아', ruan: '루안', herman: '헤르만', eila: '에일라',
+    merina: '메리나', doran: '도란', rosetta: '로제타', vernel: '베르넬', teon: '테온',
+  });
+  for (const id of ['merina', 'doran', 'rosetta', 'serena', 'herman', 'eila', 'vernel', 'teon']) assert.equal(result.moved[id], 0, id);
+  for (const id of ['linea', 'sia', 'ruan']) assert.ok(result.moved[id] > 20, `${id} moved ${result.moved[id]}`);
+  assert.equal(result.onGround, true);
+  assert.equal(result.stayed, true);
+  assert.equal(result.spotFollows, true);
+  assert.deepEqual(result.dialogue, { open: true, name: '루안', portrait: 'portrait-ruan' });
+});
 test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 이어지며 마을에는 몬스터가 없다', async () => {
   await load('village');
   const result = await evaluate(`(() => {
@@ -818,7 +859,7 @@ test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 �
     const backFromSouth = travel(1180, 260);
     const west = travel(80, 1050);
     const backFromWest = travel(2330, 1050);
-    const east = travel(2330, 910);
+    const east = travel(2330, 1050);
     const restartedHere = (() => { s.scene.restart(); step(2); return { map: s.mapId, hp: s.player.hp, maxHp: s.player.maxHp }; })();
     return { village, south, backFromSouth, west, backFromWest, east, restartedHere };
   })()`);

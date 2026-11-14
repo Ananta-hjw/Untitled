@@ -23,7 +23,7 @@ export interface Interactable {
 const SIGN = PROPS.find((p) => p.frame === 'sign')!;
 
 export const INTERACTABLES: Interactable[] = [
-  { id: 'home-door', x: HOME.entrance.x, y: HOME.entrance.y, radius: 95, markerHeight: 190, dialogue: 'home-door' },
+  { id: 'home-door', x: HOME.door.x, y: HOME.door.y, radius: 80, markerHeight: 190, dialogue: 'home-door' },
   { id: 'village-sign', x: SIGN.x, y: SIGN.y, radius: 105, markerHeight: 150, dialogue: 'village-sign' },
 ];
 

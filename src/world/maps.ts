@@ -2,8 +2,10 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from '../config.ts';
 import type { DialogueId } from '../story/dialogues.ts';
 import { INTERACTABLES, type Interactable } from './interactables.ts';
 import { insideObstacle, type Obstacle } from './obstacles.ts';
+import { NPCS, type NpcDef } from './npcs.ts';
 import {
-  HOME, PLAYER_SPAWN, PROPS as VILLAGE_PROPS, WALK_BOUNDS as VILLAGE_BOUNDS, propObstacles, type VillageProp,
+  BUILDINGS, PLAYER_SPAWN, PROPS as VILLAGE_PROPS, SOUTH_GATE_PASSAGE, WALK_BOUNDS as VILLAGE_BOUNDS,
+  buildingObstacles, propObstacles, type Building, type VillageProp,
 } from './villageLayout.ts';
 
 /**
@@ -40,8 +42,10 @@ export interface GameMap {
   hint: string;
   bounds: Rect;
   props: VillageProp[];
-  /** 주인공의 집이 있는 맵인지 (마을만) */
-  home: boolean;
+  /** 건물 (마을만) */
+  buildings: Building[];
+  /** 마을 사람 (마을만) */
+  npcs: NpcDef[];
   /** 지면 색조. 같은 땅 그림을 맵마다 다른 분위기로 쓴다. */
   groundTint?: number;
   /** 화면 위쪽에 그리는 개울. 걸을 수 있는 영역 밖에 있다. */
@@ -72,16 +76,18 @@ const VILLAGE: GameMap = {
   hint: '로웬 마을 · 조이스틱 또는 WASD로 둘러보세요',
   bounds: FULL_BOUNDS,
   props: VILLAGE_PROPS,
-  home: true,
+  buildings: BUILDINGS,
+  npcs: NPCS,
   spawn: PLAYER_SPAWN,
   enemies: [],
   exits: [
-    { to: 'south-field', zone: { left: 1040, top: 1500, right: 1320, bottom: WORLD_HEIGHT },
-      arrive: { x: 1180, y: 420 }, label: '▼ 남쪽 들판', labelAt: { x: 1180, y: 1525 } },
+    // 남쪽 입구 아치의 두 기둥 사이로 나간다.
+    { to: 'south-field', zone: { left: SOUTH_GATE_PASSAGE.left, top: 1500, right: SOUTH_GATE_PASSAGE.right, bottom: WORLD_HEIGHT },
+      arrive: { x: 1180, y: 420 }, label: '▼ 남쪽 들판', labelAt: { x: 1181, y: 1478 } },
     { to: 'west-forest', zone: { left: 0, top: 940, right: 112, bottom: 1160 },
       arrive: { x: 2150, y: 1050 }, label: '◀ 서쪽 숲길', labelAt: { x: 150, y: 1000 } },
-    { to: 'east-stream', zone: { left: 2290, top: 820, right: WORLD_WIDTH, bottom: 1000 },
-      arrive: { x: 240, y: 910 }, label: '동쪽 개울가 ▶', labelAt: { x: 2245, y: 870 } },
+    { to: 'east-stream', zone: { left: 2290, top: 960, right: WORLD_WIDTH, bottom: 1140 },
+      arrive: { x: 240, y: 910 }, label: '동쪽 개울가 ▶', labelAt: { x: 2245, y: 1010 } },
   ],
   interactables: INTERACTABLES,
 };
@@ -115,7 +121,8 @@ const SOUTH_FIELD: GameMap = {
     { frame: 'flowers', x: 1150, y: 1300, width: 75 },
     southSign.prop,
   ],
-  home: false,
+  buildings: [],
+  npcs: [],
   groundTint: 0xf2ecc8,
   spawn: { x: 1180, y: 420 },
   enemies: [
@@ -154,7 +161,8 @@ const WEST_FOREST: GameMap = {
     { frame: 'flowers', x: 380, y: 860, width: 60 },
     forestSign.prop,
   ],
-  home: false,
+  buildings: [],
+  npcs: [],
   groundTint: 0xb9cfa4,
   spawn: { x: 2150, y: 1050 },
   enemies: [
@@ -192,7 +200,8 @@ const EAST_STREAM: GameMap = {
     { frame: 'flowers', x: 600, y: 1100, width: 70 },
     streamSign.prop,
   ],
-  home: false,
+  buildings: [],
+  npcs: [],
   groundTint: 0xd6e8da,
   water: { top: 230, bottom: 415 },
   spawn: { x: 240, y: 910 },
@@ -203,7 +212,7 @@ const EAST_STREAM: GameMap = {
   ],
   exits: [
     { to: 'village', zone: { left: 0, top: 820, right: 110, bottom: 1000 },
-      arrive: { x: 2180, y: 910 }, label: '◀ 로웬 마을', labelAt: { x: 160, y: 1010 } },
+      arrive: { x: 2180, y: 1050 }, label: '◀ 로웬 마을', labelAt: { x: 160, y: 1010 } },
   ],
   interactables: [streamSign.spot],
 };
@@ -223,7 +232,7 @@ export function isMapId(value: unknown): value is MapId {
 
 /** 맵의 장애물: 집의 벽(마을만)과 소품의 바닥 접점 */
 export function mapObstacles(map: GameMap): Obstacle[] {
-  return map.home ? [HOME.footprint, ...propObstacles(map.props)] : propObstacles(map.props);
+  return [...buildingObstacles(map.buildings), ...propObstacles(map.props)];
 }
 
 /** 걸을 수 있는 영역의 꼭짓점 (WalkArea용) */
