@@ -1,6 +1,6 @@
 {
   "name": "untitled",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "모바일 RPG 프로토타입",
   "scripts": {
     "dev": "vite",
@@ -26,6 +26,7 @@
   "homepage": "https://github.com/Ananta-hjw/Untitled#readme",
   "dependencies": {
     "@capacitor/android": "^8.6.2",
+    "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.6.2",
     "phaser": "^4.2.1"
   },

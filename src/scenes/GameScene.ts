@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { App } from '@capacitor/app';
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import { bladeHitsEllipse, clipBladeSweep, type Blade } from '../combat/blade';
 import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
@@ -32,6 +34,8 @@ import { buildVillage, preloadVillage, ENEMY_SPAWNS, PLAYER_SPAWN, type Village 
 import { Hud } from '../ui/Hud';
 import { DamageNumbers } from '../ui/DamageNumbers';
 import { DialogueBox, preloadDialogue } from '../ui/DialogueBox';
+import { PauseMenu } from '../ui/PauseMenu';
+import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings } from '../ui/settingsData';
 import { DIALOGUES } from '../story/dialogues';
 import { findInteractable, type Interactable } from '../world/interactables';
 import { ProgressEffects } from '../ui/ProgressEffects';
@@ -81,6 +85,15 @@ export class GameScene extends Phaser.Scene {
   private progressEffects!: ProgressEffects;
   private dialogue!: DialogueBox;
   private talkButton!: ActionButton;
+  private pauseButton!: ActionButton;
+  private pauseMenu!: PauseMenu;
+  private pauseKeys: Phaser.Input.Keyboard.Key[] = [];
+  /** 조작 설정. 바꿀 때마다 기기에 저장한다. */
+  private settings!: Settings;
+  /** 설정에 따른 저스트 회피 인정 시간(ms) */
+  private justDodgeWindow = JUST_DODGE.windowMs;
+  /** 안드로이드 뒤로가기 버튼 리스너 (앱에서만 동작) */
+  private backButtonListener?: Promise<PluginListenerHandle>;
   private talkKeys: Phaser.Input.Keyboard.Key[] = [];
   /** 말풍선 표시. 대화할 수 있는 대상 위에 뜬다. */
   private talkMarker!: Phaser.GameObjects.Text;
@@ -136,6 +149,7 @@ export class GameScene extends Phaser.Scene {
     this.scratch.set(0, 0);
     this.enemyRespawns = [];
     this.talkKeys = [];
+    this.pauseKeys = [];
     this.progress = { level: 1, xp: 0 };
     this.stats = statsForLevel(1);
     this.playerRespawnAt = undefined;
@@ -174,15 +188,21 @@ export class GameScene extends Phaser.Scene {
       .setDepth(DEPTH_LIGHTING + 4)
       .setResolution(2)
       .setVisible(false);
+    this.buildPause();
 
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 170);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.game.events.on(Phaser.Core.Events.BLUR, this.clearAttackInput, this);
+    // 앱을 내리거나 다른 앱으로 넘어가면 돌아왔을 때 일시정지 상태로 보여 준다.
+    this.game.events.on(Phaser.Core.Events.HIDDEN, this.openPause, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
       this.game.events.off(Phaser.Core.Events.BLUR, this.clearAttackInput, this);
+      this.game.events.off(Phaser.Core.Events.HIDDEN, this.openPause, this);
+      void this.backButtonListener?.then((listener) => listener.remove()).catch(() => undefined);
+      this.backButtonListener = undefined;
       this.resetState();
     });
     this.layout();
@@ -194,6 +214,20 @@ export class GameScene extends Phaser.Scene {
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
     // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
     const step = Math.min(delta, 50);
+
+    // 일시정지 중에는 게임 시계를 멈춘다. Esc는 메뉴에서 한 단계 뒤로.
+    let escape = false;
+    for (const key of this.pauseKeys) {
+      if (Phaser.Input.Keyboard.JustDown(key)) escape = true;
+    }
+    if (this.pauseMenu.isOpen) {
+      if (escape) this.pauseMenu.back();
+      return;
+    }
+    if (this.pauseButton.consumePress() || escape) {
+      this.openPause();
+      return;
+    }
 
     // 대화 중에는 게임 시계를 멈춘다. 적·타이머·부활이 모두 그대로 기다린다.
     if (this.dialogue.isOpen) {
@@ -326,8 +360,11 @@ export class GameScene extends Phaser.Scene {
     this.hud.layout(width);
     this.attackButton.setPosition(width - 170, VIEW_HEIGHT - 185);
     this.dodgeButton.setPosition(width - 330, VIEW_HEIGHT - 105);
-    this.talkButton.setPosition(width - 170, VIEW_HEIGHT - 340);
+    // 대화 버튼은 공격 버튼 바로 위. 버튼 크기 설정이 바뀌어도 겹치지 않게 간격을 다시 잡는다.
+    this.talkButton.setPosition(width - 170, VIEW_HEIGHT - 185 - this.attackButton.size - this.talkButton.size - 16);
+    this.pauseButton.setPosition(width - 46, 74);
     this.dialogue.layout(width);
+    this.pauseMenu.layout(width);
   }
 
   // ---------------------------------------------------------------- 이동
@@ -654,6 +691,65 @@ export class GameScene extends Phaser.Scene {
     this.drawHud();
   }
 
+  // ---------------------------------------------------------------- 일시정지·설정
+
+  private buildPause(): void {
+    this.settings = loadSettings(this.storage);
+    this.pauseButton = new ActionButton(this, { x: 0, y: 0, radius: 30, label: 'II', color: 0x2a2018, fontSize: 22 });
+    this.pauseMenu = new PauseMenu(this, {
+      settings: this.settings,
+      onResume: () => this.onResume(),
+      onSettingsChange: (settings) => {
+        this.applySettings(settings);
+        saveSettings(this.storage, settings);
+      },
+      canExit: Capacitor.isNativePlatform(),
+      onExit: () => void App.exitApp(),
+    });
+    this.pauseKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)] : [];
+    // 안드로이드 뒤로가기: 바로 앱을 끄지 않고 일시정지 메뉴를 연다 (웹에서는 아무 일도 없다).
+    try {
+      this.backButtonListener = App.addListener('backButton', () => this.onBackButton());
+      this.backButtonListener.catch(() => undefined);
+    } catch {
+      this.backButtonListener = undefined;
+    }
+    this.applySettings(this.settings);
+  }
+
+  private applySettings(settings: Settings): void {
+    this.settings = settings;
+    const buttons = sizeScale(settings.buttonSize);
+    this.attackButton.setSizeScale(buttons);
+    this.dodgeButton.setSizeScale(buttons);
+    this.talkButton.setSizeScale(buttons);
+    this.joystick.setSizeScale(sizeScale(settings.joystickSize));
+    this.justDodgeWindow = justDodgeWindowMs(settings.justDodgeTiming);
+    if (this.pauseMenu) this.layout();
+  }
+
+  /** 뒤로가기 버튼: 메뉴가 열려 있으면 한 단계 뒤로, 아니면 일시정지. */
+  private onBackButton(): void {
+    if (this.pauseMenu.isOpen) this.pauseMenu.back();
+    else this.openPause();
+  }
+
+  private openPause(): void {
+    if (!this.pauseMenu || this.pauseMenu.isOpen) return;
+    this.pauseButton.setVisible(false);
+    this.pauseMenu.open();
+  }
+
+  /** 메뉴를 닫을 때 메뉴를 누르던 입력이 공격·회피·대화로 이어지지 않게 비운다. */
+  private onResume(): void {
+    this.pauseButton.setVisible(true);
+    this.clearAttackInput();
+    this.dodgeButton.consumePress();
+    this.talkButton.consumePress();
+    this.pauseButton.consumePress();
+    for (const key of [...this.dodgeKeys, ...this.talkKeys, ...this.attackKeys]) Phaser.Input.Keyboard.JustDown(key);
+  }
+
   // ---------------------------------------------------------------- 대화
 
   /** 대화 버튼이나 E·Enter 키를 이번 프레임에 눌렀는지. 눌림은 한 번만 센다. */
@@ -666,7 +762,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onDialoguePointer(): void {
-    if (this.dialogue.isOpen) this.dialogue.advance();
+    if (this.dialogue.isOpen && !this.pauseMenu.isOpen) this.dialogue.advance();
   }
 
   /** 싸우는 중에는 말을 걸 수 없다. 대화 중에는 게임이 멈추므로 공격받는 도중에 열리지 않게 한다. */
@@ -716,7 +812,7 @@ export class GameScene extends Phaser.Scene {
 
     // 공격이 닿기 직전에 피했고, 피하지 않았다면 맞았을 자리였으면 저스트 회피다.
     if (!this.justDodged && enemy.lastStrikeAt !== undefined
-      && isJustDodge(this.dodgeStartedAt, enemy.lastStrikeAt, JUST_DODGE.windowMs)
+      && isJustDodge(this.dodgeStartedAt, enemy.lastStrikeAt, this.justDodgeWindow)
       && strikeReaches(c.x, c.y, c.facing, this.dodgeOrigin.x, this.dodgeOrigin.y)) {
       this.onJustDodge(enemy);
       return;

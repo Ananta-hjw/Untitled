@@ -21,6 +21,8 @@ export class ActionButton {
   private pressed = false;
   private enabled = true;
   private shown = true;
+  /** 설정의 버튼 크기 배율 */
+  private sizeScale = 1;
 
   private readonly radius: number;
   private readonly image: Phaser.GameObjects.Image;
@@ -63,7 +65,7 @@ export class ActionButton {
 
     const onDown = (pointer: Phaser.Input.Pointer) => {
       if (this.pointerId !== null || !this.shown) return;
-      const reach = this.radius * 1.2;
+      const reach = this.radius * this.sizeScale * 1.2;
       const dx = pointer.x - this.image.x;
       const dy = pointer.y - this.image.y;
       if (dx * dx + dy * dy > reach * reach) return;
@@ -104,6 +106,17 @@ export class ActionButton {
     return pressed;
   }
 
+  /** 현재 크기(반지름, 배율 반영) */
+  get size(): number {
+    return this.radius * this.sizeScale;
+  }
+
+  /** 설정에서 고른 크기 배율. 누를 수 있는 범위도 함께 바뀐다. */
+  setSizeScale(scale: number): void {
+    this.sizeScale = scale;
+    this.refresh();
+  }
+
   /** 숨기면 눌리지 않는다. 누르고 있던 중이면 뗀 것으로 친다. */
   setVisible(visible: boolean): void {
     if (visible === this.shown) return;
@@ -130,7 +143,7 @@ export class ActionButton {
   }
 
   private refresh(): void {
-    const scale = this.isDown ? 0.93 : 1;
+    const scale = (this.isDown ? 0.93 : 1) * this.sizeScale;
     this.image.setAlpha(!this.enabled ? 0.3 : this.isDown ? 1 : 0.7).setScale(scale);
     this.text.setAlpha(this.enabled ? 1 : 0.4).setScale(scale);
   }

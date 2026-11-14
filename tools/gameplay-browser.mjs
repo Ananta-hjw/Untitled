@@ -710,3 +710,49 @@ test('공격이 닿기 직전의 회피만 저스트 회피가 되어 느린 화
   assert.equal(result.early.counterReady, false);
   assert.equal(result.early.counterAttack, false);
 });
+
+test('일시정지는 게임 시계를 멈추고, 뒤로가기·앱 전환으로도 열리며, 설정은 바로 적용되고 다시 열어도 유지된다', async () => {
+  await load();
+  await evaluate(`localStorage.removeItem('untitled-rpg.settings'); true`);
+  await load();
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(performance.now(), 16); };
+    step();
+    const before = { attack: s.attackButton.size, joystick: s.joystick.size, window: s.justDodgeWindow };
+    s.pauseButton.pressed = true; step();
+    const opened = s.pauseMenu.isOpen;
+    const frozenAt = s.now; step(20);
+    const frozen = s.now === frozenAt;
+    // 설정 변경: 버튼 크게, 조이스틱 작게, 판정 여유
+    s.pauseMenu.change('buttonSize', 1); s.pauseMenu.change('joystickSize', -1); s.pauseMenu.change('justDodgeTiming', 1);
+    const changed = { attack: s.attackButton.size, joystick: s.joystick.size, window: s.justDodgeWindow,
+      saved: JSON.parse(localStorage.getItem('untitled-rpg.settings')) };
+    // 메뉴를 누르던 공격 입력이 남아 있어도 닫은 뒤 공격하지 않는다.
+    s.keyboardAttackPressed = true; s.attackBufferedUntil = s.now + 999;
+    s.pauseMenu.close(); step(3);
+    const attackedAfterResume = s.player.isAttacking;
+    // 앱을 내리면 일시정지, 뒤로가기는 메뉴에서 게임으로, 게임에서 메뉴로
+    g.events.emit('hidden'); const hidden = s.pauseMenu.isOpen;
+    s.onBackButton(); const backClosed = !s.pauseMenu.isOpen;
+    s.onBackButton(); const backOpened = s.pauseMenu.isOpen;
+    s.pauseMenu.close();
+    return { before, opened, frozen, changed, attackedAfterResume, hidden, backClosed, backOpened };
+  })()`);
+  assert.equal(result.opened, true);
+  assert.equal(result.frozen, true);
+  assert.ok(result.changed.attack > result.before.attack);
+  assert.ok(result.changed.joystick < result.before.joystick);
+  assert.ok(result.changed.window > result.before.window);
+  assert.deepEqual(result.changed.saved, { buttonSize: 'large', joystickSize: 'small', justDodgeTiming: 'lenient' });
+  assert.equal(result.attackedAfterResume, false);
+  assert.equal(result.hidden, true);
+  assert.equal(result.backClosed, true);
+  assert.equal(result.backOpened, true);
+
+  await load();
+  const reopened = await evaluate(`(() => { const s = window.__game.scene.getScene('game');
+    const r = { settings: s.settings, window: s.justDodgeWindow }; localStorage.removeItem('untitled-rpg.settings'); return r; })()`);
+  assert.deepEqual(reopened.settings, { buttonSize: 'large', joystickSize: 'small', justDodgeTiming: 'lenient' });
+  assert.equal(reopened.window, result.changed.window);
+});

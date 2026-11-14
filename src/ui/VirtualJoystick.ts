@@ -26,7 +26,8 @@ export class VirtualJoystick {
   angle = 0;
 
   private readonly scene: Phaser.Scene;
-  private readonly radius: number;
+  private readonly baseRadius: number;
+  private radius: number;
   private readonly deadZone: number;
   private readonly base: Phaser.GameObjects.Image;
   private readonly thumb: Phaser.GameObjects.Image;
@@ -36,12 +37,13 @@ export class VirtualJoystick {
 
   constructor(scene: Phaser.Scene, options: JoystickOptions) {
     this.scene = scene;
-    this.radius = options.radius ?? 95;
+    this.baseRadius = options.radius ?? 95;
+    this.radius = this.baseRadius;
     this.deadZone = options.deadZone ?? 0.12;
     this.centerX = options.x;
     this.centerY = options.y;
 
-    VirtualJoystick.ensureTextures(scene, this.radius);
+    VirtualJoystick.ensureTextures(scene, this.baseRadius);
 
     this.base = scene.add
       .image(this.centerX, this.centerY, 'joy-base')
@@ -67,6 +69,18 @@ export class VirtualJoystick {
       scene.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.onUp, this);
       scene.game.events.off(Phaser.Core.Events.BLUR, this.release, this);
     });
+  }
+
+  /** 현재 패드 반지름 (배율 반영) */
+  get size(): number {
+    return this.radius;
+  }
+
+  /** 설정에서 고른 크기 배율. 잡을 수 있는 범위와 스틱이 움직이는 거리도 함께 바뀐다. */
+  setSizeScale(scale: number): void {
+    this.radius = this.baseRadius * scale;
+    this.base.setScale(scale);
+    this.thumb.setScale(scale);
   }
 
   get isActive(): boolean {
