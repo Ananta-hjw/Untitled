@@ -32,7 +32,7 @@ node --test tools/blade.test.mjs
 node --test --test-name-pattern='회피' tools/*.test.mjs
 ```
 
-The Node tests import `.ts` sources directly through Node 24's type stripping. Modules they import (`config.ts`, `entities/heroFrames.ts`, `entities/movement.ts`, `entities/progression.ts`, `combat/blade.ts`, `world/navGrid.ts`) must stay free of Phaser and of Vite-only imports such as `?inline`, or the tests stop loading. Put new pure logic in modules like these so it can be tested. A pure module that imports another one must spell the `.ts` extension (`'../config.ts'`) for Node; `allowImportingTsExtensions` in `tsconfig.json` lets TypeScript accept it.
+The Node tests import `.ts` sources directly through Node 24's type stripping. Modules they import (`config.ts`, `entities/heroFrames.ts`, `entities/movement.ts`, `entities/progression.ts`, `entities/saveData.ts`, `combat/blade.ts`, `world/navGrid.ts`) must stay free of Phaser and of Vite-only imports such as `?inline`, or the tests stop loading. Put new pure logic in modules like these so it can be tested. A pure module that imports another one must spell the `.ts` extension (`'../config.ts'`) for Node; `allowImportingTsExtensions` in `tsconfig.json` lets TypeScript accept it.
 
 `?debug` in the URL draws the walkable polygon and obstacles. In dev builds the `Phaser.Game` is exposed as `window.__game`, which the browser test and ad-hoc Playwright checks use.
 
@@ -54,7 +54,7 @@ The Node tests import `.ts` sources directly through Node 24's type stripping. M
 
 **No per-hit allocation.** Damage numbers (`ui/DamageNumbers.ts`, digits drawn once to a texture), blade trails and dodge ghosts (`combat/CombatEffects.ts`) reuse pooled objects. Keep new combat effects pooled; the target is low-end Android.
 
-**Progression.** The scene keeps `progress` (level, xp) and `stats` (max HP and damage for that level) and resets both in `resetState()`. Killing an enemy calls `gainXp()`, which uses the pure `entities/progression.ts` (`addXp`, `statsForLevel`, `xpToNext`); a level-up raises max HP, heals fully, and updates the name label, the HUD XP bar and the pooled effects in `ui/ProgressEffects.ts`. Player damage reads `stats`, not `PLAYER.damageMin/Max` directly. Progress is not saved yet and survives death but not a restart.
+**Progression.** The scene keeps `progress` (level, xp) and `stats` (max HP and damage for that level) and resets both in `resetState()`. Killing an enemy calls `gainXp()`, which uses the pure `entities/progression.ts` (`addXp`, `statsForLevel`, `xpToNext`); a level-up raises max HP, heals fully, and updates the name label, the HUD XP bar and the pooled effects in `ui/ProgressEffects.ts`. Player damage reads `stats`, not `PLAYER.damageMin/Max` directly. Progress survives death and is saved to `localStorage` (key `untitled-rpg.save`, versioned) on every XP change by `entities/saveData.ts`; `init()` loads it, so restarts and app relaunches continue from it. The storage is passed in, so a blocked or full `localStorage` only disables saving, and a corrupt or out-of-range save is ignored (new game). Bump `SAVE_VERSION` when the saved shape changes. Uninstalling the app clears the save.
 
 **Tuning** lives in `src/config.ts` (speeds, combo stages, dodge, enemy ranges, `PROGRESSION` for XP per kill, XP curve and per-level gains). The version shown on screen comes from `package.json` `version` through Vite's `define` (`__APP_VERSION__`).
 

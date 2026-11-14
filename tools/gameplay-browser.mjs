@@ -582,8 +582,9 @@ test('이동·긴 회피 거리는 집과 바위를 통과하지 않고 나무 �
   assert.equal(result.front, true);
 });
 
-test('적을 쓰러뜨리면 경험치가 쌓이고 레벨이 오르면 체력·공격력이 오르며 재시작하면 처음으로 돌아간다', async () => {
+test('적을 쓰러뜨리면 경험치가 쌓이고 레벨이 오르면 체력·공격력이 오르며 재시작해도 저장된 레벨로 이어진다', async () => {
   await load();
+  await evaluate(`localStorage.removeItem('untitled-rpg.save'); window.__game.scene.getScene('game').scene.restart(); window.__game.step(performance.now(), 16); window.__game.step(performance.now() + 16, 16); true`);
   const result = await evaluate(`(() => {
     const g = window.__game, s = g.scene.getScene('game'), p = s.player;
     const before = { level: s.progress.level, xp: s.progress.xp, maxHp: p.maxHp, damageMax: s.stats.damageMax };
@@ -597,8 +598,10 @@ test('적을 쓰러뜨리면 경험치가 쌓이고 레벨이 오르면 체력·
       damageMax: s.stats.damageMax, label: p.list.find((o) => o.text?.startsWith?.('Lv.'))?.text };
     s.scene.restart(); g.step(performance.now(), 16); g.step(performance.now() + 16, 16);
     const s2 = g.scene.getScene('game');
-    const restarted = { level: s2.progress.level, xp: s2.progress.xp, maxHp: s2.player.maxHp };
-    return { before, hurtHp, twoKills, levelUp, restarted };
+    s2.gainXp(7, s2.player.x, s2.player.y);
+    const restarted = { level: s2.progress.level, xp: s2.progress.xp, maxHp: s2.player.maxHp, hp: s2.player.hp,
+      label: s2.player.list.find((o) => o.text?.startsWith?.('Lv.'))?.text };
+    return { before, hurtHp, twoKills, levelUp, restarted, saved: JSON.parse(localStorage.getItem('untitled-rpg.save')) };
   })()`);
   assert.deepEqual(result.before, { level: 1, xp: 0, maxHp: 100, damageMax: 13 });
   assert.deepEqual(result.twoKills, { level: 1, xp: 20, hp: result.hurtHp });
@@ -608,5 +611,17 @@ test('적을 쓰러뜨리면 경험치가 쌓이고 레벨이 오르면 체력·
   assert.equal(result.levelUp.hp, 112);
   assert.ok(result.levelUp.damageMax > result.before.damageMax);
   assert.equal(result.levelUp.label, 'Lv. 2');
-  assert.deepEqual(result.restarted, { level: 1, xp: 0, maxHp: 100 });
+  assert.deepEqual(result.restarted, { level: 2, xp: 7, maxHp: 112, hp: 112, label: 'Lv. 2' });
+  assert.deepEqual(result.saved, { version: 1, level: 2, xp: 7 });
+
+  // 페이지를 새로 열어도(앱을 껐다 켠 것과 같음) 이어서 시작하고, 깨진 저장은 무시한다.
+  await load();
+  const reopened = await evaluate(`(() => { const s = window.__game.scene.getScene('game');
+    return { level: s.progress.level, xp: s.progress.xp, maxHp: s.player.maxHp }; })()`);
+  assert.deepEqual(reopened, { level: 2, xp: 7, maxHp: 112 });
+  await evaluate(`localStorage.setItem('untitled-rpg.save', '{broken'); true`);
+  await load();
+  const corrupted = await evaluate(`(() => { const s = window.__game.scene.getScene('game');
+    const r = { level: s.progress.level, xp: s.progress.xp }; localStorage.removeItem('untitled-rpg.save'); return r; })()`);
+  assert.deepEqual(corrupted, { level: 1, xp: 0 });
 });

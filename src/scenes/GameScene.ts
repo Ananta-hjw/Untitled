@@ -18,6 +18,7 @@ import {
 import { dodgeDistanceRatio, lungeProgress, locomotionRate } from '../entities/movement';
 import { Character } from '../entities/Character';
 import { addXp, statsForLevel, xpToNext, type LevelStats, type Progress } from '../entities/progression';
+import { browserStorage, loadProgress, saveProgress, type SaveStorage } from '../entities/saveData';
 import { ActionButton } from '../ui/ActionButton';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { HERO_SPRITE_HEIGHT, HeroSprite, preloadHeroSprite } from '../entities/HeroSprite';
@@ -64,9 +65,10 @@ export class GameScene extends Phaser.Scene {
   private hud!: Hud;
   private damageNumbers!: DamageNumbers;
   private progressEffects!: ProgressEffects;
-  /** 플레이어의 레벨과 경험치. 쓰러져도 잃지 않는다. */
+  /** 플레이어의 레벨과 경험치. 쓰러져도 잃지 않고, 바뀔 때마다 기기에 저장한다. */
   private progress: Progress = { level: 1, xp: 0 };
   private stats: LevelStats = statsForLevel(1);
+  private storage?: SaveStorage;
   private village!: Village;
   private nav!: NavGrid;
   private readonly boundsScratch = new Phaser.Geom.Rectangle();
@@ -80,6 +82,13 @@ export class GameScene extends Phaser.Scene {
 
   init(): void {
     this.resetState();
+    // 저장된 진행 상황이 있으면 그 레벨로 시작한다 (재시작 포함).
+    this.storage = browserStorage();
+    const saved = loadProgress(this.storage);
+    if (saved) {
+      this.progress = saved;
+      this.stats = statsForLevel(saved.level);
+    }
   }
 
   private resetState(): void {
@@ -540,6 +549,7 @@ export class GameScene extends Phaser.Scene {
   private gainXp(amount: number, x: number, y: number): void {
     const result = addXp(this.progress, amount);
     this.progress = { level: result.level, xp: result.xp };
+    saveProgress(this.storage, this.progress);
     if (amount > 0) this.progressEffects.showXp(x, y, amount);
 
     if (result.levelsGained > 0) {

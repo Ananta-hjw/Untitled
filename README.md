@@ -58,6 +58,7 @@ npm run test:browser
 | `src/ui/Hud.ts`, `src/ui/DamageNumbers.ts` | HUD와 재사용 피해 숫자 |
 | `src/entities/progression.ts` | 경험치·레벨 계산 (레벨별 체력·공격력, 필요 경험치) |
 | `src/ui/ProgressEffects.ts` | 경험치 획득·레벨 업 연출 |
+| `src/entities/saveData.ts` | 레벨·경험치 저장과 불러오기 (기기의 localStorage) |
 
 ## 시작 마을
 
