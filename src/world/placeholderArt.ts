@@ -9,7 +9,7 @@ import { FLOOR_TOP, VIEW_HEIGHT } from '../config';
  * 같은 텍스처·애니메이션 이름으로 등록하면 나머지 코드는 손댈 필요가 없다.
  */
 
-export interface HumanPalette {
+interface HumanPalette {
   skin: number;
   hair: number;
   armor: number;
@@ -32,7 +32,7 @@ const HUMAN_H = 180;
 const SLIME_W = 110;
 const SLIME_H = 90;
 
-export const ROOM_TILE_WIDTH = 400;
+const ROOM_TILE_WIDTH = 400;
 
 function shade(color: number, factor: number): number {
   const r = Math.min(255, Math.round(((color >> 16) & 0xff) * factor));
@@ -163,7 +163,7 @@ function drawRoomTile(g: Phaser.GameObjects.Graphics): void {
   }
 }
 
-function drawProps(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics): void {
+function drawProps(g: Phaser.GameObjects.Graphics): void {
   // 창문
   g.clear();
   g.fillStyle(0x24160c);
@@ -341,7 +341,7 @@ function registerSlime(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, key:
   });
 }
 
-export const HUMANS: Record<string, HumanPalette> = {
+const HUMANS: Record<string, HumanPalette> = {
   mage: { skin: 0xf1c9a0, hair: 0xd9d4cf, armor: 0x3b3340, trim: 0x8a2c2c, cape: 0x23202a, pants: 0x2b2730 },
   bard: { skin: 0xf4d2b0, hair: 0xb98fa6, armor: 0xa33c3c, trim: 0x6b3f1e, cape: 0x7a2a2a, pants: 0x5a3a2a },
   archer: { skin: 0xe9bf98, hair: 0xcfc7b2, armor: 0x56683e, trim: 0x4a3420, cape: 0x3c4a2a, pants: 0x4a3f2e },
@@ -358,7 +358,7 @@ export function createPlaceholderArt(scene: Phaser.Scene): void {
     drawRoomTile(g);
     g.generateTexture('room', ROOM_TILE_WIDTH, VIEW_HEIGHT);
   }
-  if (!scene.textures.exists('prop-window')) drawProps(scene, g);
+  if (!scene.textures.exists('prop-window')) drawProps(g);
 
   for (const [key, palette] of Object.entries(HUMANS)) {
     // 실제 그림이 이미 등록된 캐릭터는 건너뛴다.

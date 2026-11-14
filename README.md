@@ -50,8 +50,6 @@ npm run test:browser
 | `src/entities/HeroSprite.ts` | 원본 프레임 표시, 발·검날 좌표, 좌우 공격, 잔상 복사 |
 | `src/entities/heroFrames.ts` | 8방향 선택, 공격 방향·타격 레인, 걷기·공격·회피 프레임 시점 |
 | `src/assets/hero/academy/` | 현재 사용하는 캐릭터 시트·프레임 좌표·출처 |
-| `art/hero_parts/` | 이전 뼈대 캐릭터의 부위별 원본 PNG 보관 |
-| `tools/build_hero_rig.py` | 원본 부위를 조립해 `src/assets/hero/rig.png`, `rig.json` 생성 |
 | `src/world/placeholderArt.ts` | 임시 그래픽. 실제 아트로 교체할 부분 |
 | `src/scenes/GameScene.ts` | 입력, 이동, 카메라, 타격 판정 |
 | `src/world/tavern.ts` | 선술집 배경과 장애물 배치 |
@@ -73,7 +71,6 @@ npm run test:browser
 
 `heroFrames.ts`의 공격 프레임 시점은 `src/config.ts`의 콤보 명중 구간과 함께 조정한다.
 게임 화면에서 여덟 방향 이동·정지, 좌우·대각선 4방향의 3단 공격, 회피, 발 높이와 이름표를 확인한다.
-이전 뼈대 조립 도구와 파츠는 보관하며 현재 주인공 표시에는 사용하지 않는다.
 
 ## 안드로이드 APK
 

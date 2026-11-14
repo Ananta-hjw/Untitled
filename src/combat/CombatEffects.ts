@@ -16,7 +16,7 @@ export interface AttackEffect {
 
 interface GhostEffect {
   object: Phaser.GameObjects.Container | Phaser.GameObjects.Image;
-  kind: 'rig' | 'sprite';
+  kind: 'hero' | 'sprite';
   startedAt: number;
 }
 
@@ -76,7 +76,7 @@ export class CombatEffects {
   }
 
   spawnGhost(sprite: HeroSprite | Phaser.GameObjects.Sprite, x: number, y: number, depth: number, time: number): void {
-    const kind = sprite instanceof HeroSprite ? 'rig' : 'sprite';
+    const kind = sprite instanceof HeroSprite ? 'hero' : 'sprite';
     let effect = this.ghostPool.find((entry) => entry.kind === kind && !entry.object.active);
     if (!effect) {
       const object = sprite instanceof HeroSprite

@@ -2,9 +2,9 @@
 
 ## Project Structure & Module Organization
 
-This is a mobile RPG prototype using Phaser, TypeScript, and Vite. `src/main.ts` initializes the game; `src/scenes/GameScene.ts` coordinates input, movement, and combat for one run. Keep character and rig behavior in `src/entities/`, enemy AI and combat effects in `src/combat/`, touch controls and HUD in `src/ui/`, and map layout, path-finding, and placeholder graphics in `src/world/`. Shared gameplay constants belong in `src/config.ts`.
+This is a mobile RPG prototype using Phaser, TypeScript, and Vite. `src/main.ts` initializes the game; `src/scenes/GameScene.ts` coordinates input, movement, and combat for one run. Keep character behavior in `src/entities/`, enemy AI and combat effects in `src/combat/`, touch controls and HUD in `src/ui/`, and map layout, path-finding, and placeholder graphics in `src/world/`. Shared gameplay constants belong in `src/config.ts`.
 
-The active hero uses whole-character sheets in `src/assets/hero/academy/`, rendered by `src/entities/HeroSprite.ts`; `heroFrames.ts` controls direction and timing. Legacy hero PNG parts live in `art/hero_parts/images/`. Python utilities in `tools/` generate runtime assets under `src/assets/hero/`. Regression checks live in `tools/*.test.mjs`.
+The active hero uses whole-character sheets in `src/assets/hero/academy/`, rendered by `src/entities/HeroSprite.ts`; `heroFrames.ts` controls direction and timing. `tools/build_hero_frames.py` generates the frame and anchor data under `src/assets/hero/academy/`. Regression checks live in `tools/*.test.mjs`.
 
 ## Build, Test, and Development Commands
 
@@ -20,7 +20,7 @@ Run commands from the repository root:
 
 ## Coding Style & Naming Conventions
 
-Follow existing TypeScript style: two-space indentation, single-quoted strings, semicolons, and ES module imports. Use PascalCase for classes and their files (`HeroRig.ts`), camelCase for functions, properties, and utility modules (`walkArea.ts`), and uppercase snake case for shared constants. Preserve strict typing and keep tuning values in `src/config.ts`. No formatter or lint script is configured; match surrounding code.
+Follow existing TypeScript style: two-space indentation, single-quoted strings, semicolons, and ES module imports. Use PascalCase for classes and their files (`HeroSprite.ts`), camelCase for functions, properties, and utility modules (`walkArea.ts`), and uppercase snake case for shared constants. Preserve strict typing and keep tuning values in `src/config.ts`. No formatter or lint script is configured; match surrounding code.
 
 ## Testing Guidelines
 
@@ -30,7 +30,7 @@ Run `npm test` on Node.js 24 or later for movement, combat timing, blade collisi
 
 For the active hero, run `python3 tools/build_hero_frames.py` after changing measured frame/foot/blade anchors. Keep source sheets intact and inspect all eight walking directions, all six attack directions, and dodge. Source attribution is in `src/assets/hero/academy/README.md`.
 
-For the legacy rig, after editing hero parts or rig assembly settings, run `python3 tools/build_hero_rig.py art/hero_parts/images --preview preview.png` with Pillow available. Review the preview and corresponding `rig.png`/`rig.json` changes together. Keep generated build directories and the ignored preview image out of commits.
+Keep generated build directories out of commits.
 
 ## Commit & Pull Request Guidelines
 

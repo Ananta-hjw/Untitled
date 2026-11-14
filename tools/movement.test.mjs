@@ -50,3 +50,10 @@ test('회피는 프레임 속도와 관계없이 정해진 거리를 가고, 처
     assert.ok(Math.abs(moved - DODGE.distance) < 1e-9);
   }
 });
+
+test('1·2·3타 모두 전진이 끝난 뒤에 다음 공격으로 이어진다', () => {
+  for (const combo of PLAYER.combo) {
+    assert.ok(combo.intervalMs > combo.hitDelayMs);
+    assert.ok(combo.intervalMs > combo.lungeEndMs);
+  }
+});
