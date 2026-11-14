@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { bladeHitsEllipse, type Blade } from '../combat/blade';
+import { BladeTrail } from '../combat/BladeTrail';
 import { Enemy } from '../combat/Enemy';
 import {
   DEPTH_LIGHTING,
@@ -18,6 +19,7 @@ import {
 import { lungeProgress, locomotionRate } from '../entities/movement';
 import { Character } from '../entities/Character';
 import { ActionButton } from '../ui/ActionButton';
+import { DamageNumbers } from '../ui/DamageNumbers';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { HERO_RIG_HEIGHT, HeroRig, preloadHeroRig } from '../entities/HeroRig';
 import { createPlaceholderArt } from '../world/placeholderArt';
@@ -54,6 +56,8 @@ export class GameScene extends Phaser.Scene {
   private dodgeReadyAt = 0;
   private nextGhostAt = 0;
   private readonly dodgeDirection = new Phaser.Math.Vector2();
+  private damageNumbers!: DamageNumbers;
+  private bladeTrail!: BladeTrail;
   private hud!: Phaser.GameObjects.Graphics;
   private hudText!: Phaser.GameObjects.Text;
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
@@ -79,6 +83,8 @@ export class GameScene extends Phaser.Scene {
     this.buildCharacters();
     this.buildLighting();
     this.buildUi();
+    this.damageNumbers = new DamageNumbers(this);
+    this.bladeTrail = new BladeTrail(this);
 
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
@@ -108,6 +114,8 @@ export class GameScene extends Phaser.Scene {
       this.applyKnockback(enemy.character, dt);
     }
     this.applyKnockback(this.player, dt);
+    this.bladeTrail.update(step);
+    this.damageNumbers.update(step);
   }
 
   // ---------------------------------------------------------------- 월드
@@ -259,7 +267,7 @@ export class GameScene extends Phaser.Scene {
 
     const font = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
     this.badge = this.add
-      .text(0, 18, '프로토타입 v0.8', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
+      .text(0, 18, '프로토타입 v0.9', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
       .setOrigin(1, 0)
       .setAlpha(0.7)
       .setScrollFactor(0)
@@ -454,19 +462,20 @@ export class GameScene extends Phaser.Scene {
     if (time >= this.nextGhostAt) {
       this.nextGhostAt = time + 45;
       const sprite = player.sprite;
-      const ghost =
-        sprite instanceof HeroRig
-          ? sprite.spawnGhost(player.x, player.y, player.y - 1, 0x9fc4ff, 0.35)
-          : this.add
-              .image(player.x, player.y, sprite.texture.key, sprite.frame.name)
-              .setOrigin(0.5, 1)
-              .setFlipX(sprite.flipX)
-              .setScale(sprite.scaleX, sprite.scaleY)
-              .setAngle(sprite.angle)
-              .setTint(0x9fc4ff)
-              .setAlpha(0.4)
-              .setDepth(player.y - 1);
-      this.tweens.add({ targets: ghost, alpha: 0, duration: 220, onComplete: () => ghost.destroy() });
+      if (sprite instanceof HeroRig) {
+        sprite.spawnGhost(player.x, player.y, player.y - 1, 0x9fc4ff, 0.35);
+      } else {
+        const ghost = this.add
+          .image(player.x, player.y, sprite.texture.key, sprite.frame.name)
+          .setOrigin(0.5, 1)
+          .setFlipX(sprite.flipX)
+          .setScale(sprite.scaleX, sprite.scaleY)
+          .setAngle(sprite.angle)
+          .setTint(0x9fc4ff)
+          .setAlpha(0.4)
+          .setDepth(player.y - 1);
+        this.tweens.add({ targets: ghost, alpha: 0, duration: 220, onComplete: () => ghost.destroy() });
+      }
     }
   }
 
@@ -544,23 +553,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const finisher = trace.stage === PLAYER.combo.length - 1;
-    const color = finisher ? 0xffb35a : 0xfff3d6;
-    const effect = this.add.graphics().setDepth(player.y + 2).setBlendMode(Phaser.BlendModes.ADD);
-    effect.setData('attackStage', trace.stage + 1);
-    if (finisher) {
-      // 찌르기는 검날 방향으로 곧게 뻗는 빛과 검끝의 이동선으로 표현한다.
-      effect.lineStyle(9, color, 0.2).lineBetween(current.base.x, current.base.y, current.tip.x, current.tip.y);
-      effect.lineStyle(3, 0xffffff, 0.9).lineBetween(current.base.x, current.base.y, current.tip.x, current.tip.y);
-    } else {
-      effect.fillStyle(color, 0.22).beginPath();
-      effect.moveTo(previous.base.x, previous.base.y);
-      effect.lineTo(previous.tip.x, previous.tip.y);
-      effect.lineTo(current.tip.x, current.tip.y);
-      effect.lineTo(current.base.x, current.base.y);
-      effect.closePath().fillPath();
-      effect.lineStyle(3, color, 0.9).lineBetween(previous.tip.x, previous.tip.y, current.tip.x, current.tip.y);
-    }
-    this.tweens.add({ targets: effect, alpha: 0, duration: 110, onComplete: () => effect.destroy() });
+    this.bladeTrail.add(previous, current, finisher, player.y + 2);
 
     let hitAny = false;
     for (const enemy of this.enemies) {
@@ -576,7 +569,7 @@ export class GameScene extends Phaser.Scene {
       hitAny = true;
       const damage = Math.round(Phaser.Math.Between(PLAYER.damageMin, PLAYER.damageMax) * combo.damage);
       const died = c.hurt(damage);
-      this.showDamage(c.x, c.y - 100, damage, finisher ? '#ffb35a' : '#fff3c4', finisher ? 46 : 34);
+      this.damageNumbers.show(c.x, c.y - 100, damage, finisher ? 0xffb35a : 0xfff3c4, finisher ? 46 : 34);
       if (died) {
         enemy.kill();
         this.time.delayedCall(ENEMY.respawnMs, () => this.respawnEnemy(enemy));
@@ -602,7 +595,7 @@ export class GameScene extends Phaser.Scene {
     player.invulnerableUntil = now + PLAYER.invulnerableMs;
     const died = player.hurt(ENEMY.damage, 0xff5a4a);
     player.knockback.set(c.facing * ENEMY.knockback, 0);
-    this.showDamage(player.x, player.y - 190, ENEMY.damage, '#ff8a7a');
+    this.damageNumbers.show(player.x, player.y - 190, ENEMY.damage, 0xff8a7a);
     this.cameras.main.shake(110, 0.007);
     this.drawHud();
     if (died) this.onPlayerDeath();
@@ -645,29 +638,6 @@ export class GameScene extends Phaser.Scene {
       if (Math.abs(point.x - this.player.x) > ENEMY.aggroX + 80) break;
     }
     enemy.respawn(point.x, point.y);
-  }
-
-  private showDamage(x: number, y: number, amount: number, color: string, size = 34): void {
-    const text = this.add
-      .text(x + Phaser.Math.Between(-14, 14), y, String(amount), {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: `${size}px`,
-        fontStyle: 'bold',
-        color,
-        stroke: '#1a1008',
-        strokeThickness: 6,
-      })
-      .setOrigin(0.5)
-      .setDepth(DEPTH_LIGHTING + 5)
-      .setResolution(2);
-    this.tweens.add({
-      targets: text,
-      y: y - 60,
-      alpha: { from: 1, to: 0 },
-      duration: 650,
-      ease: 'Quad.easeOut',
-      onComplete: () => text.destroy(),
-    });
   }
 
   // ---------------------------------------------------------------- 디버그

@@ -33,6 +33,8 @@ PC에서는 방향키나 WASD로 움직이고 스페이스바나 J로 공격, Sh
 | `src/config.ts` | 화면 크기, 이동 속도, 전투 수치(체력·공격력·사거리 등) |
 | `src/ui/VirtualJoystick.ts` | 고정형 가상 조이스틱 (멀티터치, 데드존) |
 | `src/ui/ActionButton.ts` | 공격·회피 버튼 |
+| `src/ui/DamageNumbers.ts` | 데미지 숫자 (숫자 그림과 표시 항목을 재사용) |
+| `src/combat/BladeTrail.ts` | 검 궤적 이펙트 (Graphics 하나를 재사용) |
 | `src/combat/Enemy.ts` | 몬스터 AI (배회 → 추격 → 준비 동작 → 돌진) |
 | `src/world/walkArea.ts` | 이동 가능 영역(다각형)과 장애물(타원) |
 | `src/entities/Character.ts` | 플레이어·NPC·몬스터 공통 틀, Y정렬 |

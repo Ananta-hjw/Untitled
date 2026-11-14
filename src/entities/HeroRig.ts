@@ -32,6 +32,15 @@ interface Bone {
   worldRotation: number;
 }
 
+interface Ghost {
+  container: Phaser.GameObjects.Container;
+  images: Phaser.GameObjects.Image[];
+  /** 남은 시간(ms). 0 이하이면 쉬는 중 */
+  life: number;
+  duration: number;
+  alpha: number;
+}
+
 interface Slot {
   image: Phaser.GameObjects.Image;
   bone: Bone;
@@ -61,6 +70,7 @@ export class HeroRig extends Phaser.GameObjects.Container {
   private readonly bones: Bone[] = [];
   private readonly boneByName = new Map<string, Bone>();
   private readonly slots: Slot[] = [];
+  private readonly ghosts: Ghost[] = [];
   private readonly hip: Bone;
   private readonly hipRest: { x: number; y: number };
 
@@ -108,6 +118,7 @@ export class HeroRig extends Phaser.GameObjects.Container {
     scene.events.on(Phaser.Scenes.Events.UPDATE, this.onSceneUpdate, this);
     this.once(Phaser.GameObjects.Events.DESTROY, () => {
       scene.events.off(Phaser.Scenes.Events.UPDATE, this.onSceneUpdate, this);
+      for (const ghost of this.ghosts) ghost.container.destroy();
     });
   }
 
@@ -158,25 +169,54 @@ export class HeroRig extends Phaser.GameObjects.Container {
     return { base: point(0.5, 0.32), tip: point(0.5, 0.98) };
   }
 
-  /** 지금 자세 그대로 멈춘 잔상을 만든다 (회피 연출용). */
-  spawnGhost(x: number, y: number, depth: number, tint: number, alpha: number): Phaser.GameObjects.Container {
-    const ghost = this.scene.add.container(x, y).setDepth(depth).setAlpha(alpha);
-    ghost.setScale(this.scaleX * (this.flipX ? -1 : 1), this.scaleY).setAngle(this.angle);
-    for (const slot of this.slots) {
-      const source = slot.image;
-      const copy = this.scene.add
-        .image(source.x, source.y, TEXTURE, source.frame.name)
-        .setOrigin(source.originX, source.originY)
-        .setAngle(source.angle)
-        .setTint(tint);
-      ghost.add(copy);
+  /**
+   * 지금 자세 그대로 멈춘 잔상을 남긴다 (회피 연출용). durationMs 동안 서서히 사라진다.
+   * 잔상은 한 번 만들면 계속 재사용하므로 회피를 반복해도 객체가 늘지 않는다.
+   */
+  spawnGhost(x: number, y: number, depth: number, tint: number, alpha: number, durationMs = 220): void {
+    let ghost = this.ghosts.find((g) => g.life <= 0);
+    if (!ghost) {
+      const container = this.scene.add.container(0, 0).setVisible(false);
+      const images = this.slots.map((slot) => {
+        const image = this.scene.add
+          .image(0, 0, TEXTURE, slot.image.frame.name)
+          .setOrigin(slot.image.originX, slot.image.originY);
+        container.add(image);
+        return image;
+      });
+      ghost = { container, images, life: 0, duration: 1, alpha: 0 };
+      this.ghosts.push(ghost);
     }
-    return ghost;
+
+    ghost.container
+      .setPosition(x, y)
+      .setDepth(depth)
+      .setScale(this.scaleX * (this.flipX ? -1 : 1), this.scaleY)
+      .setAngle(this.angle)
+      .setAlpha(alpha)
+      .setVisible(true);
+    for (let i = 0; i < this.slots.length; i++) {
+      const source = this.slots[i].image;
+      ghost.images[i].setPosition(source.x, source.y).setAngle(source.angle).setTint(tint);
+    }
+    ghost.life = durationMs;
+    ghost.duration = durationMs;
+    ghost.alpha = alpha;
+  }
+
+  private updateGhosts(deltaMs: number): void {
+    for (const ghost of this.ghosts) {
+      if (ghost.life <= 0) continue;
+      ghost.life -= deltaMs;
+      if (ghost.life <= 0) ghost.container.setVisible(false);
+      else ghost.container.setAlpha(ghost.alpha * (ghost.life / ghost.duration));
+    }
   }
 
   private onSceneUpdate(_time: number, delta: number): void {
     if (!this.active) return;
     const dt = Math.min(delta, 50) / 1000;
+    this.updateGhosts(dt * 1000);
     const animation = HERO_ANIMATIONS[this.animation];
     this.time += dt * (animation.loop ? this.anims.timeScale : 1);
 
