@@ -1,0 +1,36 @@
+import { HIT_FEEL, JUST_DODGE } from '../config.ts';
+import { slowMotionScale } from './justDodge.ts';
+
+/**
+ * 타격감 계산: 게임 시간 배율(히트스톱·느린 화면)과 맞은 적의 찌그러짐.
+ * Phaser를 쓰지 않는 순수 함수다. tools/hit-feel.test.mjs가 직접 불러 검사한다.
+ */
+
+export type HitKind = 'normal' | 'finisher' | 'counter' | 'hurt';
+
+/** 이 종류의 타격에서 게임 시간을 멈출 길이(실제 시간 ms) */
+export function hitStopMs(kind: HitKind): number {
+  switch (kind) {
+    case 'finisher': return HIT_FEEL.finisherHitStopMs;
+    case 'counter': return HIT_FEEL.counterHitStopMs;
+    case 'hurt': return HIT_FEEL.hurtHitStopMs;
+    default: return HIT_FEEL.hitStopMs;
+  }
+}
+
+/** 이번 프레임에 게임 시간이 흐르는 배율. 히트스톱 중이면 0, 아니면 느린 화면 배율. */
+export function gameTimeScale(hitStopLeftMs: number, slowMotionLeftMs: number): number {
+  if (hitStopLeftMs > 0) return 0;
+  return slowMotionScale(slowMotionLeftMs, JUST_DODGE.slowScale, JUST_DODGE.rampMs);
+}
+
+/**
+ * 맞은 순간부터 elapsedMs가 지났을 때의 배율. 맞는 순간 가로로 납작해지고(scaleX↑ scaleY↓)
+ * 몇 번 출렁이며 원래 모양(1, 1)으로 돌아온다.
+ */
+export function hitSquash(elapsedMs: number, durationMs = HIT_FEEL.squashMs, amount = HIT_FEEL.squash): { scaleX: number; scaleY: number } {
+  if (elapsedMs >= durationMs || elapsedMs < 0) return { scaleX: 1, scaleY: 1 };
+  const t = elapsedMs / durationMs;
+  const wave = (1 - t) * (1 - t) * Math.cos(t * Math.PI * 3);
+  return { scaleX: 1 + amount * wave, scaleY: 1 - amount * 0.85 * wave };
+}

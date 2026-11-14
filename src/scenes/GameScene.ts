@@ -5,6 +5,7 @@ import { bladeHitsEllipse, clipBladeSweep, type Blade } from '../combat/blade';
 import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
 import { isJustDodge, slowMotionScale, strikeReaches } from '../combat/justDodge';
+import { gameTimeScale, hitStopMs, type HitKind } from '../combat/hitFeel';
 import {
   DEPTH_LIGHTING,
   DODGE,
@@ -76,6 +77,8 @@ export class GameScene extends Phaser.Scene {
   private justDodged = false;
   /** 느린 화면이 끝날 때까지 남은 실제 시간(ms) */
   private slowMotionLeft = 0;
+  /** 히트스톱이 끝날 때까지 남은 실제 시간(ms). 그동안 게임 시간이 멈춘다. */
+  private hitStopLeft = 0;
   /** 이 시각(게임 시계)까지 시작한 공격 한 번은 반격으로 강해진다 */
   private counterUntil = 0;
   private nextGhostAt = 0;
@@ -142,6 +145,7 @@ export class GameScene extends Phaser.Scene {
     this.dodgeStartedAt = undefined;
     this.justDodged = false;
     this.slowMotionLeft = 0;
+    this.hitStopLeft = 0;
     this.counterUntil = 0;
     this.nextGhostAt = 0;
     this.dodgeDirection.set(0, 0);
@@ -241,11 +245,17 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // 저스트 회피 뒤에는 잠깐 게임 시간이 느리게 흐른다. 적·플레이어·타이머가 모두 같이 느려진다.
-    const scale = slowMotionScale(this.slowMotionLeft, JUST_DODGE.slowScale, JUST_DODGE.rampMs);
+    // 타격 순간에는 게임 시간을 아주 잠깐 멈추고(히트스톱), 저스트 회피 뒤에는 느리게 흘린다.
+    // 적·플레이어·주인공 그림·타이머가 모두 이 시간을 따르므로 서로 어긋나지 않는다.
+    const slow = slowMotionScale(this.slowMotionLeft, JUST_DODGE.slowScale, JUST_DODGE.rampMs);
+    this.hud.setSlowMotion((1 - slow) / (1 - JUST_DODGE.slowScale));
+    const gameStep = step * gameTimeScale(this.hitStopLeft, this.slowMotionLeft);
     this.slowMotionLeft = Math.max(0, this.slowMotionLeft - step);
-    this.hud.setSlowMotion((1 - scale) / (1 - JUST_DODGE.slowScale));
-    const gameStep = step * scale;
+    this.hitStopLeft = Math.max(0, this.hitStopLeft - step);
+    // 멈춘 동안에는 아무것도 진행하지 않는다. 눌린 입력은 그대로 남아 있다가 다음 프레임에 처리된다.
+    if (gameStep === 0) return;
+
+    if (this.player.sprite instanceof HeroSprite) this.player.sprite.advance(gameStep);
 
     this.now += gameStep;
     const time = this.now;
@@ -665,11 +675,13 @@ export class GameScene extends Phaser.Scene {
         const push = PLAYER.knockback * combo.knockback;
         c.knockback.set(trace.direction.x * push, trace.direction.y * push * VERTICAL_SPEED_RATIO);
         enemy.interrupt(this.now);
+        enemy.onHit(this.now);
       }
     }
     if (hitAny) {
       const strong = finisher || trace.counter;
       this.cameras.main.shake(strong ? 130 : 70, strong ? 0.009 : 0.004);
+      this.hitStop(trace.counter ? 'counter' : finisher ? 'finisher' : 'normal');
     }
   }
 
@@ -826,9 +838,15 @@ export class GameScene extends Phaser.Scene {
     player.knockback.set(c.facing * ENEMY.knockback, 0);
     this.showDamage(player.x, player.y - 190, ENEMY.damage, '#ff8a7a');
     this.cameras.main.shake(110, 0.007);
+    this.hitStop('hurt');
     this.drawHud();
     if (died) this.onPlayerDeath();
   };
+
+  /** 게임 시간을 잠깐 멈춘다. 겹치면 더 긴 쪽을 따른다. */
+  private hitStop(kind: HitKind): void {
+    this.hitStopLeft = Math.max(this.hitStopLeft, hitStopMs(kind));
+  }
 
   /** 저스트 회피 성공: 느린 화면, 다음 공격 강화, 회피 재사용 대기 초기화, 피한 적은 멈칫. */
   private onJustDodge(enemy: Enemy): void {

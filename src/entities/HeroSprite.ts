@@ -45,10 +45,6 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     this.image = scene.add.image(0, 0, 'hero-academy-walk', 'walk-0');
     this.add(this.image);
     this.applyFrame();
-    scene.events.on(Phaser.Scenes.Events.UPDATE, this.onSceneUpdate, this);
-    this.once(Phaser.GameObjects.Events.DESTROY, () => {
-      scene.events.off(Phaser.Scenes.Events.UPDATE, this.onSceneUpdate, this);
-    });
   }
 
   play(key: string): this {
@@ -111,7 +107,11 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     return ghost;
   }
 
-  private onSceneUpdate(_time: number, delta: number): void {
+  /**
+   * 그림을 deltaMs만큼 진행한다. 씬이 게임 시계의 흐름(느린 화면·히트스톱·일시정지 반영)으로 부른다.
+   * 실제 시간으로 진행하면 느린 화면에서 공격 그림이 타격 시점보다 먼저 끝나 공격이 빗나간다.
+   */
+  advance(delta: number): void {
     if (!this.active) return;
     const loop = this.animation === 'idle' || this.animation === 'walk';
     this.time += Math.max(0, Math.min(delta, 50)) * (loop ? this.anims.timeScale : 1);

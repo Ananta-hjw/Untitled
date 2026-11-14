@@ -173,7 +173,7 @@ test('부활은 시각 효과의 완료와 무관하게 공통 게임 시계의 
     p.revive(1000, 650); e.character.revive(1110, 650); e.character.hp = 1;
     s.enemies = [e]; s.now = 0; s.comboStage = 2; s.comboExpiresAt = 10000; s.startAttack(0, 1);
     for (let t = 50; t <= 250; t += 50) {
-      p.sprite.onSceneUpdate(0, 50); s.now = t; s.updateAttackLunge(t); s.updateAttackTrace(t);
+      p.sprite.advance(50); s.now = t; s.updateAttackLunge(t); s.updateAttackTrace(t);
     }
     const pending = s.enemyRespawns[0]; if (!pending) throw new Error('적 사망 후 부활 예약 누락');
     s.updateRespawns(pending.at - 1); const enemyBefore = e.character.alive;
@@ -234,7 +234,7 @@ test('터치·키보드의 짧은 공격과 콤보 예약을 처리하고 누르
         s.nextAttackAt = 0; s.comboStage = 0; s.comboExpiresAt = 0; s.playerRespawnAt = undefined;
         s.dodgeProgress = 1; s.dodgeUntil = 0; s.dodgeReadyAt = 0; attacks = 0;
       };
-      const tick = () => { p.sprite.onSceneUpdate(0, 50); s.update(0, 50); };
+      const tick = () => { s.update(0, 50); };
       reset(); tap(); tick(); const quickTap = attacks;
       while (s.now < 1700) tick(); const noExtraAfterTap = attacks;
       reset(); tap(); tick(); const ready = s.nextAttackAt;
@@ -279,7 +279,7 @@ test('회피·포커스 이탈·사망은 이전 공격 예약을 취소하고 �
         // 마지막 사망 프레임의 짧은 입력도 부활 시 이어받지 않는다.
         s.now = s.playerRespawnAt; tap(); s.updateRespawns(s.now); s.updatePlayer(s.now, 0.05);
       } else {
-        for (let i = 0; i < 10; i++) { p.sprite.onSceneUpdate(0, 50); s.update(0, 50); }
+        for (let i = 0; i < 10; i++) { s.update(0, 50); }
       }
       results.push({ cancel, cleared, stage: s.comboStage, attacking: p.isAttacking });
     }
@@ -329,7 +329,7 @@ test('공격 효과는 프레임 속도와 무관하게 한 객체와 일정한 
         s.effects.update(1e9); p.revive(1000, 650); s.now = 1000;
         s.comboStage = stage; s.comboExpiresAt = 10000; s.startAttack(1000, 1);
         const before = begun;
-        while (s.now < 1450) { p.sprite.onSceneUpdate(0, 1000 / fps); s.update(0, 1000 / fps); }
+        while (s.now < 1450) { s.update(0, 1000 / fps); }
         const effect = s.effects.attackPool[0];
         results.push({ fps, stage, begun: begun - before, samples: effect.samples.length,
           active: effect.graphic.active, visible: effect.graphic.visible, pool: s.effects.attackPool.length });
@@ -360,14 +360,14 @@ test('회피 잔상은 프레임 이미지를 재사용하고 장면 재시작 �
     for (let repeat = 0; repeat < 3; repeat++) {
       p.revive(1000, 650); s.now = 1000 + repeat * 1000;
       const end = s.now + 600; s.startDodge(s.now, new p.knockback.constructor(1, 0));
-      while (s.now < end) { p.sprite.onSceneUpdate(0, 16); s.update(0, 16); }
+      while (s.now < end) { s.update(0, 16); }
       counts.push({ images, pool: s.effects.ghostPool.length,
         hidden: s.effects.ghostPool.every((e) => !e.object.active && !e.object.visible),
         children: s.effects.ghostPool.map((e) => e.object.list.length) });
     }
     s.add.image = image;
     const old = s.effects;
-    s.startAttack(s.now, 1); s.now += 250; p.sprite.onSceneUpdate(0, 50); s.updateAttackTrace(s.now);
+    s.startAttack(s.now, 1); s.now += 250; p.sprite.advance(50); s.updateAttackTrace(s.now);
     s.scene.restart(); g.step(performance.now(), 16); g.step(performance.now() + 16, 16);
     return { counts, oldAttackPool: old.attackPool.length, oldGhostPool: old.ghostPool.length,
       newAttackPool: s.effects.attackPool.length, newGhostPool: s.effects.ghostPool.length, enemies: s.enemies.length };
@@ -395,14 +395,14 @@ test('실제 이동 방향에 맞는 원본 프레임을 표시하고 정지·�
     for (const [name, x, y] of [['up', 0, -1], ['down', 0, 1], ['left', -1, 0], ['right', 1, 0],
       ['down-left', -.707, .707], ['down-right', .707, .707], ['up-left', -.707, -.707], ['up-right', .707, -.707]]) {
       p.revive(1000, 640); s.joystick.vector.set(x, y);
-      for (let i = 0; i < 3; i++) { hero.onSceneUpdate(0, 50); s.updatePlayer(s.now += 50, .05); }
+      for (let i = 0; i < 3; i++) { hero.advance(50); s.updatePlayer(s.now += 50, .05); }
       const moving = hero.image.frame.name;
       const foot = hero.image.getWorldTransformMatrix().transformPoint(0, 0);
       const mirrored = hero.image.scaleX < 0;
       s.joystick.vector.set(0, 0); s.updatePlayer(s.now += 50, .05);
       runs.push({ name, moving, idle: hero.image.frame.name, mirrored, error: Math.hypot(foot.x - p.x, foot.y - p.y) });
     }
-    hero.play('dodge'); hero.onSceneUpdate(0, 150);
+    hero.play('dodge'); hero.advance(150);
     const ghost = hero.spawnGhost(p.x, p.y, p.y - 1, 0x9fc4ff, .35);
     hero.play('walk'); hero.setMovement(-1, -1);
     hero.spawnGhost(p.x, p.y, p.y - 1, 0x9fc4ff, .35, ghost);
@@ -440,7 +440,7 @@ test('새 공격 그림의 실제 검날은 20·30·60·120fps와 좌우 모든 
       let hits = 0;
       e.character.hurt = () => { hits++; return false; }; e.interrupt = () => {};
       for (let i = 1; i <= Math.ceil(fps * .32); i++) {
-        hero.onSceneUpdate(0, 1000 / fps); s.now = 1000 + i * 1000 / fps;
+        hero.advance(1000 / fps); s.now = 1000 + i * 1000 / fps;
         s.updateAttackLunge(s.now); s.updateAttackTrace(s.now);
       }
       runs.push({ fps, facing, stage, hits });
@@ -472,7 +472,7 @@ test('대각선 4방향의 모든 콤보는 20·30·60·120fps에서 앞쪽만 �
       s.startAttack(1000, x, y);
       const texture = hero.image.texture.key, mirrored = hero.image.scaleX < 0;
       for (let i = 1; i <= Math.ceil(fps * .32); i++) {
-        hero.onSceneUpdate(0, 1000 / fps); s.now = 1000 + i * 1000 / fps;
+        hero.advance(1000 / fps); s.now = 1000 + i * 1000 / fps;
         s.updateAttackLunge(s.now); s.updateAttackTrace(s.now);
       }
       const knockback = enemies[0].character.knockback;
@@ -502,7 +502,7 @@ test('마지막 대각선과 자동 조준을 사용하고 공격 도중 반대 
     s.enemies = []; p.revive(1000, 640);
     hero.setMovement(-1, -1); hero.setMovement(0, 0);
     s.startAttack(1000, 0, 0);
-    hero.onSceneUpdate(0, 50);
+    hero.advance(50);
     const before = { frame: hero.image.frame.name, scale: hero.image.scaleX, blade: hero.getBlade(), direction: {...s.attackTrace.direction} };
     hero.setMovement(1, 1); p.face(1);
     const after = { frame: hero.image.frame.name, scale: hero.image.scaleX, blade: hero.getBlade(), direction: {...s.attackTrace.direction} };
@@ -555,7 +555,7 @@ test('이동·긴 회피 거리는 집과 바위를 통과하지 않고 나무 �
   const result = await evaluate(`(() => {
     const s = window.__game.scene.getScene('game'), p = s.player, home = s.walkArea.obstacles.find(o => o.shape === 'rect');
     s.enemies = []; p.revive(home.x, home.y + home.ry + 80); s.joystick.vector.set(0, -1);
-    for (let i = 0; i < 60; i++) { p.sprite.onSceneUpdate(0, 50); s.updatePlayer(s.now += 50, .05); }
+    for (let i = 0; i < 60; i++) { p.sprite.advance(50); s.updatePlayer(s.now += 50, .05); }
     const stopped = { y: p.y, edge: home.y + home.ry, walkable: s.walkArea.contains(p.x, p.y), frame: p.sprite.image.frame.name };
     const out = new p.knockback.constructor();
     s.walkArea.move(home.x, home.y + home.ry + 80, 0, -500, out);
@@ -755,4 +755,42 @@ test('일시정지는 게임 시계를 멈추고, 뒤로가기·앱 전환으로
     const r = { settings: s.settings, window: s.justDodgeWindow }; localStorage.removeItem('untitled-rpg.settings'); return r; })()`);
   assert.deepEqual(reopened.settings, { buttonSize: 'large', joystickSize: 'small', justDodgeTiming: 'lenient' });
   assert.equal(reopened.window, result.changed.window);
+});
+
+test('느린 화면 중의 공격도 맞고, 칼이 닿으면 게임 시간이 잠깐 멈추며 맞은 슬라임은 납작해졌다가 돌아온다', async () => {
+  await load();
+  const result = await evaluate(`(() => {
+    const g = window.__game;
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(performance.now(), 16); };
+    const setup = () => {
+      g.scene.getScene('game').scene.restart(); step(2);
+      const s = g.scene.getScene('game'), p = s.player, e = s.enemies[0];
+      for (const o of s.enemies.slice(1)) { o.character.placeAt(300, 1500); o.state = 'wander'; o.timer = 1e12; }
+      p.placeAt(1600, 1200); e.character.placeAt(1680, 1200); e.state = 'wander'; e.timer = 1e12; e.character.hp = 999;
+      return { s, p, e };
+    };
+    // 느린 화면 중 공격 (예전에는 그림이 먼저 끝나 빗나갔다)
+    let { s, e } = setup();
+    s.slowMotionLeft = 650; s.startAttack(s.now, 1, 0); step(80);
+    const slowDamage = 999 - e.character.hp;
+    // 히트스톱과 찌그러짐: 칼이 처음 닿는 프레임을 찾는다
+    ({ s, e } = setup());
+    s.startAttack(s.now, 1, 0);
+    let frames = 0;
+    while (e.character.hp === 999 && frames < 200) { step(); frames++; }
+    const hitAtNow = s.now, stop = s.hitStopLeft, squash = e.character.sprite.scaleX;
+    step(1);
+    const frozenAfterHit = s.now === hitAtNow;
+    step(30);
+    const resumed = s.now > hitAtNow;
+    const settled = Math.abs(e.character.sprite.scaleX - 1) < 1e-6 && Math.abs(e.character.sprite.scaleY - 1) < 1e-6;
+    return { slowDamage, hit: e.character.hp < 999, stop, frozenAfterHit, resumed, squash, settled };
+  })()`);
+  assert.ok(result.slowDamage > 0, '느린 화면 중 공격이 맞아야 한다');
+  assert.equal(result.hit, true);
+  assert.ok(result.stop > 0);
+  assert.equal(result.frozenAfterHit, true);
+  assert.equal(result.resumed, true);
+  assert.ok(result.squash > 1.1);
+  assert.equal(result.settled, true);
 });

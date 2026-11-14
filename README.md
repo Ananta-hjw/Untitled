@@ -46,6 +46,7 @@ npm run test:browser
 | `src/ui/ActionButton.ts` | 공격·회피 버튼 |
 | `src/combat/Enemy.ts` | 몬스터 AI (배회 → 추격 → 준비 동작 → 돌진) |
 | `src/combat/justDodge.ts` | 저스트 회피 판정과 느린 화면 배율 |
+| `src/combat/hitFeel.ts` | 히트스톱(타격 순간 멈춤)과 맞은 적의 찌그러짐 |
 | `src/world/walkArea.ts` | 이동 가능 영역(다각형)과 장애물(타원) |
 | `src/entities/Character.ts` | 플레이어·NPC·몬스터 공통 틀, Y정렬 |
 | `src/entities/HeroSprite.ts` | 원본 프레임 표시, 발·검날 좌표, 좌우 공격, 잔상 복사 |

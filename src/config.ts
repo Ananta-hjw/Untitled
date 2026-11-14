@@ -106,6 +106,20 @@ export const JUST_DODGE = {
   stunMs: 1300,
 };
 
+/**
+ * 타격감.
+ *  - *HitStopMs: 칼이 닿거나 맞은 순간 게임 시간을 멈추는 길이(실제 시간 ms)
+ *  - squashMs / squash: 맞은 적이 납작해졌다가 출렁이며 돌아오는 시간과 정도
+ */
+export const HIT_FEEL = {
+  hitStopMs: 45,
+  finisherHitStopMs: 80,
+  counterHitStopMs: 110,
+  hurtHitStopMs: 70,
+  squashMs: 280,
+  squash: 0.32,
+};
+
 /** 밀려나는 속도가 줄어드는 정도(초당) */
 export const KNOCKBACK_DAMPING = 7;
 

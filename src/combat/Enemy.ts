@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ENEMY } from '../config';
+import { hitSquash } from './hitFeel';
 import { Character } from '../entities/Character';
 import type { NavGrid } from '../world/navGrid';
 import type { WalkArea } from '../world/walkArea';
@@ -27,6 +28,8 @@ export class Enemy {
   private timer = 0;
   private attackStartedAt?: number;
   private strikeLanded = false;
+  /** 마지막으로 맞은 시각(게임 시계). 맞은 뒤 잠깐 몸이 출렁인다. */
+  private hitAt?: number;
 
   constructor(scene: Phaser.Scene, key: string, x: number, y: number) {
     this.scene = scene;
@@ -53,6 +56,7 @@ export class Enemy {
   ): void {
     const c = this.character;
     if (this.state === 'dead') return;
+    this.updateHitSquash(time);
 
     const dx = player.x - c.x;
     const dy = player.y - c.y;
@@ -119,13 +123,29 @@ export class Enemy {
     this.timer = time + durationMs;
   }
 
+  /** 칼에 맞았을 때: 그 자리에서 납작해졌다가 출렁이며 돌아온다 (게임 시계 기준). */
+  onHit(time: number): void {
+    this.hitAt = time;
+    const { scaleX, scaleY } = hitSquash(0);
+    this.character.sprite.setScale(scaleX, scaleY);
+  }
+
+  private updateHitSquash(time: number): void {
+    if (this.hitAt === undefined || this.state === 'windup') return;
+    const { scaleX, scaleY } = hitSquash(time - this.hitAt);
+    this.character.sprite.setScale(scaleX, scaleY);
+    if (scaleX === 1 && scaleY === 1) this.hitAt = undefined;
+  }
+
   kill(): void {
+    this.hitAt = undefined;
     this.state = 'dead';
     this.cancelStrike();
     this.character.playDeath();
   }
 
   respawn(x: number, y: number): void {
+    this.hitAt = undefined;
     this.character.revive(x, y);
     this.character.setAlpha(0);
     this.scene.tweens.add({ targets: this.character, alpha: 1, duration: 400 });
@@ -141,6 +161,7 @@ export class Enemy {
 
   private beginWindup(time: number, dx: number): void {
     this.state = 'windup';
+    this.hitAt = undefined;
     this.attackStartedAt = time;
     this.strikeLanded = false;
     this.character.setMotion(false, dx);
