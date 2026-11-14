@@ -60,5 +60,5 @@ def build(character):
 
 
 if __name__ == '__main__':
-    for name in ['linea', 'sia', 'ruan']:
+    for name in ['linea', 'sia', 'ruan', 'serena', 'doran', 'merina', 'herman', 'eila', 'teon', 'rosetta', 'vernel', 'fern']:
         build(name)
