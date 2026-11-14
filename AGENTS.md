@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This is a mobile RPG prototype using Phaser, TypeScript, and Vite. `src/main.ts` initializes the game; `src/scenes/GameScene.ts` coordinates input, movement, and combat for one run. Keep character behavior in `src/entities/`, enemy AI and combat effects in `src/combat/`, touch controls and HUD in `src/ui/`, and map layout, path-finding, and placeholder graphics in `src/world/`. The active starting map is `village.ts`, with placement and footprints in `villageLayout.ts`; `tavern.ts` is retained as a legacy map. Shared gameplay constants belong in `src/config.ts`.
+This is a mobile RPG prototype using Phaser, TypeScript, and Vite. `src/main.ts` initializes the game; `src/scenes/GameScene.ts` coordinates input, movement, and combat for one run. Keep character behavior in `src/entities/`, enemy AI and combat effects in `src/combat/`, touch controls and HUD in `src/ui/`, and map layout, path-finding, and placeholder graphics in `src/world/`. The active starting map is `village.ts`, with placement and footprints in `villageLayout.ts`. Shared gameplay constants belong in `src/config.ts`.
 
 The active hero uses whole-character sheets in `src/assets/hero/academy/`, rendered by `src/entities/HeroSprite.ts`; `heroFrames.ts` controls direction and timing. `tools/build_hero_frames.py` generates the frame and anchor data under `src/assets/hero/academy/`. Regression checks live in `tools/*.test.mjs`.
 

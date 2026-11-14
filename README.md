@@ -54,7 +54,6 @@ npm run test:browser
 | `src/scenes/GameScene.ts` | 입력, 이동, 카메라, 타격 판정 |
 | `src/world/village.ts` | 시작 마을의 지형·집·소품 표시 |
 | `src/world/villageLayout.ts` | 집·나무·바위 배치와 충돌 영역, 시작 위치 |
-| `src/world/tavern.ts` | 이전 선술집 맵 보관 |
 | `src/world/navGrid.ts` | 적의 장애물 우회 경로 |
 | `src/ui/Hud.ts`, `src/ui/DamageNumbers.ts` | HUD와 재사용 피해 숫자 |
 
