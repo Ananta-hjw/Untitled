@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NPC 8방향 걷기 미리보기</title>
+<style>
+body{margin:24px;background:#19251f;color:#f3ebd8;font:16px system-ui}h1{font-size:24px}button,input{font:inherit}button{padding:6px 15px}header{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(8,minmax(135px,1fr));gap:8px;overflow:auto}figure{margin:0;text-align:center;background:repeating-conic-gradient(#334539 0% 25%,#3b4d40 0% 50%) 0/24px 24px;border-radius:8px}canvas{width:150px;height:200px;max-width:100%}figcaption{background:#24362c;padding:6px}p{color:#cad4c8}#error{color:#ffbdab}
+</style>
+<h1>NPC 8방향 걷기 미리보기</h1>
+<header><button id="toggle">대기로 전환</button><label>초당 프레임 <input id="fps" type="range" min="2" max="12" value="8"><output id="rate">8</output></label></header>
+<p>방향별로 대기와 걷기를 비교합니다. 표시용 프레임 좌표를 사용하며 게임 내 이동은 구현하지 않습니다.</p>
+<div id="error" role="alert"></div><main id="main"></main>
+<script type="module">
+const root = '../src/assets/characters/';
+const names = { linea: '리네아', sia: '시아 · 마을 모습', ruan: '루안 · 50대 초반' };
+const directions = { up: '위', 'up-right': '오른쪽 위', right: '오른쪽', 'down-right': '오른쪽 아래', down: '아래', 'down-left': '왼쪽 아래', left: '왼쪽', 'up-left': '왼쪽 위' };
+const items = [];
+let walking = true;
+document.querySelector('#toggle').onclick = () => {
+  walking = !walking;
+  document.querySelector('#toggle').textContent = walking ? '대기로 전환' : '걷기로 전환';
+};
+document.querySelector('#fps').oninput = e => document.querySelector('#rate').textContent = e.target.value;
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error(`이미지 로딩 실패: ${url.slice(0, 100)}`)); image.src = url;
+  });
+}
+try {
+  for (const [name, label] of Object.entries(names)) {
+    const data = window.NPC_WALK_DATA?.[name] ?? await fetch(`${root}${name}/walk_frames.json`).then(r => { if (!r.ok) throw new Error('프레임 파일 로딩 실패'); return r.json(); });
+    const sheets = {};
+    for (const sheet of Object.keys(data.sheets)) sheets[sheet] = await loadImage(window.NPC_WALK_IMAGES?.[`${name}/${sheet}`] ?? `${root}${name}/${sheet}`);
+    const section = document.createElement('section');
+    const title = document.createElement('h2'); title.textContent = label;
+    const grid = document.createElement('div'); grid.className = 'grid';
+    section.append(title, grid); document.querySelector('#main').append(section);
+    for (const [direction, text] of Object.entries(directions)) {
+      const figure = document.createElement('figure');
+      const canvas = document.createElement('canvas'); canvas.width = 300; canvas.height = 400;
+      canvas.dataset.character = name; canvas.dataset.direction = direction;
+      const caption = document.createElement('figcaption'); caption.textContent = text;
+      figure.append(canvas, caption); grid.append(figure);
+      items.push({ canvas, data, sheets, direction });
+    }
+  }
+  window.NPC_WALK_READY = true;
+  function render(time) {
+    const fps = Number(document.querySelector('#fps').value);
+    for (const {canvas, data, sheets, direction} of items) {
+      const pose = walking ? data.walkPoses[Math.floor(time / 1000 * fps) % data.walkPoses.length] : data.idlePose;
+      const frame = data.frames.find(f => f.direction === direction && f.pose === pose);
+      const scale = frame.scale * 300 / data.referenceHeight;
+      const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(sheets[frame.sheet], frame.x, frame.y, frame.w, frame.h, 150 - frame.w * frame.originX * scale, 360 - frame.h * frame.originY * scale, frame.w * scale, frame.h * scale);
+      canvas.dataset.pose = String(pose);
+    }
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+} catch (error) { document.querySelector('#error').textContent = error.message; }
+</script>
+</html>
