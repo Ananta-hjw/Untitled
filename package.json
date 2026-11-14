@@ -1,13 +1,14 @@
 {
   "name": "untitled",
-  "version": "1.0.0",
+  "version": "0.11.0",
   "description": "모바일 RPG 프로토타입",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "build:single": "tsc && vite build --mode single",
     "preview": "vite preview --host",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test": "node --test tools/*.test.mjs"
   },
   "repository": {
     "type": "git",

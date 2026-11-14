@@ -16,8 +16,6 @@ export interface HumanPalette {
   trim: number;
   cape: number;
   pants: number;
-  /** 검을 들고 있는지 */
-  sword?: boolean;
 }
 
 interface HumanPose {
@@ -27,10 +25,6 @@ interface HumanPose {
   frontLift: number;
   backLift: number;
   arm: number;
-  /** 손을 들어 올린 높이 */
-  handLift?: number;
-  /** 검의 각도(도). 0 = 정면, -90 = 위 */
-  sword?: number;
 }
 
 const HUMAN_W = 220;
@@ -87,20 +81,9 @@ function drawHuman(g: Phaser.GameObjects.Graphics, p: HumanPalette, pose: HumanP
   g.fillStyle(p.trim);
   g.fillRect(cx - 19, 118 + b, 38, 7);
 
-  // 팔 (어깨에서 손까지) + 검
+  // 팔 (어깨에서 손까지)
   const handX = cx - 1 + pose.arm * 1.3;
-  const handY = 126 + b - (pose.handLift ?? 0);
-  if (p.sword) {
-    const angle = Phaser.Math.DegToRad(pose.sword ?? -78);
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    g.lineStyle(13, outline);
-    g.lineBetween(handX, handY, handX + cos * 82, handY + sin * 82);
-    g.lineStyle(8, 0xdfe6f0);
-    g.lineBetween(handX + cos * 6, handY + sin * 6, handX + cos * 79, handY + sin * 79);
-    g.lineStyle(7, 0xc9a13f);
-    g.lineBetween(handX + cos * 10 - sin * 13, handY + sin * 10 + cos * 13, handX + cos * 10 + sin * 13, handY + sin * 10 - cos * 13);
-  }
+  const handY = 126 + b;
   g.lineStyle(15, shade(p.armor, 0.8));
   g.lineBetween(cx - 1, 92 + b, handX, handY);
   g.fillStyle(shade(p.armor, 0.8));
@@ -334,46 +317,6 @@ function registerHuman(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, key:
     repeat: -1,
   });
 
-  if (!palette.sword) return;
-  const leg = { frontLift: 0, backLift: 0 };
-  const combos: HumanPose[][] = [
-    // 1타: 뒤로 젖힘 → 내려침 → 마무리
-    [
-      { ...leg, bob: -2, frontLeg: 0, backLeg: -8, arm: -10, handLift: 44, sword: -125 },
-      { ...leg, bob: 2, frontLeg: 14, backLeg: -12, arm: 22, handLift: 22, sword: -18 },
-      { ...leg, bob: 3, frontLeg: 16, backLeg: -12, arm: 20, handLift: 0, sword: 38 },
-      { ...leg, bob: 1, frontLeg: 10, backLeg: -8, arm: 12, handLift: 0, sword: 20 },
-    ],
-    // 2타: 아래에서 위로 올려 베기
-    [
-      { ...leg, bob: 3, frontLeg: 14, backLeg: -12, arm: 6, handLift: -4, sword: 70 },
-      { ...leg, bob: 0, frontLeg: 16, backLeg: -12, arm: 24, handLift: 20, sword: -5 },
-      { ...leg, bob: -3, frontLeg: 14, backLeg: -10, arm: 18, handLift: 46, sword: -75 },
-      { ...leg, bob: -1, frontLeg: 8, backLeg: -8, arm: 6, handLift: 30, sword: -95 },
-    ],
-    // 3타(마무리): 크게 당겼다가 깊게 찌르기
-    [
-      { ...leg, bob: 2, frontLeg: -4, backLeg: -14, arm: -16, handLift: 26, sword: -170 },
-      { ...leg, bob: 3, frontLeg: -2, backLeg: -16, arm: -18, handLift: 24, sword: -10 },
-      { ...leg, bob: 4, frontLeg: 24, backLeg: -20, arm: 34, handLift: 24, sword: 0 },
-      { ...leg, bob: 4, frontLeg: 24, backLeg: -20, arm: 36, handLift: 24, sword: 2 },
-      { ...leg, bob: 2, frontLeg: 14, backLeg: -12, arm: 16, handLift: 12, sword: -20 },
-    ],
-  ];
-  combos.forEach((poses, c) => {
-    const stage = c + 1;
-    poses.forEach((pose, i) => {
-      g.clear();
-      drawHuman(g, palette, pose);
-      g.generateTexture(`${key}-atk${stage}-${i}`, HUMAN_W, HUMAN_H);
-    });
-    scene.anims.create({
-      key: `${key}-attack${stage}`,
-      frames: poses.map((_, i) => ({ key: `${key}-atk${stage}-${i}` })),
-      frameRate: 15,
-      repeat: 0,
-    });
-  });
 }
 
 function registerSlime(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, key: string, color: number): void {
@@ -434,9 +377,10 @@ export function createPlaceholderArt(scene: Phaser.Scene): void {
     [0.25, 'rgba(255,170,80,0.38)'],
     [1, 'rgba(255,140,40,0)'],
   ]);
+  // 화면 전체를 살짝 어둡게 하고(가운데) 가장자리로 갈수록 더 어둡게 한다.
   radialTexture(scene, 'vignette', 512, 512, [
-    [0, 'rgba(0,0,0,0)'],
-    [0.62, 'rgba(0,0,0,0)'],
-    [1, 'rgba(8,4,2,0.8)'],
+    [0, 'rgba(20,10,4,0.22)'],
+    [0.62, 'rgba(20,10,4,0.22)'],
+    [1, 'rgba(8,4,2,0.84)'],
   ]);
 }

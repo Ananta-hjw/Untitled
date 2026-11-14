@@ -72,6 +72,9 @@ export class HeroRig extends Phaser.GameObjects.Container {
   private readonly boneByName = new Map<string, Bone>();
   private readonly slots: Slot[] = [];
   private readonly ghosts: Ghost[] = [];
+  private swordImage!: Phaser.GameObjects.Image;
+  private readonly matrixScratch = new Phaser.GameObjects.Components.TransformMatrix();
+  private readonly parentMatrixScratch = new Phaser.GameObjects.Components.TransformMatrix();
   private readonly hip: Bone;
   private readonly hipRest: { x: number; y: number };
 
@@ -114,6 +117,8 @@ export class HeroRig extends Phaser.GameObjects.Container {
       this.inner.add(image);
       this.slots.push({ image, bone: this.boneByName.get(s.bone)!, rotation: s.rotation });
     }
+
+    this.swordImage = this.slots.find((slot) => slot.bone.name === 'sword')!.image;
 
     this.applyPose();
     scene.events.on(Phaser.Scenes.Events.UPDATE, this.onSceneUpdate, this);
@@ -162,8 +167,8 @@ export class HeroRig extends Phaser.GameObjects.Container {
 
   /** 검 이미지의 가드와 끝을 실제 컨테이너 배율·좌우 반전까지 적용한 월드 좌표로 반환한다. */
   getBlade(): Blade {
-    const image = this.slots.find((slot) => slot.bone.name === 'sword')!.image;
-    const matrix = image.getWorldTransformMatrix();
+    const image = this.swordImage;
+    const matrix = image.getWorldTransformMatrix(this.matrixScratch, this.parentMatrixScratch);
     const point = (x: number, y: number) => matrix.transformPoint(
       (x - image.originX) * image.width, (y - image.originY) * image.height,
     );

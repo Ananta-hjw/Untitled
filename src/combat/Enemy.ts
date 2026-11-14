@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ENEMY } from '../config';
 import { Character } from '../entities/Character';
+import type { NavGrid } from '../world/navGrid';
 import type { WalkArea } from '../world/walkArea';
 
 type State = 'wander' | 'chase' | 'windup' | 'recover' | 'dead';
@@ -19,6 +20,7 @@ export class Enemy {
   private readonly scene: Phaser.Scene;
   private readonly target = new Phaser.Math.Vector2();
   private readonly scratch = new Phaser.Math.Vector2();
+  private readonly waypoint = { x: 0, y: 0 };
   private readonly wanderSpeed: number;
   private timer = 0;
   /** 씬의 게임 시계. update()에서 받아 둔다. */
@@ -40,7 +42,14 @@ export class Enemy {
   }
 
   /** onStrike: 돌진이 닿는 순간 호출된다. 실제로 맞았는지는 씬이 판정한다. */
-  update(time: number, dt: number, player: Character, area: WalkArea, onStrike: (enemy: Enemy) => void): void {
+  update(
+    time: number,
+    dt: number,
+    player: Character,
+    area: WalkArea,
+    nav: NavGrid,
+    onStrike: (enemy: Enemy) => void,
+  ): void {
     const c = this.character;
     this.now = time;
     if (this.state === 'dead') return;
@@ -78,7 +87,14 @@ export class Enemy {
         }
         // 플레이어의 옆자리(같은 높이)로 붙는다.
         const side = dx > 0 ? -1 : 1;
-        this.stepToward(player.x + side * (ENEMY.attackRangeX - 25), player.y, ENEMY.chaseSpeed * dt, area);
+        const goalX = player.x + side * (ENEMY.attackRangeX - 25);
+        const step = ENEMY.chaseSpeed * dt;
+        // 곧장 갈 수 있으면 곧장 가고, 테이블이나 카운터에 막혀 있으면 격자가 알려 주는 길로 돌아간다.
+        if (!area.hasClearPath(c.x, c.y, goalX, player.y) && nav.next(c.x, c.y, this.waypoint)) {
+          this.stepToward(this.waypoint.x, this.waypoint.y, step, area);
+        } else {
+          this.stepToward(goalX, player.y, step, area);
+        }
         break;
       }
 
