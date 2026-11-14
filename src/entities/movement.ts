@@ -9,8 +9,17 @@ export function locomotionRate(dx: number, dy: number, dt: number, fullSpeed: nu
   return dt > 0 ? Math.hypot(dx, dy) / (dt * fullSpeed) : 0;
 }
 
-/** 회피 속도(시작 1.6 → 끝 0.4)를 적분한 누적 거리 비율. 종료 시 항상 1이다. */
-export function dodgeDistanceRatio(phase: number): number {
-  const t = Math.max(0, Math.min(1, phase));
+/**
+ * 회피의 이동 진행도(0~1). 처음에 빠르고 끝으로 갈수록 느려진다.
+ * 속도 곡선 0.4 + 1.2 × (남은 시간 비율)을 적분한 값이라, 프레임마다 진행도의 차이만큼
+ * 움직이면 프레임 속도와 관계없이 정확히 같은 거리를 간다.
+ */
+export function dodgeProgress(elapsedMs: number, durationMs: number): number {
+  const t = Math.max(0, Math.min(1, elapsedMs / durationMs));
   return 1.6 * t - 0.6 * t * t;
+}
+
+/** Normalized-time variant shared by the scene and variable-frame regression checks. */
+export function dodgeDistanceRatio(progress: number): number {
+  return dodgeProgress(progress, 1);
 }

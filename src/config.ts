@@ -81,6 +81,10 @@ export const ENEMY = {
   staggerMs: 420,
   knockback: 260,
   respawnMs: 6000,
+  /** 적끼리 이 거리(가로/세로) 안으로 겹치면 separationSpeed(px/초)로 서로 밀어낸다 */
+  separationX: 64,
+  separationY: 24,
+  separationSpeed: 70,
 };
 
 /** 밀려나는 속도가 줄어드는 정도(초당) */

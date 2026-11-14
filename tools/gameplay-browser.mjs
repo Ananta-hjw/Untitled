@@ -126,10 +126,10 @@ test('공격을 중단당하거나 죽은 적은 이전 명중 예약을 실행�
     const s = window.__game.scene.getScene('game'), p = s.player, e = s.enemies[0];
     p.placeAt(2000, 650); let hits = 0;
     e.beginWindup(0, 1); e.interrupt(100);
-    e.update(590, 0.05, p, s.walkArea, () => hits++);
+    e.update(590, 0.05, p, s.walkArea, s.nav, () => hits++);
     const interrupted = hits;
     e.beginWindup(1000, 1); e.character.hurt(e.character.maxHp); e.kill();
-    e.update(1590, 0.05, p, s.walkArea, () => hits++);
+    e.update(1590, 0.05, p, s.walkArea, s.nav, () => hits++);
     return { interrupted, hits, state: e.state };
   })()`);
   assert.equal(result.interrupted, 0);

@@ -16,7 +16,7 @@ import { HERO_ANIMATIONS, REST, type Pose } from './heroAnimations';
  */
 
 const TEXTURE = 'hero-rig';
-/** 생성된 SD 리그의 발 원점부터 머리끝까지 높이. 이름표 위치에 사용한다. */
+/** 리그 좌표에서의 캐릭터 키(발끝~머리끝). build_hero_rig.py의 K와 맞춘 값. */
 export const HERO_RIG_HEIGHT = rigData.height;
 
 interface Bone {
@@ -32,6 +32,15 @@ interface Bone {
   worldRotation: number;
 }
 
+interface Ghost {
+  container: Phaser.GameObjects.Container;
+  images: Phaser.GameObjects.Image[];
+  /** 남은 시간(ms). 0 이하이면 쉬는 중 */
+  life: number;
+  duration: number;
+  alpha: number;
+}
+
 interface Slot {
   image: Phaser.GameObjects.Image;
   bone: Bone;
@@ -40,7 +49,8 @@ interface Slot {
 }
 
 export function preloadHeroRig(scene: Phaser.Scene): void {
-  if (!scene.textures.exists(TEXTURE)) scene.load.image(TEXTURE, rigSheet);
+  if (scene.textures.exists(TEXTURE)) return; // 씬 재시작 시 다시 불러오지 않는다
+  scene.load.image(TEXTURE, rigSheet);
 }
 
 function ensureFrames(scene: Phaser.Scene): void {
@@ -61,6 +71,10 @@ export class HeroRig extends Phaser.GameObjects.Container {
   private readonly bones: Bone[] = [];
   private readonly boneByName = new Map<string, Bone>();
   private readonly slots: Slot[] = [];
+  private readonly ghosts: Ghost[] = [];
+  private swordImage!: Phaser.GameObjects.Image;
+  private readonly matrixScratch = new Phaser.GameObjects.Components.TransformMatrix();
+  private readonly parentMatrixScratch = new Phaser.GameObjects.Components.TransformMatrix();
   private readonly hip: Bone;
   private readonly hipRest: { x: number; y: number };
 
@@ -104,10 +118,13 @@ export class HeroRig extends Phaser.GameObjects.Container {
       this.slots.push({ image, bone: this.boneByName.get(s.bone)!, rotation: s.rotation });
     }
 
+    this.swordImage = this.slots.find((slot) => slot.bone.name === 'sword')!.image;
+
     this.applyPose();
     scene.events.on(Phaser.Scenes.Events.UPDATE, this.onSceneUpdate, this);
     this.once(Phaser.GameObjects.Events.DESTROY, () => {
       scene.events.off(Phaser.Scenes.Events.UPDATE, this.onSceneUpdate, this);
+      for (const ghost of this.ghosts) ghost.container.destroy();
     });
   }
 
@@ -150,34 +167,62 @@ export class HeroRig extends Phaser.GameObjects.Container {
 
   /** 검 이미지의 가드와 끝을 실제 컨테이너 배율·좌우 반전까지 적용한 월드 좌표로 반환한다. */
   getBlade(): Blade {
-    const image = this.slots.find((slot) => slot.bone.name === 'sword')!.image;
-    const matrix = image.getWorldTransformMatrix();
+    const image = this.swordImage;
+    const matrix = image.getWorldTransformMatrix(this.matrixScratch, this.parentMatrixScratch);
     const point = (x: number, y: number) => matrix.transformPoint(
       (x - image.originX) * image.width, (y - image.originY) * image.height,
     );
     return { base: point(0.5, 0.32), tip: point(0.5, 0.98) };
   }
 
-  /** 지금 자세 그대로 멈춘 잔상을 만든다 (회피 연출용). */
-  spawnGhost(x: number, y: number, depth: number, tint: number, alpha: number,
-    reuse?: Phaser.GameObjects.Container): Phaser.GameObjects.Container {
-    const ghost = reuse ?? this.scene.add.container(x, y);
-    ghost.setPosition(x, y).setDepth(depth).setAlpha(alpha).setActive(true).setVisible(true);
-    ghost.setScale(this.scaleX * (this.flipX ? -1 : 1), this.scaleY).setAngle(this.angle);
+  /**
+   * 지금 자세 그대로 멈춘 잔상을 남긴다 (회피 연출용). durationMs 동안 서서히 사라진다.
+   * 잔상은 한 번 만들면 계속 재사용하므로 회피를 반복해도 객체가 늘지 않는다.
+   */
+  spawnGhost(x: number, y: number, depth: number, tint: number, alpha: number, durationMs = 220): void {
+    let ghost = this.ghosts.find((g) => g.life <= 0);
+    if (!ghost) {
+      const container = this.scene.add.container(0, 0).setVisible(false);
+      const images = this.slots.map((slot) => {
+        const image = this.scene.add
+          .image(0, 0, TEXTURE, slot.image.frame.name)
+          .setOrigin(slot.image.originX, slot.image.originY);
+        container.add(image);
+        return image;
+      });
+      ghost = { container, images, life: 0, duration: 1, alpha: 0 };
+      this.ghosts.push(ghost);
+    }
+
+    ghost.container
+      .setPosition(x, y)
+      .setDepth(depth)
+      .setScale(this.scaleX * (this.flipX ? -1 : 1), this.scaleY)
+      .setAngle(this.angle)
+      .setAlpha(alpha)
+      .setVisible(true);
     for (let i = 0; i < this.slots.length; i++) {
       const source = this.slots[i].image;
-      const copy = reuse ? ghost.getAt(i) as Phaser.GameObjects.Image
-        : this.scene.add.image(0, 0, TEXTURE, source.frame.name);
-      copy.setPosition(source.x, source.y).setOrigin(source.originX, source.originY)
-        .setAngle(source.angle).setTint(tint);
-      if (!reuse) ghost.add(copy);
+      ghost.images[i].setPosition(source.x, source.y).setAngle(source.angle).setTint(tint);
     }
-    return ghost;
+    ghost.life = durationMs;
+    ghost.duration = durationMs;
+    ghost.alpha = alpha;
+  }
+
+  private updateGhosts(deltaMs: number): void {
+    for (const ghost of this.ghosts) {
+      if (ghost.life <= 0) continue;
+      ghost.life -= deltaMs;
+      if (ghost.life <= 0) ghost.container.setVisible(false);
+      else ghost.container.setAlpha(ghost.alpha * (ghost.life / ghost.duration));
+    }
   }
 
   private onSceneUpdate(_time: number, delta: number): void {
     if (!this.active) return;
     const dt = Math.min(delta, 50) / 1000;
+    this.updateGhosts(dt * 1000);
     const animation = HERO_ANIMATIONS[this.animation];
     this.time += dt * (animation.loop ? this.anims.timeScale : 1);
 

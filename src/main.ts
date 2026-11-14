@@ -18,6 +18,7 @@ const game = new Phaser.Game({
     width: viewWidth(),
     height: VIEW_HEIGHT,
   },
+  // 동시에 누를 수 있는 터치 수: 조이스틱 + 공격 + 회피
   input: { activePointers: 3 },
   scene: [GameScene],
 });

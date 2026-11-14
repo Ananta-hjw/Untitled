@@ -52,9 +52,11 @@ npm run test:browser
 | `src/assets/hero/academy/` | 현재 사용하는 캐릭터 시트·프레임 좌표·출처 |
 | `art/hero_parts/` | 이전 뼈대 캐릭터의 부위별 원본 PNG 보관 |
 | `tools/build_hero_rig.py` | 원본 부위를 조립해 `src/assets/hero/rig.png`, `rig.json` 생성 |
-| `tools/cut_sprites.py` | 캐릭터 시트에서 한 줄을 잘라 게임용 스프라이트 시트로 변환 |
 | `src/world/placeholderArt.ts` | 임시 그래픽. 실제 아트로 교체할 부분 |
-| `src/scenes/GameScene.ts` | 맵 배치, 입력, 이동, 카메라, 타격 판정 |
+| `src/scenes/GameScene.ts` | 입력, 이동, 카메라, 타격 판정 |
+| `src/world/tavern.ts` | 선술집 배경과 장애물 배치 |
+| `src/world/navGrid.ts` | 적의 장애물 우회 경로 |
+| `src/ui/Hud.ts`, `src/ui/DamageNumbers.ts` | HUD와 재사용 피해 숫자 |
 
 ## 주인공 그림을 고쳤을 때
 
@@ -73,24 +75,56 @@ npm run test:browser
 게임 화면에서 네 방향 이동·정지, 좌우 3단 공격, 회피, 발 높이와 이름표를 확인한다.
 이전 뼈대 조립 도구와 파츠는 보관하며 현재 주인공 표시에는 사용하지 않는다.
 
-## 안드로이드 테스트 APK
+## 안드로이드 APK
 
-Capacitor 7로 게임을 앱 안에 포함한다. 별도 개발 서버 없이 실행되며, 가로 화면과 전체 화면을 사용한다.
+Capacitor로 웹 빌드를 안드로이드 앱으로 감싼다 (`android/`, `capacitor.config.ts`).
+푸시하면 GitHub Actions(`.github/workflows/android-apk.yml`)가 테스트용 APK를 만든다.
+저장소의 Actions 탭 → 해당 실행 → Artifacts의 `untitled-rpg-apk`에서 받을 수 있다 (GitHub 로그인 필요, zip으로 내려온다).
 
-준비물은 Node.js 24 이상, JDK 21, Android SDK Platform 35와 Build Tools 34.0.0이다.
-Android Studio의 SDK Manager로 설치한 뒤 `ANDROID_HOME`을 SDK 경로로 설정하거나,
-추적되지 않는 `android/local.properties`에 `sdk.dir=/실제/SDK/경로`를 지정한다.
+안드로이드 스튜디오가 설치된 PC에서 직접 만들 때:
 
 ```bash
-npm ci
-npm run android:apk
+npm run build
 ```
 
-APK는 `android/app/build/outputs/apk/debug/app-debug.apk`에 생성된다.
-웹 게임을 수정할 때도 같은 명령으로 웹 빌드·앱 동기화·APK 빌드를 다시 실행한다.
-Windows에서는 `npm run android:sync` 후 `android` 폴더에서 `gradlew.bat assembleDebug`를 실행한다.
+```bash
+npx cap sync android
+```
 
-APK를 휴대폰으로 복사해 열고 해당 파일 앱의 ‘알 수 없는 앱 설치’를 허용하거나,
-USB 디버깅을 켠 기기에서 `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`로 설치한다.
-테스트용 디버그 서명을 사용하므로 스토어 배포용으로 사용하지 않는다.
-이전 설치본과 서명 키가 다르면 기존 앱을 삭제한 뒤 설치해야 한다.
+```bash
+cd android && ./gradlew assembleDebug
+```
+
+결과물은 `android/app/build/outputs/apk/debug/app-debug.apk`.
+화면에 표시되는 버전은 `package.json`의 `version`을 따른다.
+
+### 서명 키
+
+기본값은 저장소에 들어 있는 테스트용 키(`android/app/debug.keystore`)다. 이 키는 공개되어 있어서
+누구나 같은 서명의 APK를 만들 수 있다. 본인 기기 테스트에만 쓰고, 다른 사람에게 나눠 주기 전에
+비공개 키로 바꾼다.
+
+1. 키를 만든다 (비밀번호와 별칭은 직접 정한다. 이 파일은 저장소에 올리지 않는다).
+
+```bash
+keytool -genkeypair -keystore signing.keystore -alias untitled -keyalg RSA -keysize 2048 -validity 10000
+```
+
+2. 키 파일을 한 줄 문자열로 바꾼다.
+
+```bash
+base64 -w 0 signing.keystore
+```
+
+3. 저장소 Settings → Secrets and variables → Actions 에 다음 네 개를 등록한다.
+
+| 이름 | 값 |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | 2번에서 나온 문자열 |
+| `ANDROID_KEYSTORE_PASSWORD` | 키 저장소 비밀번호 |
+| `ANDROID_KEY_ALIAS` | 별칭 (위 예시에서는 `untitled`) |
+| `ANDROID_KEY_PASSWORD` | 키 비밀번호 |
+
+등록한 뒤의 빌드부터 비공개 키로 서명된다. 서명이 바뀌므로 기존에 설치한 앱은 한 번 지우고 다시 설치해야 한다.
+그다음 `android/app/debug.keystore`와 `build.gradle`의 테스트용 키 부분을 지우면 된다.
+스토어 출시에는 이와 별도로 릴리스 빌드 설정과 고유한 앱 ID가 필요하다.
