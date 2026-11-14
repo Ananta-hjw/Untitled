@@ -41,6 +41,8 @@ import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings
 import { DIALOGUES, HERO_NAME } from '../story/dialogues';
 import { findInteractable, type Interactable } from '../world/interactables';
 import { Npc, preloadNpcs } from '../entities/Npc';
+import { nextStressCount, stressNpcs } from '../world/npcs';
+import { PerfOverlay } from '../ui/PerfOverlay';
 import { ProgressEffects } from '../ui/ProgressEffects';
 
 /** Scale shared by all academy frames. */
@@ -52,6 +54,8 @@ const TRAVEL_FADE_MS = 220;
 /** scene.restart()로 넘기는 값. 아무것도 넘기지 않으면 지금 맵에서 다시 시작한다. */
 interface SceneData {
   map?: MapId;
+  /** 성능 테스트 인원 (0 = 끔) */
+  stress?: number;
   /** 도착 지점. 없으면 맵의 시작 지점 */
   at?: Point;
   /** 맵을 옮길 때 이어지는 체력. 한 번 쓰고 지운다. */
@@ -129,6 +133,9 @@ export class GameScene extends Phaser.Scene {
   private npcs: Npc[] = [];
   /** 말을 걸 수 있는 대상: 맵의 표지판·문과 마을 사람들 */
   private interactables: Interactable[] = [];
+  /** 성능 테스트로 마을에 더 세우는 사람 수 (0 = 끔). 재시작해도 유지한다. ?stress=100으로도 켤 수 있다. */
+  private stressCount = Math.max(0, Math.min(500, Number(new URLSearchParams(location.search).get('stress')) || 0));
+  private perf?: PerfOverlay;
   private readonly boundsScratch = new Phaser.Geom.Rectangle();
   private keys?: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   private readonly input2 = new Phaser.Math.Vector2();
@@ -145,6 +152,7 @@ export class GameScene extends Phaser.Scene {
     if (isMapId(data.map)) this.mapId = data.map;
     else if (isMapId(fromUrl)) this.mapId = fromUrl;
     this.map = MAPS[this.mapId];
+    if (data.stress !== undefined) this.stressCount = data.stress;
     this.arrival = data.at;
     this.carriedHp = data.hp;
     // 같은 data가 다음 재시작에도 다시 넘어오므로, 체력은 한 번만 이어 받는다.
@@ -162,6 +170,7 @@ export class GameScene extends Phaser.Scene {
     this.enemies = [];
     this.npcs = [];
     this.interactables = [];
+    this.perf = undefined;
     this.attackKeys = [];
     this.dodgeKeys = [];
     this.keys = undefined;
@@ -230,6 +239,7 @@ export class GameScene extends Phaser.Scene {
       .setResolution(2)
       .setVisible(false);
     this.buildPause();
+    if (this.stressCount > 0) this.perf = new PerfOverlay(this, () => this.npcs.length);
 
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 170);
@@ -253,6 +263,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    this.perf?.update(delta);
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
     // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
     const step = Math.min(delta, 50);
@@ -323,7 +334,12 @@ export class GameScene extends Phaser.Scene {
 
   private buildCharacters(): void {
     for (const spawn of this.map.enemies) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y));
-    this.npcs = this.map.npcs.map((def) => new Npc(this, def));
+    let defs = this.map.npcs;
+    if (this.stressCount > 0 && this.mapId === 'village') {
+      const area = this.walkArea, b = this.map.bounds;
+      defs = [...defs, ...stressNpcs(this.stressCount, defs, Math.random, b, (x, y) => area.contains(x, y) && !findExit(this.map, x, y))];
+    }
+    this.npcs = defs.map((def) => new Npc(this, def));
     this.interactables = [...this.map.interactables, ...this.npcs.map((npc) => npc.spot)];
 
     const start = this.arrival ?? this.map.spawn;
@@ -788,6 +804,9 @@ export class GameScene extends Phaser.Scene {
       },
       canExit: Capacitor.isNativePlatform(),
       onExit: () => void App.exitApp(),
+      stressLabel: () => `성능 테스트: ${this.stressCount ? `${this.stressCount}명` : '끔'}`,
+      // 마을에서 사람 수를 바꿔 다시 시작한다. 끔 → 50 → 100 → 200 → 끔.
+      onStress: () => this.scene.restart({ map: 'village', stress: nextStressCount(this.stressCount) }),
     });
     this.pauseKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)] : [];
     // 안드로이드 뒤로가기: 바로 앱을 끄지 않고 일시정지 메뉴를 연다 (웹에서는 아무 일도 없다).

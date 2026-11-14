@@ -844,6 +844,39 @@ test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제
   assert.equal(result.spotFollows, true);
   assert.deepEqual(result.dialogue, { open: true, name: '루안', portrait: 'portrait-ruan' });
 });
+test('성능 테스트 모드는 마을에 사람을 더 세우고 FPS·메모리를 보여 주며, 끄면 원래대로 돌아간다', async () => {
+  await load('village');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    let t = performance.now();
+    const label = () => s.pauseMenu.stressButton.text;
+    const before = { npcs: s.npcs.length, perf: !!s.perf, label: label() };
+    s.scene.restart({ map: 'village', stress: 100 });
+    g.step(t += 16, 16);
+    for (let i = 0; i < 120; i++) s.update(t += 16, 16);
+    s.perf.update(600);
+    const on = { npcs: s.npcs.length, perf: s.perf.text.text, label: label(),
+      onGround: s.npcs.every(n => s.walkArea.contains(n.x, n.y)) };
+    s.scene.restart();
+    g.step(t += 16, 16);
+    const kept = s.npcs.length;
+    s.pauseMenu.options.onStress(); // 100 → 200
+    g.step(t += 16, 16);
+    const next = s.npcs.length;
+    s.scene.restart({ map: 'village', stress: 0 });
+    g.step(t += 16, 16);
+    return { before, on, kept, next, off: { npcs: s.npcs.length, perf: !!s.perf, label: label() } };
+  })()`);
+  assert.deepEqual(result.before, { npcs: 11, perf: false, label: '성능 테스트: 끔' });
+  assert.equal(result.on.npcs, 111);
+  assert.equal(result.on.label, '성능 테스트: 100명');
+  assert.equal(result.on.onGround, true);
+  assert.match(result.on.perf, /FPS \d+/);
+  assert.match(result.on.perf, /인물 111 · 그림 메모리 \d+MB/);
+  assert.equal(result.kept, 111);
+  assert.equal(result.next, 211);
+  assert.deepEqual(result.off, { npcs: 11, perf: false, label: '성능 테스트: 끔' });
+});
 test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 이어지며 마을에는 몬스터가 없다', async () => {
   await load('village');
   const result = await evaluate(`(() => {

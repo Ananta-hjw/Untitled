@@ -4,7 +4,9 @@ import test from 'node:test';
 import { DIALOGUES } from '../src/story/dialogues.ts';
 import { MAPS, findExit, walkable } from '../src/world/maps.ts';
 import { BUILDINGS, PLAYER_SPAWN } from '../src/world/villageLayout.ts';
-import { NPCS, direction8, pickWanderTarget, wanderPauseMs } from '../src/world/npcs.ts';
+import {
+  NPCS, STRESS_STEPS, direction8, nextStressCount, pickWanderTarget, stressNpcs, wanderPauseMs,
+} from '../src/world/npcs.ts';
 
 const village = MAPS.village;
 const characters = new URL('../src/assets/characters/', import.meta.url);
@@ -80,4 +82,21 @@ test('이동 방향을 8방향 그림 중 가장 가까운 것으로 고른다',
   assert.equal(direction8(-1, -1), 'up-left');
   assert.equal(direction8(-1, 0.3), 'left');
   assert.equal(direction8(0, 0, 'up-right'), 'up-right');
+});
+
+test('성능 테스트는 끔 → 50 → 100 → 200 → 끔으로 바뀌고, 사람들을 걸을 수 있는 곳에 세운다', () => {
+  assert.deepEqual([...STRESS_STEPS], [0, 50, 100, 200]);
+  assert.deepEqual([0, 50, 100, 200, 7].map(nextStressCount), [50, 100, 200, 0, 0]);
+  let seed = 11;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const canStand = (x, y) => walkable(village, x, y) && !findExit(village, x, y);
+  const people = stressNpcs(100, NPCS, rand, village.bounds, canStand);
+  assert.equal(people.length, 100);
+  for (const p of people) {
+    assert.equal(canStand(p.x, p.y), true, p.name);
+    assert.ok(p.wander > 0 && !p.shop, p.name);
+    assert.ok(NPCS.some((n) => n.id === p.id), p.id);
+  }
+  assert.equal(people[0].name, `${NPCS[0].name} 1`);
+  assert.equal(new Set(people.map((p) => p.id)).size, NPCS.length, '모든 그림을 돌려 쓴다');
 });

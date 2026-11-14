@@ -23,6 +23,10 @@ export interface PauseMenuOptions {
   /** 앱에서만 true. 웹에서는 게임 종료 버튼을 보이지 않는다. */
   canExit: boolean;
   onExit: () => void;
+  /** 성능 테스트 버튼 글자 (예: "성능 테스트: 100명") */
+  stressLabel: () => string;
+  /** 성능 테스트 인원을 다음 단계로 바꾼다. 씬이 다시 시작된다. */
+  onStress: () => void;
 }
 
 interface OptionRow {
@@ -42,6 +46,7 @@ export class PauseMenu {
   private readonly resumeButton: Phaser.GameObjects.Text;
   private readonly settingsButton: Phaser.GameObjects.Text;
   private readonly exitButton: Phaser.GameObjects.Text;
+  private readonly stressButton: Phaser.GameObjects.Text;
   private readonly backButton: Phaser.GameObjects.Text;
   private readonly rows: OptionRow[] = [];
   private settings: Settings;
@@ -62,6 +67,7 @@ export class PauseMenu {
     this.resumeButton = this.button('계속하기', () => this.close());
     this.settingsButton = this.button('설정', () => this.show('settings'));
     this.exitButton = this.button('게임 종료', () => options.onExit());
+    this.stressButton = this.button('', () => options.onStress());
     this.backButton = this.button('돌아가기', () => this.show('main'));
 
     const rowDefs: Array<{ key: keyof Settings; label: string }> = [
@@ -139,6 +145,7 @@ export class PauseMenu {
     this.title.setVisible(open).setText(view === 'settings' ? '설정' : '일시정지');
     this.resumeButton.setVisible(view === 'main');
     this.settingsButton.setVisible(view === 'main');
+    this.stressButton.setVisible(view === 'main').setText(this.options.stressLabel());
     this.exitButton.setVisible(view === 'main' && this.options.canExit);
     this.backButton.setVisible(view === 'settings');
     for (const row of this.rows) {
@@ -151,7 +158,7 @@ export class PauseMenu {
   private place(): void {
     const width = this.width || this.scene.scale.gameSize.width;
     const cx = width / 2;
-    const mainButtons = [this.resumeButton, this.settingsButton, ...(this.options.canExit ? [this.exitButton] : [])];
+    const mainButtons = [this.resumeButton, this.settingsButton, this.stressButton, ...(this.options.canExit ? [this.exitButton] : [])];
     const height = this.view === 'settings' ? 400 : 150 + mainButtons.length * 78;
     const top = (VIEW_HEIGHT - height) / 2;
     const left = cx - PANEL_WIDTH / 2;

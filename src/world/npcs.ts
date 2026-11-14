@@ -83,3 +83,37 @@ export function pickWanderTarget(
 export function wanderPauseMs(rand: () => number): number {
   return 1500 + rand() * 2500;
 }
+
+/** 성능 테스트에서 고를 수 있는 인원 (0 = 끔). 일시정지 메뉴에서 차례로 바꾼다. */
+export const STRESS_STEPS = [0, 50, 100, 200] as const;
+
+export function nextStressCount(current: number): number {
+  const i = STRESS_STEPS.indexOf(current as (typeof STRESS_STEPS)[number]);
+  return STRESS_STEPS[(i + 1) % STRESS_STEPS.length];
+}
+
+/**
+ * 성능 테스트용 마을 사람: 기존 사람들의 그림을 돌려 쓰며 count명을 마을 곳곳에 세운다.
+ * 모두 돌아다니게 해서 가장 무거운 경우를 잰다. canStand는 서 있을 수 있는 곳인지 판단한다.
+ */
+export function stressNpcs(
+  count: number, base: readonly NpcDef[], rand: () => number,
+  bounds: { left: number; top: number; right: number; bottom: number },
+  canStand: (x: number, y: number) => boolean,
+): NpcDef[] {
+  const result: NpcDef[] = [];
+  for (let i = 0; i < count; i++) {
+    const source = base[i % base.length];
+    let x = source.x, y = source.y;
+    for (let tries = 0; tries < 30; tries++) {
+      const px = bounds.left + rand() * (bounds.right - bounds.left);
+      const py = bounds.top + rand() * (bounds.bottom - bounds.top);
+      if (canStand(px, py)) {
+        x = px; y = py;
+        break;
+      }
+    }
+    result.push({ ...source, name: `${source.name} ${i + 1}`, x, y, shop: false, wander: 160 });
+  }
+  return result;
+}
