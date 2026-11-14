@@ -32,7 +32,7 @@ const HP_BAR_WIDTH = 70;
 export class Character extends Phaser.GameObjects.Container {
   /** 캐릭터의 몸. 프레임 스프라이트이거나 주인공 프레임 시트다. */
   readonly sprite: Phaser.GameObjects.Sprite | HeroSprite;
-  readonly maxHp: number;
+  maxHp: number;
   hp: number;
   alive = true;
   /** 1 = 오른쪽, -1 = 왼쪽 */
@@ -46,6 +46,7 @@ export class Character extends Phaser.GameObjects.Container {
   private readonly shadow: Phaser.GameObjects.Image;
   private readonly hpBar?: Phaser.GameObjects.Graphics;
   private readonly hpBarY: number;
+  private levelText?: Phaser.GameObjects.Text;
   private moving = false;
   private attacking = false;
   private dodging = false;
@@ -95,7 +96,7 @@ export class Character extends Phaser.GameObjects.Container {
       this.add(label);
 
       if (options.level !== undefined) {
-        const level = scene.add
+        this.levelText = scene.add
           .text(0, top, `Lv. ${options.level}`, {
             fontFamily: 'system-ui, sans-serif',
             fontSize: '17px',
@@ -106,7 +107,7 @@ export class Character extends Phaser.GameObjects.Container {
           })
           .setOrigin(0.5, 1)
           .setResolution(2);
-        this.add(level);
+        this.add(this.levelText);
       }
     }
 
@@ -117,6 +118,18 @@ export class Character extends Phaser.GameObjects.Container {
 
     scene.add.existing(this);
     this.setDepth(y);
+  }
+
+  /** 머리 위 레벨 표시를 바꾼다. */
+  setLevel(level: number): void {
+    this.levelText?.setText(`Lv. ${level}`);
+  }
+
+  /** 최대 체력을 바꾼다. heal이면 체력을 가득 채운다. */
+  setMaxHp(maxHp: number, heal: boolean): void {
+    this.maxHp = maxHp;
+    this.hp = heal ? maxHp : Math.min(this.hp, maxHp);
+    this.drawHpBar();
   }
 
   get isAttacking(): boolean {

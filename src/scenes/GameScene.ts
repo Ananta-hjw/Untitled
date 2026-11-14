@@ -8,6 +8,7 @@ import {
   ENEMY,
   KNOCKBACK_DAMPING,
   PLAYER,
+  PROGRESSION,
   PLAYER_SPEED,
   VERTICAL_SPEED_RATIO,
   VIEW_HEIGHT,
@@ -16,6 +17,7 @@ import {
 } from '../config';
 import { dodgeDistanceRatio, lungeProgress, locomotionRate } from '../entities/movement';
 import { Character } from '../entities/Character';
+import { addXp, statsForLevel, xpToNext, type LevelStats, type Progress } from '../entities/progression';
 import { ActionButton } from '../ui/ActionButton';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { HERO_SPRITE_HEIGHT, HeroSprite, preloadHeroSprite } from '../entities/HeroSprite';
@@ -26,6 +28,7 @@ import { NavGrid } from '../world/navGrid';
 import { buildVillage, preloadVillage, ENEMY_SPAWNS, PLAYER_SPAWN, type Village } from '../world/village';
 import { Hud } from '../ui/Hud';
 import { DamageNumbers } from '../ui/DamageNumbers';
+import { ProgressEffects } from '../ui/ProgressEffects';
 
 /** Scale shared by all academy frames. */
 const HERO_SCALE = 0.5;
@@ -60,6 +63,10 @@ export class GameScene extends Phaser.Scene {
   private readonly dodgeDirection = new Phaser.Math.Vector2();
   private hud!: Hud;
   private damageNumbers!: DamageNumbers;
+  private progressEffects!: ProgressEffects;
+  /** 플레이어의 레벨과 경험치. 쓰러져도 잃지 않는다. */
+  private progress: Progress = { level: 1, xp: 0 };
+  private stats: LevelStats = statsForLevel(1);
   private village!: Village;
   private nav!: NavGrid;
   private readonly boundsScratch = new Phaser.Geom.Rectangle();
@@ -96,6 +103,8 @@ export class GameScene extends Phaser.Scene {
     this.input2.set(0, 0);
     this.scratch.set(0, 0);
     this.enemyRespawns = [];
+    this.progress = { level: 1, xp: 0 };
+    this.stats = statsForLevel(1);
     this.playerRespawnAt = undefined;
     this.deathMessage = undefined;
   }
@@ -116,6 +125,7 @@ export class GameScene extends Phaser.Scene {
     this.effects = new CombatEffects(this);
     this.buildUi();
     this.damageNumbers = new DamageNumbers(this);
+    this.progressEffects = new ProgressEffects(this);
 
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 170);
@@ -163,12 +173,12 @@ export class GameScene extends Phaser.Scene {
     this.player = new Character(this, PLAYER_SPAWN.x, PLAYER_SPAWN.y, {
       key: 'hero',
       name: '용사',
-      level: 1,
+      level: this.progress.level,
       hero: true,
       scale: HERO_SCALE,
       labelOffset: HERO_SPRITE_HEIGHT * HERO_SCALE + 8,
       shadowWidth: 110,
-      maxHp: PLAYER.maxHp,
+      maxHp: this.stats.maxHp,
     });
   }
 
@@ -221,6 +231,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawHud(): void {
     this.hud.setHp(this.player.hp, this.player.maxHp);
+    this.hud.setXp(this.progress.level, this.progress.xp, xpToNext(this.progress.level));
   }
 
   /** 화면 너비가 바뀔 때(회전, 창 크기 변경) 화면에 고정된 요소를 다시 배치한다. */
@@ -509,12 +520,13 @@ export class GameScene extends Phaser.Scene {
       trace.hit.add(enemy);
 
       hitAny = true;
-      const damage = Math.round(Phaser.Math.Between(PLAYER.damageMin, PLAYER.damageMax) * combo.damage);
+      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * combo.damage);
       const died = c.hurt(damage);
       this.showDamage(c.x, c.y - 100, damage, finisher ? '#ffb35a' : '#fff3c4', finisher ? 46 : 34);
       if (died) {
         enemy.kill();
         this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
+        this.gainXp(PROGRESSION.slimeXp, c.x, c.y - 185);
       } else {
         const push = PLAYER.knockback * combo.knockback;
         c.knockback.set(trace.direction.x * push, trace.direction.y * push * VERTICAL_SPEED_RATIO);
@@ -522,6 +534,23 @@ export class GameScene extends Phaser.Scene {
       }
     }
     if (hitAny) this.cameras.main.shake(finisher ? 130 : 70, finisher ? 0.009 : 0.004);
+  }
+
+  /** 경험치를 더하고, 레벨이 오르면 능력치를 올리고 체력을 가득 채운다. */
+  private gainXp(amount: number, x: number, y: number): void {
+    const result = addXp(this.progress, amount);
+    this.progress = { level: result.level, xp: result.xp };
+    if (amount > 0) this.progressEffects.showXp(x, y, amount);
+
+    if (result.levelsGained > 0) {
+      const player = this.player;
+      this.stats = statsForLevel(result.level);
+      player.setMaxHp(this.stats.maxHp, player.alive);
+      player.setLevel(result.level);
+      this.hud.showLevelUp(result.level);
+      this.progressEffects.levelUpBurst(player.x, player.y);
+    }
+    this.drawHud();
   }
 
   /** 몬스터의 돌진이 닿는 순간. 화살표 함수라서 콜백으로 그대로 넘길 수 있다. */

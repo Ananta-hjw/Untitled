@@ -41,7 +41,7 @@ npm run test:browser
 
 | 파일 | 역할 |
 |---|---|
-| `src/config.ts` | 화면 크기, 이동 속도, 전투 수치(체력·공격력·사거리 등) |
+| `src/config.ts` | 화면 크기, 이동 속도, 전투 수치(체력·공격력·사거리 등), 성장 수치(`PROGRESSION`) |
 | `src/ui/VirtualJoystick.ts` | 고정형 가상 조이스틱 (멀티터치, 데드존) |
 | `src/ui/ActionButton.ts` | 공격·회피 버튼 |
 | `src/combat/Enemy.ts` | 몬스터 AI (배회 → 추격 → 준비 동작 → 돌진) |
@@ -56,6 +56,8 @@ npm run test:browser
 | `src/world/villageLayout.ts` | 집·나무·바위 배치와 충돌 영역, 시작 위치 |
 | `src/world/navGrid.ts` | 적의 장애물 우회 경로 |
 | `src/ui/Hud.ts`, `src/ui/DamageNumbers.ts` | HUD와 재사용 피해 숫자 |
+| `src/entities/progression.ts` | 경험치·레벨 계산 (레벨별 체력·공격력, 필요 경험치) |
+| `src/ui/ProgressEffects.ts` | 경험치 획득·레벨 업 연출 |
 
 ## 시작 마을
 

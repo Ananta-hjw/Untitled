@@ -581,3 +581,32 @@ test('이동·긴 회피 거리는 집과 바위를 통과하지 않고 나무 �
   assert.equal(result.behind, true);
   assert.equal(result.front, true);
 });
+
+test('적을 쓰러뜨리면 경험치가 쌓이고 레벨이 오르면 체력·공격력이 오르며 재시작하면 처음으로 돌아간다', async () => {
+  await load();
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+    const before = { level: s.progress.level, xp: s.progress.xp, maxHp: p.maxHp, damageMax: s.stats.damageMax };
+    p.hurt(30);
+    const hurtHp = p.hp;
+    // 실제 처치 경로와 같은 함수로 경험치를 준다. 세 마리째에 레벨 2가 된다.
+    s.gainXp(10, p.x, p.y); s.gainXp(10, p.x, p.y);
+    const twoKills = { level: s.progress.level, xp: s.progress.xp, hp: p.hp };
+    s.gainXp(10, p.x, p.y);
+    const levelUp = { level: s.progress.level, xp: s.progress.xp, hp: p.hp, maxHp: p.maxHp,
+      damageMax: s.stats.damageMax, label: p.list.find((o) => o.text?.startsWith?.('Lv.'))?.text };
+    s.scene.restart(); g.step(performance.now(), 16); g.step(performance.now() + 16, 16);
+    const s2 = g.scene.getScene('game');
+    const restarted = { level: s2.progress.level, xp: s2.progress.xp, maxHp: s2.player.maxHp };
+    return { before, hurtHp, twoKills, levelUp, restarted };
+  })()`);
+  assert.deepEqual(result.before, { level: 1, xp: 0, maxHp: 100, damageMax: 13 });
+  assert.deepEqual(result.twoKills, { level: 1, xp: 20, hp: result.hurtHp });
+  assert.equal(result.levelUp.level, 2);
+  assert.equal(result.levelUp.xp, 0);
+  assert.equal(result.levelUp.maxHp, 112);
+  assert.equal(result.levelUp.hp, 112);
+  assert.ok(result.levelUp.damageMax > result.before.damageMax);
+  assert.equal(result.levelUp.label, 'Lv. 2');
+  assert.deepEqual(result.restarted, { level: 1, xp: 0, maxHp: 100 });
+});
