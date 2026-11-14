@@ -55,12 +55,10 @@ export const PROPS: VillageProp[] = [
   { frame: 'rock', x: 1188, y: 573, width: 28 },
 ];
 
-export const ENEMY_SPAWNS = [
-  { key: 'slime-green', x: 2000, y: 1200 },
-  { key: 'slime-blue', x: 2210, y: 1280 },
-  { key: 'slime-green', x: 430, y: 1460 },
-  { key: 'slime-blue', x: 1000, y: 1430 },
-];
+/** 소품의 바닥 접점(줄기·바위 밑동)만 장애물로 만든다. 다른 맵도 같은 규칙을 쓴다. */
+export function propObstacles(props: readonly VillageProp[]): Obstacle[] {
+  return props.flatMap((p) => p.footprint ? [{ x: p.x, y: p.y - p.footprint.ry * .45, ...p.footprint }] : []);
+}
 
-export const OBSTACLES: Obstacle[] = [HOME.footprint, ...PROPS.flatMap((p) =>
-  p.footprint ? [{ x: p.x, y: p.y - p.footprint.ry * .45, ...p.footprint }] : [])];
+// 마을은 평화로운 곳이라 몬스터가 나오지 않는다. 몬스터는 마을 밖 사냥터(maps.ts)에 있다.
+export const OBSTACLES: Obstacle[] = [HOME.footprint, ...propObstacles(PROPS)];

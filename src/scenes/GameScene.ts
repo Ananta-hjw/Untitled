@@ -31,7 +31,8 @@ import { attackFacingFor, attackVector, insideAttackLane, movementFacing } from 
 import { createPlaceholderArt } from '../world/placeholderArt';
 import type { WalkArea } from '../world/walkArea';
 import { NavGrid } from '../world/navGrid';
-import { buildVillage, preloadVillage, ENEMY_SPAWNS, PLAYER_SPAWN, type Village } from '../world/village';
+import { buildMap, preloadVillage } from '../world/village';
+import { MAPS, START_MAP, findExit, isMapId, type GameMap, type MapExit, type MapId, type Point } from '../world/maps';
 import { Hud } from '../ui/Hud';
 import { DamageNumbers } from '../ui/DamageNumbers';
 import { DialogueBox, preloadDialogue } from '../ui/DialogueBox';
@@ -44,6 +45,17 @@ import { ProgressEffects } from '../ui/ProgressEffects';
 /** Scale shared by all academy frames. */
 const HERO_SCALE = 0.5;
 const NAV_CELL = 32;
+/** 맵을 옮길 때 화면이 어두워졌다 밝아지는 시간(ms). 연출만 담당하고 게임 시계와는 무관하다. */
+const TRAVEL_FADE_MS = 220;
+
+/** scene.restart()로 넘기는 값. 아무것도 넘기지 않으면 지금 맵에서 다시 시작한다. */
+interface SceneData {
+  map?: MapId;
+  /** 도착 지점. 없으면 맵의 시작 지점 */
+  at?: Point;
+  /** 맵을 옮길 때 이어지는 체력. 한 번 쓰고 지운다. */
+  hp?: number;
+}
 
 export class GameScene extends Phaser.Scene {
   private player!: Character;
@@ -104,7 +116,13 @@ export class GameScene extends Phaser.Scene {
   private progress: Progress = { level: 1, xp: 0 };
   private stats: LevelStats = statsForLevel(1);
   private storage?: SaveStorage;
-  private village!: Village;
+  /** 지금 있는 맵. 재시작해도 유지되고, 맵을 옮길 때만 바뀐다. */
+  private mapId: MapId = START_MAP;
+  private map: GameMap = MAPS[START_MAP];
+  private arrival?: Point;
+  private carriedHp?: number;
+  /** 다른 맵으로 옮겨 가는 중(화면이 어두워지는 동안). 그동안 게임은 멈춘다. */
+  private traveling = false;
   private nav!: NavGrid;
   private readonly boundsScratch = new Phaser.Geom.Rectangle();
   private keys?: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
@@ -115,8 +133,17 @@ export class GameScene extends Phaser.Scene {
     super('game');
   }
 
-  init(): void {
+  init(data: SceneData = {}): void {
     this.resetState();
+    // 맵: 넘겨받은 값 → (개발 빌드) 주소의 ?map= → 지금 맵 순서로 정한다.
+    const fromUrl = import.meta.env.DEV ? new URLSearchParams(location.search).get('map') : null;
+    if (isMapId(data.map)) this.mapId = data.map;
+    else if (isMapId(fromUrl)) this.mapId = fromUrl;
+    this.map = MAPS[this.mapId];
+    this.arrival = data.at;
+    this.carriedHp = data.hp;
+    // 같은 data가 다음 재시작에도 다시 넘어오므로, 체력은 한 번만 이어 받는다.
+    data.hp = undefined;
     // 저장된 진행 상황이 있으면 그 레벨로 시작한다 (재시작 포함).
     this.storage = browserStorage();
     const saved = loadProgress(this.storage);
@@ -158,6 +185,9 @@ export class GameScene extends Phaser.Scene {
     this.stats = statsForLevel(1);
     this.playerRespawnAt = undefined;
     this.deathMessage = undefined;
+    this.traveling = false;
+    this.arrival = undefined;
+    this.carriedHp = undefined;
   }
 
   preload(): void {
@@ -168,8 +198,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     createPlaceholderArt(this);
-    this.village = buildVillage(this);
-    this.walkArea = this.village.walkArea;
+    this.walkArea = buildMap(this, this.map);
     const bounds = this.walkArea.bounds;
     this.nav = new NavGrid(bounds.left, bounds.top, bounds.right, bounds.bottom, NAV_CELL,
       (x, y) => this.walkArea.contains(x, y));
@@ -196,6 +225,7 @@ export class GameScene extends Phaser.Scene {
 
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 170);
+    if (this.arrival) this.cameras.main.fadeIn(TRAVEL_FADE_MS, 0, 0, 0);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.game.events.on(Phaser.Core.Events.BLUR, this.clearAttackInput, this);
@@ -218,6 +248,8 @@ export class GameScene extends Phaser.Scene {
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
     // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
     const step = Math.min(delta, 50);
+    // 맵을 옮기는 동안에는 아무것도 진행하지 않는다.
+    if (this.traveling) return;
 
     // 일시정지 중에는 게임 시계를 멈춘다. Esc는 메뉴에서 한 단계 뒤로.
     let escape = false;
@@ -265,6 +297,7 @@ export class GameScene extends Phaser.Scene {
     this.updateRespawns(time);
     this.updateAttackLunge(time);
     this.updatePlayer(time, dt);
+    if (this.checkExit()) return;
     this.updateAttackTrace(time);
     this.nav.setTarget(this.player.x, this.player.y);
     for (const enemy of this.enemies) {
@@ -280,9 +313,10 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 월드
 
   private buildCharacters(): void {
-    for (const spawn of ENEMY_SPAWNS) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y));
+    for (const spawn of this.map.enemies) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y));
 
-    this.player = new Character(this, PLAYER_SPAWN.x, PLAYER_SPAWN.y, {
+    const start = this.arrival ?? this.map.spawn;
+    this.player = new Character(this, start.x, start.y, {
       key: 'hero',
       name: '용사',
       level: this.progress.level,
@@ -292,6 +326,32 @@ export class GameScene extends Phaser.Scene {
       shadowWidth: 110,
       maxHp: this.stats.maxHp,
     });
+    if (this.carriedHp !== undefined) this.player.hp = Phaser.Math.Clamp(Math.round(this.carriedHp), 1, this.player.maxHp);
+  }
+
+  // ---------------------------------------------------------------- 맵 이동
+
+  /** 발이 출구 영역에 들어가면 연결된 맵으로 옮겨 간다. 옮기기 시작했으면 true. */
+  private checkExit(): boolean {
+    const player = this.player;
+    if (!player.alive) return false;
+    const exit = findExit(this.map, player.x, player.y);
+    if (!exit) return false;
+    this.travel(exit);
+    return true;
+  }
+
+  /** 화면을 어둡게 한 뒤 장면을 새 맵으로 다시 시작한다. 레벨·경험치는 저장되어 있어 그대로 이어진다. */
+  private travel(exit: MapExit): void {
+    this.traveling = true;
+    this.clearAttackInput();
+    this.player.setMotion(false);
+    this.talkButton.setVisible(false);
+    this.talkMarker.setVisible(false);
+    const data: SceneData = { map: exit.to, at: exit.arrive, hp: this.player.hp };
+    const camera = this.cameras.main;
+    camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart(data));
+    camera.fadeOut(TRAVEL_FADE_MS, 0, 0, 0);
   }
 
   // ---------------------------------------------------------------- UI
@@ -355,7 +415,7 @@ export class GameScene extends Phaser.Scene {
       }) as GameScene['keys'];
     }
 
-    this.hud = new Hud(this, '집 앞에서 시작합니다 · 조이스틱 또는 WASD로 마을을 둘러보세요');
+    this.hud = new Hud(this, this.map.hint);
     this.drawHud();
   }
 
@@ -786,7 +846,7 @@ export class GameScene extends Phaser.Scene {
   private updateInteraction(time: number): void {
     const player = this.player;
     const free = player.alive && !player.isAttacking && this.dodgeProgress >= 1 && !this.inCombat();
-    const target = free ? findInteractable(player.x, player.y) : undefined;
+    const target = free ? findInteractable(player.x, player.y, this.map.interactables) : undefined;
     this.talkButton.setVisible(!!target);
 
     const marker = this.talkMarker;
@@ -883,7 +943,7 @@ export class GameScene extends Phaser.Scene {
       this.deathMessage = undefined;
       if (!this.player.alive) {
         this.clearAttackInput();
-        this.player.revive(PLAYER_SPAWN.x, PLAYER_SPAWN.y);
+        this.player.revive(this.map.spawn.x, this.map.spawn.y);
         this.player.invulnerableUntil = time + 1500;
         this.drawHud();
       }
@@ -922,5 +982,7 @@ export class GameScene extends Phaser.Scene {
       if (o.shape === 'rect') g.strokeRect(o.x - o.rx, o.y - o.ry, o.rx * 2, o.ry * 2);
       else g.strokeEllipse(o.x, o.y, o.rx * 2, o.ry * 2);
     }
+    g.lineStyle(3, 0xffd84a, 0.9);
+    for (const { zone } of this.map.exits) g.strokeRect(zone.left, zone.top, zone.right - zone.left, zone.bottom - zone.top);
   }
 }

@@ -1,0 +1,247 @@
+import { WORLD_HEIGHT, WORLD_WIDTH } from '../config.ts';
+import type { DialogueId } from '../story/dialogues.ts';
+import { INTERACTABLES, type Interactable } from './interactables.ts';
+import { insideObstacle, type Obstacle } from './obstacles.ts';
+import {
+  HOME, PLAYER_SPAWN, PROPS as VILLAGE_PROPS, WALK_BOUNDS as VILLAGE_BOUNDS, propObstacles, type VillageProp,
+} from './villageLayout.ts';
+
+/**
+ * 맵 목록과 맵 사이의 출구.
+ *
+ * 로웬 마을을 가운데 두고 남쪽 들판, 서쪽 숲길, 동쪽 개울가가 이어진다(docs/story-chapter1.md).
+ * 플레이어의 발이 출구 영역에 들어가면 연결된 맵의 도착 지점으로 옮겨 간다.
+ * 마을은 평화로운 곳이라 몬스터가 없고, 몬스터는 사냥터에만 나온다.
+ * 이 파일은 Phaser를 쓰지 않아 tools/maps.test.mjs가 직접 불러 검사한다.
+ */
+
+export type MapId = 'village' | 'south-field' | 'west-forest' | 'east-stream';
+
+export interface Rect { left: number; top: number; right: number; bottom: number }
+export interface Point { x: number; y: number }
+
+export interface MapExit {
+  to: MapId;
+  /** 이 영역에 발이 들어가면 이동한다. 걸을 수 있는 영역의 가장자리에 걸쳐 둔다. */
+  zone: Rect;
+  /** 도착하는 맵에서 서는 자리. 그 맵의 출구 영역 밖이어야 바로 되돌아가지 않는다. */
+  arrive: Point;
+  /** 출구 표시 글자와 위치 */
+  label: string;
+  labelAt: Point;
+}
+
+export interface MapEnemySpawn { key: 'slime-green' | 'slime-blue'; x: number; y: number }
+
+export interface GameMap {
+  id: MapId;
+  name: string;
+  /** 맵에 들어설 때 화면 아래에 잠깐 띄우는 안내 */
+  hint: string;
+  bounds: Rect;
+  props: VillageProp[];
+  /** 주인공의 집이 있는 맵인지 (마을만) */
+  home: boolean;
+  /** 지면 색조. 같은 땅 그림을 맵마다 다른 분위기로 쓴다. */
+  groundTint?: number;
+  /** 화면 위쪽에 그리는 개울. 걸을 수 있는 영역 밖에 있다. */
+  water?: { top: number; bottom: number };
+  /** 처음 이 맵에서 시작하거나 쓰러졌다 일어날 때 서는 자리 */
+  spawn: Point;
+  enemies: MapEnemySpawn[];
+  exits: MapExit[];
+  interactables: Interactable[];
+}
+
+const FULL_BOUNDS: Rect = { ...VILLAGE_BOUNDS };
+
+function sign(id: string, x: number, y: number, dialogue: DialogueId): { prop: VillageProp; spot: Interactable } {
+  return {
+    prop: { frame: 'sign', x, y, width: 90, footprint: { rx: 15, ry: 13 } },
+    spot: { id, x, y, radius: 105, markerHeight: 150, dialogue },
+  };
+}
+
+const southSign = sign('south-field-sign', 1420, 330, 'south-field-sign');
+const forestSign = sign('west-forest-sign', 2180, 900, 'west-forest-sign');
+const streamSign = sign('east-stream-sign', 260, 760, 'east-stream-sign');
+
+const VILLAGE: GameMap = {
+  id: 'village',
+  name: '로웬 마을',
+  hint: '로웬 마을 · 조이스틱 또는 WASD로 둘러보세요',
+  bounds: FULL_BOUNDS,
+  props: VILLAGE_PROPS,
+  home: true,
+  spawn: PLAYER_SPAWN,
+  enemies: [],
+  exits: [
+    { to: 'south-field', zone: { left: 1040, top: 1500, right: 1320, bottom: WORLD_HEIGHT },
+      arrive: { x: 1180, y: 420 }, label: '▼ 남쪽 들판', labelAt: { x: 1180, y: 1525 } },
+    { to: 'west-forest', zone: { left: 0, top: 940, right: 112, bottom: 1160 },
+      arrive: { x: 2150, y: 1050 }, label: '◀ 서쪽 숲길', labelAt: { x: 150, y: 1000 } },
+    { to: 'east-stream', zone: { left: 2290, top: 820, right: WORLD_WIDTH, bottom: 1000 },
+      arrive: { x: 240, y: 910 }, label: '동쪽 개울가 ▶', labelAt: { x: 2245, y: 870 } },
+  ],
+  interactables: INTERACTABLES,
+};
+
+const SOUTH_FIELD: GameMap = {
+  id: 'south-field',
+  name: '남쪽 들판',
+  hint: '남쪽 들판 · 슬라임이 나타납니다',
+  bounds: FULL_BOUNDS,
+  props: [
+    { frame: 'oak', x: 160, y: 380, width: 330, footprint: { rx: 38, ry: 24 } },
+    { frame: 'pine', x: 420, y: 300, width: 240, footprint: { rx: 27, ry: 20 } },
+    { frame: 'pine', x: 1700, y: 300, width: 250, footprint: { rx: 30, ry: 20 } },
+    { frame: 'oak', x: 2050, y: 360, width: 350, footprint: { rx: 40, ry: 26 } },
+    { frame: 'pine', x: 2330, y: 520, width: 230, footprint: { rx: 26, ry: 20 } },
+    { frame: 'oak', x: 150, y: 900, width: 320, footprint: { rx: 37, ry: 24 } },
+    { frame: 'pine', x: 2330, y: 1000, width: 260, footprint: { rx: 30, ry: 20 } },
+    { frame: 'oak', x: 2250, y: 1460, width: 340, footprint: { rx: 39, ry: 24 } },
+    { frame: 'pine', x: 560, y: 1560, width: 260, footprint: { rx: 28, ry: 20 } },
+    { frame: 'oak', x: 1900, y: 1560, width: 330, footprint: { rx: 38, ry: 24 } },
+    { frame: 'boulders', x: 620, y: 560, width: 170, footprint: { rx: 76, ry: 28 } },
+    { frame: 'boulders', x: 1880, y: 860, width: 180, footprint: { rx: 80, ry: 30 } },
+    { frame: 'rock', x: 700, y: 1150, width: 110, footprint: { rx: 49, ry: 24 } },
+    { frame: 'rock', x: 1500, y: 1430, width: 100, footprint: { rx: 44, ry: 22 } },
+    { frame: 'shrub', x: 880, y: 380, width: 105, footprint: { rx: 43, ry: 19 } },
+    { frame: 'stump', x: 420, y: 1250, width: 100, footprint: { rx: 40, ry: 22 } },
+    { frame: 'flowers', x: 960, y: 820, width: 75 },
+    { frame: 'flowers', x: 1400, y: 760, width: 70 },
+    { frame: 'flowers', x: 520, y: 980, width: 65 },
+    { frame: 'flowers', x: 1750, y: 1320, width: 70 },
+    { frame: 'flowers', x: 1150, y: 1300, width: 75 },
+    southSign.prop,
+  ],
+  home: false,
+  groundTint: 0xf2ecc8,
+  spawn: { x: 1180, y: 420 },
+  enemies: [
+    { key: 'slime-green', x: 2000, y: 1200 },
+    { key: 'slime-blue', x: 2210, y: 1280 },
+    { key: 'slime-green', x: 430, y: 1460 },
+    { key: 'slime-blue', x: 1000, y: 1430 },
+  ],
+  exits: [
+    { to: 'village', zone: { left: 1040, top: 0, right: 1320, bottom: 290 },
+      arrive: { x: 1180, y: 1420 }, label: '▲ 로웬 마을', labelAt: { x: 1180, y: 262 } },
+  ],
+  interactables: [southSign.spot],
+};
+
+const WEST_FOREST: GameMap = {
+  id: 'west-forest',
+  name: '서쪽 숲길',
+  hint: '서쪽 숲길 · 나무 사이를 조심하세요',
+  bounds: FULL_BOUNDS,
+  props: [
+    ...([
+      ['oak', 200, 320], ['pine', 500, 280], ['oak', 820, 330], ['pine', 1150, 300], ['oak', 1480, 320],
+      ['pine', 1800, 290], ['oak', 2120, 330], ['pine', 350, 620], ['oak', 1000, 560], ['pine', 1650, 600],
+      ['oak', 2250, 620], ['oak', 150, 950], ['pine', 700, 880], ['oak', 1300, 850], ['pine', 1900, 820],
+      ['oak', 450, 1250], ['pine', 1100, 1150], ['oak', 1700, 1250], ['pine', 250, 1540], ['oak', 900, 1520],
+      ['pine', 1500, 1560], ['oak', 2000, 1500], ['pine', 2300, 1350],
+    ] as const).map(([frame, x, y]): VillageProp => frame === 'oak'
+      ? { frame, x, y, width: 320, footprint: { rx: 37, ry: 24 } }
+      : { frame, x, y, width: 250, footprint: { rx: 29, ry: 20 } }),
+    { frame: 'boulders', x: 1250, y: 1020, width: 175, footprint: { rx: 78, ry: 29 } },
+    { frame: 'shrub', x: 600, y: 420, width: 110, footprint: { rx: 45, ry: 20 } },
+    { frame: 'shrub', x: 1950, y: 1100, width: 115, footprint: { rx: 47, ry: 20 } },
+    { frame: 'stump', x: 820, y: 1000, width: 95, footprint: { rx: 38, ry: 21 } },
+    { frame: 'flowers', x: 1560, y: 980, width: 65 },
+    { frame: 'flowers', x: 380, y: 860, width: 60 },
+    forestSign.prop,
+  ],
+  home: false,
+  groundTint: 0xb9cfa4,
+  spawn: { x: 2150, y: 1050 },
+  enemies: [
+    { key: 'slime-green', x: 900, y: 700 },
+    { key: 'slime-blue', x: 600, y: 1150 },
+    { key: 'slime-green', x: 1300, y: 1350 },
+    { key: 'slime-blue', x: 1500, y: 700 },
+  ],
+  exits: [
+    { to: 'village', zone: { left: 2290, top: 940, right: WORLD_WIDTH, bottom: 1160 },
+      arrive: { x: 230, y: 1050 }, label: '로웬 마을 ▶', labelAt: { x: 2240, y: 1000 } },
+  ],
+  interactables: [forestSign.spot],
+};
+
+const EAST_STREAM: GameMap = {
+  id: 'east-stream',
+  name: '동쪽 개울가',
+  hint: '동쪽 개울가 · 물가에 가까이 가지 마세요',
+  bounds: { ...FULL_BOUNDS, top: 430 },
+  props: [
+    { frame: 'boulders', x: 520, y: 470, width: 170, footprint: { rx: 76, ry: 28 } },
+    { frame: 'boulders', x: 1420, y: 480, width: 160, footprint: { rx: 72, ry: 27 } },
+    { frame: 'boulders', x: 2100, y: 465, width: 175, footprint: { rx: 78, ry: 29 } },
+    { frame: 'oak', x: 200, y: 1450, width: 330, footprint: { rx: 38, ry: 24 } },
+    { frame: 'pine', x: 700, y: 1550, width: 250, footprint: { rx: 28, ry: 20 } },
+    { frame: 'oak', x: 1300, y: 1560, width: 320, footprint: { rx: 37, ry: 24 } },
+    { frame: 'pine', x: 1900, y: 1500, width: 260, footprint: { rx: 30, ry: 20 } },
+    { frame: 'oak', x: 2280, y: 1250, width: 330, footprint: { rx: 38, ry: 24 } },
+    { frame: 'rock', x: 900, y: 800, width: 110, footprint: { rx: 49, ry: 24 } },
+    { frame: 'rock', x: 1600, y: 1000, width: 100, footprint: { rx: 44, ry: 22 } },
+    { frame: 'shrub', x: 2250, y: 760, width: 110, footprint: { rx: 45, ry: 20 } },
+    { frame: 'flowers', x: 1100, y: 1200, width: 70 },
+    { frame: 'flowers', x: 1800, y: 700, width: 65 },
+    { frame: 'flowers', x: 600, y: 1100, width: 70 },
+    streamSign.prop,
+  ],
+  home: false,
+  groundTint: 0xd6e8da,
+  water: { top: 230, bottom: 415 },
+  spawn: { x: 240, y: 910 },
+  enemies: [
+    { key: 'slime-blue', x: 1200, y: 750 },
+    { key: 'slime-green', x: 1700, y: 1150 },
+    { key: 'slime-blue', x: 2000, y: 650 },
+  ],
+  exits: [
+    { to: 'village', zone: { left: 0, top: 820, right: 110, bottom: 1000 },
+      arrive: { x: 2180, y: 910 }, label: '◀ 로웬 마을', labelAt: { x: 160, y: 1010 } },
+  ],
+  interactables: [streamSign.spot],
+};
+
+export const MAPS: Record<MapId, GameMap> = {
+  village: VILLAGE,
+  'south-field': SOUTH_FIELD,
+  'west-forest': WEST_FOREST,
+  'east-stream': EAST_STREAM,
+};
+
+export const START_MAP: MapId = 'village';
+
+export function isMapId(value: unknown): value is MapId {
+  return typeof value === 'string' && Object.hasOwn(MAPS, value);
+}
+
+/** 맵의 장애물: 집의 벽(마을만)과 소품의 바닥 접점 */
+export function mapObstacles(map: GameMap): Obstacle[] {
+  return map.home ? [HOME.footprint, ...propObstacles(map.props)] : propObstacles(map.props);
+}
+
+/** 걸을 수 있는 영역의 꼭짓점 (WalkArea용) */
+export function mapPolygon(map: GameMap): number[] {
+  const b = map.bounds;
+  return [b.left, b.top, b.right, b.top, b.right, b.bottom, b.left, b.bottom];
+}
+
+export function insideRect(rect: Rect, x: number, y: number): boolean {
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+/** (x, y)가 출구 영역 안이면 그 출구. 없으면 undefined. */
+export function findExit(map: GameMap, x: number, y: number): MapExit | undefined {
+  return map.exits.find((exit) => insideRect(exit.zone, x, y));
+}
+
+/** Phaser 없이 걸을 수 있는지 판단한다 (테스트용, WalkArea와 같은 규칙). */
+export function walkable(map: GameMap, x: number, y: number, obstacles: readonly Obstacle[] = mapObstacles(map)): boolean {
+  return insideRect(map.bounds, x, y) && !obstacles.some((o) => insideObstacle(o, x, y));
+}

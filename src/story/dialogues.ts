@@ -23,8 +23,20 @@ export const DIALOGUES = {
     { speaker: HERO_NAME, portrait: 'hero-neutral', text: '요즘 들판에 슬라임이 늘었다고 했지. 한 바퀴 둘러보고 오자.' },
   ],
   'village-sign': [
-    { speaker: '표지판', text: '북쪽: 주인공의 집\n남쪽: 들판 (슬라임 출몰 주의)' },
-    { speaker: HERO_NAME, portrait: 'hero-neutral', text: '들판 쪽은 조심해야겠다. 검은 제대로 챙겼고.' },
+    { speaker: '표지판', text: '로웬 마을\n남쪽: 들판 · 서쪽: 숲길 · 동쪽: 개울가' },
+    { speaker: HERO_NAME, portrait: 'hero-neutral', text: '들판 쪽에 슬라임이 늘었다고 했지. 검은 제대로 챙겼고.' },
+  ],
+  'south-field-sign': [
+    { speaker: '표지판', text: '남쪽 들판\n북쪽: 로웬 마을 (슬라임 출몰 주의)' },
+    { speaker: HERO_NAME, portrait: 'hero-neutral', text: '풀이 무릎까지 자랐네. 슬라임이 숨어 있기 딱 좋겠어.' },
+  ],
+  'west-forest-sign': [
+    { speaker: '표지판', text: '서쪽 숲길\n동쪽: 로웬 마을' },
+    { speaker: HERO_NAME, portrait: 'hero-neutral', text: '나무가 빽빽해서 낮인데도 어둑하다. 길을 잃지 않게 조심하자.' },
+  ],
+  'east-stream-sign': [
+    { speaker: '표지판', text: '동쪽 개울가\n서쪽: 로웬 마을' },
+    { speaker: HERO_NAME, portrait: 'hero-neutral', text: '물소리가 시원하다. 발을 헛디디지 않게 조심하자.' },
   ],
 } satisfies Record<string, DialogueLine[]>;
 

@@ -51,8 +51,9 @@ async function evaluate(expression) {
   return result.result.value;
 }
 
-async function load() {
-  const search = '?test=' + ++navigation;
+/** 전투 테스트는 몬스터가 있는 남쪽 들판에서, 마을 지형 테스트는 마을에서 시작한다. */
+async function load(map = 'south-field') {
+  const search = '?test=' + ++navigation + '&map=' + map;
   await send('Page.navigate', { url: appUrl + search });
   await until(() => evaluate(`location.search === ${JSON.stringify(search)} && !!window.__game?.scene.getScene('game')?.damageNumbers`));
   await evaluate('window.__game.loop.sleep()');
@@ -519,7 +520,7 @@ test('마지막 대각선과 자동 조준을 사용하고 공격 도중 반대 
 });
 
 test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가 적용된다', async () => {
-  await load();
+  await load('village');
   const result = await evaluate(`(() => {
     const g = window.__game, s = g.scene.getScene('game'), p = s.player, camera = s.cameras.main;
     const ground = s.children.list.find(o => o.texture?.key === 'village-ground');
@@ -551,7 +552,7 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
 });
 
 test('이동·긴 회피 거리는 집과 바위를 통과하지 않고 나무 앞뒤는 발 위치로 정렬한다', async () => {
-  await load();
+  await load('village');
   const result = await evaluate(`(() => {
     const s = window.__game.scene.getScene('game'), p = s.player, home = s.walkArea.obstacles.find(o => o.shape === 'rect');
     s.enemies = []; p.revive(home.x, home.y + home.ry + 80); s.joystick.vector.set(0, -1);
@@ -632,7 +633,7 @@ test('대화 대상 근처에서만 대화가 열리고, 대화 중에는 게임
     const g = window.__game, s = g.scene.getScene('game'), p = s.player;
     const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(performance.now(), 16); };
     for (const e of s.enemies) { e.character.placeAt(300, 1500); e.state = 'wander'; e.timer = 1e12; }
-    const sign = { x: 1600, y: 930 };
+    const sign = s.map.interactables[0];
     step();
     const atSpawn = s.talkButton.shown;
     p.placeAt(sign.x - 60, sign.y + 20); step();
@@ -793,4 +794,52 @@ test('느린 화면 중의 공격도 맞고, 칼이 닿으면 게임 시간이 �
   assert.equal(result.resumed, true);
   assert.ok(result.squash > 1.1);
   assert.equal(result.settled, true);
+});
+
+test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 이어지며 마을에는 몬스터가 없다', async () => {
+  await load('village');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    let t = performance.now();
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    const travel = (x, y) => {
+      // 장면이 다시 시작되면 플레이어도 새로 만들어지므로 매번 s.player를 쓴다.
+      const from = s.mapId; s.player.placeAt(x, y); step();
+      const started = s.traveling, frozenAt = s.now; step(3);
+      const frozen = s.now === frozenAt;
+      for (let i = 0; i < 60 && s.mapId === from; i++) step();
+      step(2);
+      return { started, frozen, map: s.mapId, x: s.player.x, y: s.player.y, hp: s.player.hp,
+        enemies: s.enemies.length, traveling: s.traveling, hint: s.map.hint };
+    };
+    const village = { enemies: s.enemies.length, map: s.mapId };
+    s.player.hurt(25);
+    const south = travel(1180, 1540);
+    const backFromSouth = travel(1180, 260);
+    const west = travel(80, 1050);
+    const backFromWest = travel(2330, 1050);
+    const east = travel(2330, 910);
+    const restartedHere = (() => { s.scene.restart(); step(2); return { map: s.mapId, hp: s.player.hp, maxHp: s.player.maxHp }; })();
+    return { village, south, backFromSouth, west, backFromWest, east, restartedHere };
+  })()`);
+  assert.deepEqual(result.village, { enemies: 0, map: 'village' });
+  assert.equal(result.south.started, true);
+  assert.equal(result.south.frozen, true);
+  assert.equal(result.south.map, 'south-field');
+  assert.deepEqual([result.south.x, result.south.y], [1180, 420]);
+  assert.equal(result.south.hp, 75);
+  assert.equal(result.south.enemies, 4);
+  assert.equal(result.south.traveling, false);
+  assert.equal(result.backFromSouth.map, 'village');
+  assert.deepEqual([result.backFromSouth.x, result.backFromSouth.y], [1180, 1420]);
+  assert.equal(result.backFromSouth.enemies, 0);
+  assert.equal(result.backFromSouth.hp, 75);
+  assert.equal(result.west.map, 'west-forest');
+  assert.equal(result.backFromWest.map, 'village');
+  assert.deepEqual([result.backFromWest.x, result.backFromWest.y], [230, 1050]);
+  assert.equal(result.east.map, 'east-stream');
+  assert.equal(result.east.enemies, 3);
+  // 같은 맵에서 다시 시작하면 그 맵에 남고, 체력은 다시 이어 받지 않는다.
+  assert.equal(result.restartedHere.map, 'east-stream');
+  assert.equal(result.restartedHere.hp, result.restartedHere.maxHp);
 });

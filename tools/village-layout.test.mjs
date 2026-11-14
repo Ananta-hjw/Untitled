@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { HOME, OBSTACLES, ENEMY_SPAWNS, PLAYER_SPAWN, PROPS, WALK_BOUNDS } from '../src/world/villageLayout.ts';
+import { HOME, OBSTACLES, PLAYER_SPAWN, PROPS, WALK_BOUNDS } from '../src/world/villageLayout.ts';
 import { insideObstacle } from '../src/world/obstacles.ts';
 import { NavGrid } from '../src/world/navGrid.ts';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../src/config.ts';
@@ -9,12 +9,11 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from '../src/config.ts';
 const contains = (x, y) => x >= WALK_BOUNDS.left && x <= WALK_BOUNDS.right &&
   y >= WALK_BOUNDS.top && y <= WALK_BOUNDS.bottom && !OBSTACLES.some((o) => insideObstacle(o, x, y));
 
-test('집 앞 시작점·현관 접근점·마을 외곽 몬스터 시작점은 모두 걸을 수 있다', () => {
+test('집 앞 시작점과 현관 접근점은 걸을 수 있다', () => {
   assert.ok(WALK_BOUNDS.right < WORLD_WIDTH && WALK_BOUNDS.bottom < WORLD_HEIGHT);
-  for (const point of [PLAYER_SPAWN, HOME.entrance, ...ENEMY_SPAWNS]) {
+  for (const point of [PLAYER_SPAWN, HOME.entrance]) {
     assert.equal(contains(point.x, point.y), true, JSON.stringify(point));
   }
-  for (const spawn of ENEMY_SPAWNS) assert.ok(Math.hypot(spawn.x - PLAYER_SPAWN.x, spawn.y - PLAYER_SPAWN.y) > 600);
   assert.equal(contains(HOME.footprint.x, HOME.footprint.y), false);
 });
 
