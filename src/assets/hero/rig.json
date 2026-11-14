@@ -3,122 +3,122 @@
   "hair_back": {
    "x": 0,
    "y": 0,
-   "w": 130,
-   "h": 190
+   "w": 157,
+   "h": 229
   },
   "hair_ponytail": {
-   "x": 132,
+   "x": 159,
    "y": 0,
-   "w": 110,
-   "h": 135
+   "w": 150,
+   "h": 185
   },
   "scabbard": {
-   "x": 244,
+   "x": 311,
    "y": 0,
-   "w": 13,
-   "h": 92
+   "w": 10,
+   "h": 68
   },
   "hand_l": {
-   "x": 259,
+   "x": 323,
    "y": 0,
    "w": 18,
    "h": 33
   },
   "forearm_l": {
-   "x": 279,
+   "x": 343,
    "y": 0,
-   "w": 30,
-   "h": 55
+   "w": 26,
+   "h": 37
   },
   "upper_arm_l": {
-   "x": 311,
+   "x": 371,
    "y": 0,
-   "w": 36,
-   "h": 66
+   "w": 29,
+   "h": 42
   },
   "foot_l": {
-   "x": 349,
+   "x": 402,
    "y": 0,
-   "w": 31,
-   "h": 47
+   "w": 25,
+   "h": 38
   },
   "thigh_l": {
-   "x": 382,
+   "x": 429,
    "y": 0,
-   "w": 49,
-   "h": 84
+   "w": 31,
+   "h": 41
   },
   "shin_l": {
-   "x": 433,
+   "x": 462,
    "y": 0,
-   "w": 45,
-   "h": 69
+   "w": 26,
+   "h": 34
   },
   "foot_r": {
-   "x": 480,
+   "x": 490,
    "y": 0,
-   "w": 24,
-   "h": 49
+   "w": 19,
+   "h": 40
   },
   "thigh_r": {
    "x": 0,
-   "y": 192,
-   "w": 60,
-   "h": 85
+   "y": 231,
+   "w": 39,
+   "h": 41
   },
   "shin_r": {
-   "x": 62,
-   "y": 192,
-   "w": 45,
-   "h": 70
+   "x": 41,
+   "y": 231,
+   "w": 27,
+   "h": 34
   },
   "pelvis": {
-   "x": 109,
-   "y": 192,
-   "w": 101,
-   "h": 89
+   "x": 70,
+   "y": 231,
+   "w": 66,
+   "h": 58
   },
   "torso": {
-   "x": 212,
-   "y": 192,
-   "w": 67,
-   "h": 100
+   "x": 138,
+   "y": 231,
+   "w": 52,
+   "h": 77
   },
   "sash": {
-   "x": 281,
-   "y": 192,
-   "w": 94,
-   "h": 139
+   "x": 192,
+   "y": 231,
+   "w": 59,
+   "h": 87
   },
   "head": {
-   "x": 377,
-   "y": 192,
-   "w": 100,
-   "h": 108
+   "x": 253,
+   "y": 231,
+   "w": 156,
+   "h": 167
+  },
+  "forearm_r": {
+   "x": 411,
+   "y": 231,
+   "w": 28,
+   "h": 39
+  },
+  "upper_arm_r": {
+   "x": 441,
+   "y": 231,
+   "w": 37,
+   "h": 50
   },
   "sword": {
    "x": 0,
-   "y": 333,
+   "y": 400,
    "w": 47,
    "h": 152
   },
   "hand_r_grip": {
    "x": 49,
-   "y": 333,
-   "w": 24,
+   "y": 400,
+   "w": 26,
    "h": 32
-  },
-  "forearm_r": {
-   "x": 75,
-   "y": 333,
-   "w": 35,
-   "h": 62
-  },
-  "upper_arm_r": {
-   "x": 112,
-   "y": 333,
-   "w": 45,
-   "h": 79
   }
  },
  "bones": [
@@ -132,121 +132,121 @@
    "name": "hip",
    "parent": "root",
    "x": 2.7,
-   "y": -175.53
+   "y": -88.44
   },
   {
    "name": "chest",
    "parent": "hip",
    "x": 1.35,
-   "y": -17.55
+   "y": -15.19
   },
   {
    "name": "head",
    "parent": "chest",
    "x": 5.4,
-   "y": -80.34
+   "y": -43.88
   },
   {
    "name": "hair_back",
    "parent": "head",
-   "x": -19.58,
-   "y": -68.19
+   "x": -28.02,
+   "y": -97.89
   },
   {
    "name": "ponytail",
    "parent": "head",
-   "x": -5.4,
-   "y": -94.51
+   "x": -8.44,
+   "y": -136.37
   },
   {
    "name": "upper_arm_r",
    "parent": "chest",
-   "x": -28.35,
-   "y": -66.84
+   "x": -34.43,
+   "y": -33.76
   },
   {
    "name": "forearm_r",
    "parent": "upper_arm_r",
-   "x": -17.55,
-   "y": 49.96
+   "x": -11.81,
+   "y": 32.07
   },
   {
    "name": "hand_r",
    "parent": "forearm_r",
-   "x": -16.2,
-   "y": 47.93
+   "x": -10.8,
+   "y": 30.38
   },
   {
    "name": "sword",
    "parent": "hand_r",
-   "x": -5.4,
-   "y": 14.85
+   "x": 4.84,
+   "y": 22.37
   },
   {
    "name": "upper_arm_l",
    "parent": "chest",
-   "x": 30.38,
-   "y": -64.14
+   "x": 35.78,
+   "y": -32.07
   },
   {
    "name": "forearm_l",
    "parent": "upper_arm_l",
-   "x": 11.48,
-   "y": 47.93
+   "x": 7.76,
+   "y": 30.38
   },
   {
    "name": "hand_l",
    "parent": "forearm_l",
-   "x": 9.45,
-   "y": 44.56
+   "x": 6.41,
+   "y": 30.38
   },
   {
    "name": "thigh_r",
    "parent": "hip",
    "x": -16.88,
-   "y": 19.58
+   "y": 13.5
   },
   {
    "name": "shin_r",
    "parent": "thigh_r",
-   "x": -10.8,
-   "y": 70.89
+   "x": -7.09,
+   "y": 34.43
   },
   {
    "name": "foot_r",
    "parent": "shin_r",
-   "x": -6.08,
-   "y": 54.68
+   "x": -5.06,
+   "y": 26.33
   },
   {
    "name": "thigh_l",
    "parent": "hip",
    "x": 17.55,
-   "y": 19.58
+   "y": 13.5
   },
   {
    "name": "shin_l",
    "parent": "thigh_l",
-   "x": 5.4,
-   "y": 70.89
+   "x": 3.38,
+   "y": 34.43
   },
   {
    "name": "foot_l",
    "parent": "shin_l",
-   "x": 3.38,
-   "y": 54.68
+   "x": 2.7,
+   "y": 26.33
   },
   {
    "name": "sash",
    "parent": "hip",
-   "x": 25.65,
-   "y": -12.15
+   "x": 20.59,
+   "y": -6.08
   },
   {
    "name": "scabbard",
    "parent": "chest",
-   "x": -65.49,
-   "y": -112.74
+   "x": -53.67,
+   "y": -54.01
   }
  ],
  "slots": [
@@ -283,14 +283,14 @@
    "bone": "forearm_l",
    "originX": 0.42,
    "originY": 0.1,
-   "rotation": -4.34
+   "rotation": -2.41
   },
   {
    "part": "upper_arm_l",
    "bone": "upper_arm_l",
    "originX": 0.5,
    "originY": 0.14,
-   "rotation": -19.27
+   "rotation": -21.73
   },
   {
    "part": "foot_l",
@@ -304,14 +304,14 @@
    "bone": "thigh_l",
    "originX": 0.58,
    "originY": 0.08,
-   "rotation": -8.29
+   "rotation": -10.79
   },
   {
    "part": "shin_l",
    "bone": "shin_l",
    "originX": 0.5,
    "originY": 0.14,
-   "rotation": -3.53
+   "rotation": -5.86
   },
   {
    "part": "foot_r",
@@ -325,14 +325,14 @@
    "bone": "thigh_r",
    "originX": 0.58,
    "originY": 0.08,
-   "rotation": 0.96
+   "rotation": 1.41
   },
   {
    "part": "shin_r",
    "bone": "shin_r",
    "originX": 0.5,
    "originY": 0.14,
-   "rotation": 6.34
+   "rotation": 10.89
   },
   {
    "part": "pelvis",
@@ -363,32 +363,41 @@
    "rotation": 0
   },
   {
-   "part": "sword",
-   "bone": "sword",
-   "originX": 0.5,
-   "originY": 0.11,
-   "rotation": 5
-  },
-  {
-   "part": "hand_r_grip",
-   "bone": "hand_r",
-   "originX": 0.48,
-   "originY": 0.1,
-   "rotation": 14
-  },
-  {
    "part": "forearm_r",
    "bone": "forearm_r",
    "originX": 0.62,
    "originY": 0.1,
-   "rotation": 7.38
+   "rotation": 5.55
   },
   {
    "part": "upper_arm_r",
    "bone": "upper_arm_r",
    "originX": 0.62,
    "originY": 0.22,
-   "rotation": 2.39
+   "rotation": -1.07
+  },
+  {
+   "part": "sword",
+   "bone": "sword",
+   "originX": 0.5,
+   "originY": 0.19,
+   "rotation": 5
+  },
+  {
+   "part": "hand_r_grip",
+   "bone": "hand_r",
+   "originX": 0.64,
+   "originY": 0.04,
+   "rotation": -24
   }
- ]
+ ],
+ "swordGrip": {
+  "handPart": "hand_r_grip",
+  "handX": 0.46,
+  "handY": 0.74,
+  "swordX": 0.5,
+  "swordY": 0.19,
+  "handAxisDegrees": 29
+ },
+ "height": 348
 }

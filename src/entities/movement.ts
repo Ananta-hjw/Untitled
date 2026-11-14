@@ -8,3 +8,9 @@ export function lungeProgress(elapsedMs: number, startMs: number, endMs: number)
 export function locomotionRate(dx: number, dy: number, dt: number, fullSpeed: number): number {
   return dt > 0 ? Math.hypot(dx, dy) / (dt * fullSpeed) : 0;
 }
+
+/** 회피 속도(시작 1.6 → 끝 0.4)를 적분한 누적 거리 비율. 종료 시 항상 1이다. */
+export function dodgeDistanceRatio(phase: number): number {
+  const t = Math.max(0, Math.min(1, phase));
+  return 1.6 * t - 0.6 * t * t;
+}

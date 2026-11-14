@@ -7,7 +7,10 @@
     "build": "tsc && vite build",
     "build:single": "tsc && vite build --mode single",
     "preview": "vite preview --host",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "android:sync": "npm run build && cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew --no-daemon --max-workers=2 assembleDebug",
+    "test:browser": "node --test tools/gameplay-browser.mjs"
   },
   "repository": {
     "type": "git",
@@ -21,9 +24,12 @@
   },
   "homepage": "https://github.com/Ananta-hjw/Untitled#readme",
   "dependencies": {
+    "@capacitor/android": "^7.6.10",
+    "@capacitor/core": "^7.6.10",
     "phaser": "^4.2.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.10",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vite-plugin-singlefile": "^2.3.4"

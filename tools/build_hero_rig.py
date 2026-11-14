@@ -21,33 +21,34 @@ from PIL import Image, ImageDraw, ImageFilter
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "assets", "hero")
 
-# 일러스트 좌표 → 게임 리그 좌표 배율. 리그에서 캐릭터 키가 약 400이 되게 한다.
+# 일러스트 좌표 → 게임 리그 좌표 배율. SD 관절과 파츠 크기에 함께 적용한다.
 K = 400 / 1185
 FEET = (640, 1262)  # 리그의 원점(발밑 가운데)이 될 일러스트 좌표
 
 # 뼈: 이름 → (부모, 관절의 일러스트 좌표). 쉬는 자세에서 모든 뼈의 회전은 0이다.
+# SD 비율: 큰 머리와 짧은 몸통·팔다리. 발 원점과 뼈 이름은 유지한다.
 BONES = {
     "root": (None, FEET),
-    "hip": ("root", (648, 742)),
-    "chest": ("hip", (652, 690)),
-    "head": ("chest", (668, 452)),
-    "hair_back": ("head", (610, 250)),
-    "ponytail": ("head", (652, 172)),
-    "upper_arm_r": ("chest", (568, 492)),
-    "forearm_r": ("upper_arm_r", (516, 640)),
-    "hand_r": ("forearm_r", (468, 782)),
-    "sword": ("hand_r", (452, 826)),
-    "upper_arm_l": ("chest", (742, 500)),
-    "forearm_l": ("upper_arm_l", (776, 642)),
-    "hand_l": ("forearm_l", (804, 774)),
-    "thigh_r": ("hip", (598, 800)),
-    "shin_r": ("thigh_r", (566, 1010)),
-    "foot_r": ("shin_r", (548, 1172)),
-    "thigh_l": ("hip", (700, 800)),
-    "shin_l": ("thigh_l", (716, 1010)),
-    "foot_l": ("shin_l", (726, 1172)),
-    "sash": ("hip", (724, 706)),
-    "scabbard": ("chest", (458, 356)),
+    "hip": ("root", (648, 1000)),
+    "chest": ("hip", (652, 955)),
+    "head": ("chest", (668, 825)),
+    "hair_back": ("head", (585, 535)),
+    "ponytail": ("head", (643, 421)),
+    "upper_arm_r": ("chest", (550, 855)),
+    "forearm_r": ("upper_arm_r", (515, 950)),
+    "hand_r": ("forearm_r", (483, 1040)),
+    "sword": ("hand_r", (483, 1040)),
+    "upper_arm_l": ("chest", (758, 860)),
+    "forearm_l": ("upper_arm_l", (781, 950)),
+    "hand_l": ("forearm_l", (800, 1040)),
+    "thigh_r": ("hip", (598, 1040)),
+    "shin_r": ("thigh_r", (577, 1142)),
+    "foot_r": ("shin_r", (562, 1220)),
+    "thigh_l": ("hip", (700, 1040)),
+    "shin_l": ("thigh_l", (710, 1142)),
+    "foot_l": ("shin_l", (718, 1220)),
+    "sash": ("hip", (709, 982)),
+    "scabbard": ("chest", (493, 795)),
 }
 
 # 파츠에서 지울 영역(원본 PNG 좌표의 다각형). 다른 파츠와 겹쳐 그려진 부분이 있을 때 쓴다.
@@ -57,30 +58,37 @@ ERASE: dict[str, list[list[tuple[int, int]]]] = {}
 # 슬롯: 뒤에서 앞으로 그리는 순서.
 #   fit=(시작점, 끝점, 끝 관절)  파츠 안의 두 점(0~1 비율)을 뼈의 관절과 다음 관절에 맞춘다.
 #   pivot/scale/rot             직접 지정. pivot은 파츠 안에서 관절에 올 점(0~1 비율).
+#   rigHeight                   원본 해상도에 관계없이 리그에서의 높이를 일정하게 유지
 #   wide                        길이는 그대로 두고 폭만 조절
 SLOTS = [
-    dict(part="hair_back", bone="hair_back", pivot=(0.66, 0.10), scale=1.95, rot=6),
-    dict(part="hair_ponytail", bone="ponytail", pivot=(0.80, 0.33), scale=1.5, rot=-6),
-    dict(part="scabbard", bone="scabbard", pivot=(0.5, 0.06), scale=0.95, rot=-38),
+    dict(part="hair_back", bone="hair_back", pivot=(0.66, 0.10), scale=2.35, rot=6),
+    dict(part="hair_ponytail", bone="ponytail", pivot=(0.80, 0.33), scale=2.05, rot=-6),
+    dict(part="scabbard", bone="scabbard", pivot=(0.5, 0.06), scale=0.70, rot=-38),
     dict(part="hand_l", bone="hand_l", pivot=(0.45, 0.06), scale=0.58, rot=-8),
-    dict(part="forearm_l", bone="forearm_l", fit=((0.42, 0.10), (0.62, 0.92), (804, 774)), wide=1.0),
-    dict(part="upper_arm_l", bone="upper_arm_l", fit=((0.50, 0.14), (0.36, 0.88), (776, 642)), wide=0.9),
-    dict(part="foot_l", bone="foot_l", pivot=(0.34, 0.36), scale=0.62, rot=0),
-    dict(part="thigh_l", bone="thigh_l", fit=((0.58, 0.08), (0.48, 0.92), (716, 1010)), wide=1.25),
-    dict(part="shin_l", bone="shin_l", fit=((0.50, 0.14), (0.50, 0.93), (726, 1172)), wide=1.4),
-    dict(part="foot_r", bone="foot_r", pivot=(0.50, 0.36), scale=0.64, rot=4),
-    dict(part="thigh_r", bone="thigh_r", fit=((0.58, 0.08), (0.42, 0.92), (566, 1010)), wide=1.2),
-    dict(part="shin_r", bone="shin_r", fit=((0.50, 0.14), (0.50, 0.93), (548, 1172)), wide=1.4),
-    dict(part="pelvis", bone="hip", pivot=(0.50, 0.24), scale=1.34, rot=0),
-    dict(part="torso", bone="chest", pivot=(0.60, 0.95), scale=0.31, rot=0),
-    dict(part="sash", bone="sash", pivot=(0.62, 0.10), scale=1.45, rot=-6),
-    dict(part="head", bone="head", pivot=(0.62, 0.90), scale=1.32, rot=0),
-    # 검 든 팔은 머리보다 앞에 그린다 (휘두를 때 머리 뒤로 숨지 않게).
-    dict(part="sword", bone="sword", pivot=(0.5, 0.11), scale=1.55, rot=5),
-    dict(part="hand_r_grip", bone="hand_r", pivot=(0.48, 0.10), scale=0.6, rot=14),
-    dict(part="forearm_r", bone="forearm_r", fit=((0.62, 0.10), (0.34, 0.90), (468, 782)), wide=1.0),
-    dict(part="upper_arm_r", bone="upper_arm_r", fit=((0.62, 0.22), (0.28, 0.86), (516, 640)), wide=0.90),
+    dict(part="forearm_l", bone="forearm_l", fit=((0.42, 0.10), (0.62, 0.92), (800, 1040)), wide=1.25),
+    dict(part="upper_arm_l", bone="upper_arm_l", fit=((0.50, 0.14), (0.36, 0.88), (781, 950)), wide=1.15),
+    dict(part="foot_l", bone="foot_l", pivot=(0.34, 0.36), scale=0.50, rot=0),
+    dict(part="thigh_l", bone="thigh_l", fit=((0.58, 0.08), (0.48, 0.92), (710, 1142)), wide=1.65),
+    dict(part="shin_l", bone="shin_l", fit=((0.50, 0.14), (0.50, 0.93), (718, 1220)), wide=1.7),
+    dict(part="foot_r", bone="foot_r", pivot=(0.50, 0.36), scale=0.52, rot=4),
+    dict(part="thigh_r", bone="thigh_r", fit=((0.58, 0.08), (0.42, 0.92), (577, 1142)), wide=1.6),
+    dict(part="shin_r", bone="shin_r", fit=((0.50, 0.14), (0.50, 0.93), (562, 1220)), wide=1.7),
+    dict(part="pelvis", bone="hip", pivot=(0.50, 0.24), scale=0.88, rot=0),
+    dict(part="torso", bone="chest", pivot=(0.60, 0.95), scale=0.24, rot=0),
+    dict(part="sash", bone="sash", pivot=(0.62, 0.10), scale=0.90, rot=-6),
+    dict(part="head", bone="head", pivot=(0.62, 0.90), scale=2.05, rot=0),
+    # 갑옷 → 검 → 쥐는 손 순서로 그려 손잡이와 폼멜이 소매에 묻히지 않게 한다.
+    dict(part="forearm_r", bone="forearm_r", fit=((0.62, 0.10), (0.34, 0.90), (483, 1040)), wide=1.25),
+    dict(part="upper_arm_r", bone="upper_arm_r", fit=((0.62, 0.22), (0.28, 0.86), (515, 950)), wide=1.15),
+    dict(part="sword", bone="sword", pivot=(0.5, 0.19), scale=1.55, rot=5),
+    dict(part="hand_r_grip", bone="hand_r", pivot=(0.64, 0.04), rigHeight=32, rot=-24),
 ]
+
+
+# 악수형 그립: 검지·엄지는 칼날 쪽, 새끼손가락은 폼멜 쪽에 둔다.
+# 잘라낸 손 그림의 손잡이 중심과 기울기다.
+SWORD_GRIP = dict(handPart="hand_r_grip", handX=0.46, handY=0.74,
+                  swordX=0.5, swordY=0.19, handAxisDegrees=29)
 
 
 def largest_blob(mask: np.ndarray) -> np.ndarray:
@@ -142,7 +150,7 @@ def resolve(slot: dict, size: tuple[int, int]) -> dict:
         rot = math.degrees(math.atan2(target[1], target[0]) - math.atan2(local[1], local[0]))
         return dict(sx=ratio * wide, sy=ratio, rot=rot, pivot=(ax * w, ay * h))
     px, py = slot["pivot"]
-    scale = slot["scale"]
+    scale = slot["scale"] if "scale" in slot else slot["rigHeight"] / (h * K)
     return dict(sx=scale * slot.get("wide", 1.0), sy=scale, rot=slot.get("rot", 0), pivot=(px * w, py * h))
 
 
@@ -187,15 +195,41 @@ def main() -> None:
     for name, image in images:
         sheet.paste(image, (frames[name]["x"], frames[name]["y"]))
 
+    # 축소된 실제 이미지 좌표를 사용해 반올림 후에도 손과 검의 기준점을 일치시킨다.
+    hand = next(s for s in slots if s["part"] == SWORD_GRIP["handPart"])
+    sword = next(s for s in slots if s["part"] == "sword")
+    frame = frames[hand["part"]]
+    dx = (SWORD_GRIP["handX"] - hand["originX"]) * frame["w"]
+    dy = (SWORD_GRIP["handY"] - hand["originY"]) * frame["h"]
+    angle = math.radians(hand["rotation"])
+    wrist = BONES[hand["bone"]][1]
+    BONES["sword"] = ("hand_r", (wrist[0] + (dx * math.cos(angle) - dy * math.sin(angle)) / K,
+                                wrist[1] + (dx * math.sin(angle) + dy * math.cos(angle)) / K))
+    sword["originX"] = SWORD_GRIP["swordX"]
+    sword["originY"] = SWORD_GRIP["swordY"]
+    sword["rotation"] = hand["rotation"] + SWORD_GRIP["handAxisDegrees"]
+
     bones = []
     for name, (parent, pos) in BONES.items():
         base = BONES[parent][1] if parent else FEET
         bones.append(dict(name=name, parent=parent, x=round((pos[0] - base[0]) * K, 2), y=round((pos[1] - base[1]) * K, 2)))
 
+    # 이름표 높이는 실제 SD 파츠의 윗 경계로 계산한다.
+    top = 0.0
+    for slot in slots:
+        frame = frames[slot["part"]]
+        angle = math.radians(slot["rotation"])
+        joint_y = (BONES[slot["bone"]][1][1] - FEET[1]) * K
+        for x in (0, frame["w"]):
+            for y in (0, frame["h"]):
+                edge = joint_y + (x - slot["originX"] * frame["w"]) * math.sin(angle) + (y - slot["originY"] * frame["h"]) * math.cos(angle)
+                top = min(top, edge)
+    height = math.ceil(-top)
+
     os.makedirs(OUT_DIR, exist_ok=True)
     sheet.save(os.path.join(OUT_DIR, "rig.png"))
     with open(os.path.join(OUT_DIR, "rig.json"), "w", encoding="utf-8") as f:
-        json.dump(dict(frames=frames, bones=bones, slots=slots), f, indent=1)
+        json.dump(dict(frames=frames, bones=bones, slots=slots, swordGrip=SWORD_GRIP, height=height), f, indent=1)
     print(f"rig.png {sheet.size}, {len(bones)} bones, {len(slots)} slots")
 
     if preview:

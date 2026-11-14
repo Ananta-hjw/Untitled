@@ -16,8 +16,8 @@ import { HERO_ANIMATIONS, REST, type Pose } from './heroAnimations';
  */
 
 const TEXTURE = 'hero-rig';
-/** 리그 좌표에서의 캐릭터 키(발끝~머리끝). build_hero_rig.py의 K와 맞춘 값. */
-export const HERO_RIG_HEIGHT = 400;
+/** 생성된 SD 리그의 발 원점부터 머리끝까지 높이. 이름표 위치에 사용한다. */
+export const HERO_RIG_HEIGHT = rigData.height;
 
 interface Bone {
   name: string;
@@ -40,7 +40,7 @@ interface Slot {
 }
 
 export function preloadHeroRig(scene: Phaser.Scene): void {
-  scene.load.image(TEXTURE, rigSheet);
+  if (!scene.textures.exists(TEXTURE)) scene.load.image(TEXTURE, rigSheet);
 }
 
 function ensureFrames(scene: Phaser.Scene): void {
@@ -159,17 +159,18 @@ export class HeroRig extends Phaser.GameObjects.Container {
   }
 
   /** 지금 자세 그대로 멈춘 잔상을 만든다 (회피 연출용). */
-  spawnGhost(x: number, y: number, depth: number, tint: number, alpha: number): Phaser.GameObjects.Container {
-    const ghost = this.scene.add.container(x, y).setDepth(depth).setAlpha(alpha);
+  spawnGhost(x: number, y: number, depth: number, tint: number, alpha: number,
+    reuse?: Phaser.GameObjects.Container): Phaser.GameObjects.Container {
+    const ghost = reuse ?? this.scene.add.container(x, y);
+    ghost.setPosition(x, y).setDepth(depth).setAlpha(alpha).setActive(true).setVisible(true);
     ghost.setScale(this.scaleX * (this.flipX ? -1 : 1), this.scaleY).setAngle(this.angle);
-    for (const slot of this.slots) {
-      const source = slot.image;
-      const copy = this.scene.add
-        .image(source.x, source.y, TEXTURE, source.frame.name)
-        .setOrigin(source.originX, source.originY)
-        .setAngle(source.angle)
-        .setTint(tint);
-      ghost.add(copy);
+    for (let i = 0; i < this.slots.length; i++) {
+      const source = this.slots[i].image;
+      const copy = reuse ? ghost.getAt(i) as Phaser.GameObjects.Image
+        : this.scene.add.image(0, 0, TEXTURE, source.frame.name);
+      copy.setPosition(source.x, source.y).setOrigin(source.originX, source.originY)
+        .setAngle(source.angle).setTint(tint);
+      if (!reuse) ghost.add(copy);
     }
     return ghost;
   }

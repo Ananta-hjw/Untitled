@@ -1,0 +1,533 @@
+{
+  "height": 304,
+  "frames": [
+    {
+      "name": "walk-0",
+      "texture": "hero-academy-walk",
+      "x": 77,
+      "y": 8,
+      "w": 172,
+      "h": 302,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-1",
+      "texture": "hero-academy-walk",
+      "x": 391,
+      "y": 8,
+      "w": 172,
+      "h": 304,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-2",
+      "texture": "hero-academy-walk",
+      "x": 705,
+      "y": 9,
+      "w": 171,
+      "h": 300,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-3",
+      "texture": "hero-academy-walk",
+      "x": 1019,
+      "y": 9,
+      "w": 171,
+      "h": 302,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-4",
+      "texture": "hero-academy-walk",
+      "x": 77,
+      "y": 319,
+      "w": 178,
+      "h": 301,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-5",
+      "texture": "hero-academy-walk",
+      "x": 391,
+      "y": 319,
+      "w": 179,
+      "h": 296,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-6",
+      "texture": "hero-academy-walk",
+      "x": 704,
+      "y": 320,
+      "w": 178,
+      "h": 299,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-7",
+      "texture": "hero-academy-walk",
+      "x": 1018,
+      "y": 319,
+      "w": 180,
+      "h": 296,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-8",
+      "texture": "hero-academy-walk",
+      "x": 66,
+      "y": 632,
+      "w": 176,
+      "h": 300,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-9",
+      "texture": "hero-academy-walk",
+      "x": 381,
+      "y": 632,
+      "w": 174,
+      "h": 293,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-10",
+      "texture": "hero-academy-walk",
+      "x": 695,
+      "y": 632,
+      "w": 174,
+      "h": 300,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-11",
+      "texture": "hero-academy-walk",
+      "x": 1010,
+      "y": 632,
+      "w": 172,
+      "h": 293,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-12",
+      "texture": "hero-academy-walk",
+      "x": 88,
+      "y": 950,
+      "w": 161,
+      "h": 286,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-13",
+      "texture": "hero-academy-walk",
+      "x": 402,
+      "y": 949,
+      "w": 161,
+      "h": 288,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-14",
+      "texture": "hero-academy-walk",
+      "x": 716,
+      "y": 950,
+      "w": 160,
+      "h": 286,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "walk-15",
+      "texture": "hero-academy-walk",
+      "x": 1033,
+      "y": 949,
+      "w": 158,
+      "h": 288,
+      "originX": 0.5,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "combat-0",
+      "texture": "hero-academy-combat",
+      "x": 52,
+      "y": 43,
+      "w": 212,
+      "h": 251,
+      "originX": 0.4339622641509434,
+      "originY": 1.0,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 105,
+          "y": 192
+        },
+        "tip": {
+          "x": 211,
+          "y": 237
+        }
+      }
+    },
+    {
+      "name": "combat-1",
+      "texture": "hero-academy-combat",
+      "x": 352,
+      "y": 26,
+      "w": 194,
+      "h": 268,
+      "originX": 0.4896907216494845,
+      "originY": 1.0,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 93,
+          "y": 83
+        },
+        "tip": {
+          "x": 193,
+          "y": 0
+        }
+      }
+    },
+    {
+      "name": "combat-2",
+      "texture": "hero-academy-combat",
+      "x": 665,
+      "y": 47,
+      "w": 259,
+      "h": 247,
+      "originX": 0.37065637065637064,
+      "originY": 1.0,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 158,
+          "y": 186
+        },
+        "tip": {
+          "x": 259,
+          "y": 233
+        }
+      }
+    },
+    {
+      "name": "combat-3",
+      "texture": "hero-academy-combat",
+      "x": 980,
+      "y": 43,
+      "w": 200,
+      "h": 251,
+      "originX": 0.46,
+      "originY": 1.0,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 112,
+          "y": 190
+        },
+        "tip": {
+          "x": 199,
+          "y": 236
+        }
+      }
+    },
+    {
+      "name": "combat-4",
+      "texture": "hero-academy-combat",
+      "x": 52,
+      "y": 357,
+      "w": 212,
+      "h": 251,
+      "originX": 0.4339622641509434,
+      "originY": 1.0,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 105,
+          "y": 191
+        },
+        "tip": {
+          "x": 211,
+          "y": 236
+        }
+      }
+    },
+    {
+      "name": "combat-5",
+      "texture": "hero-academy-combat",
+      "x": 346,
+      "y": 369,
+      "w": 242,
+      "h": 238,
+      "originX": 0.44214876033057854,
+      "originY": 1.004201680672269,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 145,
+          "y": 199
+        },
+        "tip": {
+          "x": 242,
+          "y": 226
+        }
+      }
+    },
+    {
+      "name": "combat-6",
+      "texture": "hero-academy-combat",
+      "x": 658,
+      "y": 357,
+      "w": 269,
+      "h": 251,
+      "originX": 0.3643122676579926,
+      "originY": 1.0,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 177,
+          "y": 110
+        },
+        "tip": {
+          "x": 269,
+          "y": 63
+        }
+      }
+    },
+    {
+      "name": "combat-7",
+      "texture": "hero-academy-combat",
+      "x": 965,
+      "y": 353,
+      "w": 268,
+      "h": 255,
+      "originX": 0.376865671641791,
+      "originY": 1.0,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 193,
+          "y": 88
+        },
+        "tip": {
+          "x": 267,
+          "y": 11
+        }
+      }
+    },
+    {
+      "name": "combat-8",
+      "texture": "hero-academy-combat",
+      "x": 52,
+      "y": 670,
+      "w": 212,
+      "h": 251,
+      "originX": 0.4339622641509434,
+      "originY": 1.0,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 105,
+          "y": 192
+        },
+        "tip": {
+          "x": 211,
+          "y": 237
+        }
+      }
+    },
+    {
+      "name": "combat-9",
+      "texture": "hero-academy-combat",
+      "x": 346,
+      "y": 674,
+      "w": 207,
+      "h": 247,
+      "originX": 0.5024154589371981,
+      "originY": 1.0,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 95,
+          "y": 165
+        },
+        "tip": {
+          "x": 205,
+          "y": 164
+        }
+      }
+    },
+    {
+      "name": "combat-10",
+      "texture": "hero-academy-combat",
+      "x": 659,
+      "y": 686,
+      "w": 288,
+      "h": 234,
+      "originX": 0.3541666666666667,
+      "originY": 1.0042735042735043,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 190,
+          "y": 144
+        },
+        "tip": {
+          "x": 288,
+          "y": 145
+        }
+      }
+    },
+    {
+      "name": "combat-11",
+      "texture": "hero-academy-combat",
+      "x": 970,
+      "y": 671,
+      "w": 229,
+      "h": 250,
+      "originX": 0.45414847161572053,
+      "originY": 1.0,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 130,
+          "y": 160
+        },
+        "tip": {
+          "x": 229,
+          "y": 160
+        }
+      }
+    },
+    {
+      "name": "combat-12",
+      "texture": "hero-academy-combat",
+      "x": 49,
+      "y": 1007,
+      "w": 200,
+      "h": 227,
+      "originX": 0.45,
+      "originY": 1.0044052863436124,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 102,
+          "y": 194
+        },
+        "tip": {
+          "x": 197,
+          "y": 223
+        }
+      }
+    },
+    {
+      "name": "combat-13",
+      "texture": "hero-academy-combat",
+      "x": 358,
+      "y": 1007,
+      "w": 192,
+      "h": 228,
+      "originX": 0.4947916666666667,
+      "originY": 1.0,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 96,
+          "y": 186
+        },
+        "tip": {
+          "x": 189,
+          "y": 223
+        }
+      }
+    },
+    {
+      "name": "combat-14",
+      "texture": "hero-academy-combat",
+      "x": 658,
+      "y": 1013,
+      "w": 243,
+      "h": 221,
+      "originX": 0.42386831275720166,
+      "originY": 1.004524886877828,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 160,
+          "y": 180
+        },
+        "tip": {
+          "x": 238,
+          "y": 217
+        }
+      }
+    },
+    {
+      "name": "combat-15",
+      "texture": "hero-academy-combat",
+      "x": 977,
+      "y": 983,
+      "w": 211,
+      "h": 252,
+      "originX": 0.4597156398104265,
+      "originY": 1.0,
+      "scale": 1.2,
+      "blade": {
+        "base": {
+          "x": 127,
+          "y": 195
+        },
+        "tip": {
+          "x": 208,
+          "y": 240
+        }
+      }
+    }
+  ]
+}

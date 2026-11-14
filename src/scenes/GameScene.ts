@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { bladeHitsEllipse, type Blade } from '../combat/blade';
+import { bladeHitsEllipse, clipBladeSweep, type Blade } from '../combat/blade';
+import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
 import {
   DEPTH_LIGHTING,
@@ -15,17 +16,17 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config';
-import { lungeProgress, locomotionRate } from '../entities/movement';
+import { dodgeDistanceRatio, lungeProgress, locomotionRate } from '../entities/movement';
 import { Character } from '../entities/Character';
 import { ActionButton } from '../ui/ActionButton';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
-import { HERO_RIG_HEIGHT, HeroRig, preloadHeroRig } from '../entities/HeroRig';
+import { HERO_SPRITE_HEIGHT, HeroSprite, preloadHeroSprite } from '../entities/HeroSprite';
 import { createPlaceholderArt } from '../world/placeholderArt';
 import { WalkArea } from '../world/walkArea';
 
 /** 화면 왼쪽 위 체력 막대 */
 const HUD = { x: 44, y: 26, width: 300, height: 26 };
-/** 뼈대 캐릭터(키 400)를 화면에 그릴 때의 배율 */
+/** 천무학관 원본 프레임을 화면에 그릴 때의 배율 */
 const HERO_SCALE = 0.5;
 const PLAYER_SPAWN = { x: 1180, y: 620 };
 const COUNTER = { left: 900, right: 1460, front: 505 };
@@ -36,6 +37,7 @@ const TABLES = [
 
 export class GameScene extends Phaser.Scene {
   private player!: Character;
+  private effects!: CombatEffects;
   private joystick!: VirtualJoystick;
   private walkArea!: WalkArea;
   private attackButton!: ActionButton;
@@ -43,20 +45,26 @@ export class GameScene extends Phaser.Scene {
   private attackKeys: Phaser.Input.Keyboard.Key[] = [];
   /** 게임 시계(ms). update()에서만 흐른다. */
   private now = 0;
-  private attackTrace?: { startedAt: number; stage: number; previous: Blade; elapsed: number; hit: Set<Enemy> };
+  private enemyRespawns: Array<{ at: number; enemy: Enemy }> = [];
+  private playerRespawnAt?: number;
+  private deathMessage?: Phaser.GameObjects.Text;
+  private attackTrace?: { startedAt: number; stage: number; previous: Blade; elapsed: number; hit: Set<Enemy>; effect?: AttackEffect };
   private nextAttackAt = 0;
+  private attackBufferedUntil?: number;
+  private keyboardAttackPressed = false;
   private attackLunge?: { startedAt: number; stage: number; facing: number; progress: number };
   private comboStage = 0;
   private comboExpiresAt = 0;
   private dodgeButton!: ActionButton;
   private dodgeKeys: Phaser.Input.Keyboard.Key[] = [];
   private dodgeUntil = 0;
+  private dodgeProgress = 1;
   private dodgeReadyAt = 0;
   private nextGhostAt = 0;
   private readonly dodgeDirection = new Phaser.Math.Vector2();
   private hud!: Phaser.GameObjects.Graphics;
   private hudText!: Phaser.GameObjects.Text;
-  private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
+  private keys?: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   private readonly input2 = new Phaser.Math.Vector2();
   private readonly scratch = new Phaser.Math.Vector2();
   private vignette!: Phaser.GameObjects.Image;
@@ -68,8 +76,38 @@ export class GameScene extends Phaser.Scene {
     super('game');
   }
 
+  init(): void {
+    this.resetState();
+  }
+
+  private resetState(): void {
+    this.enemies = [];
+    this.attackKeys = [];
+    this.dodgeKeys = [];
+    this.keys = undefined;
+    this.now = 0;
+    this.attackTrace = undefined;
+    this.attackLunge = undefined;
+    this.nextAttackAt = 0;
+    this.attackBufferedUntil = undefined;
+    this.keyboardAttackPressed = false;
+    this.comboStage = 0;
+    this.comboExpiresAt = 0;
+    this.dodgeUntil = 0;
+    this.dodgeProgress = 1;
+    this.dodgeReadyAt = 0;
+    this.nextGhostAt = 0;
+    this.dodgeDirection.set(0, 0);
+    this.input2.set(0, 0);
+    this.scratch.set(0, 0);
+    this.enemyRespawns = [];
+    this.playerRespawnAt = undefined;
+    this.deathMessage = undefined;
+    this.hint = undefined;
+  }
+
   preload(): void {
-    preloadHeroRig(this);
+    preloadHeroSprite(this);
   }
 
   create(): void {
@@ -77,6 +115,7 @@ export class GameScene extends Phaser.Scene {
     this.buildRoom();
     this.buildWalkArea();
     this.buildCharacters();
+    this.effects = new CombatEffects(this);
     this.buildLighting();
     this.buildUi();
 
@@ -84,8 +123,11 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
+    this.game.events.on(Phaser.Core.Events.BLUR, this.clearAttackInput, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
+      this.game.events.off(Phaser.Core.Events.BLUR, this.clearAttackInput, this);
+      this.resetState();
     });
     this.layout();
 
@@ -100,6 +142,8 @@ export class GameScene extends Phaser.Scene {
     const time = this.now;
     const dt = step / 1000;
 
+    this.effects.update(time);
+    this.updateRespawns(time);
     this.updateAttackLunge(time);
     this.updatePlayer(time, dt);
     this.updateAttackTrace(time);
@@ -202,9 +246,9 @@ export class GameScene extends Phaser.Scene {
       key: 'hero',
       name: '용사',
       level: 1,
-      rig: true,
+      hero: true,
       scale: HERO_SCALE,
-      labelOffset: HERO_RIG_HEIGHT * HERO_SCALE + 8,
+      labelOffset: HERO_SPRITE_HEIGHT * HERO_SCALE + 8,
       shadowWidth: 110,
       maxHp: PLAYER.maxHp,
     });
@@ -222,7 +266,7 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- UI
 
   private buildUi(): void {
-    this.input.addPointer(2); // 동시에 3개 터치까지
+    // 포인터 수는 main.ts의 activePointers로 설정한다. 재시작 때 추가하지 않는다.
     this.joystick = new VirtualJoystick(this, { x: 190, y: VIEW_HEIGHT - 170 });
 
     this.attackButton = new ActionButton(this, { x: 0, y: VIEW_HEIGHT - 170, label: '공격' });
@@ -241,6 +285,11 @@ export class GameScene extends Phaser.Scene {
         keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
         keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J),
       ];
+      for (const key of this.attackKeys) key.on('down', this.onAttackKeyDown, this);
+      const attackKeys = this.attackKeys;
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        for (const key of attackKeys) key.off('down', this.onAttackKeyDown, this);
+      });
       this.dodgeKeys = [
         keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
         keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K),
@@ -340,10 +389,18 @@ export class GameScene extends Phaser.Scene {
 
   private updatePlayer(time: number, dt: number): void {
     const player = this.player;
+    const attackPressed = this.attackButton.consumePress() || this.keyboardAttackPressed;
+    this.keyboardAttackPressed = false;
     if (!player.alive) {
+      this.attackBufferedUntil = undefined;
       this.dodgeButton.consumePress(); // 쓰러진 동안 누른 입력은 버린다
       return;
     }
+
+    if (this.attackBufferedUntil !== undefined && time > this.attackBufferedUntil) {
+      this.attackBufferedUntil = undefined;
+    }
+    if (attackPressed) this.attackBufferedUntil = time + PLAYER.attackBufferMs;
 
     const v = this.readInput();
     const force = v.length();
@@ -352,8 +409,9 @@ export class GameScene extends Phaser.Scene {
       this.dodgeButton.consumePress() || this.dodgeKeys.some((key) => Phaser.Input.Keyboard.JustDown(key));
     this.dodgeButton.setEnabled(time >= this.dodgeReadyAt);
 
-    if (time < this.dodgeUntil) {
-      this.updateDodge(time, dt);
+    if (this.dodgeProgress < 1) {
+      this.updateDodge(time);
+      if (this.dodgeProgress === 1) player.setDodging(false);
       return;
     }
     player.setDodging(false);
@@ -364,7 +422,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     // 초 단위 애니메이션과 밀리초 시계의 부동소수점 오차로 한 프레임 쉬지 않게 한다.
-    if (this.wantsAttack() && time + 1e-6 >= this.nextAttackAt) this.startAttack(time, v.x);
+    if (this.wantsAttack(time) && time + 1e-6 >= this.nextAttackAt) {
+      this.startAttack(time, v.x);
+      this.attackBufferedUntil = undefined;
+    }
 
     const fromX = player.x;
     const fromY = player.y;
@@ -382,6 +443,7 @@ export class GameScene extends Phaser.Scene {
     }
     const rate = locomotionRate(player.x - fromX, player.y - fromY, dt, PLAYER_SPEED);
     player.setMotion(rate > 0, v.x, rate);
+    if (player.sprite instanceof HeroSprite) player.sprite.setMovement(player.x - fromX, player.y - fromY);
   }
 
   private dismissHint(): void {
@@ -407,14 +469,27 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- 전투
 
-  private wantsAttack(): boolean {
-    return this.attackButton.isDown || this.attackKeys.some((key) => key.isDown);
+  private onAttackKeyDown(): void {
+    // JustDown은 같은 프레임의 keyup에서 지워지므로 눌림 이벤트를 별도로 기억한다.
+    this.keyboardAttackPressed = true;
+  }
+
+  private clearAttackInput(): void {
+    this.attackBufferedUntil = undefined;
+    this.keyboardAttackPressed = false;
+    this.attackButton?.consumePress();
+  }
+
+  private wantsAttack(time = this.now): boolean {
+    return this.attackButton.isDown || this.attackKeys.some((key) => key.isDown) ||
+      (this.attackBufferedUntil !== undefined && time <= this.attackBufferedUntil);
   }
 
   /** 회피 시작. 조이스틱 방향으로, 입력이 없으면 바라보는 쪽으로 미끄러진다. */
   private startDodge(time: number, input: Phaser.Math.Vector2): void {
     const player = this.player;
     this.dismissHint();
+    this.clearAttackInput();
     player.endAttack();
     this.attackTrace = undefined;
     this.attackLunge = undefined;
@@ -428,6 +503,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.dodgeUntil = time + DODGE.durationMs;
+    this.dodgeProgress = 0;
     this.dodgeReadyAt = time + DODGE.cooldownMs;
     this.nextAttackAt = Math.max(this.nextAttackAt, this.dodgeUntil);
     this.nextGhostAt = 0;
@@ -437,36 +513,25 @@ export class GameScene extends Phaser.Scene {
     this.dodgeButton.setEnabled(false);
   }
 
-  private updateDodge(time: number, dt: number): void {
+  private updateDodge(time: number): void {
     const player = this.player;
-    // 처음에 빠르고 끝으로 갈수록 느려진다 (평균 속도 = 거리 / 시간).
-    const remaining = (this.dodgeUntil - time) / DODGE.durationMs;
-    const speed = (DODGE.distance / (DODGE.durationMs / 1000)) * (0.4 + 1.2 * remaining);
+    const elapsed = time + 1e-6 >= this.dodgeUntil
+      ? DODGE.durationMs : time - (this.dodgeUntil - DODGE.durationMs);
+    const progress = dodgeDistanceRatio(elapsed / DODGE.durationMs);
+    const distance = (progress - this.dodgeProgress) * DODGE.distance;
+    this.dodgeProgress = progress;
     const next = this.walkArea.move(
       player.x,
       player.y,
-      this.dodgeDirection.x * speed * dt,
-      this.dodgeDirection.y * speed * VERTICAL_SPEED_RATIO * dt,
+      this.dodgeDirection.x * distance,
+      this.dodgeDirection.y * distance * VERTICAL_SPEED_RATIO,
       this.scratch,
     );
     player.placeAt(next.x, next.y);
 
     if (time >= this.nextGhostAt) {
       this.nextGhostAt = time + 45;
-      const sprite = player.sprite;
-      const ghost =
-        sprite instanceof HeroRig
-          ? sprite.spawnGhost(player.x, player.y, player.y - 1, 0x9fc4ff, 0.35)
-          : this.add
-              .image(player.x, player.y, sprite.texture.key, sprite.frame.name)
-              .setOrigin(0.5, 1)
-              .setFlipX(sprite.flipX)
-              .setScale(sprite.scaleX, sprite.scaleY)
-              .setAngle(sprite.angle)
-              .setTint(0x9fc4ff)
-              .setAlpha(0.4)
-              .setDepth(player.y - 1);
-      this.tweens.add({ targets: ghost, alpha: 0, duration: 220, onComplete: () => ghost.destroy() });
+      this.effects.spawnGhost(player.sprite, player.x, player.y, player.y - 1, time);
     }
   }
 
@@ -499,7 +564,7 @@ export class GameScene extends Phaser.Scene {
     player.playAttack(stage + 1);
     this.attackLunge = { startedAt: time, stage, facing: player.facing, progress: 0 };
     const rig = player.sprite;
-    if (rig instanceof HeroRig) {
+    if (rig instanceof HeroSprite) {
       this.attackTrace = { startedAt: time, stage, previous: rig.getBlade(), elapsed: 0, hit: new Set() };
     }
   }
@@ -527,7 +592,7 @@ export class GameScene extends Phaser.Scene {
     const player = this.player;
     const rig = player.sprite;
     if (!trace) return;
-    if (!player.alive || !player.isAttacking || !(rig instanceof HeroRig)) {
+    if (!player.alive || !player.isAttacking || !(rig instanceof HeroSprite)) {
       this.attackTrace = undefined;
       return;
     }
@@ -538,29 +603,13 @@ export class GameScene extends Phaser.Scene {
     trace.previous = current;
     const lastElapsed = trace.elapsed;
     trace.elapsed = elapsed;
-    if (elapsed < combo.hitDelayMs) return;
-    if (lastElapsed >= combo.hitDelayMs + PLAYER.hitWindowMs) {
-      this.attackTrace = undefined;
-      return;
-    }
+    const end = combo.hitDelayMs + PLAYER.hitWindowMs;
+    const sweep = clipBladeSweep(previous, current, lastElapsed, elapsed, combo.hitDelayMs, end);
+    if (elapsed >= end) this.attackTrace = undefined;
+    if (!sweep) return;
     const finisher = trace.stage === PLAYER.combo.length - 1;
-    const color = finisher ? 0xffb35a : 0xfff3d6;
-    const effect = this.add.graphics().setDepth(player.y + 2).setBlendMode(Phaser.BlendModes.ADD);
-    effect.setData('attackStage', trace.stage + 1);
-    if (finisher) {
-      // 찌르기는 검날 방향으로 곧게 뻗는 빛과 검끝의 이동선으로 표현한다.
-      effect.lineStyle(9, color, 0.2).lineBetween(current.base.x, current.base.y, current.tip.x, current.tip.y);
-      effect.lineStyle(3, 0xffffff, 0.9).lineBetween(current.base.x, current.base.y, current.tip.x, current.tip.y);
-    } else {
-      effect.fillStyle(color, 0.22).beginPath();
-      effect.moveTo(previous.base.x, previous.base.y);
-      effect.lineTo(previous.tip.x, previous.tip.y);
-      effect.lineTo(current.tip.x, current.tip.y);
-      effect.lineTo(current.base.x, current.base.y);
-      effect.closePath().fillPath();
-      effect.lineStyle(3, color, 0.9).lineBetween(previous.tip.x, previous.tip.y, current.tip.x, current.tip.y);
-    }
-    this.tweens.add({ targets: effect, alpha: 0, duration: 110, onComplete: () => effect.destroy() });
+    trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, combo.hitDelayMs, player.y + 2);
+    this.effects.drawAttack(trace.effect, sweep, time);
 
     let hitAny = false;
     for (const enemy of this.enemies) {
@@ -569,7 +618,7 @@ export class GameScene extends Phaser.Scene {
       // 높이 방향의 레인을 유지해 화면상 겹쳐 보이는 다른 줄의 적을 치지 않는다.
       if (Math.abs(c.y - player.y) > PLAYER.attackLane) continue;
       const bounds = c.sprite.getBounds();
-      if (!bladeHitsEllipse(previous, current, { x: bounds.centerX, y: bounds.centerY },
+      if (!bladeHitsEllipse(sweep.previous, sweep.current, { x: bounds.centerX, y: bounds.centerY },
         bounds.width * 0.42 + PLAYER.bladeRadius, bounds.height * 0.42 + PLAYER.bladeRadius)) continue;
       trace.hit.add(enemy);
 
@@ -579,7 +628,7 @@ export class GameScene extends Phaser.Scene {
       this.showDamage(c.x, c.y - 100, damage, finisher ? '#ffb35a' : '#fff3c4', finisher ? 46 : 34);
       if (died) {
         enemy.kill();
-        this.time.delayedCall(ENEMY.respawnMs, () => this.respawnEnemy(enemy));
+        this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
       } else {
         c.knockback.set(player.facing * PLAYER.knockback * combo.knockback, 0);
         enemy.interrupt(this.now);
@@ -610,6 +659,10 @@ export class GameScene extends Phaser.Scene {
 
   private onPlayerDeath(): void {
     const player = this.player;
+    this.clearAttackInput();
+    this.dodgeProgress = 1;
+    this.dodgeUntil = 0;
+    player.setDodging(false);
     player.playDeath();
 
     const { width } = this.scale.gameSize;
@@ -629,12 +682,29 @@ export class GameScene extends Phaser.Scene {
       .setAlpha(0);
     this.tweens.add({ targets: message, alpha: 1, duration: 300 });
 
-    this.time.delayedCall(PLAYER.respawnMs, () => {
-      message.destroy();
-      player.revive(PLAYER_SPAWN.x, PLAYER_SPAWN.y);
-      player.invulnerableUntil = this.now + 1500;
-      this.drawHud();
-    });
+    this.deathMessage = message;
+    this.playerRespawnAt = this.now + PLAYER.respawnMs;
+  }
+
+  /** 부활은 시각 효과의 재생 시간과 무관하게 게임 시계로만 결정한다. */
+  private updateRespawns(time: number): void {
+    if (this.playerRespawnAt !== undefined && time >= this.playerRespawnAt) {
+      this.playerRespawnAt = undefined;
+      this.deathMessage?.destroy();
+      this.deathMessage = undefined;
+      if (!this.player.alive) {
+        this.clearAttackInput();
+        this.player.revive(PLAYER_SPAWN.x, PLAYER_SPAWN.y);
+        this.player.invulnerableUntil = time + 1500;
+        this.drawHud();
+      }
+    }
+    for (let i = this.enemyRespawns.length - 1; i >= 0; i--) {
+      const pending = this.enemyRespawns[i];
+      if (time < pending.at) continue;
+      this.enemyRespawns.splice(i, 1);
+      if (pending.enemy.state === 'dead') this.respawnEnemy(pending.enemy);
+    }
   }
 
   private respawnEnemy(enemy: Enemy): void {

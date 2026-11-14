@@ -215,7 +215,7 @@ const attack2: RigAnimation = {
   ]),
 };
 
-/** 3타(마무리): 팔꿈치를 뒤로 당겼다가 몸을 던지며 깊게 찌른다. */
+/** 3타(마무리): 교정된 손잡이 위치에서 적 몸통 높이로 팔을 뻗어 찌른다. */
 const attack3: RigAnimation = {
   duration: 0.4,
   loop: false,
@@ -223,8 +223,8 @@ const attack3: RigAnimation = {
   pose: keyframes([
     [0, {}],
     [0.28, { upper_arm_r: 62, forearm_r: -132, hand_r: -34, chest: -10, head: -4, upper_arm_l: -30, forearm_l: -30, x: -8, y: 5, thigh_r: 6, hair_back: -6 }],
-    [0.42, { upper_arm_r: -76, forearm_r: -18, hand_r: -10, chest: 18, head: -8, upper_arm_l: 55, forearm_l: -10, x: 20, y: 14, thigh_l: -42, shin_l: 46, foot_l: -6, thigh_r: 26, shin_r: 6, hair_back: 24, ponytail: 26, sash: 26 }],
-    [0.72, { upper_arm_r: -74, forearm_r: -18, hand_r: -10, chest: 16, head: -6, upper_arm_l: 50, forearm_l: -10, x: 18, y: 13, thigh_l: -40, shin_l: 44, foot_l: -6, thigh_r: 24, shin_r: 6, hair_back: 12, ponytail: 12, sash: 14 }],
+    [0.42, { upper_arm_r: -58, forearm_r: -18, hand_r: -28, chest: 18, head: -8, upper_arm_l: 55, forearm_l: -10, x: 20, y: 14, thigh_l: -42, shin_l: 46, foot_l: -6, thigh_r: 26, shin_r: 6, hair_back: 24, ponytail: 26, sash: 26 }],
+    [0.72, { upper_arm_r: -56, forearm_r: -18, hand_r: -28, chest: 16, head: -6, upper_arm_l: 50, forearm_l: -10, x: 18, y: 13, thigh_l: -40, shin_l: 44, foot_l: -6, thigh_r: 24, shin_r: 6, hair_back: 12, ponytail: 12, sash: 14 }],
     [1, { y: 2 }],
   ]),
 };

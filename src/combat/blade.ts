@@ -1,5 +1,26 @@
 export interface Point { x: number; y: number }
 export interface Blade { base: Point; tip: Point }
+export interface BladeSweep { previous: Blade; current: Blade; start: number; end: number }
+
+export function interpolateBlade(a: Blade, b: Blade, t: number): Blade {
+  t = Math.max(0, Math.min(1, t));
+  const point = (from: Point, to: Point): Point => ({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t });
+  return { base: point(a.base, b.base), tip: point(a.tip, b.tip) };
+}
+
+/** 프레임이 유효 시간의 시작·끝을 넘더라도 그 안의 검날 이동만 반환한다. */
+export function clipBladeSweep(previous: Blade, current: Blade, from: number, to: number,
+  windowStart: number, windowEnd: number): BladeSweep | undefined {
+  if (to <= from || from >= windowEnd || to < windowStart) return;
+  const start = Math.max(from, windowStart);
+  const end = Math.min(to, windowEnd);
+  if (end < start) return;
+  return {
+    previous: interpolateBlade(previous, current, (start - from) / (to - from)),
+    current: interpolateBlade(previous, current, (end - from) / (to - from)),
+    start, end,
+  };
+}
 
 function segmentDistanceSq(a: Point, b: Point): number {
   const dx = b.x - a.x;

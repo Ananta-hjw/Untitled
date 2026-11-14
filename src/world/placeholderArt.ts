@@ -285,6 +285,7 @@ function radialTexture(
   height: number,
   stops: Array<[number, string]>,
 ): void {
+  if (scene.textures.exists(key)) return;
   const texture = scene.textures.createCanvas(key, width, height);
   if (!texture) return;
   const ctx = texture.getContext();
@@ -377,6 +378,7 @@ function registerHuman(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, key:
 }
 
 function registerSlime(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, key: string, color: number): void {
+  if (scene.anims.exists(`${key}-idle`)) return;
   [0, 1].forEach((squash, i) => {
     g.clear();
     drawSlime(g, color, squash);
@@ -406,10 +408,11 @@ export const HUMANS: Record<string, HumanPalette> = {
 export function createPlaceholderArt(scene: Phaser.Scene): void {
   const g = scene.make.graphics({}, false);
 
-  drawRoomTile(g);
-  g.generateTexture('room', ROOM_TILE_WIDTH, VIEW_HEIGHT);
-
-  drawProps(scene, g);
+  if (!scene.textures.exists('room')) {
+    drawRoomTile(g);
+    g.generateTexture('room', ROOM_TILE_WIDTH, VIEW_HEIGHT);
+  }
+  if (!scene.textures.exists('prop-window')) drawProps(scene, g);
 
   for (const [key, palette] of Object.entries(HUMANS)) {
     // 실제 그림이 이미 등록된 캐릭터는 건너뛴다.

@@ -38,6 +38,8 @@ export const PLAYER = {
   ],
   /** 이 시간 안에 다음 공격을 이어야 콤보가 유지된다 (이전 공격이 끝난 뒤부터) */
   comboWindowMs: 380,
+  /** 다음 공격이 가능해지기 직전의 짧은 입력을 기억할 시간(ms) */
+  attackBufferMs: 150,
   /** 타격 자세 이후 검날을 추적할 시간(ms), 검날 두께 보정(px), 위아래 레인(px) */
   hitWindowMs: 55,
   bladeRadius: 6,
@@ -73,6 +75,8 @@ export const ENEMY = {
   strikeRangeX: 130,
   strikeRangeY: 44,
   windupMs: 480,
+  strikeMs: 110,
+  returnMs: 220,
   recoverMs: 900,
   staggerMs: 420,
   knockback: 260,

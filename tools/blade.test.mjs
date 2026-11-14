@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bladeHitsEllipse } from '../src/combat/blade.ts';
+import { bladeHitsEllipse, clipBladeSweep } from '../src/combat/blade.ts';
 
 const blade = (x, y) => ({ base: { x, y }, tip: { x: x + 50, y } });
 
@@ -24,4 +24,22 @@ test('좌우 반전과 월드 좌표 이동 후에도 같은 위치 관계로 �
   });
   assert.equal(bladeHitsEllipse(transform(blade(0, -30)), transform(blade(0, 30)),
     { x: 975, y: 600 }, 5, 5), true);
+});
+
+test('시작 전·종료 후의 이동을 잘라 유효 시간 안의 궤적만 명중에 사용한다', () => {
+  const sweep = clipBladeSweep(blade(0, -100), blade(0, 100), 0, 100, 25, 75);
+  assert.deepEqual(sweep.previous, blade(0, -50));
+  assert.deepEqual(sweep.current, blade(0, 50));
+  assert.equal(bladeHitsEllipse(sweep.previous, sweep.current, { x: 25, y: -75 }, 5, 5), false);
+  assert.equal(bladeHitsEllipse(sweep.previous, sweep.current, { x: 25, y: 75 }, 5, 5), false);
+  assert.equal(bladeHitsEllipse(sweep.previous, sweep.current, { x: 25, y: 0 }, 5, 5), true);
+});
+
+test('유효 구간 밖의 프레임과 중복 시간은 무시하고 정확한 시작·종료 경계를 포함한다', () => {
+  const a = blade(0, 0), b = blade(0, 100);
+  assert.equal(clipBladeSweep(a, b, 0, 24, 25, 75), undefined);
+  assert.equal(clipBladeSweep(a, b, 75, 100, 25, 75), undefined);
+  assert.equal(clipBladeSweep(a, b, 30, 30, 25, 75), undefined);
+  assert.deepEqual(clipBladeSweep(a, b, 0, 25, 25, 75).current, b);
+  assert.deepEqual(clipBladeSweep(a, b, 25, 75, 25, 75).current, b);
 });

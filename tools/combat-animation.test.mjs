@@ -8,7 +8,8 @@ test('3타는 팔을 뻗은 유지 구간에 타격한다', () => {
   const phase = PLAYER.combo[2].hitDelayMs / (animation.duration * 1000);
   const pose = animation.pose(phase);
   assert.ok(phase >= 0.42 && phase <= 0.72);
-  assert.ok(pose.upper_arm_r < -70);
+  const bladeAngle = 5 + pose.chest + pose.upper_arm_r + pose.forearm_r + pose.hand_r;
+  assert.ok(Math.abs(bladeAngle + 90) < 15);
   assert.equal(pose.forearm_r, -18);
 });
 

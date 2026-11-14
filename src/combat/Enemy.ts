@@ -21,9 +21,8 @@ export class Enemy {
   private readonly scratch = new Phaser.Math.Vector2();
   private readonly wanderSpeed: number;
   private timer = 0;
-  /** 씬의 게임 시계. update()에서 받아 둔다. */
-  private now = 0;
-  private strike?: Phaser.Tweens.TweenChain;
+  private attackStartedAt?: number;
+  private strikeLanded = false;
 
   constructor(scene: Phaser.Scene, key: string, x: number, y: number) {
     this.scene = scene;
@@ -42,7 +41,6 @@ export class Enemy {
   /** onStrike: 돌진이 닿는 순간 호출된다. 실제로 맞았는지는 씬이 판정한다. */
   update(time: number, dt: number, player: Character, area: WalkArea, onStrike: (enemy: Enemy) => void): void {
     const c = this.character;
-    this.now = time;
     if (this.state === 'dead') return;
 
     const dx = player.x - c.x;
@@ -73,7 +71,7 @@ export class Enemy {
           break;
         }
         if (Math.abs(dx) < ENEMY.attackRangeX && Math.abs(dy) < ENEMY.attackRangeY) {
-          this.beginWindup(dx, onStrike);
+          this.beginWindup(time, dx);
           break;
         }
         // 플레이어의 옆자리(같은 높이)로 붙는다.
@@ -84,6 +82,7 @@ export class Enemy {
 
       case 'windup':
         c.setMotion(false);
+        this.updateStrike(time, onStrike);
         break;
 
       case 'recover':
@@ -118,40 +117,45 @@ export class Enemy {
   }
 
   private cancelStrike(): void {
-    this.strike?.stop();
-    this.strike = undefined;
-    this.scene.tweens.killTweensOf(this.character.sprite);
+    this.attackStartedAt = undefined;
+    this.strikeLanded = false;
   }
 
-  private beginWindup(dx: number, onStrike: (enemy: Enemy) => void): void {
-    const c = this.character;
+  private beginWindup(time: number, dx: number): void {
     this.state = 'windup';
-    c.setMotion(false, dx);
-    const sprite = c.sprite;
-    this.strike = this.scene.tweens.chain({
-      targets: sprite,
-      tweens: [
-        // 움츠리기 (공격 예고)
-        { scaleX: 1.25, scaleY: 0.7, duration: ENEMY.windupMs, ease: 'Quad.easeOut' },
-        // 돌진
-        {
-          x: c.facing * 46,
-          scaleX: 0.9,
-          scaleY: 1.15,
-          duration: 110,
-          ease: 'Quad.easeIn',
-          onComplete: () => {
-            if (this.state === 'windup') onStrike(this);
-          },
-        },
-        { x: 0, scaleX: 1, scaleY: 1, duration: 220, ease: 'Quad.easeOut' },
-      ],
-      onComplete: () => {
+    this.attackStartedAt = time;
+    this.strikeLanded = false;
+    this.character.setMotion(false, dx);
+    this.character.sprite.setScale(1).setPosition(0, 0);
+  }
+
+  /** 명중과 자세 모두 씬의 게임 시계를 사용한다. Tween 완료로 피해를 주지 않는다. */
+  private updateStrike(time: number, onStrike: (enemy: Enemy) => void): void {
+    if (this.attackStartedAt === undefined) return;
+    const elapsed = time - this.attackStartedAt;
+    const sprite = this.character.sprite;
+    const strikeAt = ENEMY.windupMs + ENEMY.strikeMs;
+    const endAt = strikeAt + ENEMY.returnMs;
+    if (elapsed < ENEMY.windupMs) {
+      const p = 1 - (1 - elapsed / ENEMY.windupMs) ** 2;
+      sprite.setScale(1 + 0.25 * p, 1 - 0.3 * p);
+    } else if (elapsed < strikeAt) {
+      const p = ((elapsed - ENEMY.windupMs) / ENEMY.strikeMs) ** 2;
+      sprite.setX(this.character.facing * 46 * p).setScale(1.25 - 0.35 * p, 0.7 + 0.45 * p);
+    } else {
+      const p = 1 - (1 - Math.min(1, (elapsed - strikeAt) / ENEMY.returnMs)) ** 2;
+      sprite.setX(this.character.facing * 46 * (1 - p)).setScale(0.9 + 0.1 * p, 1.15 - 0.15 * p);
+      if (!this.strikeLanded) {
+        this.strikeLanded = true;
+        onStrike(this);
         if (this.state !== 'windup') return;
+      }
+      if (elapsed >= endAt) {
         this.state = 'recover';
-        this.timer = this.now + ENEMY.recoverMs;
-      },
-    });
+        this.timer = this.attackStartedAt + endAt + ENEMY.recoverMs;
+        this.attackStartedAt = undefined;
+      }
+    }
   }
 
   /** 목표를 향해 한 걸음. 도착했거나 막혔으면 false. */
