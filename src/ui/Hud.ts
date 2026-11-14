@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DEPTH_UI } from '../config';
+import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 
 /** 화면에 고정된 정보 표시: 체력·경험치 막대, 버전 표시, 첫 조작 안내, 레벨 업 알림. */
 
@@ -15,6 +15,8 @@ export class Hud {
   private readonly xpBar: Phaser.GameObjects.Graphics;
   private readonly xpText: Phaser.GameObjects.Text;
   private readonly levelUpText: Phaser.GameObjects.Text;
+  private readonly callout: Phaser.GameObjects.Text;
+  private readonly slowTint: Phaser.GameObjects.Rectangle;
   private hint?: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, hintText: string) {
@@ -87,6 +89,52 @@ export class Hud {
       .setDepth(DEPTH_UI + 4)
       .setResolution(2)
       .setVisible(false);
+
+    // 저스트 회피 같은 짧은 알림. 한 개를 다시 쓴다.
+    this.callout = scene.add
+      .text(0, 215, '', {
+        fontFamily: FONT,
+        fontSize: '38px',
+        fontStyle: 'bold',
+        color: '#bfe9ff',
+        stroke: '#0b2236',
+        strokeThickness: 8,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_UI + 4)
+      .setResolution(2)
+      .setVisible(false);
+
+    // 느린 화면일 때 화면 전체에 옅은 푸른 빛을 덮는다.
+    this.slowTint = scene.add
+      .rectangle(0, 0, 10, VIEW_HEIGHT, 0x3a7bd5, 1)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_UI - 1)
+      .setAlpha(0)
+      .setVisible(false);
+  }
+
+  /** 화면 위쪽에 짧은 알림을 띄웠다가 지운다. */
+  showCallout(text: string): void {
+    const label = this.callout;
+    this.scene.tweens.killTweensOf(label);
+    label.setText(text).setVisible(true).setAlpha(1).setScale(1.3);
+    this.scene.tweens.chain({
+      targets: label,
+      tweens: [
+        { scale: 1, duration: 140, ease: 'Back.easeOut' },
+        { alpha: 0, duration: 350, delay: 600, onComplete: () => label.setVisible(false) },
+      ],
+    });
+  }
+
+  /** amount: 0이면 꺼짐, 1이면 가장 진한 느린 화면 효과 */
+  setSlowMotion(amount: number): void {
+    const visible = amount > 0.01;
+    this.slowTint.setVisible(visible);
+    if (visible) this.slowTint.setAlpha(0.16 * amount);
   }
 
   /** 경험치가 바뀔 때만 부른다. need가 0이면 최고 레벨이다. */
@@ -142,6 +190,8 @@ export class Hud {
     this.badge.setX(width - 22);
     this.hint?.setX(width / 2);
     this.levelUpText.setX(width / 2);
+    this.callout.setX(width / 2);
+    this.slowTint.setSize(width, VIEW_HEIGHT);
   }
 
   /** 플레이어가 처음 조작하면 안내 문구를 지운다. */

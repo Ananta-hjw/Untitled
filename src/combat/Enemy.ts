@@ -16,6 +16,8 @@ type State = 'wander' | 'chase' | 'windup' | 'recover' | 'dead';
 export class Enemy {
   readonly character: Character;
   state: State = 'wander';
+  /** 마지막 돌진이 닿은 시각(게임 시계). 저스트 회피 판정에 쓴다. */
+  lastStrikeAt?: number;
 
   private readonly scene: Phaser.Scene;
   private readonly target = new Phaser.Math.Vector2();
@@ -108,13 +110,13 @@ export class Enemy {
     }
   }
 
-  /** 맞으면 준비 동작이 끊기고 잠깐 멈칫한다. */
-  interrupt(time: number): void {
+  /** 맞으면 준비 동작이 끊기고 잠깐 멈칫한다. 저스트 회피를 당하면 더 오래 멈춘다. */
+  interrupt(time: number, durationMs: number = ENEMY.staggerMs): void {
     if (this.state === 'dead') return;
     this.cancelStrike();
     this.character.sprite.setScale(1).setPosition(0, 0);
     this.state = 'recover';
-    this.timer = time + ENEMY.staggerMs;
+    this.timer = time + durationMs;
   }
 
   kill(): void {
@@ -163,6 +165,7 @@ export class Enemy {
       sprite.setX(this.character.facing * 46 * (1 - p)).setScale(0.9 + 0.1 * p, 1.15 - 0.15 * p);
       if (!this.strikeLanded) {
         this.strikeLanded = true;
+        this.lastStrikeAt = this.attackStartedAt + strikeAt;
         onStrike(this);
         if (this.state !== 'windup') return;
       }

@@ -17,7 +17,7 @@ npm run dev
 ```
 
 같은 와이파이의 휴대폰에서 터미널에 표시되는 Network 주소로 접속하면 터치로 조작할 수 있다.
-PC에서는 방향키나 WASD로 움직이고 스페이스바나 J로 공격, Shift나 K로 회피한다. 말을 걸 수 있는 곳 근처에서는 E나 Enter로 대화한다. 주소 뒤에 `?debug`를 붙이면 이동 가능 영역이 보인다.
+PC에서는 방향키나 WASD로 움직이고 스페이스바나 J로 공격, Shift나 K로 회피한다. 적의 돌진이 닿기 직전에 회피하면 저스트 회피가 되어 잠깐 느려지고 다음 공격이 강해진다. 말을 걸 수 있는 곳 근처에서는 E나 Enter로 대화한다. 주소 뒤에 `?debug`를 붙이면 이동 가능 영역이 보인다.
 
 | 명령 | 설명 |
 |---|---|
@@ -45,6 +45,7 @@ npm run test:browser
 | `src/ui/VirtualJoystick.ts` | 고정형 가상 조이스틱 (멀티터치, 데드존) |
 | `src/ui/ActionButton.ts` | 공격·회피 버튼 |
 | `src/combat/Enemy.ts` | 몬스터 AI (배회 → 추격 → 준비 동작 → 돌진) |
+| `src/combat/justDodge.ts` | 저스트 회피 판정과 느린 화면 배율 |
 | `src/world/walkArea.ts` | 이동 가능 영역(다각형)과 장애물(타원) |
 | `src/entities/Character.ts` | 플레이어·NPC·몬스터 공통 틀, Y정렬 |
 | `src/entities/HeroSprite.ts` | 원본 프레임 표시, 발·검날 좌표, 좌우 공격, 잔상 복사 |

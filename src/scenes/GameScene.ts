@@ -2,9 +2,11 @@ import Phaser from 'phaser';
 import { bladeHitsEllipse, clipBladeSweep, type Blade } from '../combat/blade';
 import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
+import { isJustDodge, slowMotionScale, strikeReaches } from '../combat/justDodge';
 import {
   DEPTH_LIGHTING,
   DODGE,
+  JUST_DODGE,
   ENEMY,
   KNOCKBACK_DAMPING,
   PLAYER,
@@ -51,7 +53,7 @@ export class GameScene extends Phaser.Scene {
   private enemyRespawns: Array<{ at: number; enemy: Enemy }> = [];
   private playerRespawnAt?: number;
   private deathMessage?: Phaser.GameObjects.Text;
-  private attackTrace?: { startedAt: number; stage: number; direction: { x: number; y: number }; previous: Blade; elapsed: number; hit: Set<Enemy>; effect?: AttackEffect };
+  private attackTrace?: { startedAt: number; stage: number; direction: { x: number; y: number }; previous: Blade; elapsed: number; hit: Set<Enemy>; effect?: AttackEffect; counter: boolean };
   private nextAttackAt = 0;
   private attackBufferedUntil?: number;
   private keyboardAttackPressed = false;
@@ -63,6 +65,15 @@ export class GameScene extends Phaser.Scene {
   private dodgeUntil = 0;
   private dodgeProgress = 1;
   private dodgeReadyAt = 0;
+  /** 이번 회피를 시작한 시각과 위치. 저스트 회피는 "피하지 않았으면 맞았을 자리"로 판정한다. */
+  private dodgeStartedAt?: number;
+  private readonly dodgeOrigin = { x: 0, y: 0 };
+  /** 이번 회피로 이미 저스트 회피가 났는지 (한 번의 회피에 한 번만) */
+  private justDodged = false;
+  /** 느린 화면이 끝날 때까지 남은 실제 시간(ms) */
+  private slowMotionLeft = 0;
+  /** 이 시각(게임 시계)까지 시작한 공격 한 번은 반격으로 강해진다 */
+  private counterUntil = 0;
   private nextGhostAt = 0;
   private readonly dodgeDirection = new Phaser.Math.Vector2();
   private hud!: Hud;
@@ -115,6 +126,10 @@ export class GameScene extends Phaser.Scene {
     this.dodgeUntil = 0;
     this.dodgeProgress = 1;
     this.dodgeReadyAt = 0;
+    this.dodgeStartedAt = undefined;
+    this.justDodged = false;
+    this.slowMotionLeft = 0;
+    this.counterUntil = 0;
     this.nextGhostAt = 0;
     this.dodgeDirection.set(0, 0);
     this.input2.set(0, 0);
@@ -192,9 +207,15 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.now += step;
+    // 저스트 회피 뒤에는 잠깐 게임 시간이 느리게 흐른다. 적·플레이어·타이머가 모두 같이 느려진다.
+    const scale = slowMotionScale(this.slowMotionLeft, JUST_DODGE.slowScale, JUST_DODGE.rampMs);
+    this.slowMotionLeft = Math.max(0, this.slowMotionLeft - step);
+    this.hud.setSlowMotion((1 - scale) / (1 - JUST_DODGE.slowScale));
+    const gameStep = step * scale;
+
+    this.now += gameStep;
     const time = this.now;
-    const dt = step / 1000;
+    const dt = gameStep / 1000;
 
     this.effects.update(time);
     this.updateRespawns(time);
@@ -208,7 +229,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.separateEnemies(dt);
     this.applyKnockback(this.player, dt);
-    this.damageNumbers.update(step);
+    this.damageNumbers.update(gameStep);
     this.updateInteraction(time);
   }
 
@@ -460,6 +481,10 @@ export class GameScene extends Phaser.Scene {
 
     this.dodgeUntil = time + DODGE.durationMs;
     this.dodgeProgress = 0;
+    this.dodgeStartedAt = time;
+    this.dodgeOrigin.x = player.x;
+    this.dodgeOrigin.y = player.y;
+    this.justDodged = false;
     this.dodgeReadyAt = time + DODGE.cooldownMs;
     this.nextAttackAt = Math.max(this.nextAttackAt, this.dodgeUntil);
     this.nextGhostAt = 0;
@@ -528,7 +553,10 @@ export class GameScene extends Phaser.Scene {
     hero.setAttackFacing(facing);
     player.playAttack(stage + 1);
     this.attackLunge = { startedAt: time, stage, direction, progress: 0 };
-    this.attackTrace = { startedAt: time, stage, direction, previous: hero.getBlade(), elapsed: 0, hit: new Set() };
+    // 저스트 회피 직후의 첫 공격은 반격이다.
+    const counter = time <= this.counterUntil;
+    if (counter) this.counterUntil = 0;
+    this.attackTrace = { startedAt: time, stage, direction, previous: hero.getBlade(), elapsed: 0, hit: new Set(), counter };
   }
 
   /** 전진 진행도의 차이를 적용해 프레임 속도와 관계없이 같은 거리를 이동한다. */
@@ -587,9 +615,11 @@ export class GameScene extends Phaser.Scene {
       trace.hit.add(enemy);
 
       hitAny = true;
-      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * combo.damage);
+      const bonus = trace.counter ? JUST_DODGE.counterDamage : 1;
+      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * combo.damage * bonus);
       const died = c.hurt(damage);
-      this.showDamage(c.x, c.y - 100, damage, finisher ? '#ffb35a' : '#fff3c4', finisher ? 46 : 34);
+      if (trace.counter) this.showDamage(c.x, c.y - 100, damage, '#9fdcff', 50);
+      else this.showDamage(c.x, c.y - 100, damage, finisher ? '#ffb35a' : '#fff3c4', finisher ? 46 : 34);
       if (died) {
         enemy.kill();
         this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
@@ -600,7 +630,10 @@ export class GameScene extends Phaser.Scene {
         enemy.interrupt(this.now);
       }
     }
-    if (hitAny) this.cameras.main.shake(finisher ? 130 : 70, finisher ? 0.009 : 0.004);
+    if (hitAny) {
+      const strong = finisher || trace.counter;
+      this.cameras.main.shake(strong ? 130 : 70, strong ? 0.009 : 0.004);
+    }
   }
 
   /** 경험치를 더하고, 레벨이 오르면 능력치를 올리고 체력을 가득 채운다. */
@@ -679,11 +712,18 @@ export class GameScene extends Phaser.Scene {
     const player = this.player;
     const c = enemy.character;
     const now = this.now;
-    if (!player.alive || now < player.invulnerableUntil || this.dialogue.isOpen) return;
+    if (!player.alive || this.dialogue.isOpen) return;
 
-    const forward = (player.x - c.x) * c.facing;
-    if (forward < -20 || forward > ENEMY.strikeRangeX) return;
-    if (Math.abs(player.y - c.y) > ENEMY.strikeRangeY) return;
+    // 공격이 닿기 직전에 피했고, 피하지 않았다면 맞았을 자리였으면 저스트 회피다.
+    if (!this.justDodged && enemy.lastStrikeAt !== undefined
+      && isJustDodge(this.dodgeStartedAt, enemy.lastStrikeAt, JUST_DODGE.windowMs)
+      && strikeReaches(c.x, c.y, c.facing, this.dodgeOrigin.x, this.dodgeOrigin.y)) {
+      this.onJustDodge(enemy);
+      return;
+    }
+
+    if (now < player.invulnerableUntil) return;
+    if (!strikeReaches(c.x, c.y, c.facing, player.x, player.y)) return;
 
     player.invulnerableUntil = now + PLAYER.invulnerableMs;
     const died = player.hurt(ENEMY.damage, 0xff5a4a);
@@ -693,6 +733,19 @@ export class GameScene extends Phaser.Scene {
     this.drawHud();
     if (died) this.onPlayerDeath();
   };
+
+  /** 저스트 회피 성공: 느린 화면, 다음 공격 강화, 회피 재사용 대기 초기화, 피한 적은 멈칫. */
+  private onJustDodge(enemy: Enemy): void {
+    const now = this.now;
+    this.justDodged = true;
+    this.slowMotionLeft = JUST_DODGE.slowMs;
+    this.counterUntil = now + JUST_DODGE.counterMs;
+    this.dodgeReadyAt = now;
+    this.dodgeButton.setEnabled(true);
+    enemy.interrupt(now, JUST_DODGE.stunMs);
+    this.hud.showCallout('저스트 회피!');
+    this.cameras.main.flash(120, 170, 220, 255);
+  }
 
   private onPlayerDeath(): void {
     const player = this.player;

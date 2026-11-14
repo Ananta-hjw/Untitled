@@ -666,3 +666,47 @@ test('대화 대상 근처에서만 대화가 열리고, 대화 중에는 게임
   assert.equal(result.attackedAfterClose, false);
   assert.equal(result.inCombat, false);
 });
+
+test('공격이 닿기 직전의 회피만 저스트 회피가 되어 느린 화면·반격·회피 초기화가 일어나고, 일찍 피하면 일반 회피다', async () => {
+  await load();
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(performance.now(), 16); };
+    // 적 하나를 플레이어 바로 왼쪽에 두고 오른쪽(플레이어 쪽)을 보며 공격을 시작하게 한다.
+    const run = (leadMs) => {
+      s.scene.restart(); step(2);
+      const s2 = g.scene.getScene('game'), p2 = s2.player, e = s2.enemies[0];
+      for (const other of s2.enemies.slice(1)) { other.character.placeAt(300, 1500); other.state = 'wander'; other.timer = 1e12; }
+      p2.placeAt(1600, 1200); e.character.placeAt(1520, 1200); e.character.face(1);
+      s2.dodgeReadyAt = 0; p2.invulnerableUntil = 0;
+      const hp = p2.hp;
+      e.beginWindup(s2.now, 1);
+      const strikeAt = s2.now + 480 + 110; // ENEMY.windupMs + strikeMs
+      // 공격이 닿기 leadMs 전까지 기다렸다가 오른쪽으로 회피한다.
+      while (s2.now < strikeAt - leadMs) step();
+      s2.startDodge(s2.now, s2.input2.set(1, 0));
+      const nowAtDodge = s2.now;
+      step(8);
+      const outcome = { slow: s2.slowMotionLeft > 0 || s2.now - nowAtDodge < 8 * 16 * 0.9, justDodged: s2.justDodged,
+        counterReady: s2.counterUntil > s2.now, dodgeReady: s2.dodgeReadyAt <= s2.now, hpLost: hp - p2.hp,
+        enemyState: e.state };
+      // 반격: 창 안에서 시작한 공격은 반격으로 표시된다.
+      p2.placeAt(e.character.x + 80, e.character.y); p2.endAttack(); s2.nextAttackAt = 0; s2.dodgeProgress = 1;
+      s2.startAttack(s2.now, -1, 0);
+      outcome.counterAttack = !!s2.attackTrace?.counter;
+      return outcome;
+    };
+    return { just: run(100), early: run(450) };
+  })()`);
+  assert.equal(result.just.justDodged, true);
+  assert.equal(result.just.slow, true);
+  assert.equal(result.just.counterReady, true);
+  assert.equal(result.just.dodgeReady, true);
+  assert.equal(result.just.hpLost, 0);
+  assert.equal(result.just.enemyState, 'recover');
+  assert.equal(result.just.counterAttack, true);
+
+  assert.equal(result.early.justDodged, false);
+  assert.equal(result.early.counterReady, false);
+  assert.equal(result.early.counterAttack, false);
+});

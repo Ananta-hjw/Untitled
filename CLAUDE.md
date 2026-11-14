@@ -32,7 +32,7 @@ node --test tools/blade.test.mjs
 node --test --test-name-pattern='회피' tools/*.test.mjs
 ```
 
-The Node tests import `.ts` sources directly through Node 24's type stripping. Modules they import (`config.ts`, `entities/heroFrames.ts`, `entities/movement.ts`, `entities/progression.ts`, `entities/saveData.ts`, `story/dialogues.ts`, `world/interactables.ts`, `combat/blade.ts`, `world/navGrid.ts`) must stay free of Phaser and of Vite-only imports such as `?inline`, or the tests stop loading. Put new pure logic in modules like these so it can be tested. A pure module that imports another one must spell the `.ts` extension (`'../config.ts'`) for Node; `allowImportingTsExtensions` in `tsconfig.json` lets TypeScript accept it.
+The Node tests import `.ts` sources directly through Node 24's type stripping. Modules they import (`config.ts`, `entities/heroFrames.ts`, `entities/movement.ts`, `entities/progression.ts`, `entities/saveData.ts`, `story/dialogues.ts`, `world/interactables.ts`, `combat/blade.ts`, `combat/justDodge.ts`, `world/navGrid.ts`) must stay free of Phaser and of Vite-only imports such as `?inline`, or the tests stop loading. Put new pure logic in modules like these so it can be tested. A pure module that imports another one must spell the `.ts` extension (`'../config.ts'`) for Node; `allowImportingTsExtensions` in `tsconfig.json` lets TypeScript accept it.
 
 `?debug` in the URL draws the walkable polygon and obstacles. In dev builds the `Phaser.Game` is exposed as `window.__game`, which the browser test and ad-hoc Playwright checks use.
 
@@ -50,7 +50,9 @@ The Node tests import `.ts` sources directly through Node 24's type stripping. M
 
 **World.** `world/village.ts` builds the starting village with a separate ground texture, protagonist home and nature props. `villageLayout.ts` holds spawn points and ground footprints; village art and measured frames live in `src/assets/village/`. `WalkArea` uses rectangular building walls and ellipse obstacles for trunks/rocks, and divides movement into short steps to prevent dodge tunnelling. Draw depth follows the ground contact Y. `world/navGrid.ts` is one shared flow field toward the player; it is recomputed only when the player changes cell, and enemies use it only when the straight line is blocked.
 
-**Enemies.** `combat/Enemy.ts` is a small state machine: wander → chase → windup (telegraph) → strike → recover. The strike calls back into the scene, which decides whether the player is hit.
+**Enemies.** `combat/Enemy.ts` is a small state machine: wander → chase → windup (telegraph) → strike → recover, timed on the game clock. When the strike lands it records `lastStrikeAt` and calls back into the scene, which decides whether the player is hit (`strikeReaches` in `combat/justDodge.ts`).
+
+**Just dodge.** A dodge started within `JUST_DODGE.windowMs` before a strike lands, from a spot the strike would have reached, is a just dodge (`isJustDodge`, checked against the dodge's start position, once per dodge). It slows the game clock: `update()` multiplies the frame step by `slowMotionScale(...)` for `slowMs` of real time, so enemies, the player and all game timers slow together. It also resets the dodge cooldown, stuns the dodged enemy for `stunMs`, and marks the next attack started within `counterMs` as a counter (`attackTrace.counter`, damage × `counterDamage`).
 
 **No per-hit allocation.** Damage numbers (`ui/DamageNumbers.ts`, digits drawn once to a texture), blade trails and dodge ghosts (`combat/CombatEffects.ts`) reuse pooled objects. Keep new combat effects pooled; the target is low-end Android.
 
@@ -58,7 +60,7 @@ The Node tests import `.ts` sources directly through Node 24's type stripping. M
 
 **Dialogue.** `world/interactables.ts` lists talkable spots (ground position, reach radius, marker height, dialogue id); `story/dialogues.ts` holds the lines (speaker, text, optional portrait), currently placeholder text until the story is written. When the player stands near a spot and no enemy is chasing or attacking, the scene shows a marker and a 대화 button (keys E/Enter). `ui/DialogueBox.ts` types lines out and advances on any tap, E/Enter or Space/J. While it is open `update()` returns before advancing `now`, so the whole game is frozen; on close the scene clears buffered attack and dodge input so the advancing key does not attack. Portraits are runtime copies (e.g. `assets/hero/dialogue/neutral-768.png`); add new ones to `PORTRAITS` in `DialogueBox.ts` and the `Portrait` type. New NPCs need an interactable entry, a dialogue entry and their own sprite.
 
-**Tuning** lives in `src/config.ts` (speeds, combo stages, dodge, enemy ranges, `PROGRESSION` for XP per kill, XP curve and per-level gains). The version shown on screen comes from `package.json` `version` through Vite's `define` (`__APP_VERSION__`).
+**Tuning** lives in `src/config.ts` (speeds, combo stages, dodge, `JUST_DODGE`, enemy ranges, `PROGRESSION` for XP per kill, XP curve and per-level gains). The version shown on screen comes from `package.json` `version` through Vite's `define` (`__APP_VERSION__`).
 
 ## Android and CI
 

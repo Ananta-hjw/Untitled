@@ -87,6 +87,25 @@ export const ENEMY = {
   separationSpeed: 70,
 };
 
+/**
+ * 저스트 회피: 적의 공격이 닿기 직전에 회피하면 성공한다.
+ *  - windowMs: 공격이 닿는 순간보다 이만큼 먼저 회피를 시작했어도 인정한다 (그보다 이르면 일반 회피)
+ *  - slowScale / slowMs / rampMs: 성공하면 게임 시간이 slowScale배로 느려진다.
+ *    slowMs는 실제 시간(ms)이고, 마지막 rampMs 동안 원래 속도로 돌아온다.
+ *  - counterMs / counterDamage: 그 뒤 counterMs(게임 시간) 안에 시작한 공격 한 번은 피해가 counterDamage배
+ *  - stunMs: 피한 적은 이 시간 동안 멈칫한다
+ * 성공하면 회피 재사용 대기 시간도 바로 끝난다.
+ */
+export const JUST_DODGE = {
+  windowMs: 200,
+  slowScale: 0.3,
+  slowMs: 650,
+  rampMs: 250,
+  counterMs: 1500,
+  counterDamage: 2,
+  stunMs: 1300,
+};
+
 /** 밀려나는 속도가 줄어드는 정도(초당) */
 export const KNOCKBACK_DAMPING = 7;
 
