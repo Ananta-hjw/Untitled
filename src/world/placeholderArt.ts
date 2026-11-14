@@ -404,6 +404,9 @@ export const HUMANS: Record<string, HumanPalette> = {
 };
 
 export function createPlaceholderArt(scene: Phaser.Scene): void {
+  // 텍스처와 애니메이션은 게임 전체에 남으므로 씬을 재시작해도 한 번만 만든다.
+  if (scene.textures.exists('room')) return;
+
   const g = scene.make.graphics({}, false);
 
   drawRoomTile(g);

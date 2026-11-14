@@ -49,6 +49,7 @@ interface Slot {
 }
 
 export function preloadHeroRig(scene: Phaser.Scene): void {
+  if (scene.textures.exists(TEXTURE)) return; // 씬 재시작 시 다시 불러오지 않는다
   scene.load.image(TEXTURE, rigSheet);
 }
 

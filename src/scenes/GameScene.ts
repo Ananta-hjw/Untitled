@@ -16,7 +16,7 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config';
-import { lungeProgress, locomotionRate } from '../entities/movement';
+import { dodgeProgress, lungeProgress, locomotionRate } from '../entities/movement';
 import { Character } from '../entities/Character';
 import { ActionButton } from '../ui/ActionButton';
 import { DamageNumbers } from '../ui/DamageNumbers';
@@ -52,7 +52,8 @@ export class GameScene extends Phaser.Scene {
   private comboExpiresAt = 0;
   private dodgeButton!: ActionButton;
   private dodgeKeys: Phaser.Input.Keyboard.Key[] = [];
-  private dodgeUntil = 0;
+  /** 회피 중일 때만 있다. progress는 지금까지 이동한 비율(0~1). */
+  private dodge?: { startedAt: number; progress: number };
   private dodgeReadyAt = 0;
   private nextGhostAt = 0;
   private readonly dodgeDirection = new Phaser.Math.Vector2();
@@ -70,6 +71,24 @@ export class GameScene extends Phaser.Scene {
 
   constructor() {
     super('game');
+  }
+
+  /**
+   * 씬이 시작될 때마다(재시작 포함) 불린다.
+   * 클래스 필드 초기값은 처음 한 번만 적용되므로, 한 판 동안 바뀌는 상태는 여기서 되돌린다.
+   */
+  init(): void {
+    this.enemies = [];
+    this.now = 0;
+    this.attackTrace = undefined;
+    this.attackLunge = undefined;
+    this.nextAttackAt = 0;
+    this.comboStage = 0;
+    this.comboExpiresAt = 0;
+    this.dodge = undefined;
+    this.dodgeReadyAt = 0;
+    this.nextGhostAt = 0;
+    this.hint = undefined;
   }
 
   preload(): void {
@@ -267,7 +286,7 @@ export class GameScene extends Phaser.Scene {
 
     const font = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
     this.badge = this.add
-      .text(0, 18, '프로토타입 v0.9', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
+      .text(0, 18, '프로토타입 v0.10', { fontFamily: font, fontSize: '18px', color: '#e9d7b0' })
       .setOrigin(1, 0)
       .setAlpha(0.7)
       .setScrollFactor(0)
@@ -348,21 +367,22 @@ export class GameScene extends Phaser.Scene {
 
   private updatePlayer(time: number, dt: number): void {
     const player = this.player;
-    if (!player.alive) {
-      this.dodgeButton.consumePress(); // 쓰러진 동안 누른 입력은 버린다
-      return;
+
+    // 회피 입력은 매 프레임 빠짐없이 읽어서 비운다. 쓰러졌거나 회피 중일 때 누른 입력이
+    // 남아 있다가 나중에 발동하지 않게 하기 위해서다. (버튼과 모든 키를 다 확인해야 한다)
+    let dodgePressed = this.dodgeButton.consumePress();
+    for (const key of this.dodgeKeys) {
+      if (Phaser.Input.Keyboard.JustDown(key)) dodgePressed = true;
     }
+    if (!player.alive) return;
 
     const v = this.readInput();
     const force = v.length();
-
-    const dodgePressed =
-      this.dodgeButton.consumePress() || this.dodgeKeys.some((key) => Phaser.Input.Keyboard.JustDown(key));
     this.dodgeButton.setEnabled(time >= this.dodgeReadyAt);
 
-    if (time < this.dodgeUntil) {
-      this.updateDodge(time, dt);
-      return;
+    if (this.dodge) {
+      this.updateDodge(time);
+      if (this.dodge) return;
     }
     player.setDodging(false);
 
@@ -435,29 +455,34 @@ export class GameScene extends Phaser.Scene {
       this.dodgeDirection.set(player.facing, 0);
     }
 
-    this.dodgeUntil = time + DODGE.durationMs;
+    const endsAt = time + DODGE.durationMs;
+    this.dodge = { startedAt: time, progress: 0 };
     this.dodgeReadyAt = time + DODGE.cooldownMs;
-    this.nextAttackAt = Math.max(this.nextAttackAt, this.dodgeUntil);
+    this.nextAttackAt = Math.max(this.nextAttackAt, endsAt);
     this.nextGhostAt = 0;
-    player.invulnerableUntil = Math.max(player.invulnerableUntil, this.dodgeUntil + DODGE.graceMs);
+    player.invulnerableUntil = Math.max(player.invulnerableUntil, endsAt + DODGE.graceMs);
     player.knockback.set(0, 0);
     player.setDodging(true);
     this.dodgeButton.setEnabled(false);
   }
 
-  private updateDodge(time: number, dt: number): void {
+  /** 진행도의 차이만큼 이동해 프레임 속도와 관계없이 같은 거리를 간다. */
+  private updateDodge(time: number): void {
+    const dodge = this.dodge;
+    if (!dodge) return;
     const player = this.player;
-    // 처음에 빠르고 끝으로 갈수록 느려진다 (평균 속도 = 거리 / 시간).
-    const remaining = (this.dodgeUntil - time) / DODGE.durationMs;
-    const speed = (DODGE.distance / (DODGE.durationMs / 1000)) * (0.4 + 1.2 * remaining);
+    const progress = dodgeProgress(time - dodge.startedAt, DODGE.durationMs);
+    const step = (progress - dodge.progress) * DODGE.distance;
+    dodge.progress = progress;
     const next = this.walkArea.move(
       player.x,
       player.y,
-      this.dodgeDirection.x * speed * dt,
-      this.dodgeDirection.y * speed * VERTICAL_SPEED_RATIO * dt,
+      this.dodgeDirection.x * step,
+      this.dodgeDirection.y * step * VERTICAL_SPEED_RATIO,
       this.scratch,
     );
     player.placeAt(next.x, next.y);
+    if (progress >= 1) this.dodge = undefined;
 
     if (time >= this.nextGhostAt) {
       this.nextGhostAt = time + 45;
