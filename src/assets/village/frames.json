@@ -1,0 +1,76 @@
+{
+  "frames": [
+    {
+      "name": "home",
+      "texture": "village-home",
+      "x": 75,
+      "y": 111,
+      "w": 1383,
+      "h": 835
+    },
+    {
+      "name": "oak",
+      "texture": "village-props",
+      "x": 9,
+      "y": 10,
+      "w": 425,
+      "h": 427
+    },
+    {
+      "name": "pine",
+      "texture": "village-props",
+      "x": 498,
+      "y": 8,
+      "w": 334,
+      "h": 428
+    },
+    {
+      "name": "boulders",
+      "texture": "village-props",
+      "x": 912,
+      "y": 160,
+      "w": 390,
+      "h": 268
+    },
+    {
+      "name": "shrub",
+      "texture": "village-props",
+      "x": 1373,
+      "y": 198,
+      "w": 369,
+      "h": 238
+    },
+    {
+      "name": "rock",
+      "texture": "village-props",
+      "x": 56,
+      "y": 673,
+      "w": 329,
+      "h": 171
+    },
+    {
+      "name": "flowers",
+      "texture": "village-props",
+      "x": 473,
+      "y": 620,
+      "w": 389,
+      "h": 231
+    },
+    {
+      "name": "sign",
+      "texture": "village-props",
+      "x": 976,
+      "y": 487,
+      "w": 269,
+      "h": 363
+    },
+    {
+      "name": "stump",
+      "texture": "village-props",
+      "x": 1370,
+      "y": 637,
+      "w": 362,
+      "h": 215
+    }
+  ]
+}

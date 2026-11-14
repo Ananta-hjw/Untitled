@@ -4,7 +4,7 @@ export const MIN_ASPECT = 4 / 3;
 export const MAX_ASPECT = 2.4;
 
 export const WORLD_WIDTH = 2400;
-export const WORLD_HEIGHT = VIEW_HEIGHT;
+export const WORLD_HEIGHT = 1600;
 
 /** 벽과 바닥이 만나는 높이 */
 export const FLOOR_TOP = 400;

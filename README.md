@@ -2,7 +2,7 @@
 
 모바일 RPG 프로토타입. Phaser + TypeScript + Vite.
 
-가상 조이스틱(화면에 고정된 원형 패드)으로 한 장짜리 배경 위를 360도로 돌아다니고,
+주인공의 집 앞에서 시작해 나무·바위·잔디·흙길이 있는 작은 마을을 가상 조이스틱으로 돌아다니고,
 공격 버튼(누르고 있으면 3단 콤보)과 회피 버튼으로 몬스터와 실시간으로 싸운다.
 주인공은 천무학관 기반의 상하좌우·대각선 8방향 대기·걷기 시트와 같은 디자인의 좌우·대각선 3단 공격 및 회피 시트를 사용한다. 나머지는 코드로 그린 임시 그래픽이다.
 
@@ -52,9 +52,22 @@ npm run test:browser
 | `src/assets/hero/academy/` | 현재 사용하는 캐릭터 시트·프레임 좌표·출처 |
 | `src/world/placeholderArt.ts` | 임시 그래픽. 실제 아트로 교체할 부분 |
 | `src/scenes/GameScene.ts` | 입력, 이동, 카메라, 타격 판정 |
-| `src/world/tavern.ts` | 선술집 배경과 장애물 배치 |
+| `src/world/village.ts` | 시작 마을의 지형·집·소품 표시 |
+| `src/world/villageLayout.ts` | 집·나무·바위 배치와 충돌 영역, 시작 위치 |
+| `src/world/tavern.ts` | 이전 선술집 맵 보관 |
 | `src/world/navGrid.ts` | 적의 장애물 우회 경로 |
 | `src/ui/Hud.ts`, `src/ui/DamageNumbers.ts` | HUD와 재사용 피해 숫자 |
+
+## 시작 마을
+
+맵은 2400×1600이며 집 앞에서 시작한다. 잔디·흙길 지면과 집·나무·바위 소품을 분리해 표시한다.
+건물 벽은 사각형, 나무줄기와 큰 바위는 타원으로 막으며, 나뭇잎과 지붕의 겹침은 발 위치로 정렬한다.
+작은 돌·풀꽃은 통과할 수 있다. 기존 전투는 유지하며 몬스터 시작 위치는 마을 외곽에 둔다.
+집은 현재 외관과 현관 앞 접근 공간을 제공한다.
+
+배치는 `src/world/villageLayout.ts`, 그림은 `src/assets/village/`에서 관리한다.
+이미지 교체 시 `python3 tools/build_village_frames.py`로 프레임을 다시 측정한다.
+`?debug`를 붙이면 사각형 벽·타원 장애물과 이동 경계를 확인할 수 있다.
 
 ## 주인공 그림을 고쳤을 때
 

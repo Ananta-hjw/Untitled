@@ -54,7 +54,7 @@ async function evaluate(expression) {
 async function load() {
   const search = '?test=' + ++navigation;
   await send('Page.navigate', { url: appUrl + search });
-  await until(() => evaluate(`location.search === ${JSON.stringify(search)} && !!window.__game?.scene.getScene('game')?.player`));
+  await until(() => evaluate(`location.search === ${JSON.stringify(search)} && !!window.__game?.scene.getScene('game')?.damageNumbers`));
   await evaluate('window.__game.loop.sleep()');
 }
 
@@ -516,4 +516,68 @@ test('마지막 대각선과 자동 조준을 사용하고 공격 도중 반대 
   assert.deepEqual(result.after, result.before);
   assert.equal(result.aimed, 'hero-academy-attack-down');
   assert.ok(result.direction.x > 0 && result.direction.y > 0);
+});
+
+test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가 적용된다', async () => {
+  await load();
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player, camera = s.cameras.main;
+    const ground = s.children.list.find(o => o.texture?.key === 'village-ground');
+    const home = s.children.list.find(o => o.texture?.key === 'village-home');
+    const initial = { x: p.x, y: p.y, walkable: s.walkArea.contains(p.x, p.y),
+      safe: s.enemies.every(e => Math.hypot(e.character.x - p.x, e.character.y - p.y) > 600) };
+    s.enemies = []; p.placeAt(1180, 1500); camera.centerOn(p.x, p.y - 170);
+    g.step(performance.now(), 0);
+    const south = { scroll: camera.scrollY, bottom: camera.scrollY + camera.height / camera.zoom };
+    p.placeAt(1180, s.walkArea.bounds.top); camera.centerOn(p.x, p.y - 170);
+    g.step(performance.now(), 0);
+    const nameTop = p.list.find(o => o.text === '용사').getBounds().top;
+    return { initial, home: !!home, ground: { width: ground.displayWidth, height: ground.displayHeight },
+      oldRoom: s.children.list.some(o => o.texture?.key === 'room'),
+      ui: { width: s.scale.gameSize.width, attack: s.attackButton.image.x, dodge: s.dodgeButton.image.x, hp: s.hud.hpText.text },
+      scroll: south.scroll, bottom: south.bottom, nameTop,
+      boundsHeight: camera.getBounds().height };
+  })()`);
+  assert.deepEqual(result.initial, { x: 1180, y: 620, walkable: true, safe: true });
+  assert.equal(result.home, true);
+  assert.deepEqual(result.ground, { width: 2400, height: 1600 });
+  assert.equal(result.oldRoom, false);
+  assert.equal(result.ui.attack, result.ui.width - 170);
+  assert.equal(result.ui.dodge, result.ui.width - 330);
+  assert.equal(result.ui.hp, 'HP 100 / 100');
+  assert.equal(result.boundsHeight, 1600);
+  assert.ok(result.scroll > 400 && result.bottom <= 1600);
+  assert.ok(result.nameTop >= 0);
+});
+
+test('이동·긴 회피 거리는 집과 바위를 통과하지 않고 나무 앞뒤는 발 위치로 정렬한다', async () => {
+  await load();
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player, home = s.walkArea.obstacles.find(o => o.shape === 'rect');
+    s.enemies = []; p.revive(home.x, home.y + home.ry + 80); s.joystick.vector.set(0, -1);
+    for (let i = 0; i < 60; i++) { p.sprite.onSceneUpdate(0, 50); s.updatePlayer(s.now += 50, .05); }
+    const stopped = { y: p.y, edge: home.y + home.ry, walkable: s.walkArea.contains(p.x, p.y), frame: p.sprite.image.frame.name };
+    const out = new p.knockback.constructor();
+    s.walkArea.move(home.x, home.y + home.ry + 80, 0, -500, out);
+    const houseJump = { y: out.y, inside: !s.walkArea.contains(out.x, out.y) };
+    const rockImage = s.children.list.find(o => o.frame?.name === 'boulders');
+    const rock = s.walkArea.obstacles.find(o => o.x === rockImage.x);
+    s.walkArea.move(rock.x - rock.rx - 60, rock.y, rock.rx * 2 + 120, 0, out);
+    const rockJump = { x: out.x, edge: rock.x - rock.rx, inside: !s.walkArea.contains(out.x, out.y) };
+    const tree = s.children.list.find(o => o.frame?.name === 'oak');
+    p.placeAt(tree.x + 90, tree.y - 40); s.children.depthSort();
+    const behind = s.children.list.indexOf(p) < s.children.list.indexOf(tree);
+    p.placeAt(tree.x + 90, tree.y + 40); s.children.depthSort();
+    const front = s.children.list.indexOf(p) > s.children.list.indexOf(tree);
+    return { stopped, houseJump, rockJump, behind, front };
+  })()`);
+  assert.equal(result.stopped.walkable, true);
+  assert.ok(result.stopped.y >= result.stopped.edge && result.stopped.y < result.stopped.edge + 1);
+  assert.equal(result.stopped.frame, 'walk-12');
+  assert.ok(result.houseJump.y >= result.stopped.edge);
+  assert.equal(result.houseJump.inside, false);
+  assert.ok(result.rockJump.x <= result.rockJump.edge);
+  assert.equal(result.rockJump.inside, false);
+  assert.equal(result.behind, true);
+  assert.equal(result.front, true);
 });

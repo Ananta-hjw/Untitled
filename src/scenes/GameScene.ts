@@ -23,7 +23,7 @@ import { attackFacingFor, attackVector, insideAttackLane, movementFacing } from 
 import { createPlaceholderArt } from '../world/placeholderArt';
 import type { WalkArea } from '../world/walkArea';
 import { NavGrid } from '../world/navGrid';
-import { buildTavern, ENEMY_SPAWNS, NPCS, PLAYER_SPAWN, type Tavern } from '../world/tavern';
+import { buildVillage, preloadVillage, ENEMY_SPAWNS, PLAYER_SPAWN, type Village } from '../world/village';
 import { Hud } from '../ui/Hud';
 import { DamageNumbers } from '../ui/DamageNumbers';
 
@@ -60,7 +60,7 @@ export class GameScene extends Phaser.Scene {
   private readonly dodgeDirection = new Phaser.Math.Vector2();
   private hud!: Hud;
   private damageNumbers!: DamageNumbers;
-  private tavern!: Tavern;
+  private village!: Village;
   private nav!: NavGrid;
   private readonly boundsScratch = new Phaser.Geom.Rectangle();
   private keys?: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
@@ -102,12 +102,13 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     preloadHeroSprite(this);
+    preloadVillage(this);
   }
 
   create(): void {
     createPlaceholderArt(this);
-    this.tavern = buildTavern(this);
-    this.walkArea = this.tavern.walkArea;
+    this.village = buildVillage(this);
+    this.walkArea = this.village.walkArea;
     const bounds = this.walkArea.bounds;
     this.nav = new NavGrid(bounds.left, bounds.top, bounds.right, bounds.bottom, NAV_CELL,
       (x, y) => this.walkArea.contains(x, y));
@@ -117,7 +118,7 @@ export class GameScene extends Phaser.Scene {
     this.damageNumbers = new DamageNumbers(this);
 
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
+    this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 170);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.game.events.on(Phaser.Core.Events.BLUR, this.clearAttackInput, this);
@@ -157,11 +158,6 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 월드
 
   private buildCharacters(): void {
-    for (const npc of NPCS) {
-      const character = new Character(this, npc.x, npc.y, { key: npc.key, name: npc.name, level: npc.level });
-      if (npc.faceLeft) character.face(-1);
-    }
-
     for (const spawn of ENEMY_SPAWNS) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y));
 
     this.player = new Character(this, PLAYER_SPAWN.x, PLAYER_SPAWN.y, {
@@ -219,7 +215,7 @@ export class GameScene extends Phaser.Scene {
       }) as GameScene['keys'];
     }
 
-    this.hud = new Hud(this, '왼쪽 패드로 이동, 오른쪽 버튼으로 공격과 회피');
+    this.hud = new Hud(this, '집 앞에서 시작합니다 · 조이스틱 또는 WASD로 마을을 둘러보세요');
     this.drawHud();
   }
 
@@ -229,8 +225,7 @@ export class GameScene extends Phaser.Scene {
 
   /** 화면 너비가 바뀔 때(회전, 창 크기 변경) 화면에 고정된 요소를 다시 배치한다. */
   private layout(): void {
-    const { width, height } = this.scale.gameSize;
-    this.tavern.layout(width, height);
+    const { width } = this.scale.gameSize;
     this.hud.layout(width);
     this.attackButton.setPosition(width - 170, VIEW_HEIGHT - 185);
     this.dodgeButton.setPosition(width - 330, VIEW_HEIGHT - 105);
@@ -606,6 +601,9 @@ export class GameScene extends Phaser.Scene {
     g.lineStyle(3, 0x37ff8b, 0.9);
     g.strokePoints(this.walkArea.polygon.points, true);
     g.lineStyle(3, 0xff5a5a, 0.9);
-    for (const o of this.walkArea.obstacles) g.strokeEllipse(o.x, o.y, o.rx * 2, o.ry * 2);
+    for (const o of this.walkArea.obstacles) {
+      if (o.shape === 'rect') g.strokeRect(o.x - o.rx, o.y - o.ry, o.rx * 2, o.ry * 2);
+      else g.strokeEllipse(o.x, o.y, o.rx * 2, o.ry * 2);
+    }
   }
 }

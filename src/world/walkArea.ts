@@ -1,17 +1,11 @@
 import Phaser from 'phaser';
-
-export interface Obstacle {
-  x: number;
-  y: number;
-  /** 바닥에 닿는 부분을 타원으로 근사한다 */
-  rx: number;
-  ry: number;
-}
+import { insideObstacle, type Obstacle } from './obstacles';
+export type { Obstacle } from './obstacles';
 
 /**
  * 걸어다닐 수 있는 바닥 영역.
  * 한 장짜리 배경 그림 위에 다각형으로 "밟을 수 있는 곳"을 지정하고,
- * 그 안의 가구 등은 타원 장애물로 막는다.
+ * 건물의 벽은 사각형, 나무줄기·바위 등은 타원 장애물로 막는다.
  */
 export class WalkArea {
   readonly polygon: Phaser.Geom.Polygon;
@@ -25,9 +19,7 @@ export class WalkArea {
   contains(x: number, y: number): boolean {
     if (!this.polygon.contains(x, y)) return false;
     for (const o of this.obstacles) {
-      const nx = (x - o.x) / o.rx;
-      const ny = (y - o.y) / o.ry;
-      if (nx * nx + ny * ny < 1) return false;
+      if (insideObstacle(o, x, y)) return false;
     }
     return true;
   }
@@ -38,6 +30,16 @@ export class WalkArea {
    * 그것도 안 되면 이동량을 줄여서 벽에 닿는 곳까지만 간다.
    */
   move(x: number, y: number, dx: number, dy: number, out: Phaser.Math.Vector2): Phaser.Math.Vector2 {
+    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 12));
+    for (let i = 0; i < steps; i++) {
+      this.moveStep(x, y, dx / steps, dy / steps, out);
+      x = out.x;
+      y = out.y;
+    }
+    return out;
+  }
+
+  private moveStep(x: number, y: number, dx: number, dy: number, out: Phaser.Math.Vector2): Phaser.Math.Vector2 {
     if (this.contains(x + dx, y + dy)) return out.set(x + dx, y + dy);
     if (dx !== 0 && this.contains(x + dx, y)) return out.set(x + dx, y);
     if (dy !== 0 && this.contains(x, y + dy)) return out.set(x, y + dy);
