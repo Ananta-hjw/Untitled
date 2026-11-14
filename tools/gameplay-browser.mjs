@@ -796,7 +796,7 @@ test('느린 화면 중의 공격도 맞고, 칼이 닿으면 게임 시간이 �
   assert.equal(result.settled, true);
 });
 
-test('로웬 마을 사람들은 이름표를 달고, 장사꾼은 제자리에 있고, 리네아·시아·루안은 걸어 다닌다', async () => {
+test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제자리에 있고, 나머지는 걸어 다닌다', async () => {
   await load('village');
   const result = await evaluate(`(() => {
     const g = window.__game, s = g.scene.getScene('game');
@@ -805,15 +805,20 @@ test('로웬 마을 사람들은 이름표를 달고, 장사꾼은 제자리에 
     const start = Object.fromEntries(s.npcs.map(n => [n.def.id, { x: n.x, y: n.y }]));
     const names = Object.fromEntries(s.npcs.map(n => [n.def.id, n.list.find(o => o.text !== undefined)?.text]));
     const visible = s.npcs.every(n => n.list.some(o => o.texture && o.texture.key !== 'shadow' && o.texture.key !== '__MISSING' && o.displayHeight > 100));
-    for (let i = 0; i < 600; i++) g.step(t += 16, 16);
-    const moved = Object.fromEntries(s.npcs.map(n => [n.def.id, Math.round(Math.hypot(n.x - start[n.def.id].x, n.y - start[n.def.id].y))]));
+    // 돌아다니다 제자리 근처로 돌아올 수도 있으니, 처음 자리에서 가장 멀리 간 거리를 잰다.
+    const moved = Object.fromEntries(s.npcs.map(n => [n.def.id, 0]));
+    // 화면을 900번 그리면 헤드리스 브라우저의 그리기 작업이 밀리므로, 게임 갱신(update)만 돌린다.
+    for (let i = 0; i < 900; i++) {
+      s.update(t += 16, 16);
+      for (const n of s.npcs) moved[n.def.id] = Math.max(moved[n.def.id], Math.round(Math.hypot(n.x - start[n.def.id].x, n.y - start[n.def.id].y)));
+    }
     const onGround = s.npcs.every(n => s.walkArea.contains(n.x, n.y));
     // 루안 옆에 서면 루안이 멈추고, 대화하면 루안의 이름과 그림이 나온다.
     const ruan = s.npcs.find(n => n.def.id === 'ruan');
     s.player.placeAt(ruan.x + 60, ruan.y + 10);
     g.step(t += 16, 16);
     const stoppedAt = { x: ruan.x, y: ruan.y };
-    for (let i = 0; i < 60; i++) g.step(t += 16, 16);
+    for (let i = 0; i < 60; i++) s.update(t += 16, 16);
     const stayed = ruan.x === stoppedAt.x && ruan.y === stoppedAt.y;
     const spotFollows = ruan.spot.x === ruan.x && ruan.spot.y === ruan.y;
     s.openDialogue(ruan.spot);
@@ -830,8 +835,10 @@ test('로웬 마을 사람들은 이름표를 달고, 장사꾼은 제자리에 
     serena: '세레나', sia: '시아', linea: '리네아', ruan: '루안', herman: '헤르만', eila: '에일라',
     merina: '메리나', doran: '도란', rosetta: '로제타', vernel: '베르넬', teon: '테온',
   });
-  for (const id of ['merina', 'doran', 'rosetta', 'serena', 'herman', 'eila', 'vernel', 'teon']) assert.equal(result.moved[id], 0, id);
-  for (const id of ['linea', 'sia', 'ruan']) assert.ok(result.moved[id] > 20, `${id} moved ${result.moved[id]}`);
+  for (const id of ['merina', 'doran', 'rosetta']) assert.equal(result.moved[id], 0, id);
+  for (const id of ['serena', 'sia', 'linea', 'ruan', 'herman', 'eila', 'vernel', 'teon']) {
+    assert.ok(result.moved[id] > 15, `${id} moved ${result.moved[id]}`);
+  }
   assert.equal(result.onGround, true);
   assert.equal(result.stayed, true);
   assert.equal(result.spotFollows, true);

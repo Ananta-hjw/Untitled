@@ -9,7 +9,7 @@
 - `sia/sd_idle.png`: 시아의 정면 SD 기본 이미지.
 - `sia/sd_successor_idle.png`: 흑화한 계승 이후 시아의 정면 SD 기본 이미지. 1254 × 1254 투명 RGBA PNG이며 `sia/dialogue_successor.png`의 표정·의상·책을 반영했습니다.
 
-모든 이미지는 투명 배경 RGBA PNG입니다. 대화용 이미지는 전신을 담고 있어 UI에서 무릎 위 구도로 표시할 수 있습니다. SD 이미지는 단일 정지 포즈이며 방향별 이동 애니메이션 시트가 아닙니다. 리네아와 시아는 마을 NPC와 대화창에 연결했습니다. 게임 연결: 로웬 마을 사람들은 `tools/build_rowen_assets.py`가 만든 작은 WebP 사본(`sd-300.webp`, `dialogue-768.webp`, `walk_*-60.webp`)으로 게임에 들어가 있습니다(`src/world/npcs.ts`). 원본은 그대로 둡니다.
+모든 이미지는 투명 배경 RGBA PNG입니다. 대화용 이미지는 전신을 담고 있어 UI에서 무릎 위 구도로 표시할 수 있습니다. SD 이미지는 단일 정지 포즈이며 방향별 이동 애니메이션 시트가 아닙니다. 리네아와 시아는 마을 NPC와 대화창에 연결했습니다. 게임 연결: 로웬 마을 사람들은 `tools/build_rowen_assets.py`가 만든 작은 WebP 사본(`dialogue-768.webp`, `walk_*-60.webp`)으로 게임에 들어가 있습니다(`src/world/npcs.ts`). 원본은 그대로 둡니다.
 
 ## 디자인
 

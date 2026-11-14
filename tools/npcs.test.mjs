@@ -4,9 +4,7 @@ import test from 'node:test';
 import { DIALOGUES } from '../src/story/dialogues.ts';
 import { MAPS, findExit, walkable } from '../src/world/maps.ts';
 import { BUILDINGS, PLAYER_SPAWN } from '../src/world/villageLayout.ts';
-import {
-  NPCS, WALKERS, direction8, isWalker, pickWanderTarget, wanderPauseMs,
-} from '../src/world/npcs.ts';
+import { NPCS, direction8, pickWanderTarget, wanderPauseMs } from '../src/world/npcs.ts';
 
 const village = MAPS.village;
 const characters = new URL('../src/assets/characters/', import.meta.url);
@@ -23,28 +21,22 @@ test('마을 사람은 열한 명이고, 이름과 대사·그림이 연결되�
     const own = lines.filter((l) => l.portrait === npc.id);
     assert.ok(own.length > 0, `${npc.id} speaks`);
     for (const line of own) assert.equal(line.speaker, npc.name, npc.id);
-    assert.ok(existsSync(new URL(`${npc.id}/sd-300.webp`, characters)), `${npc.id} sd`);
     assert.ok(existsSync(new URL(`${npc.id}/dialogue-768.webp`, characters)), `${npc.id} portrait`);
   }
 });
 
-test('장사하는 사람은 걷지 않고, 걷는 그림이 있는 사람만 돌아다닌다', () => {
-  for (const id of ['doran', 'merina', 'rosetta']) {
-    const npc = NPCS.find((n) => n.id === id);
-    assert.equal(npc.shop, true, id);
-    assert.equal(npc.wander, undefined, id);
-    assert.equal(isWalker(id), false, id);
-  }
-  for (const npc of NPCS) assert.equal(npc.wander !== undefined, isWalker(npc.id), npc.id);
-  assert.deepEqual([...WALKERS].sort(), ['linea', 'ruan', 'sia']);
-  for (const id of WALKERS) {
+test('장사하는 사람은 걷지 않고, 나머지는 모두 돌아다니며, 모두 8방향 걷기 그림이 있다', () => {
+  const shops = NPCS.filter((n) => n.shop).map((n) => n.id).sort();
+  assert.deepEqual(shops, ['doran', 'merina', 'rosetta']);
+  for (const npc of NPCS) assert.equal(npc.wander === undefined, !!npc.shop, npc.id);
+  for (const { id } of NPCS) {
     const data = JSON.parse(readFileSync(new URL(`${id}/walk_frames.json`, characters)));
     for (const dir of ['down', 'down-right', 'right', 'up-right', 'up', 'up-left', 'left', 'down-left']) {
       for (const pose of [data.idlePose, ...data.walkPoses]) {
         assert.ok(data.frames.some((f) => f.name === `${dir}-${pose}`), `${id} ${dir}-${pose}`);
       }
     }
-    for (const sheet of ['walk_cardinal', 'walk_diagonal']) assert.ok(existsSync(new URL(`${id}/${sheet}-60.webp`, characters)));
+    for (const sheet of ['walk_cardinal', 'walk_diagonal']) assert.ok(existsSync(new URL(`${id}/${sheet}-60.webp`, characters)), `${id} ${sheet}`);
   }
 });
 

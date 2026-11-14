@@ -5,7 +5,6 @@ the game draws them. This script writes:
 
 - src/assets/village/rowen/buildings.webp + buildings.json: the eight buildings from
   residential.png and commerce.png, scaled by BUILDING_SCALE and packed in one sheet.
-- src/assets/characters/<id>/sd-300.webp: the standing SD figure cropped to its art, 300 px tall.
 - src/assets/characters/<id>/dialogue-768.webp: the dialogue portrait cropped to its art, 768 px tall.
 - src/assets/characters/<id>/walk_*-60.webp: walk sheets scaled by WALK_SCALE (frames come from
   walk_frames.json multiplied by the same factor).
@@ -25,7 +24,6 @@ SHEETS = {
     'commerce.png': ['smithy', 'general-store', 'inn', 'south-gate'],
 }
 NPCS = ['ruan', 'serena', 'linea', 'sia', 'herman', 'eila', 'merina', 'doran', 'rosetta', 'vernel', 'teon']
-WALKERS = ['linea', 'sia', 'ruan']
 
 
 def bbox(image):
@@ -106,17 +104,17 @@ def fit_height(path, target, height):
 
 def characters():
     for npc in NPCS:
-        folder = CHARACTERS / npc
-        fit_height(folder / 'sd_idle.png', folder / 'sd-300.webp', 300)
-        fit_height(folder / 'dialogue.png', folder / 'dialogue-768.webp', 768)
-    for npc in WALKERS:
+        fit_height(CHARACTERS / npc / 'dialogue.png', CHARACTERS / npc / 'dialogue-768.webp', 768)
+    for npc in NPCS:
         for name in ['walk_cardinal', 'walk_diagonal']:
             with Image.open(CHARACTERS / npc / f'{name}.png') as image:
                 size = (round(image.width * WALK_SCALE), round(image.height * WALK_SCALE))
                 image.resize(size, Image.LANCZOS).save(CHARACTERS / npc / f'{name}-60.webp', quality=88, method=6)
-    print(f'{len(NPCS)} NPC figures and portraits, {len(WALKERS)} walk sets')
+    print(f'{len(NPCS)} NPC portraits and walk sets')
 
 
 if __name__ == '__main__':
-    buildings()
+    import sys
+    if '--characters' not in sys.argv:
+        buildings()
     characters()
