@@ -625,3 +625,44 @@ test('적을 쓰러뜨리면 경험치가 쌓이고 레벨이 오르면 체력·
     const r = { level: s.progress.level, xp: s.progress.xp }; localStorage.removeItem('untitled-rpg.save'); return r; })()`);
   assert.deepEqual(corrupted, { level: 1, xp: 0 });
 });
+
+test('대화 대상 근처에서만 대화가 열리고, 대화 중에는 게임 시계가 멈추며, 넘기기 입력이 공격으로 이어지지 않는다', async () => {
+  await load();
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(performance.now(), 16); };
+    for (const e of s.enemies) { e.character.placeAt(300, 1500); e.state = 'wander'; e.timer = 1e12; }
+    const sign = { x: 1600, y: 930 };
+    step();
+    const atSpawn = s.talkButton.shown;
+    p.placeAt(sign.x - 60, sign.y + 20); step();
+    const nearSign = s.talkButton.shown && s.talkMarker.visible;
+    // 대화 버튼을 누른 것과 같은 효과
+    s.talkButton.pressed = true; step();
+    const opened = s.dialogue.isOpen;
+    const frozenAt = s.now; step(30);
+    const frozen = s.now === frozenAt;
+    // 탭으로 끝까지 넘긴다 (줄마다: 글자 모두 보이기 → 다음 줄)
+    let taps = 0;
+    while (s.dialogue.isOpen && taps < 20) { s.onDialoguePointer(); taps++; step(); }
+    // 다시 열고, 넘기는 동안 Space를 누른 것처럼 공격 입력을 남긴 채 닫는다.
+    // 닫힐 때 공격 입력이 지워져 공격으로 이어지지 않아야 한다.
+    s.talkButton.pressed = true; step();
+    const reopened = s.dialogue.isOpen;
+    while (s.dialogue.isOpen) { s.keyboardAttackPressed = true; s.attackBufferedUntil = s.now + 999; s.onDialoguePointer(); }
+    step(3);
+    const attackedAfterClose = p.isAttacking || !reopened;
+    // 전투 중에는 대화 버튼이 사라진다
+    s.enemies[0].state = 'chase'; s.enemies[0].character.placeAt(1300, 1500); step();
+    const inCombat = s.talkButton.shown;
+    return { atSpawn, nearSign, opened, frozen, closed: !s.dialogue.isOpen, taps, attackedAfterClose, inCombat };
+  })()`);
+  assert.equal(result.atSpawn, false);
+  assert.equal(result.nearSign, true);
+  assert.equal(result.opened, true);
+  assert.equal(result.frozen, true);
+  assert.equal(result.closed, true);
+  assert.equal(result.taps, 4);
+  assert.equal(result.attackedAfterClose, false);
+  assert.equal(result.inCombat, false);
+});

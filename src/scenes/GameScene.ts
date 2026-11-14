@@ -29,6 +29,9 @@ import { NavGrid } from '../world/navGrid';
 import { buildVillage, preloadVillage, ENEMY_SPAWNS, PLAYER_SPAWN, type Village } from '../world/village';
 import { Hud } from '../ui/Hud';
 import { DamageNumbers } from '../ui/DamageNumbers';
+import { DialogueBox, preloadDialogue } from '../ui/DialogueBox';
+import { DIALOGUES } from '../story/dialogues';
+import { findInteractable, type Interactable } from '../world/interactables';
 import { ProgressEffects } from '../ui/ProgressEffects';
 
 /** Scale shared by all academy frames. */
@@ -65,6 +68,11 @@ export class GameScene extends Phaser.Scene {
   private hud!: Hud;
   private damageNumbers!: DamageNumbers;
   private progressEffects!: ProgressEffects;
+  private dialogue!: DialogueBox;
+  private talkButton!: ActionButton;
+  private talkKeys: Phaser.Input.Keyboard.Key[] = [];
+  /** 말풍선 표시. 대화할 수 있는 대상 위에 뜬다. */
+  private talkMarker!: Phaser.GameObjects.Text;
   /** 플레이어의 레벨과 경험치. 쓰러져도 잃지 않고, 바뀔 때마다 기기에 저장한다. */
   private progress: Progress = { level: 1, xp: 0 };
   private stats: LevelStats = statsForLevel(1);
@@ -112,6 +120,7 @@ export class GameScene extends Phaser.Scene {
     this.input2.set(0, 0);
     this.scratch.set(0, 0);
     this.enemyRespawns = [];
+    this.talkKeys = [];
     this.progress = { level: 1, xp: 0 };
     this.stats = statsForLevel(1);
     this.playerRespawnAt = undefined;
@@ -121,6 +130,7 @@ export class GameScene extends Phaser.Scene {
   preload(): void {
     preloadHeroSprite(this);
     preloadVillage(this);
+    preloadDialogue(this);
   }
 
   create(): void {
@@ -135,6 +145,20 @@ export class GameScene extends Phaser.Scene {
     this.buildUi();
     this.damageNumbers = new DamageNumbers(this);
     this.progressEffects = new ProgressEffects(this);
+    this.dialogue = new DialogueBox(this);
+    this.talkMarker = this.add
+      .text(0, 0, '···', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color: '#1a1008',
+        backgroundColor: '#f5ead2',
+        padding: { x: 10, y: 2 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(DEPTH_LIGHTING + 4)
+      .setResolution(2)
+      .setVisible(false);
 
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 170);
@@ -155,6 +179,19 @@ export class GameScene extends Phaser.Scene {
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
     // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
     const step = Math.min(delta, 50);
+
+    // 대화 중에는 게임 시계를 멈춘다. 적·타이머·부활이 모두 그대로 기다린다.
+    if (this.dialogue.isOpen) {
+      this.dialogue.update(step);
+      // 대화 키(E·Enter)와 공격 키(Space·J) 모두 넘기기로 쓴다.
+      let advance = this.talkPressed();
+      for (const key of this.attackKeys) {
+        if (Phaser.Input.Keyboard.JustDown(key)) advance = true;
+      }
+      if (advance) this.dialogue.advance();
+      return;
+    }
+
     this.now += step;
     const time = this.now;
     const dt = step / 1000;
@@ -172,6 +209,7 @@ export class GameScene extends Phaser.Scene {
     this.separateEnemies(dt);
     this.applyKnockback(this.player, dt);
     this.damageNumbers.update(step);
+    this.updateInteraction(time);
   }
 
   // ---------------------------------------------------------------- 월드
@@ -198,6 +236,20 @@ export class GameScene extends Phaser.Scene {
     this.joystick = new VirtualJoystick(this, { x: 190, y: VIEW_HEIGHT - 170 });
 
     this.attackButton = new ActionButton(this, { x: 0, y: VIEW_HEIGHT - 170, label: '공격' });
+    this.talkButton = new ActionButton(this, {
+      x: 0,
+      y: VIEW_HEIGHT - 340,
+      radius: 56,
+      label: '대화',
+      color: 0x3d6b3a,
+      fontSize: 24,
+    });
+    this.talkButton.setVisible(false);
+    // 대화창은 화면 어디를 눌러도 넘어간다.
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onDialoguePointer, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onDialoguePointer, this);
+    });
     this.dodgeButton = new ActionButton(this, {
       x: 0,
       y: VIEW_HEIGHT - 95,
@@ -218,6 +270,10 @@ export class GameScene extends Phaser.Scene {
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
         for (const key of attackKeys) key.off('down', this.onAttackKeyDown, this);
       });
+      this.talkKeys = [
+        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
+        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER),
+      ];
       this.dodgeKeys = [
         keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
         keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K),
@@ -249,6 +305,8 @@ export class GameScene extends Phaser.Scene {
     this.hud.layout(width);
     this.attackButton.setPosition(width - 170, VIEW_HEIGHT - 185);
     this.dodgeButton.setPosition(width - 330, VIEW_HEIGHT - 105);
+    this.talkButton.setPosition(width - 170, VIEW_HEIGHT - 340);
+    this.dialogue.layout(width);
   }
 
   // ---------------------------------------------------------------- 이동
@@ -563,12 +621,65 @@ export class GameScene extends Phaser.Scene {
     this.drawHud();
   }
 
+  // ---------------------------------------------------------------- 대화
+
+  /** 대화 버튼이나 E·Enter 키를 이번 프레임에 눌렀는지. 눌림은 한 번만 센다. */
+  private talkPressed(): boolean {
+    let pressed = this.talkButton.consumePress();
+    for (const key of this.talkKeys) {
+      if (Phaser.Input.Keyboard.JustDown(key)) pressed = true;
+    }
+    return pressed;
+  }
+
+  private onDialoguePointer(): void {
+    if (this.dialogue.isOpen) this.dialogue.advance();
+  }
+
+  /** 싸우는 중에는 말을 걸 수 없다. 대화 중에는 게임이 멈추므로 공격받는 도중에 열리지 않게 한다. */
+  private inCombat(): boolean {
+    return this.enemies.some((e) => e.state === 'chase' || e.state === 'windup' || e.state === 'recover');
+  }
+
+  /** 가까이 있는 대상을 찾아 말풍선과 대화 버튼을 보여 주고, 누르면 대화를 연다. */
+  private updateInteraction(time: number): void {
+    const player = this.player;
+    const free = player.alive && !player.isAttacking && this.dodgeProgress >= 1 && !this.inCombat();
+    const target = free ? findInteractable(player.x, player.y) : undefined;
+    this.talkButton.setVisible(!!target);
+
+    const marker = this.talkMarker;
+    if (!target) {
+      marker.setVisible(false);
+      this.talkPressed(); // 대상이 없을 때 누른 키는 버린다
+      return;
+    }
+    marker.setVisible(true).setPosition(target.x, target.y - target.markerHeight - 6 * Math.abs(Math.sin(time / 260)));
+
+    if (this.talkPressed()) this.openDialogue(target);
+  }
+
+  private openDialogue(target: Interactable): void {
+    const player = this.player;
+    this.hud.dismissHint();
+    this.clearAttackInput();
+    player.setMotion(false, target.x - player.x);
+    this.talkButton.setVisible(false);
+    this.talkMarker.setVisible(false);
+    this.dialogue.open(DIALOGUES[target.dialogue], () => {
+      // 대화를 넘기려고 누른 공격 키가 닫힌 뒤 공격으로 이어지지 않게 한다.
+      this.clearAttackInput();
+      this.dodgeButton.consumePress();
+      for (const key of this.dodgeKeys) Phaser.Input.Keyboard.JustDown(key);
+    });
+  }
+
   /** 몬스터의 돌진이 닿는 순간. 화살표 함수라서 콜백으로 그대로 넘길 수 있다. */
   private readonly onEnemyStrike = (enemy: Enemy): void => {
     const player = this.player;
     const c = enemy.character;
     const now = this.now;
-    if (!player.alive || now < player.invulnerableUntil) return;
+    if (!player.alive || now < player.invulnerableUntil || this.dialogue.isOpen) return;
 
     const forward = (player.x - c.x) * c.facing;
     if (forward < -20 || forward > ENEMY.strikeRangeX) return;

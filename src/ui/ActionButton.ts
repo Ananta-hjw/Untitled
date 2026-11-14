@@ -20,6 +20,7 @@ export class ActionButton {
 
   private pressed = false;
   private enabled = true;
+  private shown = true;
 
   private readonly radius: number;
   private readonly image: Phaser.GameObjects.Image;
@@ -61,7 +62,7 @@ export class ActionButton {
       .setResolution(2);
 
     const onDown = (pointer: Phaser.Input.Pointer) => {
-      if (this.pointerId !== null) return;
+      if (this.pointerId !== null || !this.shown) return;
       const reach = this.radius * 1.2;
       const dx = pointer.x - this.image.x;
       const dy = pointer.y - this.image.y;
@@ -101,6 +102,19 @@ export class ActionButton {
     const pressed = this.pressed;
     this.pressed = false;
     return pressed;
+  }
+
+  /** 숨기면 눌리지 않는다. 누르고 있던 중이면 뗀 것으로 친다. */
+  setVisible(visible: boolean): void {
+    if (visible === this.shown) return;
+    this.shown = visible;
+    this.image.setVisible(visible);
+    this.text.setVisible(visible);
+    if (!visible) {
+      this.pointerId = null;
+      this.pressed = false;
+      this.setPressed(false);
+    }
   }
 
   /** 재사용 대기 중에는 흐리게 표시한다. */

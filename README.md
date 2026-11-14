@@ -17,7 +17,7 @@ npm run dev
 ```
 
 같은 와이파이의 휴대폰에서 터미널에 표시되는 Network 주소로 접속하면 터치로 조작할 수 있다.
-PC에서는 방향키나 WASD로 움직이고 스페이스바나 J로 공격, Shift나 K로 회피한다. 주소 뒤에 `?debug`를 붙이면 이동 가능 영역이 보인다.
+PC에서는 방향키나 WASD로 움직이고 스페이스바나 J로 공격, Shift나 K로 회피한다. 말을 걸 수 있는 곳 근처에서는 E나 Enter로 대화한다. 주소 뒤에 `?debug`를 붙이면 이동 가능 영역이 보인다.
 
 | 명령 | 설명 |
 |---|---|
@@ -59,6 +59,9 @@ npm run test:browser
 | `src/entities/progression.ts` | 경험치·레벨 계산 (레벨별 체력·공격력, 필요 경험치) |
 | `src/ui/ProgressEffects.ts` | 경험치 획득·레벨 업 연출 |
 | `src/entities/saveData.ts` | 레벨·경험치 저장과 불러오기 (기기의 localStorage) |
+| `src/story/dialogues.ts` | 대사 모음 (지금은 임시 대사) |
+| `src/world/interactables.ts` | 말을 걸 수 있는 곳과 범위 (집 문, 표지판) |
+| `src/ui/DialogueBox.ts` | 대화창 (초상화, 이름, 한 글자씩 나오는 대사) |
 
 ## 시작 마을
 
