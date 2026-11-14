@@ -17,13 +17,22 @@ android {
         }
     }
     signingConfigs {
-        // 테스트용 고정 서명. 빌드할 때마다 같은 키로 서명해야 기존 설치 위에 덮어 설치할 수 있다.
-        // 스토어 출시용이 아니다: 출시할 때는 비공개로 보관하는 별도 키를 써야 한다.
         debug {
-            storeFile file('debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
+            // CI에 비공개 서명 키가 등록되어 있으면(GitHub Secrets) 그 키로 서명한다.
+            // 없으면 저장소에 들어 있는 테스트용 키를 쓴다. 이 키는 공개되어 있으므로
+            // 본인 기기 테스트에만 쓰고, 다른 사람에게 나눠 줄 APK에는 쓰지 않는다.
+            def privateKeystore = System.getenv('ANDROID_KEYSTORE_FILE')
+            if (privateKeystore) {
+                storeFile file(privateKeystore)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            } else {
+                storeFile file('debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
         }
     }
     buildTypes {

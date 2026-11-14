@@ -25,12 +25,16 @@ PC에서는 방향키나 WASD로 움직이고 스페이스바나 J로 공격, Sh
 | `npm run build` | 배포용 빌드 (`dist/`) |
 | `npm run build:single` | HTML 한 파일로 묶은 빌드 (`dist-single/`) |
 | `npm run typecheck` | 타입 검사 |
+| `npm test` | 회귀 테스트 (Node.js 24 이상 필요) |
 
 ## 구조
 
 | 파일 | 역할 |
 |---|---|
 | `src/config.ts` | 화면 크기, 이동 속도, 전투 수치(체력·공격력·사거리 등) |
+| `src/world/tavern.ts` | 선술집 맵: 소품 배치, 걸을 수 있는 영역, 조명, 등장 위치 |
+| `src/world/navGrid.ts` | 적이 장애물을 돌아가는 길 찾기 격자 |
+| `src/ui/Hud.ts` | 체력 막대, 버전 표시, 안내 문구 |
 | `src/ui/VirtualJoystick.ts` | 고정형 가상 조이스틱 (멀티터치, 데드존) |
 | `src/ui/ActionButton.ts` | 공격·회피 버튼 |
 | `src/ui/DamageNumbers.ts` | 데미지 숫자 (숫자 그림과 표시 항목을 재사용) |
@@ -42,9 +46,8 @@ PC에서는 방향키나 WASD로 움직이고 스페이스바나 J로 공격, Sh
 | `src/entities/heroAnimations.ts` | 주인공 동작(대기, 걷기, 공격 3종, 회피). 숫자를 바꾸면 움직임이 달라진다 |
 | `art/hero_parts/` | 주인공 부위별 원본 PNG |
 | `tools/build_hero_rig.py` | 원본 부위를 조립해 `src/assets/hero/rig.png`, `rig.json` 생성 |
-| `tools/cut_sprites.py` | 캐릭터 시트에서 한 줄을 잘라 게임용 스프라이트 시트로 변환 |
 | `src/world/placeholderArt.ts` | 임시 그래픽. 실제 아트로 교체할 부분 |
-| `src/scenes/GameScene.ts` | 맵 배치, 입력, 이동, 카메라, 타격 판정 |
+| `src/scenes/GameScene.ts` | 한 판의 진행: 입력, 이동, 공격·회피·피격 판정 |
 
 ## 주인공 그림을 고쳤을 때
 
@@ -77,4 +80,35 @@ cd android && ./gradlew assembleDebug
 ```
 
 결과물은 `android/app/build/outputs/apk/debug/app-debug.apk`.
-이 APK는 테스트용 키(`android/app/debug.keystore`)로 서명되며 스토어 출시용이 아니다.
+화면에 표시되는 버전은 `package.json`의 `version`을 따른다.
+
+### 서명 키
+
+기본값은 저장소에 들어 있는 테스트용 키(`android/app/debug.keystore`)다. 이 키는 공개되어 있어서
+누구나 같은 서명의 APK를 만들 수 있다. 본인 기기 테스트에만 쓰고, 다른 사람에게 나눠 주기 전에
+비공개 키로 바꾼다.
+
+1. 키를 만든다 (비밀번호와 별칭은 직접 정한다. 이 파일은 저장소에 올리지 않는다).
+
+```bash
+keytool -genkeypair -keystore signing.keystore -alias untitled -keyalg RSA -keysize 2048 -validity 10000
+```
+
+2. 키 파일을 한 줄 문자열로 바꾼다.
+
+```bash
+base64 -w 0 signing.keystore
+```
+
+3. 저장소 Settings → Secrets and variables → Actions 에 다음 네 개를 등록한다.
+
+| 이름 | 값 |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | 2번에서 나온 문자열 |
+| `ANDROID_KEYSTORE_PASSWORD` | 키 저장소 비밀번호 |
+| `ANDROID_KEY_ALIAS` | 별칭 (위 예시에서는 `untitled`) |
+| `ANDROID_KEY_PASSWORD` | 키 비밀번호 |
+
+등록한 뒤의 빌드부터 비공개 키로 서명된다. 서명이 바뀌므로 기존에 설치한 앱은 한 번 지우고 다시 설치해야 한다.
+그다음 `android/app/debug.keystore`와 `build.gradle`의 테스트용 키 부분을 지우면 된다.
+스토어 출시에는 이와 별도로 릴리스 빌드 설정과 고유한 앱 ID가 필요하다.
