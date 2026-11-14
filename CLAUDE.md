@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working with the user
 
-- Never commit or push on your own. Always ask the user first, every time.
+- Never commit or push on your own. Always ask the user first, every time. `.claude/settings.json` enforces this with a PreToolUse hook (`.claude/hooks/confirm-git-commit-push.sh`) that forces a permission prompt for `git commit`, `git push` and GitHub MCP file writes.
 - The user writes in Korean; reply in Korean. Code comments and README are mostly Korean too.
 
 ## Commands
