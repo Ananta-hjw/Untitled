@@ -27,8 +27,8 @@ export const DIALOGUES = {
     { speaker: HERO_NAME, portrait: 'hero-neutral', text: '요즘 들판에 슬라임이 늘었다고 했지. 한 바퀴 둘러보고 오자.' },
   ],
   'village-sign': [
-    { speaker: '표지판', text: '로웬 마을\n남쪽: 들판 · 서쪽: 숲길 · 동쪽: 개울가' },
-    { speaker: HERO_NAME, portrait: 'hero-neutral', text: '들판 쪽에 슬라임이 늘었다고 했지. 검은 제대로 챙겼고.' },
+    { speaker: '표지판', text: '로웬 마을 광장\n북쪽: 집들 · 남쪽: 들판 · 서쪽: 숲길 · 동쪽: 개울가' },
+    { speaker: HERO_NAME, portrait: 'hero-neutral', text: '표지판에 누가 수확제 리본을 묶어 놨네. 리네아 솜씨다.' },
   ],
   'south-field-sign': [
     { speaker: '표지판', text: '남쪽 들판\n북쪽: 로웬 마을 (슬라임 출몰 주의)' },
@@ -43,54 +43,65 @@ export const DIALOGUES = {
     { speaker: HERO_NAME, portrait: 'hero-neutral', text: '물소리가 시원하다. 발을 헛디디지 않게 조심하자.' },
   ],
 
-  // 로웬 마을 사람들의 첫날 대사 (docs/story-chapter1.md: 수확제 전날, 평화로운 하루)
+  // 로웬 마을 사람들의 첫날 대사 (docs/story-chapter1.md: 수확제 전날, 평화로운 하루. 아주 작은 복선만 둔다)
   'npc-serena': [
     { speaker: '세레나', portrait: 'serena', text: '시온, 나가니? 오늘 저녁은 축제 전야니까 해 지기 전에 들어오렴.' },
     { speaker: '세레나', portrait: 'serena', text: '시아가 아침부터 뭘 그렇게 몰래 만드는지 모르겠구나. 너는 알고 있지?' },
     hero('글쎄요. 저도 비밀이라고 들었어요.'),
+    { speaker: '세레나', portrait: 'serena', text: '너희 둘 다 비밀이 많아졌어. …다 컸다는 거겠지.' },
   ],
   'npc-sia': [
     { speaker: '시아', portrait: 'sia', text: '오빠! 리네아 언니 생일 선물, 엄마한테도 비밀이야. 알지?' },
-    { speaker: '시아', portrait: 'sia', text: '요즘 밤마다 이상한 꿈을 꿔. 누가 멀리서 부르는 것 같은…' },
-    { speaker: '시아', portrait: 'sia', text: '…아냐, 별거 아니야. 축제 때 같이 등불 띄우는 거 잊지 마!' },
+    { speaker: '시아', portrait: 'sia', text: '아, 언니네 창문 끈이 또 헐거워졌대. 이따 내가 가서 묶어 줘야지. 내가 묶으면 안 풀리거든!' },
+    { speaker: '시아', portrait: 'sia', text: '…요즘 밤마다 이상한 꿈을 꿔. 누가 멀리서 내 이름을 부르는 것 같은.' },
+    { speaker: '시아', portrait: 'sia', text: '아냐, 별거 아니야. 축제 때 같이 등불 띄우는 거 잊지 마!' },
   ],
   'npc-linea': [
-    { speaker: '리네아', portrait: 'linea', text: '시온! 축제 장식은 거의 다 됐어. 너는 오늘도 수련이지?' },
-    { speaker: '리네아', portrait: 'linea', text: '루안 아저씨가 너 찾던데. 늦으면 또 잔소리 들을걸?' },
+    { speaker: '리네아', portrait: 'linea', text: '시온! 축제 장식은 거의 다 됐어. 남은 들꽃은 우리 집 창가에 꽂아 뒀고.' },
+    { speaker: '리네아', portrait: 'linea', text: '루안 아저씨가 너 찾던데. 광장 수련소에서 기다리신대. 늦으면 또 잔소리 들을걸?' },
     hero('알았어, 지금 갈게.'),
+    { speaker: '리네아', portrait: 'linea', text: '오늘 밤 잔치 끝나면 시아랑 셋이서 등불 띄우자. 약속이야.' },
   ],
   'npc-ruan': [
     { speaker: '루안', portrait: 'ruan', text: '왔구나. 축제 전 마지막 수련이다. 대충 할 생각은 말아라.' },
     { speaker: '루안', portrait: 'ruan', text: '검은 힘으로 휘두르는 게 아니다. 상대를 보고, 물러설 때를 아는 거지.' },
+    { speaker: '루안', portrait: 'ruan', text: '…그리고 등 뒤에 누가 있는지 잊지 않는 것. 나는 그걸 늦게 배웠다.' },
     hero('네, 스승님.'),
   ],
   'npc-herman': [
     { speaker: '헤르만', portrait: 'herman', text: '축제 준비는 순조롭네. 올해는 수확도 넉넉하고.' },
-    { speaker: '헤르만', portrait: 'herman', text: '…요즘 밤이 유난히 조용하구나. 괜한 걱정이겠지만.' },
+    { speaker: '헤르만', portrait: 'herman', text: '우리 집안엔 대대로 내려오는 낡은 서신이 하나 있지. "때가 오면 열라"는 말만 남았어.' },
+    { speaker: '헤르만', portrait: 'herman', text: '허허, 그때가 언제인지는 아무도 모른다네. 그런 날이 오지 않는 게 제일이지.' },
   ],
   'npc-eila': [
     { speaker: '에일라', portrait: 'eila', text: '다친 데는 없지? 수련하다 다치면 참지 말고 바로 오렴.' },
-    { speaker: '에일라', portrait: 'eila', text: '약초는 늘 넉넉히 말려 두니까. 축제 날엔 꼭 다치는 사람이 나오거든.' },
+    { speaker: '에일라', portrait: 'eila', text: '…시온, 요즘 몸에 이상한 데는 없니? 열이 나거나, 꿈이 이상하다거나.' },
+    hero('아뇨, 멀쩡한데요?'),
+    { speaker: '에일라', portrait: 'eila', text: '그래, 내 기분 탓이겠지. 축제 날엔 꼭 다치는 사람이 나오니까 약초나 넉넉히 말려 둬야겠다.' },
   ],
   'npc-merina': [
     { speaker: '메리나', portrait: 'merina', text: '어서 와! 축제 전이라 물약이 잘 나가. 하나 챙겨 둘래?' },
-    { speaker: '메리나', portrait: 'merina', text: '장부를 보면 마을 사정이 다 보여. 올해는 다들 웃는 얼굴이야.' },
+    { speaker: '메리나', portrait: 'merina', text: '장부를 보면 마을 사정이 다 보여. 올해는 다들 웃는 얼굴이야. 테온은 외상값만 빼고.' },
   ],
   'npc-doran': [
     { speaker: '도란', portrait: 'doran', text: '오, 시온! 그 무딘 연습용 검 들고 또 수련 가냐?' },
     { speaker: '도란', portrait: 'doran', text: '언젠가 진짜 검 한 자루 두들겨 주마. 그때까지 손목 아껴 두라고!' },
+    { speaker: '도란', portrait: 'doran', text: '요즘 숲에서 잡혔다는 도마뱀 비늘을 하나 봤는데, 쇠처럼 단단하더라. 마물 주제에 웬 쇠비늘인지.' },
   ],
   'npc-rosetta': [
     { speaker: '로제타', portrait: 'rosetta', text: '어머, 시온! 오늘 밤 여관에서 축제 전야 잔치 하는 거 알지?' },
+    { speaker: '로제타', portrait: 'rosetta', text: '마을 사람이 다 모여도 자리는 넉넉해. 이 여관이 보기보다 튼튼하거든.' },
     { speaker: '로제타', portrait: 'rosetta', text: '배고프면 언제든 들러. 국은 늘 끓고 있으니까.' },
   ],
   'npc-vernel': [
     { speaker: '베르넬', portrait: 'vernel', text: '아, 미안. 이 석판 조각에 정신이 팔려서 못 봤네.' },
-    { speaker: '베르넬', portrait: 'vernel', text: '이 표식… 북쪽 유적에서 본 것과 비슷한데. 어디였더라.' },
+    { speaker: '베르넬', portrait: 'vernel', text: '이 표식… 북쪽 유적 깊은 곳에서 본 것과 비슷한데. 거긴 아직 막혀 있어서 확인을 못 했지.' },
+    { speaker: '베르넬', portrait: 'vernel', text: '권속들은 신마다 다른 힘을 쓴다더군. 물, 얼음, 쇠… 이 표식도 그런 힘 하나를 가리키는 걸까.' },
   ],
   'npc-teon': [
     { speaker: '테온', portrait: 'teon', text: '시온! 오늘도 들판 나가? 슬라임 조심하고.' },
-    { speaker: '테온', portrait: 'teon', text: '요즘 숲길 쪽에 마물이 늘었다더라. 그래도 내가 지키는 동안엔 걱정 마!' },
+    { speaker: '테온', portrait: 'teon', text: '요즘 숲길 쪽에 마물이 늘었다더라. 이맘때 이런 적은 없었는데.' },
+    { speaker: '테온', portrait: 'teon', text: '그래도 남쪽 입구는 내가 지키니까 걱정 마! 오늘 밤 잔치 때도 자리 안 비울 거야.' },
   ],
 } satisfies Record<string, DialogueLine[]>;
 
