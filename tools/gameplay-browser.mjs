@@ -1051,6 +1051,33 @@ test('북쪽 건물 뒤의 틈으로는 들어갈 수 없고, 다른 건물 뒤�
   assert.equal(result.map, 'village');
   assert.equal(result.gap, false);
 });
+test('미니맵을 누르면 전체 지도가 열리고, 가 본 곳만 이름이 보이며, 여는 동안 게임이 멈춘다', async () => {
+  await load('village');
+  const result = await evaluate(`(() => {
+    const g = window.__game;
+    let s = g.scene.getScene('game');
+    let t = performance.now();
+    localStorage.removeItem('untitled-rpg.visited');
+    s.scene.restart({ map: 'village' }); g.step(t += 16, 16);
+    s.minimap.image.emit('pointerup');
+    const card = (id) => s.worldMap.cards.find(c => c.region === id);
+    const first = { open: s.worldMap.isOpen, village: card('village').name.visible, east: card('east-stream').name.visible,
+      eastUnknown: card('east-stream').unknown.visible, ruins: card('north-ruins').unknown.visible };
+    const frozen = s.now; g.step(t += 16, 16); const paused = s.now === frozen;
+    s.worldMap.shade.emit('pointerup');
+    const closed = !s.worldMap.isOpen;
+    s.scene.restart({ map: 'east-stream' }); g.step(t += 16, 16);
+    s.openWorldMap();
+    const after = { east: card('east-stream').name.visible, south: card('south-field').unknown.visible,
+      saved: JSON.parse(localStorage.getItem('untitled-rpg.visited')) };
+    s.worldMap.close();
+    return { first, paused, closed, after };
+  })()`);
+  assert.deepEqual(result.first, { open: true, village: true, east: false, eastUnknown: true, ruins: true });
+  assert.equal(result.paused, true);
+  assert.equal(result.closed, true);
+  assert.deepEqual(result.after, { east: true, south: true, saved: ['village', 'east-stream'] });
+});
 test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 이어지며 마을에는 몬스터가 없다', async () => {
   await load('village');
   const result = await evaluate(`(() => {

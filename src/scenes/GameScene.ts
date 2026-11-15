@@ -49,10 +49,12 @@ import { PerfOverlay } from '../ui/PerfOverlay';
 import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
 import {
-  QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestMarker, type QuestState,
+  QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, trackedQuests, type QuestEvent, type QuestMarker, type QuestState,
 } from '../story/quests';
 import type { NpcId } from '../world/npcs';
 import { ItemPanel, type PanelAction } from '../ui/ItemPanel';
+import { WorldMap } from '../ui/WorldMap';
+import { VISITED_SAVE_KEY, parseVisited, regionOf, serializeVisited, type RegionId } from '../world/worldMap';
 import {
   INVENTORY_SAVE_KEY, ITEMS, USE_COOLDOWN_MS, addGold, addItem, applyDrop, bestHealItem, buy, countOf, parseInventory,
   sell, serializeInventory, slimeDrop, useItem, type Inventory, type ItemId,
@@ -163,6 +165,10 @@ export class GameScene extends Phaser.Scene {
   /** 골드와 아이템. 바뀔 때마다 기기에 저장한다(진행 상황과 따로). */
   private inventory: Inventory = { gold: 0, items: {} };
   private itemPanel?: ItemPanel;
+  /** 전체 지도 화면과 가 본 지역 (기기에 따로 저장) */
+  private worldMap?: WorldMap;
+  private visited = new Set<RegionId>();
+  private mapKeys: Phaser.Input.Keyboard.Key[] = [];
   private potionButton?: ActionButton;
   private potionKeys: Phaser.Input.Keyboard.Key[] = [];
   /** 다음에 회복 아이템을 쓸 수 있는 시각 (게임 시계) */
@@ -192,6 +198,12 @@ export class GameScene extends Phaser.Scene {
     this.storage = browserStorage();
     this.quests = this.loadQuests();
     this.inventory = this.loadInventory();
+    // 들어온 지역을 가 본 곳으로 기록한다.
+    this.visited = this.loadVisited();
+    if (!this.visited.has(regionOf(this.mapId))) {
+      this.visited.add(regionOf(this.mapId));
+      this.saveVisited();
+    }
     const saved = loadProgress(this.storage);
     if (saved) {
       this.progress = saved;
@@ -212,6 +224,9 @@ export class GameScene extends Phaser.Scene {
     this.questTracker = undefined;
     this.inventory = { gold: 0, items: {} };
     this.itemPanel = undefined;
+    this.worldMap = undefined;
+    this.visited = new Set();
+    this.mapKeys = [];
     this.potionButton = undefined;
     this.potionKeys = [];
     this.nextUseAt = 0;
@@ -289,6 +304,9 @@ export class GameScene extends Phaser.Scene {
     this.potionButton = new ActionButton(this, { x: 0, y: 0, radius: 44, label: '', color: 0x7a3b2a, fontSize: 18 });
     this.potionKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q)] : [];
     this.itemPanel = new ItemPanel(this, (action) => this.onItemAction(action), () => this.onResume());
+    this.worldMap = new WorldMap(this, () => this.onResume());
+    this.minimap.onTap(() => this.openWorldMap());
+    this.mapKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M)] : [];
     this.refreshInventory();
     this.refreshQuests();
     this.layout();
@@ -338,6 +356,18 @@ export class GameScene extends Phaser.Scene {
     // 가방·잡화점이 열려 있으면 게임 시계를 멈춘다. Esc로 닫는다.
     if (this.itemPanel?.isOpen) {
       if (escape) this.itemPanel.close();
+      return;
+    }
+    // 전체 지도도 열려 있으면 게임 시계를 멈춘다. Esc나 M으로 닫는다.
+    let mapKey = false;
+    for (const key of this.mapKeys) if (Phaser.Input.Keyboard.JustDown(key)) mapKey = true;
+    if (this.worldMap?.isOpen) {
+      this.worldMap.update(this.time.now);
+      if (escape || mapKey) this.worldMap.close();
+      return;
+    }
+    if (mapKey) {
+      this.openWorldMap();
       return;
     }
     if (this.pauseButton.consumePress() || escape) {
@@ -559,6 +589,7 @@ export class GameScene extends Phaser.Scene {
     // 물약 버튼은 회피 버튼 바로 위
     this.potionButton?.setPosition(width - 330, VIEW_HEIGHT - 95 - this.dodgeButton.size - (this.potionButton?.size ?? 0) - 18);
     this.itemPanel?.layout(width);
+    this.worldMap?.layout(width);
     this.dialogue.layout(width);
     this.pauseMenu.layout(width);
   }
@@ -1147,6 +1178,40 @@ export class GameScene extends Phaser.Scene {
     labels.forEach((label, i) => this.progressEffects.showPopup(player.x, player.y - 150 + i * 28, label, i === 0 && gold ? '#ffd23f' : '#a8f0ff'));
     this.saveInventory();
     this.refreshInventory();
+  }
+
+  /** 전체 지도를 연다. 대화·메뉴·이동 중에는 열지 않는다. */
+  private openWorldMap(): void {
+    if (!this.worldMap || this.worldMap.isOpen || this.dialogue.isOpen || this.pauseMenu.isOpen || this.itemPanel?.isOpen || this.traveling) return;
+    this.clearAttackInput();
+    this.joystick.vector.set(0, 0);
+    this.talkButton.setVisible(false);
+    this.talkMarker.setVisible(false);
+    this.pauseButton.setVisible(false);
+    // 퀘스트 표시: 완료할 퀘스트가 있으면 마을에 ?, 처치 목표가 남은 사냥터에 !
+    const markers = new Map<RegionId, QuestMarker>();
+    for (const { quest, progress } of trackedQuests(this.quests)) {
+      if (progress.status === 'ready') markers.set('village', 'ready');
+      else if (quest.objective.map && !markers.has(regionOf(quest.objective.map))) markers.set(regionOf(quest.objective.map), 'new');
+    }
+    if (!markers.has('village') && NPCS.some((n) => markerFor(n.id, this.quests) === 'new')) markers.set('village', 'new');
+    this.worldMap.show(regionOf(this.mapId), this.visited, markers);
+  }
+
+  private loadVisited(): Set<RegionId> {
+    try {
+      return parseVisited(this.storage?.getItem(VISITED_SAVE_KEY) ?? null);
+    } catch {
+      return new Set();
+    }
+  }
+
+  private saveVisited(): void {
+    try {
+      this.storage?.setItem(VISITED_SAVE_KEY, serializeVisited(this.visited));
+    } catch {
+      // 저장소가 막혀 있으면 이번 실행 동안만 기억한다.
+    }
   }
 
   private openItemPanel(mode: 'bag' | 'shop'): void {

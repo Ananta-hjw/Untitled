@@ -38,6 +38,11 @@ export class Minimap {
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH_UI + 5).setResolution(2);
   }
 
+  /** 미니맵을 누르면 부른다 (전체 지도를 연다). */
+  onTap(callback: () => void): void {
+    this.image.setInteractive({ useHandCursor: true }).on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, callback);
+  }
+
   /** 미니맵 가운데 위치(화면 좌표) */
   layout(cx: number, cy: number): void {
     this.image.setPosition(cx, cy);
