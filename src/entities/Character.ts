@@ -230,8 +230,12 @@ export class Character extends Phaser.GameObjects.Container {
     this.placeAt(x, y);
   }
 
+  /**
+   * 맞은 순간 밝게 빛난다. 색을 덮어쓰지(FILL) 않고 더해서(ADD) 눈·윤곽 같은 그림이 그대로 보인다.
+   * (FILL은 히트 스톱 동안 몸 전체가 하얀 덩어리로 보였다.)
+   */
   private flash(color: number): void {
-    this.sprite.setTint(color).setTintMode(Phaser.TintModes.FILL);
+    this.sprite.setTint(color === 0xffffff ? 0x5a5a5a : color).setTintMode(Phaser.TintModes.ADD);
     this.flashTimer?.remove();
     this.flashTimer = this.scene.time.delayedCall(90, () => {
       this.sprite.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);

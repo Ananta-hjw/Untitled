@@ -9,10 +9,13 @@ const DIAGONALS: Facing[] = ['down-left', 'down-right', 'up-left', 'up-right'];
 const COMPASS: Facing[] = ['right', 'down-right', 'down', 'down-left', 'left', 'up-left', 'up', 'up-right'];
 export const ACTION_DURATION = { attack1: 420, attack2: 320, attack3: 400, dodge: 300 };
 // Put the drawn striking pose inside each configured damage window.
+// 준비 자세(0번)는 짧게 두어 누르자마자 칼을 드는 것이 보이게 하고, 그만큼 들어 올린 자세(1번)를 길게 보여 준다.
+// 2타(올려 베기)는 낮은 자세에서 올라가는 궤적으로 맞히므로, 타격 그림이 명중 구간이 열리는 순간(hitDelayMs)에 바뀐다.
+// 그래야 맞는 순간 화면에 낮은 준비 자세가 아니라 올려 베는 그림이 보인다.
 const POSE_STARTS = {
-  attack1: [0, 126, 200, 290],
-  attack2: [0, 64, 125, 200],
-  attack3: [0, 112, 168, 300],
+  attack1: [0, 45, 200, 290],
+  attack2: [0, 40, 105, 200],
+  attack3: [0, 50, 168, 300],
   dodge: [0, 60, 130, 240],
 };
 
