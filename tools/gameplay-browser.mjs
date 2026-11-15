@@ -909,7 +909,7 @@ test('퀘스트: 머리 위 표시, 대화로 받고 완료, 목록 표시, 저�
       reloaded: { quests: s.quests, ruan: marker('ruan'), tracker: s.questTracker.text.text } };
   })()`);
   // 도란은 대장간 안에 있어서, 마을에서는 대장간 문 위에 표시가 뜬다.
-  assert.deepEqual(result.start, { ruan: 'new', doran: 'new', smithyDoor: true, teon: 'new', serena: null, tracker: '' });
+  assert.deepEqual(result.start, { ruan: 'new', doran: 'sub-new', smithyDoor: true, teon: 'sub-new', serena: null, tracker: '' });
   assert.equal(result.speaker, '루안');
   assert.equal(result.accepted.ruan, 'progress');
   assert.match(result.accepted.tracker, /마지막 수련 · 3단 콤보 마무리 0\/3/);

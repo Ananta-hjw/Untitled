@@ -21,10 +21,12 @@ const FRAME_DATA = import.meta.glob<WalkData>('../assets/characters/*/walk_frame
 const WALK_SHEET_SCALE = 0.6;
 const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 
-/** 머리 위 퀘스트 표시: 새 퀘스트 !, 완료 ?, 진행 중 회색 ?, 말 걸 대상 하늘색 ! */
+/** 머리 위 퀘스트 표시: 새 퀘스트 !, 완료 ? (메인 노란색, 서브 초록색), 진행 중 회색 ?, 말 걸 대상 하늘색 ! */
 export const MARKER_STYLE: Record<QuestMarker, { text: string; color: string }> = {
   new: { text: '!', color: '#ffd23f' },
   ready: { text: '?', color: '#ffd23f' },
+  'sub-new': { text: '!', color: '#6ee06a' },
+  'sub-ready': { text: '?', color: '#6ee06a' },
   progress: { text: '?', color: '#b9b2a4' },
   target: { text: '!', color: '#8fd6ff' },
 };

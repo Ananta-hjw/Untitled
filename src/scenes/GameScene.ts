@@ -49,7 +49,7 @@ import { PerfOverlay } from '../ui/PerfOverlay';
 import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
 import {
-  QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, trackedQuests, type QuestEvent, type QuestMarker, type QuestState,
+  MARKER_PRIORITY, QUEST_SAVE_KEY, markerFor, questMarker, parseQuests, recordEvent, serializeQuests, talkTo, trackedQuests, type QuestEvent, type QuestMarker, type QuestState,
 } from '../story/quests';
 import type { NpcId } from '../world/npcs';
 import { ItemPanel, type PanelAction } from '../ui/ItemPanel';
@@ -1101,10 +1101,9 @@ export class GameScene extends Phaser.Scene {
   /** 머리 위 표시와 퀘스트 목록을 지금 상태로 맞춘다. */
   private refreshQuests(): void {
     for (const npc of this.npcs) npc.setQuestMarker(markerFor(npc.def.id, this.quests));
-    const priority: QuestMarker[] = ['ready', 'new', 'target', 'progress'];
     for (const door of this.doorMarkers) {
       const markers = door.npcs.map((id) => markerFor(id, this.quests)).filter((m): m is QuestMarker => !!m);
-      door.marker = priority.find((m) => markers.includes(m));
+      door.marker = MARKER_PRIORITY.find((m) => markers.includes(m));
       if (door.marker) door.text.setText(MARKER_STYLE[door.marker].text).setColor(MARKER_STYLE[door.marker].color);
       door.text.setVisible(!!door.marker);
     }
@@ -1190,11 +1189,19 @@ export class GameScene extends Phaser.Scene {
     this.pauseButton.setVisible(false);
     // 퀘스트 표시: 완료할 퀘스트가 있으면 마을에 ?, 처치 목표가 남은 사냥터에 !
     const markers = new Map<RegionId, QuestMarker>();
+    // 메인(노란색)과 서브(초록색)가 겹치면 MARKER_PRIORITY에서 앞선 것을 둔다.
+    const put = (region: RegionId, marker: QuestMarker) => {
+      const old = markers.get(region);
+      if (!old || MARKER_PRIORITY.indexOf(marker) < MARKER_PRIORITY.indexOf(old)) markers.set(region, marker);
+    };
     for (const { quest, progress } of trackedQuests(this.quests)) {
-      if (progress.status === 'ready') markers.set('village', 'ready');
-      else if (quest.objective.map && !markers.has(regionOf(quest.objective.map))) markers.set(regionOf(quest.objective.map), 'new');
+      if (progress.status === 'ready') put('village', questMarker(quest, 'ready'));
+      else if (quest.objective.map) put(regionOf(quest.objective.map), questMarker(quest, 'new'));
     }
-    if (!markers.has('village') && NPCS.some((n) => markerFor(n.id, this.quests) === 'new')) markers.set('village', 'new');
+    for (const n of NPCS) {
+      const m = markerFor(n.id, this.quests);
+      if (m === 'new' || m === 'sub-new') put('village', m);
+    }
     this.worldMap.show(regionOf(this.mapId), this.visited, markers);
   }
 

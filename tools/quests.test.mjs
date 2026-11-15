@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  QUESTS, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, trackedQuests,
+  MARKER_PRIORITY, QUESTS, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, trackedQuests,
 } from '../src/story/quests.ts';
 import { NPCS } from '../src/world/npcs.ts';
 import { MAPS } from '../src/world/maps.ts';
@@ -62,11 +62,22 @@ test('심부름 퀘스트: 테온에게 받고, 로제타에게 말을 걸면 �
   assert.equal(r.progressed.id, 'teon-lunch');
   state = r.state;
   assert.equal(markerFor('rosetta', state), undefined);
-  assert.equal(markerFor('teon', state), 'ready');
+  assert.equal(markerFor('teon', state), 'sub-ready');
   assert.equal(talkTo('rosetta', state), undefined, '로제타는 평소 대사로 돌아간다');
   state = talkTo('teon', state).state;
   assert.equal(state['teon-lunch'].status, 'done');
   assert.equal(markerFor('teon', state), undefined);
+});
+
+test('메인 퀘스트는 노란 표시(new/ready), 서브 퀘스트는 초록 표시(sub-new/sub-ready)', () => {
+  assert.equal(markerFor('ruan', {}), 'new');
+  assert.equal(markerFor('doran', {}), 'sub-new');
+  assert.equal(markerFor('teon', {}), 'sub-new');
+  assert.equal(markerFor('doran', { 'doran-gel': { status: 'ready', count: 5 } }), 'sub-ready');
+  assert.ok(MARKER_PRIORITY.indexOf('ready') < MARKER_PRIORITY.indexOf('sub-ready'));
+  assert.ok(MARKER_PRIORITY.indexOf('sub-ready') < MARKER_PRIORITY.indexOf('new'));
+  assert.ok(MARKER_PRIORITY.indexOf('new') < MARKER_PRIORITY.indexOf('sub-new'));
+  assert.equal(new Set(MARKER_PRIORITY).size, 6);
 });
 
 test('퀘스트가 없는 사람은 표시도 퀘스트 대화도 없다', () => {

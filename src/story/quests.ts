@@ -136,17 +136,34 @@ export interface QuestProgress { status: QuestStatus; count: number }
 export type QuestState = Partial<Record<QuestId, QuestProgress>>;
 
 /** 머리 위와 미니맵에 띄우는 표시 */
-export type QuestMarker = 'new' | 'ready' | 'progress' | 'target';
+/**
+ * 머리 위 표시. 메인 퀘스트(main)는 노란색, 서브 퀘스트는 초록색(sub-)으로 나눈다.
+ * 진행 중(progress)과 말 걸 대상(target)은 메인·서브 구분 없이 하나다.
+ */
+export type QuestMarker = 'new' | 'ready' | 'sub-new' | 'sub-ready' | 'progress' | 'target';
+
+/** 여러 표시가 겹칠 때 먼저 보여 줄 순서 */
+export const MARKER_PRIORITY: QuestMarker[] = ['ready', 'sub-ready', 'new', 'sub-new', 'target', 'progress'];
+
+/** 새 퀘스트나 완료할 퀘스트 표시를 메인/서브에 맞춘다. */
+export function questMarker(def: QuestDef, kind: 'new' | 'ready'): QuestMarker {
+  return def.main ? kind : `sub-${kind}`;
+}
 
 function canStart(def: QuestDef, state: QuestState): boolean {
   return !state[def.id] && (!def.requires || state[def.requires]?.status === 'done');
 }
 
-/** 이 사람 위에 띄울 표시. 완료할 것 > 새 퀘스트 > 말 걸 대상 > 진행 중 순서로 하나만. */
+/**
+ * 이 사람 위에 띄울 표시. 완료할 것 > 새 퀘스트 > 말 걸 대상 > 진행 중 순서로 하나만.
+ * 완료할 것과 새 퀘스트는 메인 퀘스트를 먼저 본다.
+ */
 export function markerFor(npc: NpcId, state: QuestState): QuestMarker | undefined {
-  const mine = QUESTS.filter((q) => q.giver === npc);
-  if (mine.some((q) => state[q.id]?.status === 'ready')) return 'ready';
-  if (mine.some((q) => canStart(q, state))) return 'new';
+  const mine = [...QUESTS.filter((q) => q.giver === npc)].sort((a, b) => Number(!!b.main) - Number(!!a.main));
+  const ready = mine.find((q) => state[q.id]?.status === 'ready');
+  if (ready) return questMarker(ready, 'ready');
+  const fresh = mine.find((q) => canStart(q, state));
+  if (fresh) return questMarker(fresh, 'new');
   if (QUESTS.some((q) => q.objective.event === 'talk' && q.objective.npc === npc && state[q.id]?.status === 'active')) return 'target';
   if (mine.some((q) => state[q.id]?.status === 'active')) return 'progress';
   return undefined;
