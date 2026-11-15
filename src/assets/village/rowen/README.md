@@ -14,4 +14,4 @@ NPC와 시설의 대응, 배치 의도는 `docs/rowen-village.md`에 정리했�
 
 ## 추가 건물·실내 원화
 
-`linea-house.png`에 리네아 집의 별도 외관을, `interiors/{linea,home,chief,clinic}.png`에 리네아 집·시온 집·촌장 집·치유소 내부 원화를 추가했습니다. 건물별 구조와 가구, 색감을 구분했습니다. 크기와 디자인, 게임 적용 전 필요한 사항은 `interiors/README.md`를 참고하세요. 이번 5장은 원화 제작이며 현재 게임의 배치나 실내 이미지를 교체하지 않았습니다.
+`linea-house.png`에 리네아 집의 별도 외관을, `interiors/{linea,home,chief,clinic,hall,store,smithy,inn}.png`에 리네아 집·시온 집·촌장 집·치유소·수련소·잡화점·대장간·여관 내부 원화를 추가했습니다. 건물별 구조와 가구, 색감을 구분했습니다. 크기와 디자인, 게임 적용 전 필요한 사항은 `interiors/README.md`를 참고하세요. 총 9장(외관 1장·실내 8장)은 원화 제작이며 현재 게임의 배치나 실내 이미지를 교체하지 않았습니다.
