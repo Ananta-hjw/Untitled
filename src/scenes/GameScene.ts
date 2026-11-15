@@ -48,8 +48,10 @@ import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
 import { PerfOverlay } from '../ui/PerfOverlay';
 import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
+import { StoryChoice } from '../ui/StoryChoice';
+import { chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, raidSpawns, INSPECTION_LINES } from '../story/chapterOne';
 import {
-  MARKER_PRIORITY, QUEST_SAVE_KEY, markerFor, questMarker, parseQuests, recordEvent, serializeQuests, talkTo, trackedQuests, type QuestEvent, type QuestMarker, type QuestState,
+  currentObjective, MARKER_PRIORITY, QUEST_SAVE_KEY, markerFor, questMarker, parseQuests, recordEvent, serializeQuests, talkTo, trackedQuests, type QuestEvent, type QuestMarker, type QuestState,
 } from '../story/quests';
 import type { NpcId } from '../world/npcs';
 import { ItemPanel, type PanelAction } from '../ui/ItemPanel';
@@ -158,6 +160,10 @@ export class GameScene extends Phaser.Scene {
   private perf?: PerfOverlay;
   /** 퀘스트 진행. 바뀔 때마다 기기에 저장한다(진행 상황과 따로). */
   private quests: QuestState = {};
+  private storyChoice?: StoryChoice;
+  private storyMarkers: Phaser.GameObjects.Text[] = [];
+  private raidEnemies = new Set<Enemy>();
+  private chapterShade?: Phaser.GameObjects.Rectangle;
   /** 마을의 가게 문 위 퀘스트 표시: 안에 있는 사람의 표시를 문 위에 보여 준다. */
   private doorMarkers: Array<{ spot: Interactable; text: Phaser.GameObjects.Text; npcs: NpcId[]; marker?: QuestMarker }> = [];
   private minimap?: Minimap;
@@ -197,6 +203,7 @@ export class GameScene extends Phaser.Scene {
     // 저장된 진행 상황이 있으면 그 레벨로 시작한다 (재시작 포함).
     this.storage = browserStorage();
     this.quests = this.loadQuests();
+    this.saveQuests();
     this.inventory = this.loadInventory();
     // 들어온 지역을 가 본 곳으로 기록한다.
     this.visited = this.loadVisited();
@@ -218,6 +225,10 @@ export class GameScene extends Phaser.Scene {
 
     this.perf = undefined;
     this.quests = {};
+    this.storyChoice = undefined;
+    this.storyMarkers = [];
+    this.raidEnemies = new Set();
+    this.chapterShade = undefined;
     this.doorMarkers = [];
     // 지난 장면의 UI는 재시작 때 사라지므로 새로 만들 때까지 비워 둔다.
     this.minimap = undefined;
@@ -285,6 +296,11 @@ export class GameScene extends Phaser.Scene {
     this.damageNumbers = new DamageNumbers(this);
     this.progressEffects = new ProgressEffects(this);
     this.dialogue = new DialogueBox(this);
+    this.storyChoice = new StoryChoice(this, () => this.onResume());
+    if (chapterPhase(this.quests) === 'raid') {
+      this.chapterShade = this.add.rectangle(0, 0, this.scale.gameSize.width, VIEW_HEIGHT, 0x122137, 0.42).setOrigin(0).setScrollFactor(0).setDepth(DEPTH_LIGHTING);
+      this.player.invulnerableUntil = 1500;
+    }
     this.talkMarker = this.add
       .text(0, 0, '···', {
         fontFamily: 'system-ui, sans-serif',
@@ -348,6 +364,11 @@ export class GameScene extends Phaser.Scene {
     let escape = false;
     for (const key of this.pauseKeys) {
       if (Phaser.Input.Keyboard.JustDown(key)) escape = true;
+    }
+    if (this.storyChoice?.isOpen) {
+      if (escape) this.storyChoice.cancel();
+      else if (this.talkKeys.some(key => key.keyCode === Phaser.Input.Keyboard.KeyCodes.ENTER && Phaser.Input.Keyboard.JustDown(key))) this.storyChoice.accept();
+      return;
     }
     if (this.pauseMenu.isOpen) {
       if (escape) this.pauseMenu.back();
@@ -427,8 +448,13 @@ export class GameScene extends Phaser.Scene {
 
   private buildCharacters(): void {
     for (const spawn of this.map.enemies) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y));
-    let defs = this.map.npcs;
-    if (this.stressCount > 0 && this.mapId === 'village') {
+    for (const point of raidSpawns(this.quests, this.mapId)) {
+      const enemy = new Enemy(this, 'retainer-ash', point.x, point.y);
+      this.enemies.push(enemy);
+      this.raidEnemies.add(enemy);
+    }
+    let defs = chapterNpcs(this.map.npcs, this.quests, this.mapId);
+    if (this.stressCount > 0 && this.mapId === 'village' && chapterPhase(this.quests) === 'day') {
       const area = this.walkArea, b = this.map.bounds;
       defs = [...defs, ...stressNpcs(this.stressCount, defs, Math.random, b, (x, y) => area.contains(x, y) && !findExit(this.map, x, y))];
     }
@@ -464,6 +490,7 @@ export class GameScene extends Phaser.Scene {
   private checkExit(): boolean {
     const player = this.player;
     if (!player.alive) return false;
+    if (chapterPhase(this.quests) === 'raid' && this.mapId === 'village') return false;
     const exit = findExit(this.map, player.x, player.y);
     if (!exit) return false;
     this.travel(exit);
@@ -544,7 +571,7 @@ export class GameScene extends Phaser.Scene {
       }) as GameScene['keys'];
     }
 
-    this.hud = new Hud(this, this.map.hint);
+    this.hud = new Hud(this, this.mapId === 'village' && chapterPhase(this.quests) === 'raid' ? '마을 습격 · 권속을 저지하고 주민들의 안전을 확인하세요' : this.map.hint);
     this.drawHud();
   }
 
@@ -591,6 +618,8 @@ export class GameScene extends Phaser.Scene {
     this.itemPanel?.layout(width);
     this.worldMap?.layout(width);
     this.dialogue.layout(width);
+    this.storyChoice?.layout(width);
+    this.chapterShade?.setSize(width, VIEW_HEIGHT);
     this.pauseMenu.layout(width);
   }
 
@@ -900,10 +929,11 @@ export class GameScene extends Phaser.Scene {
       if (died) {
         enemy.kill();
         this.impacts.splatter(c.x, c.y, enemy.color, this.now);
-        this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
+        const raid = this.raidEnemies.has(enemy);
+        if (!raid) this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
         this.gainXp(PROGRESSION.slimeXp, c.x, c.y - 185);
-        this.questEvent({ type: 'kill', map: this.mapId });
-        this.collectDrop(c.x, c.y);
+        this.questEvent({ type: 'kill', map: this.mapId, ...(raid ? { encounter: 'village-raid' as const } : {}) });
+        if (!raid) this.collectDrop(c.x, c.y);
       } else {
         const heavy = strike.kind !== 'normal' ? HIT_FEEL.heavyKnockback : 1;
         const push = PLAYER.knockback * combo.knockback * heavy;
@@ -983,11 +1013,13 @@ export class GameScene extends Phaser.Scene {
 
   /** 뒤로가기 버튼: 메뉴가 열려 있으면 한 단계 뒤로, 아니면 일시정지. */
   private onBackButton(): void {
+    if (this.storyChoice?.isOpen) { this.storyChoice.cancel(); return; }
     if (this.pauseMenu.isOpen) this.pauseMenu.back();
     else this.openPause();
   }
 
   private openPause(): void {
+    if (this.storyChoice?.isOpen) return;
     if (!this.pauseMenu || this.pauseMenu.isOpen) return;
     this.pauseButton.setVisible(false);
     this.pauseMenu.open();
@@ -1039,7 +1071,7 @@ export class GameScene extends Phaser.Scene {
     marker.setVisible(true).setPosition(target.x, target.y - target.markerHeight - 6 * Math.abs(Math.sin(time / 260)));
     // 건물 문 앞에서는 "들어가기", 그 밖에는 "대화"
     const enter = target.enter;
-    this.talkButton.setLabel(enter ? '들어가기' : '대화');
+    this.talkButton.setLabel(enter ? '들어가기' : target.id.startsWith('story-') ? '살펴보기' : '대화');
     marker.setText(enter ? `▲ ${enter.label}` : '···');
 
     if (!this.talkPressed()) return;
@@ -1051,7 +1083,23 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private openDialogue(target: Interactable): void {
+  private openDialogue(target: Interactable, confirmed = false): void {
+    if (this.storyChoice?.isOpen) return;
+    const festival = this.quests['festival-eve'];
+    if (!confirmed && target.id === 'npc-rosetta' && festival?.status === 'active') {
+      this.clearAttackInput();
+      this.storyChoice?.open(() => this.openDialogue(target, true));
+      return;
+    }
+    if (target.id.startsWith('story-')) {
+      this.dialogue.open(INSPECTION_LINES[target.id] ?? [], () => {
+        const spot = target.id === 'story-south-watch' ? 'south-watch' : 'home-search';
+        this.questEvent({ type: 'inspect', spot, map: this.mapId });
+        this.onResume();
+      });
+      return;
+    }
+    const beforePhase = chapterPhase(this.quests);
     const player = this.player;
     this.hud.dismissHint();
     this.clearAttackInput();
@@ -1060,21 +1108,23 @@ export class GameScene extends Phaser.Scene {
     this.talkMarker.setVisible(false);
     // 마을 사람이면 퀘스트 대화를 먼저 본다. 퀘스트와 상관없으면 평소 대사.
     const quest = target.id.startsWith('npc-') ? talkTo(target.id.slice(4) as NpcId, this.quests) : undefined;
-    if (quest) {
-      this.quests = quest.state;
-      this.saveQuests();
-      this.refreshQuests();
-    }
-    const lines = quest?.lines.length ? quest.lines : target.dialogue ? DIALOGUES[target.dialogue] : [];
+    const npc = target.id.startsWith('npc-') ? target.id.slice(4) as NpcId : undefined;
+    const lines = quest?.lines.length ? quest.lines : (npc && chapterDialogue(npc, this.quests)) || (target.dialogue ? DIALOGUES[target.dialogue] : []);
     this.dialogue.open(lines, () => {
+      if (quest) {
+        this.quests = quest.state;
+        this.saveQuests();
+        this.refreshQuests();
+      }
       if (quest?.completed) {
-        this.hud.showCallout(`퀘스트 완료: ${quest.completed.title}`);
+        this.hud.showCallout(`퀘스트 완료: ${quest.completed.title}${quest.next ? ` → ${quest.next.title}` : ''}`);
         this.gainXp(quest.completed.rewardXp, player.x, player.y - 185);
         this.giveRewards(quest.completed.rewardGold ?? 0, quest.completed.rewardItems ?? []);
       } else if (quest?.accepted) {
         this.hud.showCallout(`새 퀘스트: ${quest.accepted.title}`);
       } else if (quest?.progressed) {
-        this.hud.showCallout(`${quest.progressed.title}: 보고하러 가기`);
+        const p = this.quests[quest.progressed.id]!;
+        this.hud.showCallout(`${quest.progressed.title}: ${p.status === 'ready' ? '보고하러 가기' : currentObjective(quest.progressed, p).label}`);
       }
       // 메리나와의 평소 대화가 끝나면 잡화점을 연다.
       if (!quest && target.id === 'npc-merina') this.openItemPanel('shop');
@@ -1082,6 +1132,10 @@ export class GameScene extends Phaser.Scene {
       this.clearAttackInput();
       this.dodgeButton.consumePress();
       for (const key of this.dodgeKeys) Phaser.Input.Keyboard.JustDown(key);
+      if (beforePhase !== chapterPhase(this.quests)) {
+        const at = { x: 1180, y: 1130 };
+        this.travel({ to: 'village', arrive: at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: at });
+      }
     });
   }
 
@@ -1100,6 +1154,15 @@ export class GameScene extends Phaser.Scene {
 
   /** 머리 위 표시와 퀘스트 목록을 지금 상태로 맞춘다. */
   private refreshQuests(): void {
+    this.interactables = this.interactables.filter(spot => !spot.id.startsWith('story-'));
+    for (const marker of this.storyMarkers) marker.destroy();
+    this.storyMarkers = [];
+    for (const spot of chapterSpots(this.quests, this.mapId)) {
+      this.interactables.push(spot);
+      this.storyMarkers.push(this.add.text(spot.x, spot.y - spot.markerHeight, '◆ 살펴보기', {
+        fontFamily: 'system-ui, sans-serif', fontSize: '22px', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 5,
+      }).setOrigin(0.5, 1).setDepth(spot.y + 400).setResolution(2));
+    }
     for (const npc of this.npcs) npc.setQuestMarker(markerFor(npc.def.id, this.quests));
     for (const door of this.doorMarkers) {
       const markers = door.npcs.map((id) => markerFor(id, this.quests)).filter((m): m is QuestMarker => !!m);
@@ -1181,7 +1244,7 @@ export class GameScene extends Phaser.Scene {
 
   /** 전체 지도를 연다. 대화·메뉴·이동 중에는 열지 않는다. */
   private openWorldMap(): void {
-    if (!this.worldMap || this.worldMap.isOpen || this.dialogue.isOpen || this.pauseMenu.isOpen || this.itemPanel?.isOpen || this.traveling) return;
+    if (!this.worldMap || this.storyChoice?.isOpen || this.worldMap.isOpen || this.dialogue.isOpen || this.pauseMenu.isOpen || this.itemPanel?.isOpen || this.traveling) return;
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
     this.talkButton.setVisible(false);
@@ -1196,7 +1259,12 @@ export class GameScene extends Phaser.Scene {
     };
     for (const { quest, progress } of trackedQuests(this.quests)) {
       if (progress.status === 'ready') put('village', questMarker(quest, 'ready'));
-      else if (quest.objective.map) put(regionOf(quest.objective.map), questMarker(quest, 'new'));
+      else {
+        const objective = currentObjective(quest, progress);
+        const npc = NPCS.find(n => n.id === objective.npc);
+        const map = objective.map ?? (npc?.inside ? `in-${npc.inside}` as MapId : 'village');
+        put(regionOf(map), questMarker(quest, 'new'));
+      }
     }
     for (const n of NPCS) {
       const m = markerFor(n.id, this.quests);
@@ -1276,6 +1344,7 @@ export class GameScene extends Phaser.Scene {
     npcs: [
       ...this.npcs.map((n) => ({ x: n.x, y: n.y, marker: n.questMarker })),
       ...this.doorMarkers.filter((d) => d.marker).map((d) => ({ x: d.spot.x, y: d.spot.y, marker: d.marker })),
+      ...chapterSpots(this.quests, this.mapId).map(spot => ({ x: spot.x, y: spot.y, marker: 'target' as const })),
     ],
     enemies: this.enemies.filter((e) => e.character.alive).map((e) => ({ x: e.character.x, y: e.character.y })),
   });

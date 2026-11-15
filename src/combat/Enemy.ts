@@ -36,7 +36,7 @@ export class Enemy {
 
   constructor(scene: Phaser.Scene, key: string, x: number, y: number) {
     this.scene = scene;
-    this.color = key.includes('blue') ? 0x6cb8ff : 0x8fe06a;
+    this.color = key === 'retainer-ash' ? 0x9c96b3 : key.includes('blue') ? 0x6cb8ff : 0x8fe06a;
     this.character = new Character(scene, x, y, {
       key,
       shadowWidth: 100,

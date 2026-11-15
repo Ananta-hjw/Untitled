@@ -934,7 +934,7 @@ test('퀘스트: 머리 위 표시, 대화로 받고 완료, 목록 표시, 저�
   assert.equal(result.ready.ruan, 'ready');
   assert.match(result.ready.tracker, /마지막 수련 · 루안에게 보고/);
   assert.equal(result.xpGained, true);
-  assert.equal(result.afterDone.ruan, 'new');
+  assert.equal(result.afterDone.ruan, 'progress');
   assert.deepEqual(result.minimap.center, [94, 200, 255], '가운데는 플레이어(하늘색 점)');
   assert.ok(result.minimap.edgeAlpha > 200, '테두리가 그려진다');
   assert.equal(result.minimap.title, '로웬 마을');
@@ -1145,4 +1145,75 @@ test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 �
   // 같은 맵에서 다시 시작하면 그 맵에 남고, 체력은 다시 이어 받지 않는다.
   assert.equal(result.restartedHere.map, 'east-stream');
   assert.equal(result.restartedHere.hp, result.restartedHere.maxHp);
+});
+
+test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수색·서신이 재시작 후에도 이어진다', async () => {
+  await load('village');
+  const result = await evaluate(`(async () => {
+    const { QUESTS, currentObjective } = await import('/src/story/quests.ts');
+    const g = window.__game;
+    let s = g.scene.getScene('game'), t = performance.now();
+    const seed = {};
+    for (const q of QUESTS.filter(q => q.main).slice(0, 3)) seed[q.id] = { status: 'done', count: q.objective.need };
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+    const restart = map => { s.scene.restart({ map }); g.step(t += 16, 16); s = g.scene.getScene('game'); };
+    const flush = () => { while (s.dialogue.isOpen) s.dialogue.advance(); };
+    const settle = () => { for (let i = 0; i < 30; i++) g.step(t += 16, 16); s = g.scene.getScene('game'); };
+    const talk = id => { const n = s.npcs.find(n => n.def.id === id); if (!n) throw Error('NPC 없음: ' + id); s.openDialogue(n.spot); flush(); };
+    const inspect = id => { const spot = s.interactables.find(p => p.id === id); if (!spot) throw Error('조사 지점 없음: ' + id); s.openDialogue(spot); flush(); };
+    restart('village');
+    const migrated = s.quests['watch-report']?.status;
+    talk('teon');
+    restart('in-inn'); talk('rosetta');
+    restart('village-north'); talk('linea'); talk('sia'); talk('linea');
+    restart('village');
+    const patrolMarker = s.storyMarkers.length;
+    inspect('story-south-watch'); talk('teon');
+    restart('in-inn');
+    s.openDialogue(s.npcs.find(n => n.def.id === 'rosetta').spot);
+    const choice = s.storyChoice.isOpen;
+    const frozenAt = s.now; s.update(0, 100); const frozen = s.now === frozenAt;
+    s.storyChoice.cancel();
+    const cancelled = s.quests['festival-eve'].status === 'active' && !s.quests['village-raid'];
+    s.openDialogue(s.npcs.find(n => n.def.id === 'rosetta').spot);
+    s.storyChoice.accept(); flush(); settle();
+    const raid = { map: s.mapId, enemies: s.enemies.length, sia: s.npcs.some(n => n.def.id === 'sia'), shade: !!s.chapterShade };
+    s.player.placeAt(1180, 1130); s.player.invulnerableUntil = Infinity;
+    s.stats.damageMin = 1000; s.stats.damageMax = 1000;
+    for (const e of s.enemies) { e.character.placeAt(1250, 1130); e.character.hp = 1; }
+    s.comboStage = 2; s.comboExpiresAt = s.now + 9999; s.nextAttackAt = 0;
+    s.startAttack(s.now, 1);
+    for (let i = 0; i < 16; i++) { s.player.sprite.advance(50); s.now += 50; s.updateAttackLunge(s.now); s.updateAttackTrace(s.now); }
+    const battle = { alive: s.enemies.filter(e => e.character.alive).length, pending: s.enemyRespawns.length, step: s.quests['village-raid'].step };
+    restart('village');
+    const noRespawn = s.enemies.length === 0;
+    talk('serena'); talk('eila'); talk('ruan'); settle();
+    restart('village-north');
+    const aftermath = { sia: s.npcs.some(n => n.def.id === 'sia'), linea: s.npcs.some(n => n.def.id === 'linea'), shade: !!s.chapterShade };
+    talk('serena');
+    const searchMarker = s.storyMarkers.length;
+    restart('village-north');
+    const searchRestored = s.interactables.some(p => p.id === 'story-home-search');
+    inspect('story-home-search'); talk('eila'); talk('herman');
+    restart('village'); talk('vernel');
+    restart('village');
+    const complete = QUESTS.filter(q => q.main).every(q => s.quests[q.id]?.status === 'done');
+    const tracker = s.questTracker.text.text;
+    localStorage.removeItem('untitled-rpg.quests');
+    restart('village');
+    return { migrated, patrolMarker, choice, frozen, cancelled, raid, battle, noRespawn, aftermath, searchMarker, searchRestored, complete, tracker };
+  })()`);
+  assert.equal(result.migrated, 'active');
+  assert.equal(result.patrolMarker, 1);
+  assert.equal(result.choice, true);
+  assert.equal(result.frozen, true);
+  assert.equal(result.cancelled, true);
+  assert.deepEqual(result.raid, { map: 'village', enemies: 3, sia: false, shade: true });
+  assert.deepEqual(result.battle, { alive: 0, pending: 0, step: 1 });
+  assert.equal(result.noRespawn, true);
+  assert.deepEqual(result.aftermath, { sia: false, linea: true, shade: false });
+  assert.equal(result.searchMarker, 1);
+  assert.equal(result.searchRestored, true);
+  assert.equal(result.complete, true);
+  assert.equal(result.tracker, '');
 });

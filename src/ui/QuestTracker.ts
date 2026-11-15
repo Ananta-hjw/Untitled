@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH_UI } from '../config';
-import { trackedQuests, type QuestState } from '../story/quests';
+import { currentObjective, reportTo, trackedQuests, type QuestState } from '../story/quests';
 import { NPCS } from '../world/npcs';
 
 const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
@@ -25,8 +25,9 @@ export class QuestTracker {
   refresh(state: QuestState): void {
     const lines = trackedQuests(state).slice(0, MAX_LINES).map(({ quest, progress }) => {
       const tag = quest.main ? '◆ ' : '◇ ';
-      if (progress.status === 'ready') return `${tag}${quest.title} · ${NAMES[quest.giver]}에게 보고`;
-      return `${tag}${quest.title} · ${quest.objective.label} ${progress.count}/${quest.objective.need}`;
+      if (progress.status === 'ready') return `${tag}${quest.title} · ${NAMES[reportTo(quest)]}에게 보고`;
+      const objective = currentObjective(quest, progress);
+      return `${tag}${quest.title} · ${objective.label} ${progress.count}/${objective.need}`;
     });
     this.text.setText(lines).setVisible(lines.length > 0);
   }

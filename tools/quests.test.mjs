@@ -14,15 +14,15 @@ test('퀘스트는 마을 사람이 주고, 대사의 화자와 그림이 그 �
     assert.ok(names[q.giver], q.id);
     if (q.requires) assert.ok(QUESTS.some((r) => r.id === q.requires), q.id);
     if (q.objective.map) assert.ok(MAPS[q.objective.map], q.id);
-    if (q.objective.event === 'talk') assert.ok(names[q.objective.npc] && q.target?.length, q.id);
+    if (q.objective.event === 'talk') assert.ok(names[q.objective.npc] && (q.target?.length || q.steps?.[0].lines?.length), q.id);
     assert.ok(q.objective.need > 0 && q.rewardXp > 0, q.id);
-    for (const l of [...q.offer, ...q.reminder, ...q.done, ...(q.target ?? [])]) {
-      if (l.portrait !== 'hero-neutral') assert.equal(l.speaker, names[l.portrait], `${q.id}: ${l.text}`);
+    for (const l of [...q.offer, ...q.reminder, ...q.done, ...(q.target ?? []), ...(q.steps ?? []).flatMap(o => o.lines ?? [])]) {
+      if (l.portrait && l.portrait !== 'hero-neutral') assert.equal(l.speaker, names[l.portrait], `${q.id}: ${l.text}`);
     }
   }
 });
 
-test('루안의 수련은 순서대로 열리고, 표시는 ! → … → ? → 다음 ! 로 바뀐다', () => {
+test('루안의 수련은 순서대로 열리고, 완료하면 다음 메인이 자동으로 이어진다', () => {
   let state = {};
   assert.equal(markerFor('ruan', state), 'new');
   let r = talkTo('ruan', state);
@@ -36,8 +36,9 @@ test('루안의 수련은 순서대로 열리고, 표시는 ! → … → ? → 
   r = talkTo('ruan', state);
   assert.equal(r.completed.id, 'ruan-training');
   state = r.state;
-  assert.equal(markerFor('ruan', state), 'new');
-  assert.equal(talkTo('ruan', state).accepted.id, 'ruan-field');
+  assert.equal(markerFor('ruan', state), 'progress');
+  assert.equal(r.next.id, 'ruan-field');
+  assert.deepEqual(state['ruan-field'], { status: 'active', count: 0 });
 });
 
 test('처치는 정해진 맵에서만 세고, 맵을 가리지 않는 퀘스트는 어디서든 센다', () => {
