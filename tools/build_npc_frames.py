@@ -1,4 +1,5 @@
 """Measure NPC walk sheets without changing any source image pixels."""
+import argparse
 import json
 from pathlib import Path
 from statistics import median
@@ -10,6 +11,11 @@ SHEETS = {
     'walk_cardinal.png': ['down', 'left', 'right', 'up'],
     'walk_diagonal.png': ['down-left', 'down-right', 'up-left', 'up-right'],
 }
+CHARACTERS = [
+    'linea', 'sia', 'ruan', 'serena', 'doran', 'merina',
+    'herman', 'eila', 'teon', 'rosetta', 'vernel', 'fern',
+    'bram', 'mirel', 'kairen', 'velka', 'razen',
+]
 
 
 def build(character):
@@ -60,5 +66,8 @@ def build(character):
 
 
 if __name__ == '__main__':
-    for name in ['linea', 'sia', 'ruan', 'serena', 'doran', 'merina', 'herman', 'eila', 'teon', 'rosetta', 'vernel', 'fern']:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--characters', nargs='+', choices=CHARACTERS, default=CHARACTERS,
+                        help='Measure only the named characters; defaults to all walk sheets.')
+    for name in parser.parse_args().characters:
         build(name)
