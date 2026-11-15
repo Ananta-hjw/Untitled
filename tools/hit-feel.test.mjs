@@ -30,3 +30,21 @@ test('맞는 순간 납작해졌다가 출렁이며 원래 모양으로 돌아�
   // 시간이 갈수록 흔들림이 줄어든다
   assert.ok(Math.abs(hitSquash(HIT_FEEL.squashMs * 0.9).scaleX - 1) < Math.abs(start.scaleX - 1));
 });
+
+test('치명타는 일반과 마무리 일격 사이의 무게이고, 반격에는 붙지 않는다', async () => {
+  const { strikeKind, critMultiplier, heavierKind } = await import('../src/combat/hitFeel.ts');
+  assert.ok(hitStopMs('normal') < hitStopMs('crit') && hitStopMs('crit') < hitStopMs('finisher'));
+  assert.deepEqual(strikeKind(false, false, 0), { kind: 'crit', crit: true });
+  assert.deepEqual(strikeKind(false, false, 0.99), { kind: 'normal', crit: false });
+  assert.deepEqual(strikeKind(false, true, 0), { kind: 'finisher', crit: true });
+  assert.deepEqual(strikeKind(true, false, 0), { kind: 'counter', crit: false });
+  assert.deepEqual(strikeKind(true, true, 0), { kind: 'counter', crit: false });
+  assert.equal(strikeKind(false, false, HIT_FEEL.critChance).crit, false);
+  assert.equal(critMultiplier(true), HIT_FEEL.critDamage);
+  assert.equal(critMultiplier(false), 1);
+  assert.equal(heavierKind(undefined, 'normal'), 'normal');
+  assert.equal(heavierKind('crit', 'normal'), 'crit');
+  assert.equal(heavierKind('normal', 'finisher'), 'finisher');
+  assert.equal(heavierKind('counter', 'finisher'), 'counter');
+  for (const [ms, intensity] of Object.values(HIT_FEEL.shake)) assert.ok(ms <= 200 && intensity <= 0.015);
+});

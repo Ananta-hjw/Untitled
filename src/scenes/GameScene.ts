@@ -5,7 +5,8 @@ import { bladeHitsEllipse, clipBladeSweep, type Blade } from '../combat/blade';
 import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
 import { isJustDodge, slowMotionScale, strikeReaches } from '../combat/justDodge';
-import { gameTimeScale, hitStopMs, type HitKind } from '../combat/hitFeel';
+import { critMultiplier, gameTimeScale, heavierKind, hitStopMs, strikeKind, type HitKind } from '../combat/hitFeel';
+import { ImpactEffects } from '../combat/ImpactEffects';
 import {
   DEPTH_LIGHTING,
   DODGE,
@@ -19,6 +20,7 @@ import {
   VIEW_HEIGHT,
   WORLD_HEIGHT,
   WORLD_WIDTH,
+  HIT_FEEL,
 } from '../config';
 import { dodgeDistanceRatio, lungeProgress, locomotionRate } from '../entities/movement';
 import { Character } from '../entities/Character';
@@ -96,6 +98,10 @@ export class GameScene extends Phaser.Scene {
   private slowMotionLeft = 0;
   /** 히트스톱이 끝날 때까지 남은 실제 시간(ms). 그동안 게임 시간이 멈춘다. */
   private hitStopLeft = 0;
+  /** 섬광·불꽃·먼지·파편 (게임 시계로 움직인다) */
+  private impacts!: ImpactEffects;
+  /** 넉백으로 미끄러지는 캐릭터가 마지막으로 먼지를 일으킨 시각 */
+  private readonly slideDustAt = new WeakMap<Character, number>();
   /** 이 시각(게임 시계)까지 시작한 공격 한 번은 반격으로 강해진다 */
   private counterUntil = 0;
   private nextGhostAt = 0;
@@ -221,6 +227,7 @@ export class GameScene extends Phaser.Scene {
       (x, y) => this.walkArea.contains(x, y));
     this.buildCharacters();
     this.effects = new CombatEffects(this);
+    this.impacts = new ImpactEffects(this);
     this.buildUi();
     this.damageNumbers = new DamageNumbers(this);
     this.progressEffects = new ProgressEffects(this);
@@ -264,6 +271,8 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     this.perf?.update(delta);
+    // 히트스톱이나 일시정지로 게임 시계가 멈추면 불꽃도 그 자리에 멈춘다.
+    this.impacts?.update(this.now, delta);
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
     // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
     const step = Math.min(delta, 50);
@@ -553,6 +562,11 @@ export class GameScene extends Phaser.Scene {
     if (character.alive) {
       const next = this.walkArea.move(character.x, character.y, k.x * dt, k.y * dt, this.scratch);
       character.placeAt(next.x, next.y);
+      // 세게 밀려나면 발밑에 흙먼지가 인다.
+      if (k.lengthSq() > 260 * 260 && this.now - (this.slideDustAt.get(character) ?? -1e9) > 70) {
+        this.slideDustAt.set(character, this.now);
+        this.impacts.dust(character.x, character.y, 1, this.now, 20);
+      }
     }
     k.scale(Math.max(0, 1 - KNOCKBACK_DAMPING * dt));
   }
@@ -616,6 +630,7 @@ export class GameScene extends Phaser.Scene {
     this.dodgeUntil = time + DODGE.durationMs;
     this.dodgeProgress = 0;
     this.dodgeStartedAt = time;
+    this.impacts.dust(player.x, player.y, 5, time, 50);
     this.dodgeOrigin.x = player.x;
     this.dodgeOrigin.y = player.y;
     this.justDodged = false;
@@ -736,7 +751,7 @@ export class GameScene extends Phaser.Scene {
     trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, combo.hitDelayMs, player.y + 2);
     this.effects.drawAttack(trace.effect, sweep, time);
 
-    let hitAny = false;
+    let heaviest: Exclude<HitKind, 'hurt'> | undefined;
     for (const enemy of this.enemies) {
       const c = enemy.character;
       if (!c.alive || trace.hit.has(enemy)) continue;
@@ -748,27 +763,36 @@ export class GameScene extends Phaser.Scene {
         bounds.width * 0.42 + PLAYER.bladeRadius, bounds.height * 0.42 + PLAYER.bladeRadius)) continue;
       trace.hit.add(enemy);
 
-      hitAny = true;
+      const strike = strikeKind(trace.counter, finisher, Math.random());
+      heaviest = heavierKind(heaviest, strike.kind);
       const bonus = trace.counter ? JUST_DODGE.counterDamage : 1;
-      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * combo.damage * bonus);
+      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * combo.damage * bonus * critMultiplier(strike.crit));
       const died = c.hurt(damage);
       if (trace.counter) this.showDamage(c.x, c.y - 100, damage, '#9fdcff', 50);
+      else if (strike.crit) this.showDamage(c.x, c.y - 100, damage, '#ffd23f', finisher ? 58 : 52);
       else this.showDamage(c.x, c.y - 100, damage, finisher ? '#ffb35a' : '#fff3c4', finisher ? 46 : 34);
+      // 칼이 닿은 자리(몸 가운데)에서 섬광과 불꽃이 튄다.
+      this.impacts.impact(bounds.centerX, bounds.centerY, trace.direction.x, trace.direction.y,
+        strike.crit && strike.kind === 'finisher' ? 'finisher' : strike.kind, this.now, c.y);
       if (died) {
         enemy.kill();
+        this.impacts.splatter(c.x, c.y, enemy.color, this.now);
         this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
         this.gainXp(PROGRESSION.slimeXp, c.x, c.y - 185);
       } else {
-        const push = PLAYER.knockback * combo.knockback;
+        const heavy = strike.kind !== 'normal' ? HIT_FEEL.heavyKnockback : 1;
+        const push = PLAYER.knockback * combo.knockback * heavy;
         c.knockback.set(trace.direction.x * push, trace.direction.y * push * VERTICAL_SPEED_RATIO);
         enemy.interrupt(this.now);
         enemy.onHit(this.now);
       }
     }
-    if (hitAny) {
-      const strong = finisher || trace.counter;
-      this.cameras.main.shake(strong ? 130 : 70, strong ? 0.009 : 0.004);
-      this.hitStop(trace.counter ? 'counter' : finisher ? 'finisher' : 'normal');
+    if (heaviest) {
+      const [ms, intensity] = HIT_FEEL.shake[heaviest];
+      this.cameras.main.shake(ms, intensity);
+      this.hitStop(heaviest);
+      if (heaviest === 'counter') this.impacts.screenFlash(0x9fdcff, 0.16);
+      else if (heaviest !== 'normal') this.impacts.screenFlash(0xffffff, heaviest === 'finisher' ? 0.1 : 0.07);
     }
   }
 
@@ -927,7 +951,10 @@ export class GameScene extends Phaser.Scene {
     const died = player.hurt(ENEMY.damage, 0xff5a4a);
     player.knockback.set(c.facing * ENEMY.knockback, 0);
     this.showDamage(player.x, player.y - 190, ENEMY.damage, '#ff8a7a');
-    this.cameras.main.shake(110, 0.007);
+    const [shakeMs, shakeIntensity] = HIT_FEEL.shake.hurt;
+    this.cameras.main.shake(shakeMs, shakeIntensity);
+    this.impacts.screenFlash(0xff3b2f, 0.14, 160);
+    this.impacts.dust(player.x, player.y, 4, now);
     this.hitStop('hurt');
     this.drawHud();
     if (died) this.onPlayerDeath();
@@ -948,6 +975,7 @@ export class GameScene extends Phaser.Scene {
     this.dodgeButton.setEnabled(true);
     enemy.interrupt(now, JUST_DODGE.stunMs);
     this.hud.showCallout('저스트 회피!');
+    this.impacts.dust(this.player.x, this.player.y, 6, now, 60);
     this.cameras.main.flash(120, 170, 220, 255);
   }
 

@@ -31,8 +31,12 @@ export class Enemy {
   /** 마지막으로 맞은 시각(게임 시계). 맞은 뒤 잠깐 몸이 출렁인다. */
   private hitAt?: number;
 
+  /** 쓰러질 때 흩어지는 파편의 색 */
+  readonly color: number;
+
   constructor(scene: Phaser.Scene, key: string, x: number, y: number) {
     this.scene = scene;
+    this.color = key.includes('blue') ? 0x6cb8ff : 0x8fe06a;
     this.character = new Character(scene, x, y, {
       key,
       shadowWidth: 100,
