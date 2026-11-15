@@ -21,6 +21,7 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
   HIT_FEEL,
+  HERO_WALK_NATURAL_SPEED,
 } from '../config';
 import { dodgeDistanceRatio, lungeProgress, locomotionRate } from '../entities/movement';
 import { Character } from '../entities/Character';
@@ -42,13 +43,13 @@ import { PauseMenu } from '../ui/PauseMenu';
 import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings } from '../ui/settingsData';
 import { DIALOGUES, HERO_NAME } from '../story/dialogues';
 import { findInteractable, type Interactable } from '../world/interactables';
-import { Npc, preloadNpcs } from '../entities/Npc';
-import { nextStressCount, stressNpcs } from '../world/npcs';
+import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
+import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
 import { PerfOverlay } from '../ui/PerfOverlay';
 import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
 import {
-  QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestState,
+  QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestMarker, type QuestState,
 } from '../story/quests';
 import type { NpcId } from '../world/npcs';
 import { ItemPanel, type PanelAction } from '../ui/ItemPanel';
@@ -155,6 +156,8 @@ export class GameScene extends Phaser.Scene {
   private perf?: PerfOverlay;
   /** 퀘스트 진행. 바뀔 때마다 기기에 저장한다(진행 상황과 따로). */
   private quests: QuestState = {};
+  /** 마을의 가게 문 위 퀘스트 표시: 안에 있는 사람의 표시를 문 위에 보여 준다. */
+  private doorMarkers: Array<{ spot: Interactable; text: Phaser.GameObjects.Text; npcs: NpcId[]; marker?: QuestMarker }> = [];
   private minimap?: Minimap;
   private questTracker?: QuestTracker;
   /** 골드와 아이템. 바뀔 때마다 기기에 저장한다(진행 상황과 따로). */
@@ -202,6 +205,7 @@ export class GameScene extends Phaser.Scene {
     this.interactables = [];
     this.perf = undefined;
     this.quests = {};
+    this.doorMarkers = [];
     // 지난 장면의 UI는 재시작 때 사라지므로 새로 만들 때까지 비워 둔다.
     this.minimap = undefined;
     this.questTracker = undefined;
@@ -248,7 +252,7 @@ export class GameScene extends Phaser.Scene {
   preload(): void {
     preloadHeroSprite(this);
     preloadVillage(this);
-    preloadNpcs(this, MAPS.village.npcs);
+    preloadNpcs(this, NPCS);
     preloadDialogue(this);
   }
 
@@ -381,6 +385,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.separateEnemies(dt);
     for (const npc of this.npcs) npc.update(time, dt, this.player, this.walkArea);
+    for (const door of this.doorMarkers) if (door.marker) door.text.setY(door.spot.y - 150 - Math.abs(Math.sin(time / 320)) * 8);
     this.applyKnockback(this.player, dt);
     this.damageNumbers.update(gameStep);
     this.updateInteraction(time);
@@ -398,6 +403,15 @@ export class GameScene extends Phaser.Scene {
     }
     this.npcs = defs.map((def) => new Npc(this, def));
     this.interactables = [...this.map.interactables, ...this.npcs.map((npc) => npc.spot)];
+    for (const spot of this.map.interactables) {
+      if (!spot.enter) continue;
+      const inside = NPCS.filter((n) => n.inside && `in-${n.inside}` === spot.enter!.to).map((n) => n.id);
+      if (inside.length === 0) continue;
+      const text = this.add.text(spot.x, spot.y - 150, '', {
+        fontFamily: 'system-ui, sans-serif', fontSize: '40px', fontStyle: 'bold', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 7,
+      }).setOrigin(0.5, 1).setDepth(spot.y + 400).setResolution(2).setVisible(false);
+      this.doorMarkers.push({ spot, text, npcs: inside });
+    }
 
     const start = this.arrival ?? this.map.spawn;
     this.player = new Character(this, start.x, start.y, {
@@ -619,7 +633,8 @@ export class GameScene extends Phaser.Scene {
       this.dismissHint();
     }
     const rate = locomotionRate(player.x - fromX, player.y - fromY, dt, PLAYER_SPEED);
-    player.setMotion(rate > 0, v.x, rate);
+    // 걸음 그림은 실제로 움직인 속도에 맞춘다 (발이 바닥에서 미끄러지지 않게).
+    player.setMotion(rate > 0, v.x, rate * PLAYER_SPEED / HERO_WALK_NATURAL_SPEED);
     if (player.sprite instanceof HeroSprite) player.sprite.setMovement(player.x - fromX, player.y - fromY);
   }
 
@@ -1054,6 +1069,13 @@ export class GameScene extends Phaser.Scene {
   /** 머리 위 표시와 퀘스트 목록을 지금 상태로 맞춘다. */
   private refreshQuests(): void {
     for (const npc of this.npcs) npc.setQuestMarker(markerFor(npc.def.id, this.quests));
+    const priority: QuestMarker[] = ['ready', 'new', 'target', 'progress'];
+    for (const door of this.doorMarkers) {
+      const markers = door.npcs.map((id) => markerFor(id, this.quests)).filter((m): m is QuestMarker => !!m);
+      door.marker = priority.find((m) => markers.includes(m));
+      if (door.marker) door.text.setText(MARKER_STYLE[door.marker].text).setColor(MARKER_STYLE[door.marker].color);
+      door.text.setVisible(!!door.marker);
+    }
     this.questTracker?.refresh(this.quests);
   }
 
@@ -1178,7 +1200,10 @@ export class GameScene extends Phaser.Scene {
 
   /** 미니맵이 다시 그릴 때만 부른다. */
   private readonly collectMinimap = () => ({
-    npcs: this.npcs.map((n) => ({ x: n.x, y: n.y, marker: n.questMarker })),
+    npcs: [
+      ...this.npcs.map((n) => ({ x: n.x, y: n.y, marker: n.questMarker })),
+      ...this.doorMarkers.filter((d) => d.marker).map((d) => ({ x: d.spot.x, y: d.spot.y, marker: d.marker })),
+    ],
     enemies: this.enemies.filter((e) => e.character.alive).map((e) => ({ x: e.character.x, y: e.character.y })),
   });
 

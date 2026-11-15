@@ -828,14 +828,14 @@ test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제
     return { count: s.npcs.length, names, visible, moved, onGround, stayed, spotFollows, dialogue,
       talkable: s.interactables.filter(i => i.id.startsWith('npc-')).length };
   })()`);
-  assert.equal(result.count, 11);
-  assert.equal(result.talkable, 11);
+  // 장사하는 세 사람(메리나·도란·로제타)은 가게 안에 있다.
+  assert.equal(result.count, 8);
+  assert.equal(result.talkable, 8);
   assert.equal(result.visible, true);
   assert.deepEqual(result.names, {
     serena: '세레나', sia: '시아', linea: '리네아', ruan: '루안', herman: '헤르만', eila: '에일라',
-    merina: '메리나', doran: '도란', rosetta: '로제타', vernel: '베르넬', teon: '테온',
+    vernel: '베르넬', teon: '테온',
   });
-  for (const id of ['merina', 'doran', 'rosetta']) assert.equal(result.moved[id], 0, id);
   for (const id of ['serena', 'sia', 'linea', 'ruan', 'herman', 'eila', 'vernel', 'teon']) {
     assert.ok(result.moved[id] > 15, `${id} moved ${result.moved[id]}`);
   }
@@ -867,15 +867,15 @@ test('성능 테스트 모드는 마을에 사람을 더 세우고 FPS·메모�
     g.step(t += 16, 16);
     return { before, on, kept, next, off: { npcs: s.npcs.length, perf: !!s.perf, label: label() } };
   })()`);
-  assert.deepEqual(result.before, { npcs: 11, perf: false, label: '성능 테스트: 끔' });
-  assert.equal(result.on.npcs, 111);
+  assert.deepEqual(result.before, { npcs: 8, perf: false, label: '성능 테스트: 끔' });
+  assert.equal(result.on.npcs, 108);
   assert.equal(result.on.label, '성능 테스트: 100명');
   assert.equal(result.on.onGround, true);
   assert.match(result.on.perf, /FPS \d+/);
-  assert.match(result.on.perf, /인물 111 · 그림 메모리 \d+MB/);
-  assert.equal(result.kept, 111);
-  assert.equal(result.next, 211);
-  assert.deepEqual(result.off, { npcs: 11, perf: false, label: '성능 테스트: 끔' });
+  assert.match(result.on.perf, /인물 108 · 그림 메모리 \d+MB/);
+  assert.equal(result.kept, 108);
+  assert.equal(result.next, 208);
+  assert.deepEqual(result.off, { npcs: 8, perf: false, label: '성능 테스트: 끔' });
 });
 test('퀘스트: 머리 위 표시, 대화로 받고 완료, 목록 표시, 저장 후 재시작에도 유지되고 미니맵에 그려진다', async () => {
   await load('village');
@@ -888,7 +888,7 @@ test('퀘스트: 머리 위 표시, 대화로 받고 완료, 목록 표시, 저�
     const marker = (id) => s.npcs.find(n => n.def.id === id).questMarker;
     const talk = (id) => { const n = s.npcs.find(n => n.def.id === id); s.openDialogue(n.spot); const name = s.dialogue.nameText.text;
       while (s.dialogue.isOpen) s.dialogue.advance(); return name; };
-    const start = { ruan: marker('ruan'), doran: marker('doran'), teon: marker('teon'), serena: marker('serena') ?? null, tracker: s.questTracker.text.text };
+    const start = { ruan: marker('ruan'), doran: s.doorMarkers.find(d => d.spot.id === 'door-smithy').marker, smithyDoor: s.doorMarkers.find(d => d.spot.id === 'door-smithy').text.visible, teon: marker('teon'), serena: marker('serena') ?? null, tracker: s.questTracker.text.text };
     const speaker = talk('ruan');
     const accepted = { ruan: marker('ruan'), tracker: s.questTracker.text.text };
     // 3단 콤보의 마지막 일격을 세 번 시작하면 목표를 채운다.
@@ -908,7 +908,8 @@ test('퀘스트: 머리 위 표시, 대화로 받고 완료, 목록 표시, 저�
     return { start, speaker, accepted, ready, xpGained: xpAfter > xpBefore, afterDone, minimap,
       reloaded: { quests: s.quests, ruan: marker('ruan'), tracker: s.questTracker.text.text } };
   })()`);
-  assert.deepEqual(result.start, { ruan: 'new', doran: 'new', teon: 'new', serena: null, tracker: '' });
+  // 도란은 대장간 안에 있어서, 마을에서는 대장간 문 위에 표시가 뜬다.
+  assert.deepEqual(result.start, { ruan: 'new', doran: 'new', smithyDoor: true, teon: 'new', serena: null, tracker: '' });
   assert.equal(result.speaker, '루안');
   assert.equal(result.accepted.ruan, 'progress');
   assert.match(result.accepted.tracker, /마지막 수련 · 3단 콤보 마무리 0\/3/);
@@ -1007,11 +1008,34 @@ test('건물 문 앞에서 들어가기를 누르면 실내로 들어가고, 아
   assert.equal(result.started, true);
   assert.equal(result.inside.map, 'in-inn');
   assert.equal(result.inside.walkable, true);
-  assert.deepEqual([result.inside.npcs, result.inside.enemies, result.inside.minimap], [0, 0, '여관']);
+  assert.deepEqual([result.inside.npcs, result.inside.enemies, result.inside.minimap], [1, 0, '여관'], '여관 안에는 로제타가 있다');
   assert.equal(result.inside.bounds, true);
   assert.equal(result.blocked, true);
   assert.equal(result.back.map, 'village');
   assert.ok(Math.hypot(result.back.x - result.back.door.x, result.back.y - result.back.door.y) < 40);
+});
+test('잡화점 안의 메리나에게 카운터 앞에서 말을 걸면 대화 뒤 잡화점이 열린다', async () => {
+  await load('in-store');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    let t = performance.now();
+    const merina = s.npcs.find(n => n.def.id === 'merina');
+    const counter = s.map.interior.furniture.find(f => f.kind === 'counter');
+    const counterFront = s.map.bounds.top + counter.y;
+    s.player.placeAt(merina.spot.x, merina.spot.y + 20);
+    for (let i = 0; i < 3; i++) g.step(t += 16, 16);
+    const ready = { button: s.talkButton.image.visible, label: s.talkButton.text.text, behind: merina.y < counterFront - counter.d, standing: s.player.y > counterFront };
+    s.openDialogue(merina.spot);
+    const name = s.dialogue.nameText.text;
+    while (s.dialogue.isOpen) s.dialogue.advance();
+    const shop = s.itemPanel.isOpen;
+    s.itemPanel.close();
+    return { npcs: s.npcs.map(n => n.def.id), ready, name, shop };
+  })()`);
+  assert.deepEqual(result.npcs, ['merina']);
+  assert.deepEqual(result.ready, { button: true, label: '대화', behind: true, standing: true });
+  assert.equal(result.name, '메리나');
+  assert.equal(result.shop, true);
 });
 test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 이어지며 마을에는 몬스터가 없다', async () => {
   await load('village');

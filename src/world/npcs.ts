@@ -1,10 +1,11 @@
 import type { DialogueId } from '../story/dialogues.ts';
+import { INTERIORS, roomRect, type InteriorId } from './interiors.ts';
 
 /**
  * 로웬 마을 사람들 (docs/story.md 마을 사람들, docs/rowen-village.md 배치).
  *
  * 모두 8방향 걷기 그림(walk_cardinal/walk_diagonal 시트)으로 그린다.
- * 장사를 하는 사람(도란, 메리나, 로제타)은 가게 앞에 서서 시온 쪽을 돌아볼 뿐 걷지 않는다.
+ * 장사를 하는 사람(도란, 메리나, 로제타)은 가게 안(실내 맵)에 서서 시온 쪽을 돌아볼 뿐 걷지 않는다.
  * 나머지는 자기 자리 주변을 천천히 돌아다닌다.
  * 페른은 습격 다음 날 도착하므로(docs/story-chapter1.md) 첫날에는 없다.
  * 이 파일은 Phaser를 쓰지 않아 tools/npcs.test.mjs가 직접 불러 검사한다.
@@ -30,6 +31,16 @@ export interface NpcDef {
   shop?: boolean;
   /** 돌아다니는 범위 (처음 자리에서의 반지름). 장사하는 사람은 없다(서 있는다). */
   wander?: number;
+  /** 건물 안에 있으면 그 실내. 없으면 로웬 마을(바깥)에 있다. */
+  inside?: InteriorId;
+  /** 카운터 뒤처럼 바로 다가갈 수 없는 자리면, 말을 거는 자리를 이만큼 앞(아래)으로 옮긴다. */
+  talkOffset?: number;
+}
+
+/** 실내의 방 좌표(바닥 왼쪽 위 기준)를 월드 좌표로 바꾼다. */
+function inRoom(id: InteriorId, x: number, y: number): { x: number; y: number; inside: InteriorId } {
+  const room = roomRect(INTERIORS.find((i) => i.id === id)!);
+  return { x: room.left + x, y: room.top + y, inside: id };
 }
 
 export const NPCS: NpcDef[] = [
@@ -39,16 +50,31 @@ export const NPCS: NpcDef[] = [
   { id: 'ruan', name: '루안', role: '첫 스승', x: 590, y: 1090, height: 156, dialogue: 'npc-ruan', wander: 120 },
   { id: 'herman', name: '헤르만', role: '촌장', x: 1290, y: 525, height: 150, dialogue: 'npc-herman', wander: 100 },
   { id: 'eila', name: '에일라', role: '치유사', x: 2070, y: 550, height: 146, dialogue: 'npc-eila', wander: 110 },
-  { id: 'merina', name: '메리나', role: '잡화점 주인', x: 2090, y: 950, height: 144, dialogue: 'npc-merina', shop: true },
-  { id: 'doran', name: '도란', role: '대장장이', x: 590, y: 1505, height: 156, dialogue: 'npc-doran', shop: true },
-  { id: 'rosetta', name: '로제타', role: '여관 주인', x: 1990, y: 1505, height: 146, dialogue: 'npc-rosetta', shop: true },
+  // 장사하는 사람은 가게 안: 메리나와 로제타는 카운터 뒤, 도란은 모루 옆
+  { id: 'merina', name: '메리나', role: '잡화점 주인', ...inRoom('store', 500, 150), height: 144, dialogue: 'npc-merina', shop: true, talkOffset: 125 },
+  { id: 'doran', name: '도란', role: '대장장이', ...inRoom('smithy', 560, 345), height: 156, dialogue: 'npc-doran', shop: true },
+  { id: 'rosetta', name: '로제타', role: '여관 주인', ...inRoom('inn', 1070, 140), height: 146, dialogue: 'npc-rosetta', shop: true, talkOffset: 125 },
   { id: 'vernel', name: '베르넬', role: '유적 연구자', x: 1580, y: 1250, height: 150, dialogue: 'npc-vernel', wander: 120 },
   { id: 'teon', name: '테온', role: '경비대원', x: 1330, y: 1290, height: 150, dialogue: 'npc-teon', wander: 100 },
 ];
 
 /** 마을 사람이 플레이어를 보고 멈춰서 돌아보는 거리 */
 export const NPC_NOTICE_RADIUS = 150;
-export const NPC_WALK_SPEED = 62;
+export const NPC_WALK_SPEED = 78;
+/**
+ * 한 걸음에 나아가는 거리 (키에 대한 비율). 걷기 시트의 옆모습에서 잰 보폭(키의 약 0.26~0.33)에 맞췄다.
+ * 걸음 그림은 시간이 아니라 걸은 거리에 맞춰 넘긴다. 그래야 발이 바닥에서 미끄러지지 않는다.
+ */
+export const NPC_STEP_RATIO = 0.29;
+
+/**
+ * 걸은 거리(px)에 해당하는 걷기 그림. poses는 한 주기(두 걸음)의 그림 순서다(예: [1, 2, 3, 2]).
+ * 한 그림이 반 걸음을 맡는다.
+ */
+export function walkPose(distance: number, height: number, poses: readonly number[]): number {
+  const perPose = (NPC_STEP_RATIO * height * 2) / poses.length;
+  return poses[Math.floor(Math.max(0, distance) / perPose) % poses.length];
+}
 
 export type Direction8 = 'down' | 'down-right' | 'right' | 'up-right' | 'up' | 'up-left' | 'left' | 'down-left';
 

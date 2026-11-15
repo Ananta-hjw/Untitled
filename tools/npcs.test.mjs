@@ -5,7 +5,7 @@ import { DIALOGUES } from '../src/story/dialogues.ts';
 import { MAPS, findExit, walkable } from '../src/world/maps.ts';
 import { BUILDINGS, PLAYER_SPAWN } from '../src/world/villageLayout.ts';
 import {
-  NPCS, STRESS_STEPS, direction8, nextStressCount, pickWanderTarget, stressNpcs, wanderPauseMs,
+  NPCS, NPC_STEP_RATIO, STRESS_STEPS, walkPose, direction8, nextStressCount, pickWanderTarget, stressNpcs, wanderPauseMs,
 } from '../src/world/npcs.ts';
 
 const village = MAPS.village;
@@ -14,7 +14,11 @@ const characters = new URL('../src/assets/characters/', import.meta.url);
 test('마을 사람은 열한 명이고, 이름과 대사·그림이 연결되어 있다', () => {
   assert.equal(NPCS.length, 11);
   assert.equal(new Set(NPCS.map((n) => n.id)).size, NPCS.length);
-  assert.equal(village.npcs, NPCS);
+  // 장사하는 세 사람은 가게 안, 나머지는 마을에 있다.
+  assert.deepEqual(village.npcs.map((n) => n.id).sort(), NPCS.filter((n) => !n.shop).map((n) => n.id).sort());
+  assert.deepEqual(MAPS['in-store'].npcs.map((n) => n.id), ['merina']);
+  assert.deepEqual(MAPS['in-smithy'].npcs.map((n) => n.id), ['doran']);
+  assert.deepEqual(MAPS['in-inn'].npcs.map((n) => n.id), ['rosetta']);
   assert.equal(NPCS.some((n) => n.id === 'fern'), false, '페른은 첫날 없다');
   for (const npc of NPCS) {
     const lines = DIALOGUES[npc.dialogue];
@@ -42,18 +46,35 @@ test('장사하는 사람은 걷지 않고, 나머지는 모두 돌아다니며,
   }
 });
 
-test('마을 사람은 걸을 수 있는 곳에 서 있고, 출구·문·시작점을 막지 않는다', () => {
+test('마을 사람은 자기 맵의 걸을 수 있는 곳에 서 있고, 출구·문·시작점을 막지 않으며, 말을 걸 수 있다', () => {
+  const mapOf = (npc) => MAPS[npc.inside ? `in-${npc.inside}` : 'village'];
   for (const npc of NPCS) {
-    assert.equal(walkable(village, npc.x, npc.y), true, npc.id);
-    assert.equal(findExit(village, npc.x, npc.y), undefined, npc.id);
-    assert.ok(Math.hypot(npc.x - PLAYER_SPAWN.x, npc.y - PLAYER_SPAWN.y) > 110, `${npc.id} on spawn`);
-    for (const b of BUILDINGS) assert.ok(Math.hypot(npc.x - b.door.x, npc.y - b.door.y) > 50, `${npc.id} at ${b.frame} door`);
+    const map = mapOf(npc);
+    assert.equal(walkable(map, npc.x, npc.y), true, npc.id);
+    assert.equal(findExit(map, npc.x, npc.y), undefined, npc.id);
+    assert.ok(Math.hypot(npc.x - map.spawn.x, npc.y - map.spawn.y) > 110, `${npc.id} on spawn`);
+    // 말을 거는 자리(카운터 앞 등)는 걸어서 설 수 있는 곳이다.
+    const talkY = npc.y + (npc.talkOffset ?? 0);
+    assert.equal(walkable(map, npc.x, talkY + 20), true, `${npc.id} talk spot`);
+    if (!npc.inside) for (const b of BUILDINGS) assert.ok(Math.hypot(npc.x - b.door.x, npc.y - b.door.y) > 50, `${npc.id} at ${b.frame} door`);
   }
   for (let i = 0; i < NPCS.length; i++) {
     for (let j = i + 1; j < NPCS.length; j++) {
+      if (NPCS[i].inside !== NPCS[j].inside) continue;
       assert.ok(Math.hypot(NPCS[i].x - NPCS[j].x, NPCS[i].y - NPCS[j].y) > 90, `${NPCS[i].id} / ${NPCS[j].id}`);
     }
   }
+});
+
+test('걸음 그림은 걸은 거리에 맞춰 넘어가고, 두 걸음에 한 주기를 돈다', () => {
+  const poses = [1, 2, 3, 2], height = 140, step = NPC_STEP_RATIO * height;
+  assert.equal(walkPose(0, height, poses), 1);
+  assert.equal(walkPose(step / 2 - 0.1, height, poses), 1);
+  assert.equal(walkPose(step / 2 + 0.1, height, poses), 2);
+  assert.equal(walkPose(step + 0.1, height, poses), 3);
+  assert.equal(walkPose(step * 2 + 0.1, height, poses), 1, '두 걸음이면 한 주기');
+  // 같은 거리를 걸으면 키가 큰 사람이 그림을 덜 넘긴다 (보폭이 크다).
+  assert.equal(walkPose(step * 0.75, height * 2, poses), 1);
 });
 
 test('돌아다닐 곳은 반지름 안의 걸을 수 있는 곳이고, 없으면 제자리로 돌아간다', () => {

@@ -83,7 +83,7 @@ const VILLAGE: GameMap = {
   bounds: FULL_BOUNDS,
   props: VILLAGE_PROPS,
   buildings: BUILDINGS,
-  npcs: NPCS,
+  npcs: NPCS.filter((n) => !n.inside),
   spawn: PLAYER_SPAWN,
   enemies: [],
   exits: [
@@ -246,7 +246,7 @@ function interiorMap(interior: Interior): GameMap {
     bounds: roomRect(interior),
     props: [],
     buildings: [],
-    npcs: [],
+    npcs: NPCS.filter((n) => n.inside === interior.id),
     spawn: arrivalOf(interior),
     enemies: [],
     exits: [{

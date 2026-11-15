@@ -3,7 +3,7 @@ import type { Interactable } from '../world/interactables';
 import type { QuestMarker } from '../story/quests';
 import type { WalkArea } from '../world/walkArea';
 import {
-  NPC_NOTICE_RADIUS, NPC_WALK_SPEED, direction8, pickWanderTarget, wanderPauseMs,
+  NPC_NOTICE_RADIUS, NPC_WALK_SPEED, direction8, pickWanderTarget, walkPose, wanderPauseMs,
   type Direction8, type NpcDef, type NpcId,
 } from '../world/npcs';
 
@@ -69,6 +69,8 @@ export class Npc extends Phaser.GameObjects.Container {
   private target?: { x: number; y: number };
   private restUntil = 0;
   private walkStartedAt = 0;
+  /** 이번에 걷기 시작한 뒤 실제로 걸은 거리. 걸음 그림을 이 거리에 맞춰 넘긴다. */
+  private walked = 0;
   private readonly rand: () => number;
   private readonly step = new Phaser.Math.Vector2();
   private readonly marker: Phaser.GameObjects.Text;
@@ -101,7 +103,9 @@ export class Npc extends Phaser.GameObjects.Container {
     }).setOrigin(0.5, 1).setResolution(2).setVisible(false);
     this.add(this.marker);
 
-    this.spot = { id: `npc-${def.id}`, x: def.x, y: def.y, radius: 110, markerHeight: def.height + 44, dialogue: def.dialogue };
+    // 카운터 뒤의 사람은 카운터 앞에서 말을 건다. 말풍선은 그래도 그 사람 머리 위에 뜬다.
+    const offset = def.talkOffset ?? 0;
+    this.spot = { id: `npc-${def.id}`, x: def.x, y: def.y + offset, radius: 110, markerHeight: def.height + 44 + offset, dialogue: def.dialogue };
     scene.add.existing(this);
     this.setDepth(def.y);
   }
@@ -140,6 +144,7 @@ export class Npc extends Phaser.GameObjects.Container {
       this.target = pickWanderTarget(this.def, this.def.wander, this.rand,
         (x, y) => area.contains(x, y) && area.hasClearPath(this.x, this.y, x, y));
       this.walkStartedAt = now;
+      this.walked = 0;
     }
 
     const dx = this.target.x - this.x, dy = this.target.y - this.y;
@@ -153,11 +158,11 @@ export class Npc extends Phaser.GameObjects.Container {
     }
     area.move(this.x, this.y, (dx / distance) * travel, (dy / distance) * travel, this.step);
     this.direction = direction8(dx, dy, this.direction);
+    this.walked += Math.hypot(this.step.x - this.x, this.step.y - this.y);
     this.setPosition(this.step.x, this.step.y).setDepth(this.step.y);
     this.spot.x = this.x;
-    this.spot.y = this.y;
-    const poses = this.walk.walkPoses;
-    this.showFrame(poses[Math.floor(((now - this.walkStartedAt) / 1000) * this.walk.fps) % poses.length]);
+    this.spot.y = this.y + (this.def.talkOffset ?? 0);
+    this.showFrame(walkPose(this.walked, this.def.height, this.walk.walkPoses));
   }
 
   private showFrame(pose: number): void {
