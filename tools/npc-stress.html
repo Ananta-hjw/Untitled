@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NPC 100명 성능 측정</title>
+<style>
+body{margin:0;background:#16231c;color:#f5ead2;font:14px system-ui}header{padding:8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}a{color:#ace6c5}#game{height:calc(100vh - 110px)}pre{margin:4px 12px;white-space:pre-wrap;font:12px monospace}p{margin:4px 12px;font-size:12px}
+</style>
+<header><strong>NPC 이동 부하 측정</strong><a href="?count=0">0명</a><a href="?count=25">25명</a><a href="?count=50">50명</a><a href="?count=100">100명</a><button onclick="location.reload()">다시 측정</button></header>
+<p>실제 마을·NPC 코드 사용 / 걷는 3종 이미지 공유 / 휴식 생략 / 전투·NPC끼리 충돌·주인공·게임 UI 제외. 5초 준비 후 30초 측정.</p>
+<pre id="result">불러오는 중…</pre><div id="game"></div>
+<script type="module">
+import Phaser from 'phaser';
+import { Npc, preloadNpcs } from '../src/entities/Npc.ts';
+import { NPCS } from '../src/world/npcs.ts';
+import { MAPS } from '../src/world/maps.ts';
+import { buildMap, preloadVillage } from '../src/world/village.ts';
+import { createPlaceholderArt } from '../src/world/placeholderArt.ts';
+
+const count = Math.max(0, Math.min(200, Math.floor(Number(new URLSearchParams(location.search).get('count')) || 0)));
+const walkers = NPCS.filter(n => ['linea', 'sia', 'ruan'].includes(n.id));
+const stats = document.querySelector('#result');
+let seed = 123456;
+const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+const percentile = (values, fraction) => [...values].sort((a, b) => a - b)[Math.min(values.length - 1, Math.floor(values.length * fraction))] ?? 0;
+class Benchmark extends Phaser.Scene {
+  preload() { preloadVillage(this); preloadNpcs(this, walkers); }
+  create() {
+    createPlaceholderArt(this);
+    this.area = buildMap(this, MAPS.village);
+    this.npcs = [];
+    for (let i = 0; i < count; i++) {
+      let x, y, found = false;
+      for (let attempt = 0; attempt < 1000; attempt++) {
+        x = 550 + random() * 1300; y = 720 + random() * 650;
+        if (this.area.contains(x, y)) { found = true; break; }
+      }
+      if (!found) throw new Error('NPC 시작 지점 탐색 실패');
+      this.npcs.push(new Npc(this, { ...walkers[i % walkers.length], name: `주민 ${i + 1}`, x, y, wander: 85 }, random));
+    }
+    this.cameras.main.setZoom(0.65).centerOn(1200, 960);
+    this.now = 0; this.last = performance.now(); this.started = this.last;
+    this.intervals = []; this.costs = []; this.moving = []; this.visible = [];
+    this.player = { x: -100000, y: -100000 };
+    window.NPC_STRESS_READY = true;
+  }
+  update(_time, delta) {
+    if (!this.npcs) return;
+    const tick = performance.now();
+    const interval = tick - this.last; this.last = tick;
+    this.now += Math.min(delta, 50);
+    let moving = 0, visible = 0;
+    const start = performance.now();
+    const view = this.cameras.main.worldView;
+    for (const npc of this.npcs) {
+      // 테스트에서만 쉬는 시간을 생략한다. 실제 이동·장애물·방향·프레임 코드는 그대로 사용한다.
+      npc.restUntil = 0;
+      const x = npc.x, y = npc.y;
+      npc.update(this.now, Math.min(delta, 50) / 1000, this.player, this.area);
+      if (x !== npc.x || y !== npc.y) moving++;
+      if (view.contains(npc.x, npc.y)) visible++;
+    }
+    const cost = performance.now() - start;
+    const elapsed = tick - this.started;
+    if (elapsed >= 5000 && !window.NPC_STRESS_RESULT) {
+      this.intervals.push(interval); this.costs.push(cost); this.moving.push(moving); this.visible.push(visible);
+    }
+    if (elapsed >= 35000 && !window.NPC_STRESS_RESULT) {
+      const frames = this.intervals.length;
+      const total = this.intervals.reduce((a, b) => a + b, 0);
+      const gl = this.game.renderer.gl;
+      const extension = gl?.getExtension('WEBGL_debug_renderer_info');
+      const textureBytes = this.textures.getTextureKeys().reduce((sum, key) => sum + this.textures.get(key).source.reduce((n, source) => n + source.width * source.height * 4, 0), 0);
+      window.NPC_STRESS_RESULT = {
+        count, frames, measuredMs: total, fps: frames * 1000 / total,
+        p50Ms: percentile(this.intervals, .5), p95Ms: percentile(this.intervals, .95), p99Ms: percentile(this.intervals, .99),
+        over33msPercent: this.intervals.filter(v => v > 33.34).length / frames * 100,
+        npcUpdateMeanMs: this.costs.reduce((a, b) => a + b, 0) / frames, npcUpdateP95Ms: percentile(this.costs, .95),
+        movingMean: this.moving.reduce((a, b) => a + b, 0) / frames, visibleMin: Math.min(...this.visible),
+        textureBaseMiB: textureBytes / 1048576,
+        heapMiB: performance.memory ? performance.memory.usedJSHeapSize / 1048576 : null,
+        renderer: extension ? gl.getParameter(extension.UNMASKED_RENDERER_WEBGL) : gl ? 'WebGL' : 'Canvas',
+        renderWidth: this.game.scale.width, renderHeight: this.game.scale.height,
+        userAgent: navigator.userAgent,
+      };
+    }
+    if (!this.nextDisplay || tick >= this.nextDisplay) {
+      stats.textContent = window.NPC_STRESS_RESULT
+        ? `${count}명: ${window.NPC_STRESS_RESULT.fps.toFixed(1)} FPS / P95 ${window.NPC_STRESS_RESULT.p95Ms.toFixed(1)}ms / NPC갱신 ${window.NPC_STRESS_RESULT.npcUpdateMeanMs.toFixed(2)}ms · 측정 완료`
+        : `${count}명 / 현재 이동 ${moving}명 / 화면 안 ${visible}명 / ${elapsed < 5000 ? '준비' : '측정'} ${Math.max(0, (35000 - elapsed) / 1000).toFixed(0)}초 남음`;
+      this.nextDisplay = tick + 500;
+    }
+  }
+}
+window.NPC_STRESS_GAME = new Phaser.Game({
+  type: Phaser.AUTO, parent: 'game', backgroundColor: '#16231c',
+  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: 1280, height: 720 },
+  scene: [Benchmark],
+});
+</script>
+</html>
