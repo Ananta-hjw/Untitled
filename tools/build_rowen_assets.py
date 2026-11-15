@@ -4,7 +4,8 @@ Source sheets and portraits are 1–4 MB each; a phone does not need that much d
 the game draws them. This script writes:
 
 - src/assets/village/rowen/buildings.webp + buildings.json: the eight buildings from
-  residential.png and commerce.png, scaled by BUILDING_SCALE and packed in one sheet.
+  residential.png and commerce.png, scaled by BUILDING_SCALE, plus Linea's cottage from
+  linea-house.png (SINGLES, scaled to its own width), packed in one sheet.
 - src/assets/characters/<id>/dialogue-768.webp: the dialogue portrait cropped to its art, 768 px tall.
 - src/assets/characters/<id>/walk_*-60.webp: walk sheets scaled by WALK_SCALE (frames come from
   walk_frames.json multiplied by the same factor).
@@ -23,6 +24,8 @@ SHEETS = {
     'residential.png': ['family-house', 'training-hall', 'chief-house', 'clinic'],
     'commerce.png': ['smithy', 'general-store', 'inn', 'south-gate'],
 }
+# Buildings drawn alone on one image: name -> (file, width in the sheet)
+SINGLES = {'linea-house': ('linea-house.png', 420)}
 NPCS = ['ruan', 'serena', 'linea', 'sia', 'herman', 'eila', 'merina', 'doran', 'rosetta', 'vernel', 'teon']
 
 
@@ -78,14 +81,21 @@ def buildings():
                 art = art.crop((max(0, x0 - 2), max(0, y0 - 2), min(art.width, x1 + 2), min(art.height, y1 + 2)))
                 size = (round(art.width * BUILDING_SCALE), round(art.height * BUILDING_SCALE))
                 crops.append((name, art.resize(size, Image.LANCZOS)))
-    # Two rows of four, packed left to right.
-    width = max(sum(c.width for _, c in crops[:4]), sum(c.width for _, c in crops[4:])) + 8
-    height = max(c.height for _, c in crops[:4]) + max(c.height for _, c in crops[4:]) + 4
+    for name, (filename, target) in SINGLES.items():
+        with Image.open(VILLAGE / filename) as image:
+            art = image.convert('RGBA')
+            x0, y0, x1, y1 = main_part(art)
+            art = art.crop((max(0, x0 - 2), max(0, y0 - 2), min(art.width, x1 + 2), min(art.height, y1 + 2)))
+            crops.append((name, art.resize((target, round(art.height * target / art.width)), Image.LANCZOS)))
+    # Rows of four, packed left to right.
+    rows = [crops[i:i + 4] for i in range(0, len(crops), 4)]
+    width = max(sum(c.width for _, c in row) for row in rows) + 8
+    height = sum(max(c.height for _, c in row) for row in rows) + 4 * (len(rows) - 1)
     out = Image.new('RGBA', (width, height))
     frames, x, y = [], 0, 0
     for i, (name, crop) in enumerate(crops):
-        if i == 4:
-            x, y = 0, max(c.height for _, c in crops[:4]) + 4
+        if i and i % 4 == 0:
+            x, y = 0, y + max(c.height for _, c in rows[i // 4 - 1]) + 4
         out.paste(crop, (x, y))
         frames.append(dict(name=name, x=x, y=y, w=crop.width, h=crop.height))
         x += crop.width + 2

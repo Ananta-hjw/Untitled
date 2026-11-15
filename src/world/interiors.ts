@@ -11,7 +11,7 @@ import type { BuildingFrame } from './villageLayout.ts';
  * 이 파일은 Phaser를 쓰지 않아 tools/interiors.test.mjs가 직접 불러 검사한다.
  */
 
-export type InteriorId = 'home' | 'chief' | 'clinic' | 'hall' | 'store' | 'smithy' | 'inn';
+export type InteriorId = 'home' | 'linea' | 'chief' | 'clinic' | 'hall' | 'store' | 'smithy' | 'inn';
 
 export type FurnitureKind =
   | 'bed' | 'table' | 'chair' | 'shelf' | 'books' | 'herbs' | 'weapons' | 'counter' | 'barrel' | 'crate'
@@ -57,6 +57,20 @@ export const INTERIORS: Interior[] = [
       { kind: 'chair', x: 410, y: 375, w: 46, d: 40 },
       { kind: 'rug', x: 500, y: 470, w: 300, d: 130, color: 0x8a3b3b },
       { kind: 'plant', x: 60, y: 480, w: 50, d: 40 },
+    ],
+  },
+  {
+    // 창가 꽃병, 일지를 쓰는 책상, 침대 (src/assets/village/rowen/interiors/linea.png 원화 참고)
+    id: 'linea', building: 'linea-house', name: '리네아의 집', width: 900, depth: 480, floor: 0xa47a52, wall: 0xeadcc0,
+    furniture: [
+      { kind: 'bed', x: 720, y: 240, w: 140, d: 210, color: 0x7fa9a0 },
+      { kind: 'table', x: 300, y: 120, w: 190, d: 80 },
+      { kind: 'chair', x: 300, y: 165, w: 46, d: 40 },
+      { kind: 'plant', x: 500, y: 60, w: 50, d: 40 },
+      { kind: 'shelf', x: 110, y: 45, w: 150, d: 45 },
+      { kind: 'hearth', x: 110, y: 330, w: 150, d: 65 },
+      { kind: 'rug', x: 450, y: 400, w: 260, d: 120, color: 0x5f8f86 },
+      { kind: 'plant', x: 850, y: 450, w: 50, d: 40 },
     ],
   },
   {

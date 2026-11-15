@@ -25,9 +25,10 @@ function reachable(map, from) {
   return points;
 }
 
-test('시작 맵은 로웬 마을이고, 맵 id를 구별한다', () => {
-  assert.equal(START_MAP, 'village');
+test('시작 맵은 로웬 마을 북쪽(시온의 집 앞)이고, 맵 id를 구별한다', () => {
+  assert.equal(START_MAP, 'village-north');
   assert.equal(MAPS.village.name, '로웬 마을');
+  assert.ok(MAPS['village-north'].buildings.some((b) => b.frame === 'family-house'));
   assert.equal(isMapId('south-field'), true);
   assert.equal(isMapId('nowhere'), false);
   assert.equal(isMapId('toString'), false);
@@ -35,6 +36,7 @@ test('시작 맵은 로웬 마을이고, 맵 id를 구별한다', () => {
 
 test('마을에는 몬스터가 없고, 사냥터마다 몬스터가 있다', () => {
   assert.equal(MAPS.village.enemies.length, 0);
+  assert.equal(MAPS['village-north'].enemies.length, 0);
   for (const id of ['south-field', 'west-forest', 'east-stream']) assert.ok(MAPS[id].enemies.length > 0, id);
 });
 
@@ -74,8 +76,9 @@ test('모든 출구는 되돌아오는 출구가 있고, 그 출구로 돌아오
   }
 });
 
-test('마을에서 세 사냥터로, 사냥터에서 마을로 갈 수 있다', () => {
-  assert.deepEqual(MAPS.village.exits.map((e) => e.to).sort(), ['east-stream', 'south-field', 'west-forest']);
+test('마을 광장에서 세 사냥터와 마을 북쪽으로, 사냥터에서 마을로 갈 수 있다', () => {
+  assert.deepEqual(MAPS.village.exits.map((e) => e.to).sort(), ['east-stream', 'south-field', 'village-north', 'west-forest']);
+  assert.deepEqual(MAPS['village-north'].exits.map((e) => e.to), ['village']);
   for (const map of maps) {
     const points = reachable(map, map.spawn);
     for (const exit of map.exits) {

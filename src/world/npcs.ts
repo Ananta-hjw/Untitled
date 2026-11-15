@@ -1,5 +1,6 @@
 import type { DialogueId } from '../story/dialogues.ts';
 import { INTERIORS, roomRect, type InteriorId } from './interiors.ts';
+import type { VillageArea } from './villageLayout.ts';
 
 /**
  * 로웬 마을 사람들 (docs/story.md 마을 사람들, docs/rowen-village.md 배치).
@@ -31,8 +32,10 @@ export interface NpcDef {
   shop?: boolean;
   /** 돌아다니는 범위 (처음 자리에서의 반지름). 장사하는 사람은 없다(서 있는다). */
   wander?: number;
-  /** 건물 안에 있으면 그 실내. 없으면 로웬 마을(바깥)에 있다. */
+  /** 건물 안에 있으면 그 실내. 없으면 바깥(area)에 있다. */
   inside?: InteriorId;
+  /** 바깥에 있을 때 어느 마을 맵인지. 없으면 광장(village) */
+  area?: VillageArea;
   /** 카운터 뒤처럼 바로 다가갈 수 없는 자리면, 말을 거는 자리를 이만큼 앞(아래)으로 옮긴다. */
   talkOffset?: number;
 }
@@ -44,12 +47,14 @@ function inRoom(id: InteriorId, x: number, y: number): { x: number; y: number; i
 }
 
 export const NPCS: NpcDef[] = [
-  { id: 'serena', name: '세레나', role: '시온의 어머니', x: 700, y: 600, height: 148, dialogue: 'npc-serena', wander: 110 },
-  { id: 'sia', name: '시아', role: '시온의 여동생', x: 290, y: 680, height: 132, dialogue: 'npc-sia', wander: 150 },
-  { id: 'linea', name: '리네아', role: '시온의 친한 친구', x: 1040, y: 1000, height: 142, dialogue: 'npc-linea', wander: 170 },
+  // 북쪽 맵: 집들 앞
+  { id: 'serena', name: '세레나', role: '시온의 어머니', area: 'village-north', x: 700, y: 600, height: 148, dialogue: 'npc-serena', wander: 110 },
+  { id: 'sia', name: '시아', role: '시온의 여동생', area: 'village-north', x: 290, y: 680, height: 132, dialogue: 'npc-sia', wander: 150 },
+  { id: 'linea', name: '리네아', role: '시온의 친한 친구', area: 'village-north', x: 980, y: 1200, height: 142, dialogue: 'npc-linea', wander: 150 },
+  { id: 'herman', name: '헤르만', role: '촌장', area: 'village-north', x: 1290, y: 525, height: 150, dialogue: 'npc-herman', wander: 100 },
+  { id: 'eila', name: '에일라', role: '치유사', area: 'village-north', x: 2070, y: 550, height: 146, dialogue: 'npc-eila', wander: 110 },
+  // 광장
   { id: 'ruan', name: '루안', role: '첫 스승', x: 590, y: 1090, height: 156, dialogue: 'npc-ruan', wander: 120 },
-  { id: 'herman', name: '헤르만', role: '촌장', x: 1290, y: 525, height: 150, dialogue: 'npc-herman', wander: 100 },
-  { id: 'eila', name: '에일라', role: '치유사', x: 2070, y: 550, height: 146, dialogue: 'npc-eila', wander: 110 },
   // 장사하는 사람은 가게 안: 메리나와 로제타는 카운터 뒤, 도란은 모루 옆
   { id: 'merina', name: '메리나', role: '잡화점 주인', ...inRoom('store', 500, 150), height: 144, dialogue: 'npc-merina', shop: true, talkOffset: 125 },
   { id: 'doran', name: '도란', role: '대장장이', ...inRoom('smithy', 560, 345), height: 156, dialogue: 'npc-doran', shop: true },

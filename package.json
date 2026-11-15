@@ -1,6 +1,6 @@
 {
   "name": "untitled",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "description": "모바일 RPG 프로토타입",
   "scripts": {
     "dev": "vite",

@@ -4,17 +4,18 @@ import { INTERIORS, WALKABLE_FURNITURE, arrivalOf, furnitureAt, furnitureObstacl
 import { MAPS, findExit, walkable } from '../src/world/maps.ts';
 import { BUILDINGS } from '../src/world/villageLayout.ts';
 
-test('남쪽 입구를 뺀 일곱 건물에 실내가 있고, 마을 문 앞에 "들어가기"가 있다', () => {
+test('남쪽 입구를 뺀 여덟 건물에 실내가 있고, 그 건물이 있는 마을 맵의 문 앞에 "들어가기"가 있다', () => {
   for (const b of BUILDINGS) {
     const interior = interiorFor(b.frame);
     assert.equal(!!interior, b.frame !== 'south-gate', b.frame);
     if (!interior) continue;
-    const door = MAPS.village.interactables.find((i) => i.enter?.to === `in-${interior.id}`);
+    const door = MAPS[b.area].interactables.find((i) => i.enter?.to === `in-${interior.id}`);
     assert.ok(door, b.frame);
     assert.deepEqual([door.x, door.y], [b.door.x, b.door.y]);
     assert.equal(door.enter.label, interior.name);
   }
   assert.equal(new Set(INTERIORS.map((i) => i.id)).size, INTERIORS.length);
+  assert.equal(INTERIORS.length, 8);
 });
 
 test('가구는 방 안에 있고 서로 겹치지 않으며, 들어온 자리와 문 앞은 비어 있다', () => {
@@ -46,11 +47,11 @@ test('실내에서 나오면 그 건물 문 앞, 마을의 걸을 수 있는 자
     const map = MAPS[`in-${interior.id}`];
     assert.equal(map.exits.length, 1);
     const exit = map.exits[0];
-    assert.equal(exit.to, 'village');
     const building = BUILDINGS.find((b) => b.frame === interior.building);
+    assert.equal(exit.to, building.area);
     assert.ok(Math.hypot(exit.arrive.x - building.door.x, exit.arrive.y - building.door.y) < 40, interior.id);
-    assert.equal(walkable(MAPS.village, exit.arrive.x, exit.arrive.y), true, interior.id);
-    assert.equal(findExit(MAPS.village, exit.arrive.x, exit.arrive.y), undefined, interior.id);
+    assert.equal(walkable(MAPS[building.area], exit.arrive.x, exit.arrive.y), true, interior.id);
+    assert.equal(findExit(MAPS[building.area], exit.arrive.x, exit.arrive.y), undefined, interior.id);
     assert.equal(map.enemies.length, 0);
   }
 });

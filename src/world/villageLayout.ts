@@ -3,8 +3,11 @@ import type { Obstacle } from './obstacles';
 /**
  * 로웬 마을 배치 (docs/rowen-village.md).
  *
- * 가운데 큰 나무를 두고 북서쪽 가족 집, 북쪽 촌장 집, 북동쪽 치유소, 서쪽 수련소, 동쪽 잡화점,
- * 남서쪽 대장간, 남동쪽 여관, 남쪽 입구(초소·아치·수레)가 둘러싼다.
+ * 마을은 두 맵으로 나뉜다. 위아래 가운데 길로 오간다.
+ * - 로웬 마을 북쪽(village-north, 집들이 있는 곳): 시온의 집, 촌장의 집, 치유소, 그리고 아래쪽의 리네아의 집.
+ *   새 게임은 여기 시온의 집 앞에서 시작한다.
+ * - 로웬 마을(village, 광장): 가운데 큰 나무를 두고 서쪽 수련소, 동쪽 잡화점, 남서쪽 대장간, 남동쪽 여관,
+ *   남쪽 입구(초소·아치·수레). 들판·숲길·개울가로 나가는 출구가 여기 있다.
  * 건물 그림은 src/assets/village/rowen/buildings.webp(tools/build_rowen_assets.py)이고,
  * 좌표는 그림 아래 가운데(바닥에 닿는 곳) 기준이다.
  */
@@ -13,12 +16,20 @@ export const PLAYER_SPAWN = { x: 430, y: 640 };
 // Reserve room for the full walking sprite and its name plate at camera boundaries.
 export const WALK_BOUNDS = { left: 64, top: 224, right: 2336, bottom: 1560 };
 
+/** 마을의 두 맵 (maps.ts의 MapId와 같은 이름) */
+export type VillageArea = 'village' | 'village-north';
+
+/** 두 맵을 잇는 가운데 길 (북쪽 맵의 아래 끝, 광장의 위 끝) */
+export const VILLAGE_LINK = { left: 1100, right: 1260 };
+
 export type BuildingFrame =
   | 'family-house' | 'training-hall' | 'chief-house' | 'clinic'
-  | 'smithy' | 'general-store' | 'inn' | 'south-gate';
+  | 'smithy' | 'general-store' | 'inn' | 'south-gate' | 'linea-house';
 
 export interface Building {
   frame: BuildingFrame;
+  /** 이 건물이 있는 맵 */
+  area: VillageArea;
   /** 그림 아래 가운데 (바닥 기준) */
   x: number;
   y: number;
@@ -38,27 +49,34 @@ export interface Building {
 const wall = (left: number, top: number, right: number, bottom: number): Obstacle =>
   ({ x: (left + right) / 2, y: (top + bottom) / 2, rx: (right - left) / 2, ry: (bottom - top) / 2, shape: 'rect' });
 
-// 북쪽 줄 건물(시온의 집, 촌장의 집, 치유소)은 뒤쪽 벽이 걸을 수 있는 영역의 위쪽 끝에 닿아,
+// 북쪽 맵 위쪽 줄 건물(시온의 집, 촌장의 집, 치유소)은 뒤쪽 벽이 걸을 수 있는 영역의 위쪽 끝에 닿아,
 // 지붕 뒤의 좁은 틈으로 들어가 캐릭터가 통째로 가려지는 일이 없다.
 export const BUILDINGS: Building[] = [
-  { frame: 'family-house', x: 430, y: 540, width: 500, label: '시온의 집',
+  { frame: 'family-house', area: 'village-north', x: 430, y: 540, width: 500, label: '시온의 집',
     footprint: [wall(200, WALK_BOUNDS.top, 660, 532)], door: { x: 415, y: 580 } },
-  { frame: 'chief-house', x: 1180, y: 470, width: 380, label: '촌장의 집',
+  { frame: 'chief-house', area: 'village-north', x: 1180, y: 470, width: 380, label: '촌장의 집',
     footprint: [wall(1000, WALK_BOUNDS.top, 1360, 462)], door: { x: 1180, y: 510 } },
-  { frame: 'clinic', x: 1950, y: 500, width: 540, label: '치유소',
+  { frame: 'clinic', area: 'village-north', x: 1950, y: 500, width: 540, label: '치유소',
     footprint: [wall(1700, WALK_BOUNDS.top, 2200, 492)], door: { x: 1912, y: 540 } },
-  { frame: 'training-hall', x: 450, y: 990, width: 520, label: '수련소',
+  // 리네아의 집: 시온의 집 아래쪽 꽃밭 옆 낮은 오두막 (1장의 창문 매듭 장면)
+  { frame: 'linea-house', area: 'village-north', x: 720, y: 1100, width: 380, label: '리네아의 집',
+    footprint: [wall(540, 985, 900, 1093)], door: { x: 700, y: 1140 } },
+  { frame: 'training-hall', area: 'village', x: 450, y: 990, width: 520, label: '수련소',
     footprint: [wall(205, 840, 695, 982)], door: { x: 450, y: 1030 } },
-  { frame: 'general-store', x: 1960, y: 900, width: 420, label: '잡화점',
+  { frame: 'general-store', area: 'village', x: 1960, y: 900, width: 420, label: '잡화점',
     footprint: [wall(1770, 700, 2150, 892)], door: { x: 1960, y: 940 } },
-  { frame: 'smithy', x: 470, y: 1460, width: 520, label: '대장간',
+  { frame: 'smithy', area: 'village', x: 470, y: 1460, width: 520, label: '대장간',
     footprint: [wall(225, 1270, 715, 1452)], door: { x: 402, y: 1500 } },
-  { frame: 'inn', x: 1930, y: 1460, width: 600, label: '여관',
+  { frame: 'inn', area: 'village', x: 1930, y: 1460, width: 600, label: '여관',
     footprint: [wall(1650, 1260, 2210, 1452)], door: { x: 1858, y: 1500 } },
   // 남쪽 입구: 왼쪽 초소와 오른쪽 행상 수레 사이, 아치 기둥 안쪽만 지나갈 수 있다.
-  { frame: 'south-gate', x: 1174, y: 1560, width: 640, label: '',
+  { frame: 'south-gate', area: 'village', x: 1174, y: 1560, width: 640, label: '',
     footprint: [wall(867, 1370, 1134, 1600), wall(1228, 1440, 1481, 1600)], door: { x: 1181, y: 1440 } },
 ];
+
+export function buildingsIn(area: VillageArea): Building[] {
+  return BUILDINGS.filter((b) => b.area === area);
+}
 
 /** 남쪽 입구 아치의 통로 (두 기둥 사이) */
 export const SOUTH_GATE_PASSAGE = { left: 1134, right: 1228 };
@@ -73,13 +91,18 @@ export interface VillageProp {
   footprint?: { rx: number; ry: number };
 }
 
+/** 광장(village)의 소품 */
 export const PROPS: VillageProp[] = [
   // 마을 한가운데 큰 나무
   { frame: 'oak', x: 1180, y: 900, width: 420, footprint: { rx: 46, ry: 28 } },
+  // 위쪽: 북쪽 맵으로 가는 길(가운데) 양옆의 숲
   { frame: 'pine', x: 100, y: 420, width: 210, footprint: { rx: 25, ry: 18 } },
-  { frame: 'pine', x: 790, y: 330, width: 220, footprint: { rx: 26, ry: 18 } },
+  { frame: 'oak', x: 420, y: 470, width: 320, footprint: { rx: 37, ry: 24 } },
+  { frame: 'pine', x: 790, y: 360, width: 220, footprint: { rx: 26, ry: 18 } },
   { frame: 'oak', x: 1540, y: 330, width: 290, footprint: { rx: 34, ry: 22 } },
+  { frame: 'pine', x: 1900, y: 420, width: 230, footprint: { rx: 27, ry: 19 } },
   { frame: 'pine', x: 2320, y: 420, width: 210, footprint: { rx: 25, ry: 18 } },
+  { frame: 'boulders', x: 2150, y: 560, width: 160, footprint: { rx: 72, ry: 27 } },
   { frame: 'oak', x: 110, y: 1320, width: 230, footprint: { rx: 30, ry: 20 } },
   { frame: 'pine', x: 2320, y: 1300, width: 210, footprint: { rx: 25, ry: 18 } },
   { frame: 'shrub', x: 770, y: 640, width: 100, footprint: { rx: 41, ry: 18 } },
@@ -90,12 +113,40 @@ export const PROPS: VillageProp[] = [
   { frame: 'stump', x: 700, y: 1060, width: 80, footprint: { rx: 32, ry: 18 } },
   { frame: 'flowers', x: 690, y: 560, width: 70 },
   { frame: 'flowers', x: 200, y: 590, width: 65 },
-  { frame: 'flowers', x: 2220, y: 560, width: 70 },
+  { frame: 'flowers', x: 2220, y: 700, width: 70 },
   { frame: 'flowers', x: 1020, y: 990, width: 65 },
   { frame: 'flowers', x: 1340, y: 840, width: 65 },
-  { frame: 'flowers', x: 1250, y: 560, width: 60 },
+  { frame: 'flowers', x: 1300, y: 520, width: 60 },
   { frame: 'flowers', x: 2240, y: 1010, width: 60 },
   { frame: 'sign', x: 1330, y: 1010, width: 90, footprint: { rx: 15, ry: 13 } },
+];
+
+/** 북쪽 맵(village-north)의 소품: 집 사이의 나무와 텃밭 꽃 */
+export const NORTH_PROPS: VillageProp[] = [
+  { frame: 'pine', x: 100, y: 420, width: 210, footprint: { rx: 25, ry: 18 } },
+  { frame: 'pine', x: 790, y: 330, width: 220, footprint: { rx: 26, ry: 18 } },
+  { frame: 'oak', x: 1540, y: 330, width: 290, footprint: { rx: 34, ry: 22 } },
+  { frame: 'pine', x: 2320, y: 420, width: 210, footprint: { rx: 25, ry: 18 } },
+  { frame: 'oak', x: 1650, y: 1060, width: 360, footprint: { rx: 40, ry: 26 } },
+  { frame: 'oak', x: 130, y: 1300, width: 260, footprint: { rx: 32, ry: 21 } },
+  { frame: 'pine', x: 2300, y: 1280, width: 220, footprint: { rx: 26, ry: 18 } },
+  { frame: 'pine', x: 2150, y: 900, width: 210, footprint: { rx: 25, ry: 18 } },
+  { frame: 'shrub', x: 770, y: 640, width: 100, footprint: { rx: 41, ry: 18 } },
+  { frame: 'shrub', x: 1620, y: 640, width: 110, footprint: { rx: 45, ry: 19 } },
+  { frame: 'shrub', x: 1000, y: 1300, width: 100, footprint: { rx: 41, ry: 18 } },
+  { frame: 'shrub', x: 1420, y: 1420, width: 100, footprint: { rx: 41, ry: 18 } },
+  { frame: 'stump', x: 1950, y: 1350, width: 80, footprint: { rx: 32, ry: 18 } },
+  { frame: 'rock', x: 380, y: 1450, width: 80, footprint: { rx: 35, ry: 18 } },
+  { frame: 'flowers', x: 690, y: 560, width: 70 },
+  { frame: 'flowers', x: 200, y: 590, width: 65 },
+  { frame: 'flowers', x: 2220, y: 560, width: 70 },
+  { frame: 'flowers', x: 1250, y: 560, width: 60 },
+  // 리네아의 집 앞 꽃밭
+  { frame: 'flowers', x: 470, y: 1170, width: 70 },
+  { frame: 'flowers', x: 930, y: 1150, width: 65 },
+  { frame: 'flowers', x: 560, y: 1230, width: 60 },
+  { frame: 'flowers', x: 860, y: 1240, width: 65 },
+  { frame: 'flowers', x: 1700, y: 1250, width: 60 },
 ];
 
 /** 소품의 바닥 접점(줄기·바위 밑동)만 장애물로 만든다. 다른 맵도 같은 규칙을 쓴다. */
@@ -108,4 +159,6 @@ export function buildingObstacles(buildings: readonly Building[]): Obstacle[] {
 }
 
 // 마을은 평화로운 곳이라 몬스터가 나오지 않는다. 몬스터는 마을 밖 사냥터(maps.ts)에 있다.
-export const OBSTACLES: Obstacle[] = [...buildingObstacles(BUILDINGS), ...propObstacles(PROPS)];
+export function areaObstacles(area: VillageArea): Obstacle[] {
+  return [...buildingObstacles(buildingsIn(area)), ...propObstacles(area === 'village' ? PROPS : NORTH_PROPS)];
+}

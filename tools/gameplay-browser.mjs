@@ -520,7 +520,7 @@ test('마지막 대각선과 자동 조준을 사용하고 공격 도중 반대 
 });
 
 test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가 적용된다', async () => {
-  await load('village');
+  await load('village-north');
   const result = await evaluate(`(() => {
     const g = window.__game, s = g.scene.getScene('game'), p = s.player, camera = s.cameras.main;
     const ground = s.children.list.find(o => o.texture?.key === 'village-ground');
@@ -799,7 +799,8 @@ test('느린 화면 중의 공격도 맞고, 칼이 닿으면 게임 시간이 �
 test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제자리에 있고, 나머지는 걸어 다닌다', async () => {
   await load('village');
   const result = await evaluate(`(() => {
-    const g = window.__game, s = g.scene.getScene('game');
+    const g = window.__game;
+    let s = g.scene.getScene('game');
     let t = performance.now();
     s.player.placeAt(1180, 1440);
     const start = Object.fromEntries(s.npcs.map(n => [n.def.id, { x: n.x, y: n.y }]));
@@ -812,7 +813,23 @@ test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제
       s.update(t += 16, 16);
       for (const n of s.npcs) moved[n.def.id] = Math.max(moved[n.def.id], Math.round(Math.hypot(n.x - start[n.def.id].x, n.y - start[n.def.id].y)));
     }
-    const onGround = s.npcs.every(n => s.walkArea.contains(n.x, n.y));
+    let onGround = s.npcs.every(n => s.walkArea.contains(n.x, n.y));
+    const count = s.npcs.length;
+    // 마을 북쪽(집들)의 다섯 사람도 이름표를 달고 돌아다닌다.
+    s.scene.restart({ map: 'village-north' }); g.step(t += 16, 16);
+    s = g.scene.getScene('game');
+    s.player.placeAt(1180, 1440);
+    const northStart = Object.fromEntries(s.npcs.map(n => [n.def.id, { x: n.x, y: n.y }]));
+    Object.assign(names, Object.fromEntries(s.npcs.map(n => [n.def.id, n.list.find(o => o.text !== undefined)?.text])));
+    for (const n of s.npcs) moved[n.def.id] = 0;
+    for (let i = 0; i < 900; i++) {
+      s.update(t += 16, 16);
+      for (const n of s.npcs) moved[n.def.id] = Math.max(moved[n.def.id], Math.round(Math.hypot(n.x - northStart[n.def.id].x, n.y - northStart[n.def.id].y)));
+    }
+    onGround &&= s.npcs.every(n => s.walkArea.contains(n.x, n.y));
+    const northCount = s.npcs.length;
+    s.scene.restart({ map: 'village' }); g.step(t += 16, 16);
+    s = g.scene.getScene('game');
     // 루안 옆에 서면 루안이 멈추고, 대화하면 루안의 이름과 그림이 나온다.
     const ruan = s.npcs.find(n => n.def.id === 'ruan');
     s.player.placeAt(ruan.x + 60, ruan.y + 10);
@@ -825,12 +842,13 @@ test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제
     g.step(t += 16, 16);
     const dialogue = { open: s.dialogue.isOpen, name: s.dialogue.nameText.text, portrait: s.dialogue.portrait.texture.key };
     s.dialogue.close();
-    return { count: s.npcs.length, names, visible, moved, onGround, stayed, spotFollows, dialogue,
+    return { count, northCount, names, visible, moved, onGround, stayed, spotFollows, dialogue,
       talkable: s.interactables.filter(i => i.id.startsWith('npc-')).length };
   })()`);
-  // 장사하는 세 사람(메리나·도란·로제타)은 가게 안에 있다.
-  assert.equal(result.count, 8);
-  assert.equal(result.talkable, 8);
+  // 장사하는 세 사람(메리나·도란·로제타)은 가게 안, 시온의 가족·이웃 다섯은 마을 북쪽, 셋은 광장에 있다.
+  assert.equal(result.count, 3);
+  assert.equal(result.northCount, 5);
+  assert.equal(result.talkable, 3);
   assert.equal(result.visible, true);
   assert.deepEqual(result.names, {
     serena: '세레나', sia: '시아', linea: '리네아', ruan: '루안', herman: '헤르만', eila: '에일라',
@@ -867,15 +885,15 @@ test('성능 테스트 모드는 마을에 사람을 더 세우고 FPS·메모�
     g.step(t += 16, 16);
     return { before, on, kept, next, off: { npcs: s.npcs.length, perf: !!s.perf, label: label() } };
   })()`);
-  assert.deepEqual(result.before, { npcs: 8, perf: false, label: '성능 테스트: 끔' });
-  assert.equal(result.on.npcs, 108);
+  assert.deepEqual(result.before, { npcs: 3, perf: false, label: '성능 테스트: 끔' });
+  assert.equal(result.on.npcs, 103);
   assert.equal(result.on.label, '성능 테스트: 100명');
   assert.equal(result.on.onGround, true);
   assert.match(result.on.perf, /FPS \d+/);
-  assert.match(result.on.perf, /인물 108 · 그림 메모리 \d+MB/);
-  assert.equal(result.kept, 108);
-  assert.equal(result.next, 208);
-  assert.deepEqual(result.off, { npcs: 8, perf: false, label: '성능 테스트: 끔' });
+  assert.match(result.on.perf, /인물 103 · 그림 메모리 \d+MB/);
+  assert.equal(result.kept, 103);
+  assert.equal(result.next, 203);
+  assert.deepEqual(result.off, { npcs: 3, perf: false, label: '성능 테스트: 끔' });
 });
 test('퀘스트: 머리 위 표시, 대화로 받고 완료, 목록 표시, 저장 후 재시작에도 유지되고 미니맵에 그려진다', async () => {
   await load('village');
@@ -888,7 +906,7 @@ test('퀘스트: 머리 위 표시, 대화로 받고 완료, 목록 표시, 저�
     const marker = (id) => s.npcs.find(n => n.def.id === id).questMarker;
     const talk = (id) => { const n = s.npcs.find(n => n.def.id === id); s.openDialogue(n.spot); const name = s.dialogue.nameText.text;
       while (s.dialogue.isOpen) s.dialogue.advance(); return name; };
-    const start = { ruan: marker('ruan'), doran: s.doorMarkers.find(d => d.spot.id === 'door-smithy').marker, smithyDoor: s.doorMarkers.find(d => d.spot.id === 'door-smithy').text.visible, teon: marker('teon'), serena: marker('serena') ?? null, tracker: s.questTracker.text.text };
+    const start = { ruan: marker('ruan'), doran: s.doorMarkers.find(d => d.spot.id === 'door-smithy').marker, smithyDoor: s.doorMarkers.find(d => d.spot.id === 'door-smithy').text.visible, teon: marker('teon'), vernel: marker('vernel') ?? null, tracker: s.questTracker.text.text };
     const speaker = talk('ruan');
     const accepted = { ruan: marker('ruan'), tracker: s.questTracker.text.text };
     // 3단 콤보의 마지막 일격을 세 번 시작하면 목표를 채운다.
@@ -909,7 +927,7 @@ test('퀘스트: 머리 위 표시, 대화로 받고 완료, 목록 표시, 저�
       reloaded: { quests: s.quests, ruan: marker('ruan'), tracker: s.questTracker.text.text } };
   })()`);
   // 도란은 대장간 안에 있어서, 마을에서는 대장간 문 위에 표시가 뜬다.
-  assert.deepEqual(result.start, { ruan: 'new', doran: 'sub-new', smithyDoor: true, teon: 'sub-new', serena: null, tracker: '' });
+  assert.deepEqual(result.start, { ruan: 'new', doran: 'sub-new', smithyDoor: true, teon: 'sub-new', vernel: null, tracker: '' });
   assert.equal(result.speaker, '루안');
   assert.equal(result.accepted.ruan, 'progress');
   assert.match(result.accepted.tracker, /마지막 수련 · 3단 콤보 마무리 0\/3/);
@@ -1045,8 +1063,11 @@ test('북쪽 건물 뒤의 틈으로는 들어갈 수 없고, 다른 건물 뒤�
     const hall = s.map.buildings.find(b => b.frame === 'training-hall').footprint[0];
     s.player.placeAt(hall.x, hall.y - hall.ry - 25);
     for (let i = 0; i < 3; i++) g.step(t += 16, 16);
-    const chief = s.map.buildings.find(b => b.frame === 'chief-house').footprint[0];
-    return { map: s.mapId, gap: s.walkArea.contains(chief.x, s.map.bounds.top + 4) };
+    const map = s.mapId;
+    s.scene.restart({ map: 'village-north' }); g.step(t += 16, 16);
+    const n = g.scene.getScene('game');
+    const chief = n.map.buildings.find(b => b.frame === 'chief-house').footprint[0];
+    return { map, gap: n.walkArea.contains(chief.x, n.map.bounds.top + 4) };
   })()`);
   assert.equal(result.map, 'village');
   assert.equal(result.gap, false);

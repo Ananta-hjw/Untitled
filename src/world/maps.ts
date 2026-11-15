@@ -7,21 +7,22 @@ import {
   INTERIORS, arrivalOf, doorOf, furnitureObstacles, interiorFor, roomRect, type Interior, type InteriorId,
 } from './interiors.ts';
 import {
-  BUILDINGS, PLAYER_SPAWN, PROPS as VILLAGE_PROPS, SOUTH_GATE_PASSAGE, WALK_BOUNDS as VILLAGE_BOUNDS,
-  buildingObstacles, propObstacles, type Building, type VillageProp,
+  BUILDINGS, NORTH_PROPS, PLAYER_SPAWN, PROPS as VILLAGE_PROPS, SOUTH_GATE_PASSAGE, VILLAGE_LINK, WALK_BOUNDS as VILLAGE_BOUNDS,
+  buildingObstacles, buildingsIn, propObstacles, type Building, type VillageArea, type VillageProp,
 } from './villageLayout.ts';
 
 /**
  * 맵 목록과 맵 사이의 출구.
  *
  * 로웬 마을을 가운데 두고 남쪽 들판, 서쪽 숲길, 동쪽 개울가가 이어진다(docs/story-chapter1.md).
+ * 마을은 집들이 있는 북쪽(village-north, 시작 지점)과 광장(village) 두 맵이고, 가운데 길로 오간다.
  * 플레이어의 발이 출구 영역에 들어가면 연결된 맵의 도착 지점으로 옮겨 간다.
  * 마을은 평화로운 곳이라 몬스터가 없고, 몬스터는 사냥터에만 나온다.
  * 마을 건물은 문 앞에서 "들어가기"로 실내(in-…)에 들어가고, 실내 아래쪽 문으로 나와 그 건물 문 앞에 선다.
  * 이 파일은 Phaser를 쓰지 않아 tools/maps.test.mjs가 직접 불러 검사한다.
  */
 
-export type MapId = 'village' | 'south-field' | 'west-forest' | 'east-stream' | `in-${InteriorId}`;
+export type MapId = 'village' | 'village-north' | 'south-field' | 'west-forest' | 'east-stream' | `in-${InteriorId}`;
 
 export interface Rect { left: number; top: number; right: number; bottom: number }
 export interface Point { x: number; y: number }
@@ -76,17 +77,39 @@ const southSign = sign('south-field-sign', 1420, 330, 'south-field-sign');
 const forestSign = sign('west-forest-sign', 2180, 900, 'west-forest-sign');
 const streamSign = sign('east-stream-sign', 260, 760, 'east-stream-sign');
 
-const VILLAGE: GameMap = {
-  id: 'village',
-  name: '로웬 마을',
-  hint: '로웬 마을 · 조이스틱 또는 WASD로 둘러보세요',
+const outdoorNpcs = (area: VillageArea) => NPCS.filter((n) => !n.inside && (n.area ?? 'village') === area);
+const LINK_X = (VILLAGE_LINK.left + VILLAGE_LINK.right) / 2;
+
+const VILLAGE_NORTH: GameMap = {
+  id: 'village-north',
+  name: '로웬 마을 북쪽',
+  hint: '로웬 마을 북쪽 · 조이스틱 또는 WASD로 둘러보세요',
   bounds: FULL_BOUNDS,
-  props: VILLAGE_PROPS,
-  buildings: BUILDINGS,
-  npcs: NPCS.filter((n) => !n.inside),
+  props: NORTH_PROPS,
+  buildings: buildingsIn('village-north'),
+  npcs: outdoorNpcs('village-north'),
   spawn: PLAYER_SPAWN,
   enemies: [],
   exits: [
+    { to: 'village', zone: { left: VILLAGE_LINK.left, top: 1500, right: VILLAGE_LINK.right, bottom: WORLD_HEIGHT },
+      arrive: { x: LINK_X, y: 330 }, label: '▼ 로웬 마을 광장', labelAt: { x: LINK_X, y: 1478 } },
+  ],
+  interactables: doorSpots('village-north'),
+};
+
+const VILLAGE: GameMap = {
+  id: 'village',
+  name: '로웬 마을',
+  hint: '로웬 마을 광장 · 북쪽 길로 집들이 있는 곳에 갈 수 있어요',
+  bounds: FULL_BOUNDS,
+  props: VILLAGE_PROPS,
+  buildings: buildingsIn('village'),
+  npcs: outdoorNpcs('village'),
+  spawn: { x: LINK_X, y: 380 },
+  enemies: [],
+  exits: [
+    { to: 'village-north', zone: { left: VILLAGE_LINK.left, top: 0, right: VILLAGE_LINK.right, bottom: 270 },
+      arrive: { x: LINK_X, y: 1440 }, label: '▲ 마을 북쪽 (집)', labelAt: { x: LINK_X, y: 300 } },
     // 남쪽 입구 아치의 두 기둥 사이로 나간다.
     { to: 'south-field', zone: { left: SOUTH_GATE_PASSAGE.left, top: 1500, right: SOUTH_GATE_PASSAGE.right, bottom: WORLD_HEIGHT },
       arrive: { x: 1180, y: 420 }, label: '▼ 남쪽 들판', labelAt: { x: 1181, y: 1478 } },
@@ -96,7 +119,7 @@ const VILLAGE: GameMap = {
       arrive: { x: 240, y: 910 }, label: '동쪽 개울가 ▶', labelAt: { x: 2245, y: 1010 } },
   ],
   // 표지판과, 실내가 있는 건물마다 문 앞의 "들어가기"
-  interactables: [...INTERACTABLES, ...doorSpots()],
+  interactables: [...INTERACTABLES, ...doorSpots('village')],
 };
 
 const SOUTH_FIELD: GameMap = {
@@ -225,8 +248,8 @@ const EAST_STREAM: GameMap = {
 };
 
 /** 건물 문 앞의 "들어가기". 실내에서 나오면 이 자리 조금 앞에 선다. */
-function doorSpots(): Interactable[] {
-  return BUILDINGS.flatMap((b) => {
+function doorSpots(area: VillageArea): Interactable[] {
+  return buildingsIn(area).flatMap((b) => {
     const interior = interiorFor(b.frame);
     if (!interior) return [];
     return [{
@@ -250,7 +273,7 @@ function interiorMap(interior: Interior): GameMap {
     spawn: arrivalOf(interior),
     enemies: [],
     exits: [{
-      to: 'village', zone: { left: door.x - 70, top: door.y - 26, right: door.x + 70, bottom: WORLD_HEIGHT },
+      to: building.area, zone: { left: door.x - 70, top: door.y - 26, right: door.x + 70, bottom: WORLD_HEIGHT },
       arrive: { x: building.door.x, y: building.door.y + 18 }, label: '▼ 나가기', labelAt: { x: door.x, y: door.y + 74 },
     }],
     interactables: [],
@@ -260,13 +283,15 @@ function interiorMap(interior: Interior): GameMap {
 
 export const MAPS = {
   village: VILLAGE,
+  'village-north': VILLAGE_NORTH,
   'south-field': SOUTH_FIELD,
   'west-forest': WEST_FOREST,
   'east-stream': EAST_STREAM,
   ...Object.fromEntries(INTERIORS.map((i) => [`in-${i.id}`, interiorMap(i)])),
 } as Record<MapId, GameMap>;
 
-export const START_MAP: MapId = 'village';
+/** 새 게임은 시온의 집 앞(마을 북쪽)에서 시작한다. */
+export const START_MAP: MapId = 'village-north';
 
 export function isMapId(value: unknown): value is MapId {
   return typeof value === 'string' && Object.hasOwn(MAPS, value);

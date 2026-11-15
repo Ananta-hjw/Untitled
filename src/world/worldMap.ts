@@ -40,9 +40,9 @@ export const ROUTES: Array<[RegionId, RegionId]> = [
   ['village', 'north-ruins'],
 ];
 
-/** 맵이 속한 지역. 건물 실내는 로웬 마을이다. */
+/** 맵이 속한 지역. 건물 실내와 마을 북쪽도 로웬 마을이다. */
 export function regionOf(mapId: MapId): RegionId {
-  if (mapId.startsWith('in-')) return 'village';
+  if (mapId.startsWith('in-') || mapId === 'village-north') return 'village';
   return REGIONS.find((r) => r.mapId === mapId)?.id ?? 'village';
 }
 

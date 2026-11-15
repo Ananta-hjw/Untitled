@@ -14,8 +14,9 @@ const characters = new URL('../src/assets/characters/', import.meta.url);
 test('마을 사람은 열한 명이고, 이름과 대사·그림이 연결되어 있다', () => {
   assert.equal(NPCS.length, 11);
   assert.equal(new Set(NPCS.map((n) => n.id)).size, NPCS.length);
-  // 장사하는 세 사람은 가게 안, 나머지는 마을에 있다.
-  assert.deepEqual(village.npcs.map((n) => n.id).sort(), NPCS.filter((n) => !n.shop).map((n) => n.id).sort());
+  // 장사하는 세 사람은 가게 안, 시온의 가족·이웃은 마을 북쪽(집들), 나머지는 광장에 있다.
+  assert.deepEqual(MAPS['village-north'].npcs.map((n) => n.id).sort(), ['eila', 'herman', 'linea', 'serena', 'sia']);
+  assert.deepEqual(village.npcs.map((n) => n.id).sort(), ['ruan', 'teon', 'vernel']);
   assert.deepEqual(MAPS['in-store'].npcs.map((n) => n.id), ['merina']);
   assert.deepEqual(MAPS['in-smithy'].npcs.map((n) => n.id), ['doran']);
   assert.deepEqual(MAPS['in-inn'].npcs.map((n) => n.id), ['rosetta']);
@@ -47,7 +48,7 @@ test('장사하는 사람은 걷지 않고, 나머지는 모두 돌아다니며,
 });
 
 test('마을 사람은 자기 맵의 걸을 수 있는 곳에 서 있고, 출구·문·시작점을 막지 않으며, 말을 걸 수 있다', () => {
-  const mapOf = (npc) => MAPS[npc.inside ? `in-${npc.inside}` : 'village'];
+  const mapOf = (npc) => MAPS[npc.inside ? `in-${npc.inside}` : npc.area ?? 'village'];
   for (const npc of NPCS) {
     const map = mapOf(npc);
     assert.equal(walkable(map, npc.x, npc.y), true, npc.id);

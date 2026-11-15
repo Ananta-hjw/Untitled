@@ -2,36 +2,41 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
-  BUILDINGS, HOME, OBSTACLES, PLAYER_SPAWN, PROPS, SOUTH_GATE_PASSAGE, WALK_BOUNDS,
+  BUILDINGS, HOME, PLAYER_SPAWN, PROPS, SOUTH_GATE_PASSAGE, WALK_BOUNDS, areaObstacles,
 } from '../src/world/villageLayout.ts';
 import { insideObstacle } from '../src/world/obstacles.ts';
 import { NavGrid } from '../src/world/navGrid.ts';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../src/config.ts';
 
-const contains = (x, y) => x >= WALK_BOUNDS.left && x <= WALK_BOUNDS.right &&
-  y >= WALK_BOUNDS.top && y <= WALK_BOUNDS.bottom && !OBSTACLES.some((o) => insideObstacle(o, x, y));
+// 마을은 두 맵(광장 village, 북쪽 village-north)이라 맵마다 따로 잰다.
+const OBSTACLES = areaObstacles('village');
+const blocks = { village: OBSTACLES, 'village-north': areaObstacles('village-north') };
+const containsIn = (area, x, y) => x >= WALK_BOUNDS.left && x <= WALK_BOUNDS.right &&
+  y >= WALK_BOUNDS.top && y <= WALK_BOUNDS.bottom && !blocks[area].some((o) => insideObstacle(o, x, y));
+const contains = (x, y) => containsIn('village', x, y);
 
 test('시작점과 모든 건물의 문 앞은 걸을 수 있고, 건물의 벽은 막는다', () => {
   assert.ok(WALK_BOUNDS.right < WORLD_WIDTH && WALK_BOUNDS.bottom < WORLD_HEIGHT);
   assert.equal(HOME.frame, 'family-house');
-  assert.equal(contains(PLAYER_SPAWN.x, PLAYER_SPAWN.y), true);
-  assert.equal(new Set(BUILDINGS.map((b) => b.frame)).size, 8);
+  assert.equal(HOME.area, 'village-north');
+  assert.equal(containsIn('village-north', PLAYER_SPAWN.x, PLAYER_SPAWN.y), true);
+  assert.equal(new Set(BUILDINGS.map((b) => b.frame)).size, 9);
   for (const b of BUILDINGS) {
-    assert.equal(contains(b.door.x, b.door.y), true, `${b.frame} door`);
+    assert.equal(containsIn(b.area, b.door.x, b.door.y), true, `${b.frame} door`);
     for (const wall of b.footprint) {
-      if (wall.y < WALK_BOUNDS.bottom) assert.equal(contains(wall.x, wall.y), false, `${b.frame} wall`);
+      if (wall.y < WALK_BOUNDS.bottom) assert.equal(containsIn(b.area, wall.x, wall.y), false, `${b.frame} wall`);
       assert.ok(wall.y + wall.ry <= b.y + 40, `${b.frame} wall below the art`);
     }
   }
 });
 
 test('건물 벽은 서로 겹치지 않고, 건물 그림은 맵 안에 있다', () => {
-  const walls = BUILDINGS.flatMap((b) => b.footprint.map((w) => ({ ...w, frame: b.frame })));
+  const walls = BUILDINGS.flatMap((b) => b.footprint.map((w) => ({ ...w, frame: b.frame, area: b.area })));
   for (let i = 0; i < walls.length; i++) {
     for (let j = i + 1; j < walls.length; j++) {
       const a = walls[i], c = walls[j];
       const apart = Math.abs(a.x - c.x) >= a.rx + c.rx || Math.abs(a.y - c.y) >= a.ry + c.ry;
-      assert.ok(apart || a.frame === c.frame, `${a.frame} / ${c.frame}`);
+      assert.ok(apart || a.frame === c.frame || a.area !== c.area, `${a.frame} / ${c.frame}`);
     }
   }
   for (const b of BUILDINGS) assert.ok(b.x - b.width / 2 >= 0 && b.x + b.width / 2 <= WORLD_WIDTH && b.y <= WORLD_HEIGHT, b.frame);
@@ -74,7 +79,7 @@ test('수련소 뒤에서 앞문까지 건물을 뚫지 않고 돌아간다', ()
 test('북쪽 줄 건물 뒤에는 캐릭터가 숨을 틈이 없다', () => {
   for (const frame of ['family-house', 'chief-house', 'clinic']) {
     const wall = BUILDINGS.find((x) => x.frame === frame).footprint[0];
-    for (const dx of [-0.8, 0, 0.8]) assert.equal(contains(wall.x + dx * wall.rx, WALK_BOUNDS.top + 4), false, frame);
+    for (const dx of [-0.8, 0, 0.8]) assert.equal(containsIn('village-north', wall.x + dx * wall.rx, WALK_BOUNDS.top + 4), false, frame);
   }
 });
 
@@ -110,7 +115,7 @@ test('건물 몸체 안으로는 걸어 들어갈 수 없다 (기단만이 아�
       for (const fx of [-0.35, 0, 0.35]) {
         const x = b.x + fx * b.width, y = b.y - fy * height;
         if (y < WALK_BOUNDS.top) continue;
-        assert.equal(contains(x, y), false, `${b.frame} (${Math.round(x)}, ${Math.round(y)})`);
+        assert.equal(containsIn(b.area, x, y), false, `${b.frame} (${Math.round(x)}, ${Math.round(y)})`);
       }
     }
   }
