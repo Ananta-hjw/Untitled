@@ -58,7 +58,7 @@ test('촌장 집 뒤에서 시작점까지 건물을 뚫지 않고 돌아간다'
   nav.setTarget(PLAYER_SPAWN.x, PLAYER_SPAWN.y);
   const chief = BUILDINGS.find((x) => x.frame === 'chief-house');
   const wall = chief.footprint[0];
-  const point = { x: chief.x, y: 290 }, next = { x: 0, y: 0 };
+  const point = { x: chief.x, y: b.top + 12 }, next = { x: 0, y: 0 };
   let steps = 0, around = false;
   while (nav.next(point.x, point.y, next)) {
     assert.equal(contains(next.x, next.y), true);
@@ -90,5 +90,20 @@ test('소품과 건물 프레임은 각 그림 안에 있다', () => {
   for (const f of buildings) {
     assert.ok(f.w > 100 && f.h > 100, f.name);
     assert.ok(f.x >= 0 && f.y >= 0 && f.x + f.w <= size.width && f.y + f.h <= size.height, f.name);
+  }
+});
+
+test('건물 몸체 안으로는 걸어 들어갈 수 없다 (기단만이 아니라 벽 앞까지)', () => {
+  const root = new URL('../src/assets/village/rowen/', import.meta.url);
+  const frames = Object.fromEntries(JSON.parse(readFileSync(new URL('buildings.json', root))).frames.map((f) => [f.name, f]));
+  for (const b of BUILDINGS.filter((x) => x.frame !== 'south-gate')) {
+    const height = b.width * frames[b.frame].h / frames[b.frame].w;
+    for (const fy of [0.05, 0.2, 0.35, 0.45]) {
+      for (const fx of [-0.35, 0, 0.35]) {
+        const x = b.x + fx * b.width, y = b.y - fy * height;
+        if (y < WALK_BOUNDS.top) continue;
+        assert.equal(contains(x, y), false, `${b.frame} (${Math.round(x)}, ${Math.round(y)})`);
+      }
+    }
   }
 });

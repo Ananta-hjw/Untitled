@@ -130,6 +130,10 @@ export class ActionButton {
     }
   }
 
+  setLabel(label: string): void {
+    this.text.setText(label);
+  }
+
   /** 재사용 대기 중에는 흐리게 표시한다. */
   setEnabled(enabled: boolean): void {
     if (enabled === this.enabled) return;

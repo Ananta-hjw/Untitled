@@ -14,6 +14,7 @@ export class Hud {
   private readonly badge: Phaser.GameObjects.Text;
   private readonly xpBar: Phaser.GameObjects.Graphics;
   private readonly xpText: Phaser.GameObjects.Text;
+  private readonly goldText: Phaser.GameObjects.Text;
   private readonly levelUpText: Phaser.GameObjects.Text;
   private readonly callout: Phaser.GameObjects.Text;
   private readonly slowTint: Phaser.GameObjects.Rectangle;
@@ -23,9 +24,10 @@ export class Hud {
     this.scene = scene;
 
     this.badge = scene.add
-      .text(0, 18, `프로토타입 v${__APP_VERSION__}`, { fontFamily: FONT, fontSize: '18px', color: '#e9d7b0' })
-      .setOrigin(1, 0)
-      .setAlpha(0.7)
+      .text(0, VIEW_HEIGHT - 8, `프로토타입 v${__APP_VERSION__}`, { fontFamily: FONT, fontSize: '15px', color: '#e9d7b0' })
+      // 오른쪽 위는 미니맵 자리라서 화면 아래 가운데에 작게 둔다.
+      .setOrigin(0.5, 1)
+      .setAlpha(0.55)
       .setScrollFactor(0)
       .setDepth(DEPTH_UI)
       .setResolution(2);
@@ -68,6 +70,15 @@ export class Hud {
         color: '#f0d27a',
         stroke: '#1a1008',
         strokeThickness: 4,
+      })
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_UI + 1)
+      .setResolution(2);
+
+    this.goldText = scene.add
+      .text(XP_BAR.x, XP_BAR.y + XP_BAR.height + 16, '', {
+        fontFamily: FONT, fontSize: '18px', fontStyle: 'bold', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 4,
       })
       .setOrigin(0, 0.5)
       .setScrollFactor(0)
@@ -170,6 +181,10 @@ export class Hud {
   }
 
   /** 체력이 바뀔 때만 부른다. */
+  setGold(gold: number): void {
+    this.goldText.setText(`● ${gold.toLocaleString()} G`);
+  }
+
   setHp(hp: number, maxHp: number): void {
     const { x, y, width, height } = BAR;
     const ratio = hp / maxHp;
@@ -187,7 +202,7 @@ export class Hud {
   }
 
   layout(width: number): void {
-    this.badge.setX(width - 22);
+    this.badge.setX(width / 2);
     this.hint?.setX(width / 2);
     this.levelUpText.setX(width / 2);
     this.callout.setX(width / 2);

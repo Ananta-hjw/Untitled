@@ -45,6 +45,17 @@ import { findInteractable, type Interactable } from '../world/interactables';
 import { Npc, preloadNpcs } from '../entities/Npc';
 import { nextStressCount, stressNpcs } from '../world/npcs';
 import { PerfOverlay } from '../ui/PerfOverlay';
+import { Minimap } from '../ui/Minimap';
+import { QuestTracker } from '../ui/QuestTracker';
+import {
+  QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestState,
+} from '../story/quests';
+import type { NpcId } from '../world/npcs';
+import { ItemPanel, type PanelAction } from '../ui/ItemPanel';
+import {
+  INVENTORY_SAVE_KEY, ITEMS, USE_COOLDOWN_MS, addGold, addItem, applyDrop, bestHealItem, buy, countOf, parseInventory,
+  sell, serializeInventory, slimeDrop, useItem, type Inventory, type ItemId,
+} from '../items/inventory';
 import { ProgressEffects } from '../ui/ProgressEffects';
 
 /** Scale shared by all academy frames. */
@@ -142,6 +153,17 @@ export class GameScene extends Phaser.Scene {
   /** 성능 테스트로 마을에 더 세우는 사람 수 (0 = 끔). 재시작해도 유지한다. ?stress=100으로도 켤 수 있다. */
   private stressCount = Math.max(0, Math.min(500, Number(new URLSearchParams(location.search).get('stress')) || 0));
   private perf?: PerfOverlay;
+  /** 퀘스트 진행. 바뀔 때마다 기기에 저장한다(진행 상황과 따로). */
+  private quests: QuestState = {};
+  private minimap?: Minimap;
+  private questTracker?: QuestTracker;
+  /** 골드와 아이템. 바뀔 때마다 기기에 저장한다(진행 상황과 따로). */
+  private inventory: Inventory = { gold: 0, items: {} };
+  private itemPanel?: ItemPanel;
+  private potionButton?: ActionButton;
+  private potionKeys: Phaser.Input.Keyboard.Key[] = [];
+  /** 다음에 회복 아이템을 쓸 수 있는 시각 (게임 시계) */
+  private nextUseAt = 0;
   private readonly boundsScratch = new Phaser.Geom.Rectangle();
   private keys?: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   private readonly input2 = new Phaser.Math.Vector2();
@@ -165,6 +187,8 @@ export class GameScene extends Phaser.Scene {
     data.hp = undefined;
     // 저장된 진행 상황이 있으면 그 레벨로 시작한다 (재시작 포함).
     this.storage = browserStorage();
+    this.quests = this.loadQuests();
+    this.inventory = this.loadInventory();
     const saved = loadProgress(this.storage);
     if (saved) {
       this.progress = saved;
@@ -177,6 +201,15 @@ export class GameScene extends Phaser.Scene {
     this.npcs = [];
     this.interactables = [];
     this.perf = undefined;
+    this.quests = {};
+    // 지난 장면의 UI는 재시작 때 사라지므로 새로 만들 때까지 비워 둔다.
+    this.minimap = undefined;
+    this.questTracker = undefined;
+    this.inventory = { gold: 0, items: {} };
+    this.itemPanel = undefined;
+    this.potionButton = undefined;
+    this.potionKeys = [];
+    this.nextUseAt = 0;
     this.attackKeys = [];
     this.dodgeKeys = [];
     this.keys = undefined;
@@ -246,6 +279,14 @@ export class GameScene extends Phaser.Scene {
       .setResolution(2)
       .setVisible(false);
     this.buildPause();
+    this.minimap = new Minimap(this, this.map);
+    this.questTracker = new QuestTracker(this);
+    this.potionButton = new ActionButton(this, { x: 0, y: 0, radius: 44, label: '', color: 0x7a3b2a, fontSize: 18 });
+    this.potionKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q)] : [];
+    this.itemPanel = new ItemPanel(this, (action) => this.onItemAction(action), () => this.onResume());
+    this.refreshInventory();
+    this.refreshQuests();
+    this.layout();
     if (this.stressCount > 0) this.perf = new PerfOverlay(this, () => this.npcs.length);
 
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -273,6 +314,7 @@ export class GameScene extends Phaser.Scene {
     this.perf?.update(delta);
     // 히트스톱이나 일시정지로 게임 시계가 멈추면 불꽃도 그 자리에 멈춘다.
     this.impacts?.update(this.now, delta);
+    if (this.player) this.minimap?.update(delta, this.player, this.collectMinimap);
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
     // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
     const step = Math.min(delta, 50);
@@ -286,6 +328,11 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.pauseMenu.isOpen) {
       if (escape) this.pauseMenu.back();
+      return;
+    }
+    // 가방·잡화점이 열려 있으면 게임 시계를 멈춘다. Esc로 닫는다.
+    if (this.itemPanel?.isOpen) {
+      if (escape) this.itemPanel.close();
       return;
     }
     if (this.pauseButton.consumePress() || escape) {
@@ -337,6 +384,7 @@ export class GameScene extends Phaser.Scene {
     this.applyKnockback(this.player, dt);
     this.damageNumbers.update(gameStep);
     this.updateInteraction(time);
+    this.updatePotion(time);
   }
 
   // ---------------------------------------------------------------- 월드
@@ -469,6 +517,12 @@ export class GameScene extends Phaser.Scene {
     // 대화 버튼은 공격 버튼 바로 위. 버튼 크기 설정이 바뀌어도 겹치지 않게 간격을 다시 잡는다.
     this.talkButton.setPosition(width - 170, VIEW_HEIGHT - 185 - this.attackButton.size - this.talkButton.size - 16);
     this.pauseButton.setPosition(width - 46, 74);
+    // 미니맵은 일시정지 버튼 왼쪽, 퀘스트 목록은 그 아래에 오른쪽으로 맞춘다.
+    this.minimap?.layout(width - 172, 92);
+    if (this.minimap) this.questTracker?.layout(width - 20, this.minimap.bottom + 4);
+    // 물약 버튼은 회피 버튼 바로 위
+    this.potionButton?.setPosition(width - 330, VIEW_HEIGHT - 95 - this.dodgeButton.size - (this.potionButton?.size ?? 0) - 18);
+    this.itemPanel?.layout(width);
     this.dialogue.layout(width);
     this.pauseMenu.layout(width);
   }
@@ -674,6 +728,7 @@ export class GameScene extends Phaser.Scene {
     this.comboExpiresAt = this.nextAttackAt + PLAYER.comboWindowMs;
     this.comboStage = (stage + 1) % PLAYER.combo.length;
     this.dismissHint();
+    if (stage === PLAYER.combo.length - 1) this.questEvent({ type: 'finisher' });
 
     const hero = player.sprite;
     if (!(hero instanceof HeroSprite)) return;
@@ -779,6 +834,8 @@ export class GameScene extends Phaser.Scene {
         this.impacts.splatter(c.x, c.y, enemy.color, this.now);
         this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
         this.gainXp(PROGRESSION.slimeXp, c.x, c.y - 185);
+        this.questEvent({ type: 'kill', map: this.mapId });
+        this.collectDrop(c.x, c.y);
       } else {
         const heavy = strike.kind !== 'normal' ? HIT_FEEL.heavyKnockback : 1;
         const push = PLAYER.knockback * combo.knockback * heavy;
@@ -831,6 +888,7 @@ export class GameScene extends Phaser.Scene {
       stressLabel: () => `성능 테스트: ${this.stressCount ? `${this.stressCount}명` : '끔'}`,
       // 마을에서 사람 수를 바꿔 다시 시작한다. 끔 → 50 → 100 → 200 → 끔.
       onStress: () => this.scene.restart({ map: 'village', stress: nextStressCount(this.stressCount) }),
+      onBag: () => this.openItemPanel('bag'),
     });
     this.pauseKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)] : [];
     // 안드로이드 뒤로가기: 바로 앱을 끄지 않고 일시정지 메뉴를 연다 (웹에서는 아무 일도 없다).
@@ -849,6 +907,7 @@ export class GameScene extends Phaser.Scene {
     this.attackButton.setSizeScale(buttons);
     this.dodgeButton.setSizeScale(buttons);
     this.talkButton.setSizeScale(buttons);
+    this.potionButton?.setSizeScale(buttons);
     this.joystick.setSizeScale(sizeScale(settings.joystickSize));
     this.justDodgeWindow = justDodgeWindowMs(settings.justDodgeTiming);
     if (this.pauseMenu) this.layout();
@@ -921,13 +980,175 @@ export class GameScene extends Phaser.Scene {
     player.setMotion(false, target.x - player.x);
     this.talkButton.setVisible(false);
     this.talkMarker.setVisible(false);
-    this.dialogue.open(DIALOGUES[target.dialogue], () => {
+    // 마을 사람이면 퀘스트 대화를 먼저 본다. 퀘스트와 상관없으면 평소 대사.
+    const quest = target.id.startsWith('npc-') ? talkTo(target.id.slice(4) as NpcId, this.quests) : undefined;
+    if (quest) {
+      this.quests = quest.state;
+      this.saveQuests();
+      this.refreshQuests();
+    }
+    this.dialogue.open(quest?.lines.length ? quest.lines : DIALOGUES[target.dialogue], () => {
+      if (quest?.completed) {
+        this.hud.showCallout(`퀘스트 완료: ${quest.completed.title}`);
+        this.gainXp(quest.completed.rewardXp, player.x, player.y - 185);
+        this.giveRewards(quest.completed.rewardGold ?? 0, quest.completed.rewardItems ?? []);
+      } else if (quest?.accepted) {
+        this.hud.showCallout(`새 퀘스트: ${quest.accepted.title}`);
+      } else if (quest?.progressed) {
+        this.hud.showCallout(`${quest.progressed.title}: 보고하러 가기`);
+      }
+      // 메리나와의 평소 대화가 끝나면 잡화점을 연다.
+      if (!quest && target.id === 'npc-merina') this.openItemPanel('shop');
       // 대화를 넘기려고 누른 공격 키가 닫힌 뒤 공격으로 이어지지 않게 한다.
       this.clearAttackInput();
       this.dodgeButton.consumePress();
       for (const key of this.dodgeKeys) Phaser.Input.Keyboard.JustDown(key);
     });
   }
+
+  // ---------------------------------------------------------------- 퀘스트와 미니맵
+
+  /** 처치·마무리 일격처럼 퀘스트 목표를 채우는 일이 일어났을 때 */
+  private questEvent(event: QuestEvent): void {
+    const { state, updates } = recordEvent(this.quests, event);
+    if (updates.length === 0) return;
+    this.quests = state;
+    this.saveQuests();
+    this.refreshQuests();
+    const u = updates[0];
+    this.hud.showCallout(u.ready ? `${u.quest.title} 목표 달성!` : `${u.quest.title} ${u.count}/${u.need}`);
+  }
+
+  /** 머리 위 표시와 퀘스트 목록을 지금 상태로 맞춘다. */
+  private refreshQuests(): void {
+    for (const npc of this.npcs) npc.setQuestMarker(markerFor(npc.def.id, this.quests));
+    this.questTracker?.refresh(this.quests);
+  }
+
+  private loadQuests(): QuestState {
+    try {
+      return parseQuests(this.storage?.getItem(QUEST_SAVE_KEY) ?? null);
+    } catch {
+      return {};
+    }
+  }
+
+  private saveQuests(): void {
+    try {
+      this.storage?.setItem(QUEST_SAVE_KEY, serializeQuests(this.quests));
+    } catch {
+      // 저장소가 막혀 있으면 이번 실행 동안만 기억한다.
+    }
+  }
+
+  // ---------------------------------------------------------------- 골드와 아이템
+
+  /** 물약 버튼(또는 Q): 모자란 체력에 알맞은 회복 아이템을 쓴다. */
+  private updatePotion(time: number): void {
+    const button = this.potionButton;
+    if (!button) return;
+    let pressed = button.consumePress();
+    for (const key of this.potionKeys) if (Phaser.Input.Keyboard.JustDown(key)) pressed = true;
+    const player = this.player;
+    const ready = time >= this.nextUseAt;
+    button.setEnabled(ready && player.alive && player.hp < player.maxHp && !!bestHealItem(this.inventory, player.maxHp - player.hp));
+    if (pressed && ready) {
+      const id = bestHealItem(this.inventory, player.maxHp - player.hp);
+      if (id) this.useHealItem(id);
+    }
+  }
+
+  private useHealItem(id: ItemId): boolean {
+    const player = this.player;
+    const result = useItem(this.inventory, id, player.hp, player.maxHp);
+    if (!result || this.now < this.nextUseAt) return false;
+    this.inventory = result.inventory;
+    this.nextUseAt = this.now + USE_COOLDOWN_MS;
+    player.hp += result.heal;
+    this.showDamage(player.x, player.y - 190, result.heal, '#7dff8a', 38);
+    this.impacts.dust(player.x, player.y, 3, this.now, 30);
+    this.drawHud();
+    this.saveInventory();
+    this.refreshInventory();
+    return true;
+  }
+
+  /** 쓰러진 슬라임이 떨어뜨린 골드와 아이템을 바로 줍는다. */
+  private collectDrop(x: number, y: number): void {
+    const drop = slimeDrop(Math.random);
+    this.inventory = applyDrop(this.inventory, drop);
+    this.progressEffects.showPopup(x, y - 150, `+${drop.gold} G`, '#ffd23f');
+    drop.items.forEach((item, i) => this.progressEffects.showPopup(x, y - 120 + i * 26, `${ITEMS[item.id].name} +${item.count}`, '#a8f0ff'));
+    this.saveInventory();
+    this.refreshInventory();
+  }
+
+  private giveRewards(gold: number, items: Array<{ id: ItemId; count: number }>): void {
+    if (gold === 0 && items.length === 0) return;
+    this.inventory = addGold(this.inventory, gold);
+    for (const item of items) this.inventory = addItem(this.inventory, item.id, item.count);
+    const player = this.player;
+    const labels = [gold ? `+${gold} G` : '', ...items.map((i) => `${ITEMS[i.id].name} +${i.count}`)].filter(Boolean);
+    labels.forEach((label, i) => this.progressEffects.showPopup(player.x, player.y - 150 + i * 28, label, i === 0 && gold ? '#ffd23f' : '#a8f0ff'));
+    this.saveInventory();
+    this.refreshInventory();
+  }
+
+  private openItemPanel(mode: 'bag' | 'shop'): void {
+    this.clearAttackInput();
+    this.joystick.vector.set(0, 0);
+    this.talkButton.setVisible(false);
+    this.talkMarker.setVisible(false);
+    this.pauseButton.setVisible(false);
+    this.itemPanel?.show(mode, this.inventory);
+  }
+
+  private onItemAction(action: PanelAction): void {
+    let next: Inventory | null = null;
+    if (action.type === 'use') {
+      // 가방에서 쓸 때는 재사용 대기 시간을 따지지 않는다 (게임이 멈춰 있다).
+      this.nextUseAt = 0;
+      if (!this.useHealItem(action.id)) this.hud.showCallout(this.player.hp >= this.player.maxHp ? '체력이 가득하다' : '쓸 수 없다');
+      this.itemPanel?.refresh(this.inventory);
+      return;
+    }
+    if (action.type === 'buy') next = buy(this.inventory, action.id);
+    if (action.type === 'sell') next = sell(this.inventory, action.id);
+    if (!next) return;
+    this.inventory = next;
+    this.saveInventory();
+    this.refreshInventory();
+    this.itemPanel?.refresh(this.inventory);
+  }
+
+  /** HUD의 골드와 물약 버튼 숫자를 맞춘다. */
+  private refreshInventory(): void {
+    this.hud.setGold(this.inventory.gold);
+    const heals = countOf(this.inventory, 'potion') + countOf(this.inventory, 'lunch');
+    this.potionButton?.setLabel(`물약\n${heals}`);
+  }
+
+  private loadInventory(): Inventory {
+    try {
+      return parseInventory(this.storage?.getItem(INVENTORY_SAVE_KEY) ?? null);
+    } catch {
+      return { gold: 0, items: {} };
+    }
+  }
+
+  private saveInventory(): void {
+    try {
+      this.storage?.setItem(INVENTORY_SAVE_KEY, serializeInventory(this.inventory));
+    } catch {
+      // 저장소가 막혀 있으면 이번 실행 동안만 기억한다.
+    }
+  }
+
+  /** 미니맵이 다시 그릴 때만 부른다. */
+  private readonly collectMinimap = () => ({
+    npcs: this.npcs.map((n) => ({ x: n.x, y: n.y, marker: n.questMarker })),
+    enemies: this.enemies.filter((e) => e.character.alive).map((e) => ({ x: e.character.x, y: e.character.y })),
+  });
 
   /** 몬스터의 돌진이 닿는 순간. 화살표 함수라서 콜백으로 그대로 넘길 수 있다. */
   private readonly onEnemyStrike = (enemy: Enemy): void => {

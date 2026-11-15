@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Interactable } from '../world/interactables';
+import type { QuestMarker } from '../story/quests';
 import type { WalkArea } from '../world/walkArea';
 import {
   NPC_NOTICE_RADIUS, NPC_WALK_SPEED, direction8, pickWanderTarget, wanderPauseMs,
@@ -19,6 +20,14 @@ const FRAME_DATA = import.meta.glob<WalkData>('../assets/characters/*/walk_frame
 /** walk_*-60.webp는 원본 시트를 이 배율로 줄인 것이다 (tools/build_rowen_assets.py). */
 const WALK_SHEET_SCALE = 0.6;
 const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+
+/** 머리 위 퀘스트 표시: 새 퀘스트 !, 완료 ?, 진행 중 회색 ?, 말 걸 대상 하늘색 ! */
+export const MARKER_STYLE: Record<QuestMarker, { text: string; color: string }> = {
+  new: { text: '!', color: '#ffd23f' },
+  ready: { text: '?', color: '#ffd23f' },
+  progress: { text: '?', color: '#b9b2a4' },
+  target: { text: '!', color: '#8fd6ff' },
+};
 
 const sheetKey = (id: NpcId, sheet: string) => `npc-${id}-${sheet.startsWith('walk_cardinal') ? 'cardinal' : 'diagonal'}`;
 const sheetUrl = (id: NpcId, sheet: string) => SHEET_URLS[`../assets/characters/${id}/${sheet}-60.webp`];
@@ -62,6 +71,9 @@ export class Npc extends Phaser.GameObjects.Container {
   private walkStartedAt = 0;
   private readonly rand: () => number;
   private readonly step = new Phaser.Math.Vector2();
+  private readonly marker: Phaser.GameObjects.Text;
+  /** 지금 띄운 퀘스트 표시 (미니맵도 이 값을 쓴다) */
+  questMarker?: QuestMarker;
 
   constructor(scene: Phaser.Scene, def: NpcDef, rand: () => number = Math.random) {
     super(scene, def.x, def.y);
@@ -84,13 +96,29 @@ export class Npc extends Phaser.GameObjects.Container {
       color: def.shop ? '#ffe09a' : '#f5ead2', stroke: '#1a1008', strokeThickness: 5,
     }).setOrigin(0.5, 1).setResolution(2);
     this.add(label);
+    this.marker = scene.add.text(0, -def.height - 36, '', {
+      fontFamily: FONT, fontSize: '38px', fontStyle: 'bold', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 7,
+    }).setOrigin(0.5, 1).setResolution(2).setVisible(false);
+    this.add(this.marker);
 
     this.spot = { id: `npc-${def.id}`, x: def.x, y: def.y, radius: 110, markerHeight: def.height + 44, dialogue: def.dialogue };
     scene.add.existing(this);
     this.setDepth(def.y);
   }
 
+  setQuestMarker(marker: QuestMarker | undefined): void {
+    this.questMarker = marker;
+    if (!marker) {
+      this.marker.setVisible(false);
+      return;
+    }
+    const style = MARKER_STYLE[marker];
+    this.marker.setText(style.text).setColor(style.color).setVisible(true);
+  }
+
   update(now: number, dt: number, player: { x: number; y: number }, area: WalkArea): void {
+    // 퀘스트 표시는 위아래로 천천히 흔들려 눈에 띈다.
+    if (this.questMarker) this.marker.setY(-this.def.height - 36 - Math.abs(Math.sin(now / 320)) * 8);
     const idle = this.walk.idlePose;
     if (Math.hypot(player.x - this.x, player.y - this.y) < NPC_NOTICE_RADIUS) {
       // 말을 걸 수 있게 멈추고 플레이어 쪽을 본다.

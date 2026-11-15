@@ -43,10 +43,15 @@ export class ProgressEffects {
 
   /** 쓰러진 적 위로 얻은 경험치를 띄운다. */
   showXp(x: number, y: number, amount: number): void {
+    this.showPopup(x, y, `+${amount} EXP`);
+  }
+
+  /** 떠올랐다 사라지는 짧은 글 (경험치, 골드, 주운 아이템) */
+  showPopup(x: number, y: number, label: string, color = '#ffd76a'): void {
     const text = this.popups[this.nextPopup];
     this.nextPopup = (this.nextPopup + 1) % POPUP_COUNT;
     this.scene.tweens.killTweensOf(text);
-    text.setText(`+${amount} EXP`).setPosition(x, y).setAlpha(1).setVisible(true);
+    text.setText(label).setColor(color).setPosition(x, y).setAlpha(1).setVisible(true);
     this.scene.tweens.add({
       targets: text,
       y: y - 50,

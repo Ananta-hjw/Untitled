@@ -877,6 +877,102 @@ test('성능 테스트 모드는 마을에 사람을 더 세우고 FPS·메모�
   assert.equal(result.next, 211);
   assert.deepEqual(result.off, { npcs: 11, perf: false, label: '성능 테스트: 끔' });
 });
+test('퀘스트: 머리 위 표시, 대화로 받고 완료, 목록 표시, 저장 후 재시작에도 유지되고 미니맵에 그려진다', async () => {
+  await load('village');
+  const result = await evaluate(`(() => {
+    const g = window.__game;
+    let s = g.scene.getScene('game');
+    let t = performance.now();
+    localStorage.removeItem('untitled-rpg.quests');
+    s.scene.restart({ map: 'village' }); g.step(t += 16, 16);
+    const marker = (id) => s.npcs.find(n => n.def.id === id).questMarker;
+    const talk = (id) => { const n = s.npcs.find(n => n.def.id === id); s.openDialogue(n.spot); const name = s.dialogue.nameText.text;
+      while (s.dialogue.isOpen) s.dialogue.advance(); return name; };
+    const start = { ruan: marker('ruan'), doran: marker('doran'), teon: marker('teon'), serena: marker('serena') ?? null, tracker: s.questTracker.text.text };
+    const speaker = talk('ruan');
+    const accepted = { ruan: marker('ruan'), tracker: s.questTracker.text.text };
+    // 3단 콤보의 마지막 일격을 세 번 시작하면 목표를 채운다.
+    for (let i = 0; i < 3; i++) { s.comboStage = 2; s.comboExpiresAt = s.now + 999; s.startAttack(s.now, 0); s.now += 2000; }
+    const ready = { ruan: marker('ruan'), tracker: s.questTracker.text.text };
+    const xpBefore = s.progress.xp + s.progress.level * 1000;
+    talk('ruan');
+    const xpAfter = s.progress.xp + s.progress.level * 1000;
+    const afterDone = { ruan: marker('ruan') };
+    talk('ruan');
+    s.player.placeAt(1600, 1150);
+    for (let i = 0; i < 10; i++) g.step(t += 16, 16);
+    s.minimap.elapsed = 999; s.update(t, 16);
+    const ctx = s.minimap.texture.context, px = ctx.getImageData(150, 150, 1, 1).data, edge = ctx.getImageData(150, 6, 1, 1).data;
+    const minimap = { center: [px[0], px[1], px[2]], edgeAlpha: edge[3], visible: s.minimap.image.visible, title: s.minimap.title.text };
+    s.scene.restart(); g.step(t += 16, 16);
+    return { start, speaker, accepted, ready, xpGained: xpAfter > xpBefore, afterDone, minimap,
+      reloaded: { quests: s.quests, ruan: marker('ruan'), tracker: s.questTracker.text.text } };
+  })()`);
+  assert.deepEqual(result.start, { ruan: 'new', doran: 'new', teon: 'new', serena: null, tracker: '' });
+  assert.equal(result.speaker, '루안');
+  assert.equal(result.accepted.ruan, 'progress');
+  assert.match(result.accepted.tracker, /마지막 수련 · 3단 콤보 마무리 0\/3/);
+  assert.equal(result.ready.ruan, 'ready');
+  assert.match(result.ready.tracker, /마지막 수련 · 루안에게 보고/);
+  assert.equal(result.xpGained, true);
+  assert.equal(result.afterDone.ruan, 'new');
+  assert.deepEqual(result.minimap.center, [94, 200, 255], '가운데는 플레이어(하늘색 점)');
+  assert.ok(result.minimap.edgeAlpha > 200, '테두리가 그려진다');
+  assert.equal(result.minimap.title, '로웬 마을');
+  assert.deepEqual(result.reloaded.quests, { 'ruan-training': { status: 'done', count: 3 }, 'ruan-field': { status: 'active', count: 0 } });
+  assert.equal(result.reloaded.ruan, 'progress');
+  assert.match(result.reloaded.tracker, /들판의 슬라임 · 남쪽 들판의 슬라임 0\/5/);
+});
+test('골드와 아이템: 슬라임이 골드를 떨어뜨리고, 물약 버튼으로 회복하고, 잡화점에서 사고팔며, 재시작해도 남는다', async () => {
+  await load();
+  const result = await evaluate(`(() => {
+    const g = window.__game;
+    let s = g.scene.getScene('game');
+    let t = performance.now();
+    // 이 테스트에서 오른 레벨과 가방은 끝날 때 되돌려, 다음 테스트에 영향을 주지 않는다.
+    const savedProgress = localStorage.getItem('untitled-rpg.save');
+    localStorage.removeItem('untitled-rpg.inventory');
+    s.scene.restart({ map: 'south-field' }); g.step(t += 16, 16);
+    const start = { gold: s.inventory.gold, hud: s.hud.goldText.text, label: s.potionButton.text.text };
+    // 슬라임을 한 번에 쓰러뜨린다.
+    const e = s.enemies[0], c = e.character, p = s.player;
+    s.enemies = [e]; c.hp = 1; c.setPosition(p.x + 60, p.y); p.face(1);
+    s.startAttack(s.now, 1, 0);
+    for (let i = 0; i < 40 && c.alive; i++) g.step(t += 16, 16);
+    const afterKill = { alive: c.alive, gold: s.inventory.gold, hud: s.hud.goldText.text };
+    // 물약: 체력이 가득하면 못 쓰고, 다치면 버튼으로 쓴다.
+    s.inventory = { gold: 100, items: { potion: 2 } }; s.refreshInventory();
+    // 쓰러뜨린 순간의 히트스톱이 끝날 때까지 기다린다 (멈춘 동안 누른 버튼은 끝난 뒤 처리된다).
+    for (let i = 0; i < 20; i++) g.step(t += 16, 16);
+    s.potionButton.pressed = true; for (let i = 0; i < 3; i++) g.step(t += 16, 16);
+    const fullHp = s.inventory.items.potion;
+    p.hp = 30; s.drawHud(); s.potionButton.pressed = true; for (let i = 0; i < 3; i++) g.step(t += 16, 16);
+    const healed = { hp: p.hp, potions: s.inventory.items.potion, label: s.potionButton.text.text };
+    // 잡화점
+    s.openItemPanel('shop');
+    const frozen = s.now; g.step(t += 16, 16); const paused = s.now === frozen;
+    s.onItemAction({ type: 'buy', id: 'potion' });
+    s.inventory = { ...s.inventory, items: { ...s.inventory.items, 'slime-gel': 2 } };
+    s.onItemAction({ type: 'sell', id: 'slime-gel' });
+    const shop = { gold: s.inventory.gold, potions: s.inventory.items.potion, gel: s.inventory.items['slime-gel'] ?? 0 };
+    s.itemPanel.close();
+    s.scene.restart(); g.step(t += 16, 16);
+    const reloaded = s.inventory;
+    if (savedProgress === null) localStorage.removeItem('untitled-rpg.save'); else localStorage.setItem('untitled-rpg.save', savedProgress);
+    localStorage.removeItem('untitled-rpg.inventory');
+    s.scene.restart(); g.step(t += 16, 16);
+    return { start, afterKill, fullHp, healed, paused, shop, reloaded };
+  })()`);
+  assert.deepEqual(result.start, { gold: 0, hud: '● 0 G', label: '물약\n0' });
+  assert.equal(result.afterKill.alive, false);
+  assert.ok(result.afterKill.gold >= 3 && result.afterKill.gold <= 6, String(result.afterKill.gold));
+  assert.equal(result.afterKill.hud, `● ${result.afterKill.gold} G`);
+  assert.equal(result.fullHp, 2, '체력이 가득하면 물약을 쓰지 않는다');
+  assert.deepEqual(result.healed, { hp: 80, potions: 1, label: '물약\n1' });
+  assert.equal(result.paused, true, '잡화점이 열려 있으면 게임이 멈춘다');
+  assert.deepEqual(result.shop, { gold: 100 - 20 + 4, potions: 2, gel: 1 });
+  assert.deepEqual(result.reloaded, { gold: 84, items: { potion: 2, 'slime-gel': 1 } });
+});
 test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 이어지며 마을에는 몬스터가 없다', async () => {
   await load('village');
   const result = await evaluate(`(() => {

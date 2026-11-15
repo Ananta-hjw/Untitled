@@ -24,9 +24,12 @@ export interface Building {
   y: number;
   /** 화면에 그리는 너비. 높이는 그림 비율을 따른다. */
   width: number;
-  /** 벽과 기단의 바닥 영역. 지붕은 막지 않아 캐릭터가 건물 뒤로 지나갈 수 있다. */
+  /**
+   * 건물이 땅을 차지하는 영역(앞쪽 기단부터 건물 몸체 뒤쪽까지). 이 안으로는 걸어 들어갈 수 없다.
+   * 지붕 꼭대기 쪽은 막지 않아, 건물 뒤로 돌아갈 때 캐릭터가 지붕에 가려진다.
+   */
   footprint: Obstacle[];
-  /** 문 앞. 걸을 수 있는 곳이어야 한다. */
+  /** 문 앞. 걸을 수 있는 곳이어야 한다. 나중에 건물 안으로 들어가는 입구가 된다. */
   door: { x: number; y: number };
   /** 건물 위에 띄우는 이름 */
   label: string;
@@ -37,22 +40,22 @@ const wall = (left: number, top: number, right: number, bottom: number): Obstacl
 
 export const BUILDINGS: Building[] = [
   { frame: 'family-house', x: 430, y: 540, width: 500, label: '시온의 집',
-    footprint: [wall(220, 443, 640, 522)], door: { x: 415, y: 580 } },
+    footprint: [wall(200, 330, 660, 532)], door: { x: 415, y: 580 } },
   { frame: 'chief-house', x: 1180, y: 470, width: 380, label: '촌장의 집',
-    footprint: [wall(1020, 370, 1340, 455)], door: { x: 1180, y: 510 } },
+    footprint: [wall(1000, 262, 1360, 462)], door: { x: 1180, y: 510 } },
   { frame: 'clinic', x: 1950, y: 500, width: 540, label: '치유소',
-    footprint: [wall(1720, 410, 2180, 485)], door: { x: 1912, y: 540 } },
+    footprint: [wall(1700, 320, 2200, 492)], door: { x: 1912, y: 540 } },
   { frame: 'training-hall', x: 450, y: 990, width: 520, label: '수련소',
-    footprint: [wall(225, 905, 675, 975)], door: { x: 450, y: 1030 } },
+    footprint: [wall(205, 840, 695, 982)], door: { x: 450, y: 1030 } },
   { frame: 'general-store', x: 1960, y: 900, width: 420, label: '잡화점',
-    footprint: [wall(1780, 810, 2140, 885)], door: { x: 1960, y: 940 } },
+    footprint: [wall(1770, 700, 2150, 892)], door: { x: 1960, y: 940 } },
   { frame: 'smithy', x: 470, y: 1460, width: 520, label: '대장간',
-    footprint: [wall(245, 1370, 695, 1445)], door: { x: 402, y: 1500 } },
+    footprint: [wall(225, 1270, 715, 1452)], door: { x: 402, y: 1500 } },
   { frame: 'inn', x: 1930, y: 1460, width: 600, label: '여관',
-    footprint: [wall(1670, 1370, 2190, 1445)], door: { x: 1858, y: 1500 } },
+    footprint: [wall(1650, 1260, 2210, 1452)], door: { x: 1858, y: 1500 } },
   // 남쪽 입구: 왼쪽 초소와 오른쪽 행상 수레 사이, 아치 기둥 안쪽만 지나갈 수 있다.
   { frame: 'south-gate', x: 1174, y: 1560, width: 640, label: '',
-    footprint: [wall(867, 1490, 1134, 1600), wall(1228, 1490, 1481, 1600)], door: { x: 1181, y: 1440 } },
+    footprint: [wall(867, 1370, 1134, 1600), wall(1228, 1440, 1481, 1600)], door: { x: 1181, y: 1440 } },
 ];
 
 /** 남쪽 입구 아치의 통로 (두 기둥 사이) */
