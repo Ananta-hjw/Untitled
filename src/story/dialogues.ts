@@ -53,7 +53,7 @@ export const DIALOGUES = {
   'npc-sia': [
     { speaker: '시아', portrait: 'sia', text: '오빠! 리네아 언니 생일 선물, 엄마한테도 비밀이야. 알지?' },
     { speaker: '시아', portrait: 'sia', text: '아, 언니네 창문 끈이 또 헐거워졌대. 이따 내가 가서 묶어 줘야지. 내가 묶으면 안 풀리거든!' },
-    { speaker: '시아', portrait: 'sia', text: '…요즘 밤마다 이상한 꿈을 꿔. 누가 멀리서 내 이름을 부르는 것 같은.' },
+    { speaker: '시아', portrait: 'sia', text: '…요즘 밤마다 이상한 꿈을 꿔. 누가 멀리서 부르는 것 같은.' },
     { speaker: '시아', portrait: 'sia', text: '아냐, 별거 아니야. 축제 때 같이 등불 띄우는 거 잊지 마!' },
   ],
   'npc-linea': [
@@ -70,14 +70,14 @@ export const DIALOGUES = {
   ],
   'npc-herman': [
     { speaker: '헤르만', portrait: 'herman', text: '축제 준비는 순조롭네. 올해는 수확도 넉넉하고.' },
-    { speaker: '헤르만', portrait: 'herman', text: '우리 집안엔 대대로 내려오는 낡은 서신이 하나 있지. "때가 오면 열라"는 말만 남았어.' },
-    { speaker: '헤르만', portrait: 'herman', text: '허허, 그때가 언제인지는 아무도 모른다네. 그런 날이 오지 않는 게 제일이지.' },
+    { speaker: '헤르만', portrait: 'herman', text: '…요즘 밤이 유난히 조용하구나. 괜한 걱정이겠지만.' },
+    { speaker: '헤르만', portrait: 'herman', text: '허허, 늙으면 걱정만 는다네. 오늘은 다들 마음껏 즐기게.' },
   ],
   'npc-eila': [
     { speaker: '에일라', portrait: 'eila', text: '다친 데는 없지? 수련하다 다치면 참지 말고 바로 오렴.' },
-    { speaker: '에일라', portrait: 'eila', text: '…시온, 요즘 몸에 이상한 데는 없니? 열이 나거나, 꿈이 이상하다거나.' },
-    hero('아뇨, 멀쩡한데요?'),
-    { speaker: '에일라', portrait: 'eila', text: '그래, 내 기분 탓이겠지. 축제 날엔 꼭 다치는 사람이 나오니까 약초나 넉넉히 말려 둬야겠다.' },
+    { speaker: '에일라', portrait: 'eila', text: '축제 날엔 꼭 다치는 사람이 나오거든. 약초를 넉넉히 말려 둬야겠다.' },
+    hero('작년엔 도란 아저씨가 등불 매달다 떨어지셨죠.'),
+    { speaker: '에일라', portrait: 'eila', text: '그래, 올해는 사다리부터 내가 붙잡고 있어야겠어.' },
   ],
   'npc-merina': [
     { speaker: '메리나', portrait: 'merina', text: '어서 와! 축제 전이라 물약이 잘 나가. 하나 챙겨 둘래?' },
@@ -95,12 +95,12 @@ export const DIALOGUES = {
   ],
   'npc-vernel': [
     { speaker: '베르넬', portrait: 'vernel', text: '아, 미안. 이 석판 조각에 정신이 팔려서 못 봤네.' },
-    { speaker: '베르넬', portrait: 'vernel', text: '이 표식… 북쪽 유적 깊은 곳에서 본 것과 비슷한데. 거긴 아직 막혀 있어서 확인을 못 했지.' },
-    { speaker: '베르넬', portrait: 'vernel', text: '권속들은 신마다 다른 힘을 쓴다더군. 물, 얼음, 쇠… 이 표식도 그런 힘 하나를 가리키는 걸까.' },
+    { speaker: '베르넬', portrait: 'vernel', text: '이 표식… 북쪽 유적 입구 쪽에서 본 것과 비슷한데. 안쪽은 무너져서 들어가 보질 못했지.' },
+    { speaker: '베르넬', portrait: 'vernel', text: '축제가 끝나면 다시 가 볼 생각이야. 그때 같이 가겠나? 하하, 농담일세.' },
   ],
   'npc-teon': [
     { speaker: '테온', portrait: 'teon', text: '시온! 오늘도 들판 나가? 슬라임 조심하고.' },
-    { speaker: '테온', portrait: 'teon', text: '요즘 숲길 쪽에 마물이 늘었다더라. 이맘때 이런 적은 없었는데.' },
+    { speaker: '테온', portrait: 'teon', text: '요즘 숲길 쪽에 마물이 늘었대. 루안 선생님께도 말씀드려 놨어.' },
     { speaker: '테온', portrait: 'teon', text: '그래도 남쪽 입구는 내가 지키니까 걱정 마! 오늘 밤 잔치 때도 자리 안 비울 거야.' },
   ],
 } satisfies Record<string, DialogueLine[]>;
