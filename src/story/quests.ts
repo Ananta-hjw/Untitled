@@ -132,7 +132,7 @@ export const QUESTS: QuestDef[] = [
     completeOnTarget: true,
     objective: { label: '마을 북쪽의 시아에게 창문 끈 이야기 듣기', need: 1, event: 'talk', npc: 'sia' },
     steps: [
-      { label: '마을 북쪽의 시아에게 창문 끈 이야기 듣기', need: 1, event: 'talk', npc: 'sia', lines: [line('sia', '시아', '언니 집 창문 끈이 헐거워졌네. 잠깐만, 내가 묶을게.'), { speaker: '로웬 마을', text: '시아는 끈을 두 번 감고, 끝을 안쪽에 숨겨 단단히 묶었다.' }, hero('또 네 방식으로 묶었네.'), line('sia', '시아', '이렇게 해야 바람이 불어도 안 풀리지. 오빠는 맨날 대충 묶잖아.')] },
+      { label: '마을 북쪽의 시아에게 창문 끈 이야기 듣기', need: 1, event: 'talk', npc: 'sia', lines: [line('sia', '시아', '언니 집 창문 끈이 헐거워졌네. 잠깐만, 내가 묶을게.'), { speaker: '로웬 마을', text: '시아는 끈을 두 번 감고, 끝을 안쪽에 숨겨 단단히 묶었다.' }, hero('또 네 방식으로 묶었네.'), line('sia', '시아', '이렇게 해야 바람이 불어도 안 풀리지. 오빠는 맨날 대충 묶잖아.'), line('sia', '시아', '언니, 등불은 나중에 같이 띄우자.')] },
       { label: '리네아와 매듭 이야기 나누기', need: 1, event: 'talk', npc: 'linea', lines: [line('linea', '리네아', '어릴 때부터 시아가 묶어 주면 안 풀리더라. 이젠 누가 묶었는지 보기만 해도 알겠어.'), hero('맞아. 끝을 꼭 안쪽에 숨겨 놓지.')] },
     ],
     rewardXp: 15,
@@ -178,7 +178,7 @@ export const QUESTS: QuestDef[] = [
     steps: [
       { label: '마을 북쪽의 세레나에게 시아의 행방 묻기', need: 1, event: 'talk', npc: 'serena', lines: [line('serena', '세레나', '아직 돌아오지 않았어. 집에도 없더구나. 혹시 모르니 너도 한 번 봐 주겠니?')] },
       { label: '마을 북쪽 시온의 집 앞에서 시아의 흔적 살펴보기', need: 1, event: 'inspect', spot: 'home-search', map: 'village-north' },
-      { label: '에일라에게 리네아의 상태 확인하기', need: 1, event: 'talk', npc: 'eila', lines: [line('eila', '에일라', '리네아가 눈은 떴지만, 평범한 부상은 아니야. 몸에 어떤 권능의 흔적이 남아 있어. 겉으로 보이는 상처를 치료해도 그 흔적은 사라지지 않는구나.'), hero('그럼 고칠 방법을 찾아야겠네요. 시아도… 꼭 데려올 거예요.')] },
+      { label: '에일라에게 리네아의 상태 확인하기', need: 1, event: 'talk', npc: 'eila', lines: [line('eila', '에일라', '리네아가 눈은 떴지만, 몸속을 갉아먹는 기운이 남아 있어. 평범한 독도 아니고… 어떤 권능의 흔적 같구나. 상처를 치료해도 그 기운은 사라지지 않아.'), hero('그럼 고칠 방법을 찾아야겠네요. 시아도… 꼭 데려올 거예요.')] },
     ],
     rewardXp: 25,
     offer: [ruan('세레나와 이야기하고 집도 살펴봐라. 에일라가 리네아를 돌보고 있을 거다.')],
