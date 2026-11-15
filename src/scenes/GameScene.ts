@@ -289,7 +289,7 @@ export class GameScene extends Phaser.Scene {
     this.layout();
     if (this.stressCount > 0) this.perf = new PerfOverlay(this, () => this.npcs.length);
 
-    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    this.setCameraBounds();
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 170);
     if (this.arrival) this.cameras.main.fadeIn(TRAVEL_FADE_MS, 0, 0, 0);
 
@@ -509,8 +509,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 화면 너비가 바뀔 때(회전, 창 크기 변경) 화면에 고정된 요소를 다시 배치한다. */
+  /**
+   * 카메라가 움직일 수 있는 범위. 바깥 맵은 월드 전체, 실내는 방 둘레만.
+   * 방이 화면보다 작으면 방이 화면 가운데 오도록 범위를 화면 크기만큼 넓힌다.
+   */
+  private setCameraBounds(): void {
+    const camera = this.cameras.main;
+    const interior = this.map.interior;
+    if (!interior) {
+      camera.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+      return;
+    }
+    const room = this.map.bounds;
+    // 뒤쪽 벽과 앞쪽 문턱까지 보이게 한다.
+    const left = room.left - 80, right = room.right + 80, top = room.top - 260, bottom = room.bottom + 110;
+    const viewW = this.scale.gameSize.width / camera.zoom, viewH = VIEW_HEIGHT / camera.zoom;
+    const width = Math.max(right - left, viewW), height = Math.max(bottom - top, viewH);
+    const cx = (left + right) / 2, cy = (top + bottom) / 2;
+    camera.setBounds(cx - width / 2, cy - height / 2, width, height);
+  }
+
   private layout(): void {
     const { width } = this.scale.gameSize;
+    if (this.map) this.setCameraBounds();
     this.hud.layout(width);
     this.attackButton.setPosition(width - 170, VIEW_HEIGHT - 185);
     this.dodgeButton.setPosition(width - 330, VIEW_HEIGHT - 105);
@@ -969,8 +990,18 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     marker.setVisible(true).setPosition(target.x, target.y - target.markerHeight - 6 * Math.abs(Math.sin(time / 260)));
+    // 건물 문 앞에서는 "들어가기", 그 밖에는 "대화"
+    const enter = target.enter;
+    this.talkButton.setLabel(enter ? '들어가기' : '대화');
+    marker.setText(enter ? `▲ ${enter.label}` : '···');
 
-    if (this.talkPressed()) this.openDialogue(target);
+    if (!this.talkPressed()) return;
+    if (enter && isMapId(enter.to)) {
+      this.hud.dismissHint();
+      this.travel({ to: enter.to, arrive: enter.at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: enter.at });
+    } else {
+      this.openDialogue(target);
+    }
   }
 
   private openDialogue(target: Interactable): void {
@@ -987,7 +1018,8 @@ export class GameScene extends Phaser.Scene {
       this.saveQuests();
       this.refreshQuests();
     }
-    this.dialogue.open(quest?.lines.length ? quest.lines : DIALOGUES[target.dialogue], () => {
+    const lines = quest?.lines.length ? quest.lines : target.dialogue ? DIALOGUES[target.dialogue] : [];
+    this.dialogue.open(lines, () => {
       if (quest?.completed) {
         this.hud.showCallout(`퀘스트 완료: ${quest.completed.title}`);
         this.gainXp(quest.completed.rewardXp, player.x, player.y - 185);

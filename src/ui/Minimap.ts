@@ -3,6 +3,7 @@ import { DEPTH_UI } from '../config';
 import type { GameMap } from '../world/maps';
 import type { QuestMarker } from '../story/quests';
 import { MARKER_STYLE } from '../entities/Npc';
+import { furnitureObstacles } from '../world/interiors';
 
 /** 화면에 그리는 지름(px)과 캔버스 배율 (선명하게 두 배로 그린다) */
 const SIZE = 150;
@@ -72,34 +73,44 @@ export class Minimap {
     ctx.fillStyle = '#2c3a22';
     ctx.fillRect(0, 0, size, size);
 
-    // 지면 (맵 전체 그림을 줄여서 옮긴다) + 맵 색조
-    const ground = textures.get('village-ground').getSourceImage() as CanvasImageSource;
-    const left = toX(0), top = toY(0), w = 2400 * k, h = 1600 * k;
-    ctx.drawImage(ground, left, top, w, h);
-    if (this.map.groundTint !== undefined) {
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = `#${this.map.groundTint.toString(16).padStart(6, '0')}`;
-      ctx.fillRect(left, top, w, h);
-      ctx.globalCompositeOperation = 'source-over';
-    }
-    if (this.map.water) {
-      ctx.fillStyle = '#4f9fc4';
-      ctx.fillRect(left, toY(this.map.water.top), w, (this.map.water.bottom - this.map.water.top) * k);
-    }
-    // 걸을 수 없는 바깥은 어둡게
     const b = this.map.bounds;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(left, top, w, toY(b.top) - top);
-    ctx.fillRect(left, toY(b.bottom), w, top + h - toY(b.bottom));
+    if (this.map.interior) {
+      // 실내: 방 바닥과 가구 자리만 간단히 그린다.
+      ctx.fillStyle = '#0d0906';
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = `#${this.map.interior.floor.toString(16).padStart(6, '0')}`;
+      ctx.fillRect(toX(b.left), toY(b.top), (b.right - b.left) * k, (b.bottom - b.top) * k);
+      ctx.fillStyle = 'rgba(40,24,12,0.85)';
+      for (const o of furnitureObstacles(this.map.interior)) ctx.fillRect(toX(o.x - o.rx), toY(o.y - o.ry), o.rx * 2 * k, o.ry * 2 * k);
+    } else {
+      // 지면 (맵 전체 그림을 줄여서 옮긴다) + 맵 색조
+      const ground = textures.get('village-ground').getSourceImage() as CanvasImageSource;
+      const left = toX(0), top = toY(0), w = 2400 * k, h = 1600 * k;
+      ctx.drawImage(ground, left, top, w, h);
+      if (this.map.groundTint !== undefined) {
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = `#${this.map.groundTint.toString(16).padStart(6, '0')}`;
+        ctx.fillRect(left, top, w, h);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      if (this.map.water) {
+        ctx.fillStyle = '#4f9fc4';
+        ctx.fillRect(left, toY(this.map.water.top), w, (this.map.water.bottom - this.map.water.top) * k);
+      }
+      // 걸을 수 없는 바깥은 어둡게
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(left, top, w, toY(b.top) - top);
+      ctx.fillRect(left, toY(b.bottom), w, top + h - toY(b.bottom));
 
-    // 나무·바위와 건물: 게임과 같은 그림을 작게 그린다.
-    const props = textures.get('village-props');
-    for (const p of this.map.props) {
-      if (p.frame === 'flowers' || p.frame === 'rock') continue;
-      this.drawFrame(ctx, props, p.frame, toX(p.x), toY(p.y), p.width * k);
+      // 나무·바위와 건물: 게임과 같은 그림을 작게 그린다.
+      const props = textures.get('village-props');
+      for (const p of this.map.props) {
+        if (p.frame === 'flowers' || p.frame === 'rock') continue;
+        this.drawFrame(ctx, props, p.frame, toX(p.x), toY(p.y), p.width * k);
+      }
+      const buildings = textures.get('village-buildings');
+      for (const bd of this.map.buildings) this.drawFrame(ctx, buildings, bd.frame, toX(bd.x), toY(bd.y), bd.width * k);
     }
-    const buildings = textures.get('village-buildings');
-    for (const bd of this.map.buildings) this.drawFrame(ctx, buildings, bd.frame, toX(bd.x), toY(bd.y), bd.width * k);
 
     // 출구: 노란 화살표
     for (const exit of this.map.exits) {

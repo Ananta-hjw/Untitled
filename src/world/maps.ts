@@ -4,6 +4,9 @@ import { INTERACTABLES, type Interactable } from './interactables.ts';
 import { insideObstacle, type Obstacle } from './obstacles.ts';
 import { NPCS, type NpcDef } from './npcs.ts';
 import {
+  INTERIORS, arrivalOf, doorOf, furnitureObstacles, interiorFor, roomRect, type Interior, type InteriorId,
+} from './interiors.ts';
+import {
   BUILDINGS, PLAYER_SPAWN, PROPS as VILLAGE_PROPS, SOUTH_GATE_PASSAGE, WALK_BOUNDS as VILLAGE_BOUNDS,
   buildingObstacles, propObstacles, type Building, type VillageProp,
 } from './villageLayout.ts';
@@ -14,10 +17,11 @@ import {
  * 로웬 마을을 가운데 두고 남쪽 들판, 서쪽 숲길, 동쪽 개울가가 이어진다(docs/story-chapter1.md).
  * 플레이어의 발이 출구 영역에 들어가면 연결된 맵의 도착 지점으로 옮겨 간다.
  * 마을은 평화로운 곳이라 몬스터가 없고, 몬스터는 사냥터에만 나온다.
+ * 마을 건물은 문 앞에서 "들어가기"로 실내(in-…)에 들어가고, 실내 아래쪽 문으로 나와 그 건물 문 앞에 선다.
  * 이 파일은 Phaser를 쓰지 않아 tools/maps.test.mjs가 직접 불러 검사한다.
  */
 
-export type MapId = 'village' | 'south-field' | 'west-forest' | 'east-stream';
+export type MapId = 'village' | 'south-field' | 'west-forest' | 'east-stream' | `in-${InteriorId}`;
 
 export interface Rect { left: number; top: number; right: number; bottom: number }
 export interface Point { x: number; y: number }
@@ -55,6 +59,8 @@ export interface GameMap {
   enemies: MapEnemySpawn[];
   exits: MapExit[];
   interactables: Interactable[];
+  /** 건물 실내 (실내 맵만). 바닥·벽·가구를 코드로 그린다. */
+  interior?: Interior;
 }
 
 const FULL_BOUNDS: Rect = { ...VILLAGE_BOUNDS };
@@ -89,7 +95,8 @@ const VILLAGE: GameMap = {
     { to: 'east-stream', zone: { left: 2290, top: 960, right: WORLD_WIDTH, bottom: 1140 },
       arrive: { x: 240, y: 910 }, label: '동쪽 개울가 ▶', labelAt: { x: 2245, y: 1010 } },
   ],
-  interactables: INTERACTABLES,
+  // 표지판과, 실내가 있는 건물마다 문 앞의 "들어가기"
+  interactables: [...INTERACTABLES, ...doorSpots()],
 };
 
 const SOUTH_FIELD: GameMap = {
@@ -217,12 +224,47 @@ const EAST_STREAM: GameMap = {
   interactables: [streamSign.spot],
 };
 
-export const MAPS: Record<MapId, GameMap> = {
+/** 건물 문 앞의 "들어가기". 실내에서 나오면 이 자리 조금 앞에 선다. */
+function doorSpots(): Interactable[] {
+  return BUILDINGS.flatMap((b) => {
+    const interior = interiorFor(b.frame);
+    if (!interior) return [];
+    return [{
+      id: `door-${interior.id}`, x: b.door.x, y: b.door.y, radius: 70, markerHeight: 150,
+      enter: { to: `in-${interior.id}` as MapId, at: arrivalOf(interior), label: interior.name },
+    }];
+  });
+}
+
+function interiorMap(interior: Interior): GameMap {
+  const building = BUILDINGS.find((b) => b.frame === interior.building)!;
+  const door = doorOf(interior);
+  return {
+    id: `in-${interior.id}`,
+    name: interior.name,
+    hint: `${interior.name} · 아래쪽 문으로 나갈 수 있어요`,
+    bounds: roomRect(interior),
+    props: [],
+    buildings: [],
+    npcs: [],
+    spawn: arrivalOf(interior),
+    enemies: [],
+    exits: [{
+      to: 'village', zone: { left: door.x - 70, top: door.y - 26, right: door.x + 70, bottom: WORLD_HEIGHT },
+      arrive: { x: building.door.x, y: building.door.y + 18 }, label: '▼ 나가기', labelAt: { x: door.x, y: door.y + 74 },
+    }],
+    interactables: [],
+    interior,
+  };
+}
+
+export const MAPS = {
   village: VILLAGE,
   'south-field': SOUTH_FIELD,
   'west-forest': WEST_FOREST,
   'east-stream': EAST_STREAM,
-};
+  ...Object.fromEntries(INTERIORS.map((i) => [`in-${i.id}`, interiorMap(i)])),
+} as Record<MapId, GameMap>;
 
 export const START_MAP: MapId = 'village';
 
@@ -230,9 +272,12 @@ export function isMapId(value: unknown): value is MapId {
   return typeof value === 'string' && Object.hasOwn(MAPS, value);
 }
 
-/** 맵의 장애물: 집의 벽(마을만)과 소품의 바닥 접점 */
+/** 맵의 장애물: 건물의 벽(마을만), 소품의 바닥 접점, 실내 가구 */
 export function mapObstacles(map: GameMap): Obstacle[] {
-  return [...buildingObstacles(map.buildings), ...propObstacles(map.props)];
+  return [
+    ...buildingObstacles(map.buildings), ...propObstacles(map.props),
+    ...(map.interior ? furnitureObstacles(map.interior) : []),
+  ];
 }
 
 /** 걸을 수 있는 영역의 꼭짓점 (WalkArea용) */

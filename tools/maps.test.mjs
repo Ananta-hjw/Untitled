@@ -62,7 +62,10 @@ test('시작점·몬스터·도착점은 걸을 수 있고, 시작점과 도착�
 test('모든 출구는 되돌아오는 출구가 있고, 그 출구로 돌아오면 처음 출구 근처에 선다', () => {
   for (const map of maps) {
     for (const exit of map.exits) {
-      const back = MAPS[exit.to].exits.find((e) => e.to === map.id);
+      // 되돌아오는 길은 출구이거나, 실내라면 마을 건물의 문("들어가기")이다.
+      const target = MAPS[exit.to];
+      const door = target.interactables.find((i) => i.enter?.to === map.id);
+      const back = target.exits.find((e) => e.to === map.id) ?? (door && { arrive: door.enter.at });
       assert.ok(back, `${exit.to} → ${map.id}`);
       const z = exit.zone;
       const nearest = { x: Math.min(Math.max(back.arrive.x, z.left), z.right), y: Math.min(Math.max(back.arrive.y, z.top), z.bottom) };
@@ -88,6 +91,14 @@ test('사냥터의 표지판은 대사가 있고, 시작점에서는 대화 버�
   for (const map of maps) {
     assert.equal(findInteractable(map.spawn.x, map.spawn.y, map.interactables), undefined, map.id);
     for (const spot of map.interactables) {
+      if (spot.enter) {
+        // 건물 문: 들어가는 실내가 있고, 들어가면 걸을 수 있는 자리에 선다.
+        const inside = MAPS[spot.enter.to];
+        assert.ok(inside?.interior, spot.id);
+        assert.equal(walkable(inside, spot.enter.at.x, spot.enter.at.y), true, spot.id);
+        assert.equal(findInteractable(spot.x, spot.y + 20, map.interactables)?.id, spot.id);
+        continue;
+      }
       const lines = DIALOGUES[spot.dialogue];
       assert.ok(lines?.length > 0, spot.dialogue);
       for (const line of lines) assert.ok(line.text.length <= 90, `${spot.dialogue}: ${line.text.length}자`);

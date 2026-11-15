@@ -6,6 +6,7 @@ import buildingFrames from '../assets/village/rowen/buildings.json';
 import props from '../assets/village/props.png?url';
 import frames from '../assets/village/frames.json';
 import { WalkArea } from './walkArea';
+import { drawInterior } from './interiorArt';
 import { mapObstacles, mapPolygon, type GameMap } from './maps';
 
 const FONT = 'system-ui, "Noto Sans KR", sans-serif';
@@ -31,6 +32,12 @@ export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
   for (const f of buildingFrames.frames) {
     if (!buildingTexture.has(f.name)) buildingTexture.add(f.name, 0, f.x, f.y, f.w, f.h);
   }
+  // 건물 실내는 바닥·벽·가구를 따로 그린다.
+  if (map.interior) {
+    drawInterior(scene, map.interior);
+    drawExitLabels(scene, map);
+    return new WalkArea(mapPolygon(map), mapObstacles(map));
+  }
   const floor = scene.add.image(0, 0, 'village-ground').setOrigin(0).setDisplaySize(WORLD_WIDTH, WORLD_HEIGHT).setDepth(-100);
   if (map.groundTint !== undefined) floor.setTint(map.groundTint);
   if (map.water) drawWater(scene, map.water.top, map.water.bottom);
@@ -50,6 +57,13 @@ export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
     }
   }
 
+  drawExitLabels(scene, map);
+
+  return new WalkArea(mapPolygon(map), mapObstacles(map));
+}
+
+
+function drawExitLabels(scene: Phaser.Scene, map: GameMap): void {
   // 출구 표시: 바닥에 깔리는 글자라 캐릭터보다 아래에 그린다. 건물(입구 아치) 앞에 있으면 건물 위에 그린다.
   for (const exit of map.exits) {
     const covered = map.buildings.some((b) => Math.abs(b.x - exit.labelAt.x) < b.width / 2 && b.y > exit.labelAt.y);
@@ -59,7 +73,6 @@ export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
     }).setOrigin(.5).setDepth(covered ? WORLD_HEIGHT + 10 : -50).setResolution(2).setAlpha(.9);
   }
 
-  return new WalkArea(mapPolygon(map), mapObstacles(map));
 }
 
 /** 개울: 걸을 수 있는 영역 위쪽에 물결 띠를 그린다. 그림이 생기면 바꾼다. */

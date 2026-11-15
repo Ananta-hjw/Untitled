@@ -973,6 +973,46 @@ test('골드와 아이템: 슬라임이 골드를 떨어뜨리고, 물약 버튼
   assert.deepEqual(result.shop, { gold: 100 - 20 + 4, potions: 2, gel: 1 });
   assert.deepEqual(result.reloaded, { gold: 84, items: { potion: 2, 'slime-gel': 1 } });
 });
+test('건물 문 앞에서 들어가기를 누르면 실내로 들어가고, 아래쪽 문으로 나오면 그 건물 문 앞에 선다', async () => {
+  await load('village');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    let t = performance.now();
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    s.scene.restart({ map: 'village' }); step();
+    const door = s.interactables.find(i => i.id === 'door-inn');
+    s.player.placeAt(door.x, door.y + 10); step(2);
+    const atDoor = { button: s.talkButton.text.text, visible: s.talkButton.image.visible, marker: s.talkMarker.text };
+    s.talkButton.pressed = true; step();
+    const started = s.traveling;
+    for (let i = 0; i < 60 && s.mapId === 'village'; i++) step();
+    step(2);
+    const inside = { map: s.mapId, x: s.player.x, y: s.player.y, walkable: s.walkArea.contains(s.player.x, s.player.y),
+      npcs: s.npcs.length, enemies: s.enemies.length, minimap: s.minimap.title.text,
+      bounds: s.cameras.main.getBounds().width >= s.scale.gameSize.width };
+    // 가구는 막힌다: 바(카운터) 한가운데는 걸을 수 없다.
+    const counter = s.map.interior.furniture.find(f => f.kind === 'counter');
+    const room = s.map.bounds;
+    const blocked = !s.walkArea.contains(room.left + counter.x, room.top + counter.y - counter.d / 2);
+    // 아래쪽 문으로 나간다.
+    const exit = s.map.exits[0];
+    s.player.placeAt((exit.zone.left + exit.zone.right) / 2, room.bottom - 2); step();
+    for (let i = 0; i < 60 && s.mapId !== 'village'; i++) step();
+    step(2);
+    return { atDoor, started, inside, blocked, back: { map: s.mapId, x: s.player.x, y: s.player.y, door: { x: door.x, y: door.y } } };
+  })()`);
+  assert.equal(result.atDoor.visible, true);
+  assert.equal(result.atDoor.button, '들어가기');
+  assert.equal(result.atDoor.marker, '▲ 여관');
+  assert.equal(result.started, true);
+  assert.equal(result.inside.map, 'in-inn');
+  assert.equal(result.inside.walkable, true);
+  assert.deepEqual([result.inside.npcs, result.inside.enemies, result.inside.minimap], [0, 0, '여관']);
+  assert.equal(result.inside.bounds, true);
+  assert.equal(result.blocked, true);
+  assert.equal(result.back.map, 'village');
+  assert.ok(Math.hypot(result.back.x - result.back.door.x, result.back.y - result.back.door.y) < 40);
+});
 test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 이어지며 마을에는 몬스터가 없다', async () => {
   await load('village');
   const result = await evaluate(`(() => {

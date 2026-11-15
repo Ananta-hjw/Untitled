@@ -1,5 +1,5 @@
 import type { DialogueId } from '../story/dialogues.ts';
-import { HOME, PROPS } from './villageLayout.ts';
+import { PROPS } from './villageLayout.ts';
 
 /**
  * 말을 걸거나 살펴볼 수 있는 대상.
@@ -17,13 +17,15 @@ export interface Interactable {
   radius: number;
   /** 말풍선을 띄울 높이 (바닥에서 위로) */
   markerHeight: number;
-  dialogue: DialogueId;
+  /** 말을 걸면 나오는 대사 */
+  dialogue?: DialogueId;
+  /** 건물 문: 누르면 이 맵(실내)의 이 자리로 들어간다. 대화 버튼 대신 "들어가기"가 뜬다. */
+  enter?: { to: string; at: { x: number; y: number }; label: string };
 }
 
 const SIGN = PROPS.find((p) => p.frame === 'sign')!;
 
 export const INTERACTABLES: Interactable[] = [
-  { id: 'home-door', x: HOME.door.x, y: HOME.door.y, radius: 80, markerHeight: 190, dialogue: 'home-door' },
   { id: 'village-sign', x: SIGN.x, y: SIGN.y, radius: 105, markerHeight: 150, dialogue: 'village-sign' },
 ];
 
