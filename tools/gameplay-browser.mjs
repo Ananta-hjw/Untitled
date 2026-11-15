@@ -1037,6 +1037,20 @@ test('잡화점 안의 메리나에게 카운터 앞에서 말을 걸면 대화 
   assert.equal(result.name, '메리나');
   assert.equal(result.shop, true);
 });
+test('북쪽 건물 뒤의 틈으로는 들어갈 수 없고, 다른 건물 뒤에 서도 실내로 들어가지 않는다', async () => {
+  await load('village');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    let t = performance.now();
+    const hall = s.map.buildings.find(b => b.frame === 'training-hall').footprint[0];
+    s.player.placeAt(hall.x, hall.y - hall.ry - 25);
+    for (let i = 0; i < 3; i++) g.step(t += 16, 16);
+    const chief = s.map.buildings.find(b => b.frame === 'chief-house').footprint[0];
+    return { map: s.mapId, gap: s.walkArea.contains(chief.x, s.map.bounds.top + 4) };
+  })()`);
+  assert.equal(result.map, 'village');
+  assert.equal(result.gap, false);
+});
 test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 이어지며 마을에는 몬스터가 없다', async () => {
   await load('village');
   const result = await evaluate(`(() => {

@@ -52,13 +52,14 @@ test('나무·바위의 바닥 접점은 막고 넓은 잎은 통과한다', () 
   assert.equal(insideObstacle(trunk, trunk.x + 100, trunk.y - 150), false);
 });
 
-test('촌장 집 뒤에서 시작점까지 건물을 뚫지 않고 돌아간다', () => {
+test('수련소 뒤에서 앞문까지 건물을 뚫지 않고 돌아간다', () => {
   const b = WALK_BOUNDS;
+  const hall = BUILDINGS.find((x) => x.frame === 'training-hall');
+  const wall = hall.footprint[0];
   const nav = new NavGrid(b.left, b.top, b.right, b.bottom, 32, contains);
-  nav.setTarget(PLAYER_SPAWN.x, PLAYER_SPAWN.y);
-  const chief = BUILDINGS.find((x) => x.frame === 'chief-house');
-  const wall = chief.footprint[0];
-  const point = { x: chief.x, y: b.top + 12 }, next = { x: 0, y: 0 };
+  nav.setTarget(hall.door.x, hall.door.y);
+  const point = { x: hall.x, y: wall.y - wall.ry - 20 }, next = { x: 0, y: 0 };
+  assert.equal(contains(point.x, point.y), true);
   let steps = 0, around = false;
   while (nav.next(point.x, point.y, next)) {
     assert.equal(contains(next.x, next.y), true);
@@ -67,7 +68,14 @@ test('촌장 집 뒤에서 시작점까지 건물을 뚫지 않고 돌아간다'
     assert.ok(++steps < 300);
   }
   assert.equal(around, true);
-  assert.ok(Math.hypot(point.x - PLAYER_SPAWN.x, point.y - PLAYER_SPAWN.y) < 50);
+  assert.ok(Math.hypot(point.x - hall.door.x, point.y - hall.door.y) < 50);
+});
+
+test('북쪽 줄 건물 뒤에는 캐릭터가 숨을 틈이 없다', () => {
+  for (const frame of ['family-house', 'chief-house', 'clinic']) {
+    const wall = BUILDINGS.find((x) => x.frame === frame).footprint[0];
+    for (const dx of [-0.8, 0, 0.8]) assert.equal(contains(wall.x + dx * wall.rx, WALK_BOUNDS.top + 4), false, frame);
+  }
 });
 
 /** VP8X(투명 WebP) 머리에서 그림 크기를 읽는다. */

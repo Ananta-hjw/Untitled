@@ -203,6 +203,7 @@ export class GameScene extends Phaser.Scene {
     this.enemies = [];
     this.npcs = [];
     this.interactables = [];
+
     this.perf = undefined;
     this.quests = {};
     this.doorMarkers = [];

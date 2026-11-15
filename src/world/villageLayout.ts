@@ -38,13 +38,15 @@ export interface Building {
 const wall = (left: number, top: number, right: number, bottom: number): Obstacle =>
   ({ x: (left + right) / 2, y: (top + bottom) / 2, rx: (right - left) / 2, ry: (bottom - top) / 2, shape: 'rect' });
 
+// 북쪽 줄 건물(시온의 집, 촌장의 집, 치유소)은 뒤쪽 벽이 걸을 수 있는 영역의 위쪽 끝에 닿아,
+// 지붕 뒤의 좁은 틈으로 들어가 캐릭터가 통째로 가려지는 일이 없다.
 export const BUILDINGS: Building[] = [
   { frame: 'family-house', x: 430, y: 540, width: 500, label: '시온의 집',
-    footprint: [wall(200, 330, 660, 532)], door: { x: 415, y: 580 } },
+    footprint: [wall(200, WALK_BOUNDS.top, 660, 532)], door: { x: 415, y: 580 } },
   { frame: 'chief-house', x: 1180, y: 470, width: 380, label: '촌장의 집',
-    footprint: [wall(1000, 262, 1360, 462)], door: { x: 1180, y: 510 } },
+    footprint: [wall(1000, WALK_BOUNDS.top, 1360, 462)], door: { x: 1180, y: 510 } },
   { frame: 'clinic', x: 1950, y: 500, width: 540, label: '치유소',
-    footprint: [wall(1700, 320, 2200, 492)], door: { x: 1912, y: 540 } },
+    footprint: [wall(1700, WALK_BOUNDS.top, 2200, 492)], door: { x: 1912, y: 540 } },
   { frame: 'training-hall', x: 450, y: 990, width: 520, label: '수련소',
     footprint: [wall(205, 840, 695, 982)], door: { x: 450, y: 1030 } },
   { frame: 'general-store', x: 1960, y: 900, width: 420, label: '잡화점',
