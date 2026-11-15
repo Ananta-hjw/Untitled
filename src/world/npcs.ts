@@ -1,5 +1,5 @@
 import type { DialogueId } from '../story/dialogues.ts';
-import { INTERIORS, roomRect, type InteriorId } from './interiors.ts';
+import { interiorShop, type InteriorId } from './interiors.ts';
 import type { VillageArea } from './villageLayout.ts';
 
 /**
@@ -40,12 +40,6 @@ export interface NpcDef {
   talkOffset?: number;
 }
 
-/** 실내의 방 좌표(바닥 왼쪽 위 기준)를 월드 좌표로 바꾼다. */
-function inRoom(id: InteriorId, x: number, y: number): { x: number; y: number; inside: InteriorId } {
-  const room = roomRect(INTERIORS.find((i) => i.id === id)!);
-  return { x: room.left + x, y: room.top + y, inside: id };
-}
-
 export const NPCS: NpcDef[] = [
   // 북쪽 맵: 집들 앞
   { id: 'serena', name: '세레나', role: '시온의 어머니', area: 'village-north', x: 700, y: 600, height: 148, dialogue: 'npc-serena', wander: 110 },
@@ -56,9 +50,9 @@ export const NPCS: NpcDef[] = [
   // 광장
   { id: 'ruan', name: '루안', role: '첫 스승', x: 590, y: 1090, height: 156, dialogue: 'npc-ruan', wander: 120 },
   // 장사하는 사람은 가게 안: 메리나와 로제타는 카운터 뒤, 도란은 모루 옆
-  { id: 'merina', name: '메리나', role: '잡화점 주인', ...inRoom('store', 500, 150), height: 144, dialogue: 'npc-merina', shop: true, talkOffset: 125 },
-  { id: 'doran', name: '도란', role: '대장장이', ...inRoom('smithy', 560, 345), height: 156, dialogue: 'npc-doran', shop: true },
-  { id: 'rosetta', name: '로제타', role: '여관 주인', ...inRoom('inn', 1070, 140), height: 146, dialogue: 'npc-rosetta', shop: true, talkOffset: 125 },
+  { id: 'merina', name: '메리나', role: '잡화점 주인', ...interiorShop('store'), height: 144, dialogue: 'npc-merina', shop: true },
+  { id: 'doran', name: '도란', role: '대장장이', ...interiorShop('smithy'), height: 156, dialogue: 'npc-doran', shop: true },
+  { id: 'rosetta', name: '로제타', role: '여관 주인', ...interiorShop('inn'), height: 146, dialogue: 'npc-rosetta', shop: true },
   { id: 'vernel', name: '베르넬', role: '유적 연구자', x: 1580, y: 1250, height: 150, dialogue: 'npc-vernel', wander: 120 },
   { id: 'teon', name: '테온', role: '경비대원', x: 1330, y: 1290, height: 150, dialogue: 'npc-teon', wander: 100 },
 ];

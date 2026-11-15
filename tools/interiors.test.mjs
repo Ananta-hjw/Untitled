@@ -31,7 +31,8 @@ test('가구는 방 안에 있고 서로 겹치지 않으며, 들어온 자리�
     for (let i = 0; i < solid.length; i++) {
       for (let j = i + 1; j < solid.length; j++) {
         const a = solid[i], c = solid[j];
-        assert.ok(Math.abs(a.x - c.x) >= a.rx + c.rx || Math.abs(a.y - c.y) >= a.ry + c.ry, `${interior.id}: 가구 ${i}, ${j}가 겹친다`);
+        // 원화 픽셀을 월드 좌표로 변환할 때 맞닿은 변에 소수점 오차가 생길 수 있다.
+        assert.ok(Math.abs(a.x - c.x) + 1e-6 >= a.rx + c.rx || Math.abs(a.y - c.y) + 1e-6 >= a.ry + c.ry, `${interior.id}: 가구 ${i}, ${j}가 겹친다`);
       }
     }
     const at = arrivalOf(interior);

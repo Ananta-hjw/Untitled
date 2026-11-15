@@ -1,3 +1,4 @@
+import { interiorArtRect } from '../world/interiors';
 import Phaser from 'phaser';
 import { App } from '@capacitor/app';
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
@@ -278,7 +279,7 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     preloadHeroSprite(this);
-    preloadVillage(this);
+    preloadVillage(this, this.map);
     preloadNpcs(this, NPCS);
     preloadDialogue(this);
   }
@@ -592,9 +593,7 @@ export class GameScene extends Phaser.Scene {
       camera.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
       return;
     }
-    const room = this.map.bounds;
-    // 뒤쪽 벽과 앞쪽 문턱까지 보이게 한다.
-    const left = room.left - 80, right = room.right + 80, top = room.top - 260, bottom = room.bottom + 110;
+    const { left, right, top, bottom } = interiorArtRect(interior);
     const viewW = this.scale.gameSize.width / camera.zoom, viewH = VIEW_HEIGHT / camera.zoom;
     const width = Math.max(right - left, viewW), height = Math.max(bottom - top, viewH);
     const cx = (left + right) / 2, cy = (top + bottom) / 2;

@@ -87,7 +87,21 @@ test('마을 광장에서 세 사냥터와 마을 북쪽으로, 사냥터에서 
     for (const enemy of map.enemies) {
       assert.ok(points.some((p) => Math.hypot(p.x - enemy.x, p.y - enemy.y) < 40), `${map.id}: 몬스터 ${enemy.x},${enemy.y}에 닿지 못한다`);
     }
+    for (const npc of map.npcs) {
+      const y = npc.y + (npc.talkOffset ?? 0) + 20;
+      assert.ok(points.some(p => Math.hypot(p.x - npc.x, p.y - y) < 40), `${map.id}: ${npc.name}의 대화 위치에 닿지 못한다`);
+    }
   }
+});
+
+test('남쪽 들판은 원화의 물가를 막고, 다리와 흙길은 열며 나무·바위의 접점을 막는다', () => {
+  const field = MAPS['south-field'], scale = 2400 / 1536;
+  const canWalk = (x, y) => walkable(field, x * scale, y * scale);
+  assert.equal(canWalk(1350, 440), true, '다리 위');
+  assert.equal(canWalk(1350, 560), false, '다리 아래의 개울');
+  assert.equal(canWalk(835, 938), false, '전경 나무 줄기');
+  assert.equal(canWalk(650, 518), false, '중앙 바위');
+  assert.equal(canWalk(760, 640), true, '중앙 흙길');
 });
 
 test('사냥터의 표지판은 대사가 있고, 시작점에서는 대화 버튼이 뜨지 않는다', () => {

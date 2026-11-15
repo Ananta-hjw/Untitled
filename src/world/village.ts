@@ -6,12 +6,14 @@ import buildingFrames from '../assets/village/rowen/buildings.json';
 import props from '../assets/village/props.png?url';
 import frames from '../assets/village/frames.json';
 import { WalkArea } from './walkArea';
+import { drawFieldArt, preloadMapArt } from './mapArt';
 import { drawInterior } from './interiorArt';
 import { mapObstacles, mapPolygon, type GameMap } from './maps';
 
 const FONT = 'system-ui, "Noto Sans KR", sans-serif';
 
-export function preloadVillage(scene: Phaser.Scene): void {
+export function preloadVillage(scene: Phaser.Scene, map: GameMap): void {
+  preloadMapArt(scene, map);
   for (const [key, url] of [['village-ground', ground], ['village-buildings', buildings], ['village-props', props]]) {
     if (!scene.textures.exists(key)) scene.load.image(key, url);
   }
@@ -20,27 +22,31 @@ export function preloadVillage(scene: Phaser.Scene): void {
 /**
  * 맵 하나를 그린다. 지면, 건물, 소품을 따로 두어 바닥 접점과 충돌 영역이 일치하게 한다.
  * 건물 이름은 지붕 위에 띄운다. 마을 사람(NPC)은 씬이 따로 만든다.
- * 사냥터는 아직 전용 그림이 없어서 마을의 지면과 소품을 다른 배치·색조로 다시 쓴다.
+ * 남쪽 들판은 전용 원화, 숲길·개울가는 공용 지면과 소품을 쓴다.
  */
 export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
-  for (const f of frames.frames) {
-    if (!scene.textures.exists(f.texture)) continue; // 예전 집 그림(home.png)은 로웬 마을 건물로 바뀌었다.
-    const texture = scene.textures.get(f.texture);
-    if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
-  }
-  const buildingTexture = scene.textures.get('village-buildings');
-  for (const f of buildingFrames.frames) {
-    if (!buildingTexture.has(f.name)) buildingTexture.add(f.name, 0, f.x, f.y, f.w, f.h);
-  }
-  // 건물 실내는 바닥·벽·가구를 따로 그린다.
   if (map.interior) {
     drawInterior(scene, map.interior);
     drawExitLabels(scene, map);
     return new WalkArea(mapPolygon(map), mapObstacles(map));
   }
-  const floor = scene.add.image(0, 0, 'village-ground').setOrigin(0).setDisplaySize(WORLD_WIDTH, WORLD_HEIGHT).setDepth(-100);
-  if (map.groundTint !== undefined) floor.setTint(map.groundTint);
-  if (map.water) drawWater(scene, map.water.top, map.water.bottom);
+  for (const f of frames.frames) {
+    if (!scene.textures.exists(f.texture)) continue; // 예전 집 그림(home.png)은 로웬 마을 건물로 바뀌었다.
+    const texture = scene.textures.get(f.texture);
+    if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
+  }
+  if (map.buildings.length > 0) {
+    const buildingTexture = scene.textures.get('village-buildings');
+    for (const f of buildingFrames.frames) {
+      if (!buildingTexture.has(f.name)) buildingTexture.add(f.name, 0, f.x, f.y, f.w, f.h);
+    }
+  }
+  if (map.id === 'south-field') drawFieldArt(scene);
+  else {
+    const floor = scene.add.image(0, 0, 'village-ground').setOrigin(0).setDisplaySize(WORLD_WIDTH, WORLD_HEIGHT).setDepth(-100);
+    if (map.groundTint !== undefined) floor.setTint(map.groundTint);
+    if (map.water) drawWater(scene, map.water.top, map.water.bottom);
+  }
 
   for (const p of map.props) {
     const image = scene.add.image(p.x, p.y, 'village-props', p.frame).setOrigin(.5, 1).setDepth(p.y);

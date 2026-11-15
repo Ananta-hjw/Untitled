@@ -32,10 +32,10 @@ async function until(check) {
   throw new Error('개발 서버 또는 Chromium 준비 시간 초과');
 }
 
-function send(method, params = {}) {
+function send(method, params = {}, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     const id = ++requestId;
-    const timeout = setTimeout(() => { requests.delete(id); reject(new Error(method + ' 시간 초과')); }, 10000);
+    const timeout = setTimeout(() => { requests.delete(id); reject(new Error(method + ' 시간 초과')); }, timeoutMs);
     requests.set(id, (message) => {
       clearTimeout(timeout);
       if (message.error) reject(new Error(JSON.stringify(message.error)));
@@ -46,7 +46,7 @@ function send(method, params = {}) {
 }
 
 async function evaluate(expression) {
-  const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+  const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }, 30000);
   if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
   return result.result.value;
 }
@@ -197,11 +197,11 @@ test('회피는 가변 프레임과 좌우·세로·대각선 이동에서 같�
     s.enemies = []; s.joystick.vector.set(0, 0);
     for (const deltas of [[50], [1000 / 30], [1000 / 60], [1000 / 120], [100], [7, 41, 19, 50, 33, 11]]) {
       for (const [x, y] of [[1, 0], [-1, 0], [0, -1], [Math.SQRT1_2, -Math.SQRT1_2]]) {
-        p.revive(1600, 675); s.now = 1000; s.dodgeReadyAt = 0;
+        p.revive(1400, 1000); s.now = 1000; s.dodgeReadyAt = 0;
         s.startDodge(s.now, new p.knockback.constructor(x, y));
         let i = 0;
         while (s.now < 1350) s.update(0, deltas[i++ % deltas.length]);
-        results.push({ x, y, dx: p.x - 1600, dy: p.y - 675, progress: s.dodgeProgress, dodging: p.dodging });
+        results.push({ x, y, dx: p.x - 1400, dy: p.y - 1000, progress: s.dodgeProgress, dodging: p.dodging });
       }
     }
     return results;
@@ -994,17 +994,25 @@ test('골드와 아이템: 슬라임이 골드를 떨어뜨리고, 물약 버튼
 });
 test('건물 문 앞에서 들어가기를 누르면 실내로 들어가고, 아래쪽 문으로 나오면 그 건물 문 앞에 선다', async () => {
   await load('village');
-  const result = await evaluate(`(() => {
+  const result = await evaluate(`(async () => {
     const g = window.__game, s = g.scene.getScene('game');
     let t = performance.now();
     const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    const waitMap = async target => {
+      for (let i = 0; i < 300; i++) {
+        step();
+        if (s.mapId === target && s.sys.isActive() && s.minimap) return;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      throw Error('맵 입장 시간 초과: ' + target);
+    };
     s.scene.restart({ map: 'village' }); step();
     const door = s.interactables.find(i => i.id === 'door-inn');
     s.player.placeAt(door.x, door.y + 10); step(2);
     const atDoor = { button: s.talkButton.text.text, visible: s.talkButton.image.visible, marker: s.talkMarker.text };
     s.talkButton.pressed = true; step();
     const started = s.traveling;
-    for (let i = 0; i < 60 && s.mapId === 'village'; i++) step();
+    await waitMap('in-inn');
     step(2);
     const inside = { map: s.mapId, x: s.player.x, y: s.player.y, walkable: s.walkArea.contains(s.player.x, s.player.y),
       npcs: s.npcs.length, enemies: s.enemies.length, minimap: s.minimap.title.text,
@@ -1016,7 +1024,7 @@ test('건물 문 앞에서 들어가기를 누르면 실내로 들어가고, 아
     // 아래쪽 문으로 나간다.
     const exit = s.map.exits[0];
     s.player.placeAt((exit.zone.left + exit.zone.right) / 2, room.bottom - 2); step();
-    for (let i = 0; i < 60 && s.mapId !== 'village'; i++) step();
+    await waitMap('village');
     step(2);
     return { atDoor, started, inside, blocked, back: { map: s.mapId, x: s.player.x, y: s.player.y, door: { x: door.x, y: door.y } } };
   })()`);
@@ -1101,27 +1109,31 @@ test('미니맵을 누르면 전체 지도가 열리고, 가 본 곳만 이름�
 });
 test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 이어지며 마을에는 몬스터가 없다', async () => {
   await load('village');
-  const result = await evaluate(`(() => {
+  const result = await evaluate(`(async () => {
     const g = window.__game, s = g.scene.getScene('game');
     let t = performance.now();
     const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
-    const travel = (x, y) => {
+    const travel = async (x, y) => {
       // 장면이 다시 시작되면 플레이어도 새로 만들어지므로 매번 s.player를 쓴다.
       const from = s.mapId; s.player.placeAt(x, y); step();
       const started = s.traveling, frozenAt = s.now; step(3);
       const frozen = s.now === frozenAt;
-      for (let i = 0; i < 60 && s.mapId === from; i++) step();
+      for (let i = 0; i < 300; i++) {
+        step();
+        if (s.mapId !== from && s.sys.isActive() && s.minimap) break;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
       step(2);
       return { started, frozen, map: s.mapId, x: s.player.x, y: s.player.y, hp: s.player.hp,
         enemies: s.enemies.length, traveling: s.traveling, hint: s.map.hint };
     };
     const village = { enemies: s.enemies.length, map: s.mapId };
     s.player.hurt(25);
-    const south = travel(1180, 1540);
-    const backFromSouth = travel(1180, 260);
-    const west = travel(80, 1050);
-    const backFromWest = travel(2330, 1050);
-    const east = travel(2330, 1050);
+    const south = await travel(1180, 1540);
+    const backFromSouth = await travel(1180, 260);
+    const west = await travel(80, 1050);
+    const backFromWest = await travel(2330, 1050);
+    const east = await travel(2330, 1050);
     const restartedHere = (() => { s.scene.restart(); step(2); return { map: s.mapId, hp: s.player.hp, maxHp: s.player.maxHp }; })();
     return { village, south, backFromSouth, west, backFromWest, east, restartedHere };
   })()`);
@@ -1156,20 +1168,28 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     const seed = {};
     for (const q of QUESTS.filter(q => q.main).slice(0, 3)) seed[q.id] = { status: 'done', count: q.objective.need };
     localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
-    const restart = map => { s.scene.restart({ map }); g.step(t += 16, 16); s = g.scene.getScene('game'); };
+    const restart = async map => {
+      s.scene.restart({ map }); g.step(t += 16, 16);
+      for (let i = 0; i < 300; i++) {
+        s = g.scene.getScene('game');
+        if (s.mapId === map && s.sys.isActive() && s.minimap) return;
+        await new Promise(resolve => setTimeout(resolve, 10)); g.step(t += 16, 16);
+      }
+      throw Error('맵 재시작 시간 초과: ' + map);
+    };
     const flush = () => { while (s.dialogue.isOpen) s.dialogue.advance(); };
     const settle = () => { for (let i = 0; i < 30; i++) g.step(t += 16, 16); s = g.scene.getScene('game'); };
     const talk = id => { const n = s.npcs.find(n => n.def.id === id); if (!n) throw Error('NPC 없음: ' + id); s.openDialogue(n.spot); flush(); };
     const inspect = id => { const spot = s.interactables.find(p => p.id === id); if (!spot) throw Error('조사 지점 없음: ' + id); s.openDialogue(spot); flush(); };
-    restart('village');
+    await restart('village');
     const migrated = s.quests['watch-report']?.status;
     talk('teon');
-    restart('in-inn'); talk('rosetta');
-    restart('village-north'); talk('linea'); talk('sia'); talk('linea');
-    restart('village');
+    await restart('in-inn'); talk('rosetta');
+    await restart('village-north'); talk('linea'); talk('sia'); talk('linea');
+    await restart('village');
     const patrolMarker = s.storyMarkers.length;
     inspect('story-south-watch'); talk('teon');
-    restart('in-inn');
+    await restart('in-inn');
     s.openDialogue(s.npcs.find(n => n.def.id === 'rosetta').spot);
     const choice = s.storyChoice.isOpen;
     const frozenAt = s.now; s.update(0, 100); const frozen = s.now === frozenAt;
@@ -1185,22 +1205,22 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     s.startAttack(s.now, 1);
     for (let i = 0; i < 16; i++) { s.player.sprite.advance(50); s.now += 50; s.updateAttackLunge(s.now); s.updateAttackTrace(s.now); }
     const battle = { alive: s.enemies.filter(e => e.character.alive).length, pending: s.enemyRespawns.length, step: s.quests['village-raid'].step };
-    restart('village');
+    await restart('village');
     const noRespawn = s.enemies.length === 0;
     talk('serena'); talk('eila'); talk('ruan'); settle();
-    restart('village-north');
+    await restart('village-north');
     const aftermath = { sia: s.npcs.some(n => n.def.id === 'sia'), linea: s.npcs.some(n => n.def.id === 'linea'), shade: !!s.chapterShade };
     talk('serena');
     const searchMarker = s.storyMarkers.length;
-    restart('village-north');
+    await restart('village-north');
     const searchRestored = s.interactables.some(p => p.id === 'story-home-search');
     inspect('story-home-search'); talk('eila'); talk('herman');
-    restart('village'); talk('vernel');
-    restart('village');
+    await restart('village'); talk('vernel');
+    await restart('village');
     const complete = QUESTS.filter(q => q.main).every(q => s.quests[q.id]?.status === 'done');
     const tracker = s.questTracker.text.text;
     localStorage.removeItem('untitled-rpg.quests');
-    restart('village');
+    await restart('village');
     return { migrated, patrolMarker, choice, frozen, cancelled, raid, battle, noRespawn, aftermath, searchMarker, searchRestored, complete, tracker };
   })()`);
   assert.equal(result.migrated, 'active');
@@ -1216,4 +1236,42 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
   assert.equal(result.searchRestored, true);
   assert.equal(result.complete, true);
   assert.equal(result.tracker, '');
+});
+
+test('원화가 있는 실내 여덟 곳과 남쪽 들판은 해당 그림만 읽고, 전경·충돌·출입을 유지한다', async () => {
+  for (const id of ['home', 'linea', 'chief', 'clinic', 'hall', 'store', 'smithy', 'inn', 'south-field']) {
+    const map = id === 'south-field' ? id : 'in-' + id;
+    await load(map);
+    const art = await evaluate(`(() => {
+      const s = window.__game.scene.getScene('game');
+      const background = s.children.getByName('map-art-background');
+      const foreground = s.children.list.filter(c => c.name === 'map-art-foreground');
+      return { key: background.texture.key, width: background.displayWidth, height: background.displayHeight,
+        textures: Object.keys(s.textures.list).filter(k => k.startsWith('map-art-')),
+        foreground: foreground.map(c => ({ width: c.displayWidth, depth: c.depth })),
+        walkable: s.walkArea.contains(s.player.x, s.player.y),
+        blocked: s.map.interior ? s.map.interior.furniture.every(f => !s.walkArea.contains(s.map.bounds.left + f.x, s.map.bounds.top + f.y - f.d / 2)) : !s.walkArea.contains(835 * 2400 / 1536, 938 * 1600 / 1024) };
+    })()`);
+    assert.equal(art.key, 'map-art-' + id);
+    assert.ok(art.textures.every(k => k === art.key || k.startsWith(art.key + '-foreground-')), id + ': 다른 맵 원화를 미리 읽지 않는다');
+    assert.equal(art.walkable, true, id);
+    assert.equal(art.blocked, true, id);
+    assert.ok(art.width > 0 && art.height > 0 && art.foreground.length >= 2, id);
+    if (id === 'south-field') assert.ok(art.foreground.every(c => c.width < 1000), '전경이 배경 전체를 덮지 않는다');
+    else {
+      const back = await evaluate(`(async () => {
+        const g = window.__game, s = g.scene.getScene('game'), exit = s.map.exits[0];
+        let t = performance.now();
+        s.player.placeAt((exit.zone.left + exit.zone.right) / 2, exit.zone.top + 2);
+        for (let i = 0; i < 300; i++) {
+          g.step(t += 16, 16);
+          if (s.mapId === exit.to && s.sys.isActive() && s.minimap) return { map: s.mapId, expected: exit.to, walkable: s.walkArea.contains(s.player.x, s.player.y) };
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        throw Error('실내 출구 이동 실패');
+      })()`);
+      assert.equal(back.map, back.expected, id);
+      assert.equal(back.walkable, true, id);
+    }
+  }
 });

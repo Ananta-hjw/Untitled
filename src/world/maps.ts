@@ -1,3 +1,4 @@
+import { FIELD_BOUNDS, FIELD_OBSTACLES, FIELD_POLYGON, insidePolygon } from './southFieldLayout.ts';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config.ts';
 import type { DialogueId } from '../story/dialogues.ts';
 import { INTERACTABLES, type Interactable } from './interactables.ts';
@@ -46,6 +47,8 @@ export interface GameMap {
   /** 맵에 들어설 때 화면 아래에 잠깐 띄우는 안내 */
   hint: string;
   bounds: Rect;
+  walkPolygon?: number[];
+  obstacles?: Obstacle[];
   props: VillageProp[];
   /** 건물 (마을만) */
   buildings: Building[];
@@ -60,7 +63,7 @@ export interface GameMap {
   enemies: MapEnemySpawn[];
   exits: MapExit[];
   interactables: Interactable[];
-  /** 건물 실내 (실내 맵만). 바닥·벽·가구를 코드로 그린다. */
+  /** 건물 실내 (실내 맵만). 원화의 바닥·가구 좌표와 일치한다. */
   interior?: Interior;
 }
 
@@ -126,39 +129,17 @@ const SOUTH_FIELD: GameMap = {
   id: 'south-field',
   name: '남쪽 들판',
   hint: '남쪽 들판 · 슬라임이 나타납니다',
-  bounds: FULL_BOUNDS,
-  props: [
-    { frame: 'oak', x: 160, y: 380, width: 330, footprint: { rx: 38, ry: 24 } },
-    { frame: 'pine', x: 420, y: 300, width: 240, footprint: { rx: 27, ry: 20 } },
-    { frame: 'pine', x: 1700, y: 300, width: 250, footprint: { rx: 30, ry: 20 } },
-    { frame: 'oak', x: 2050, y: 360, width: 350, footprint: { rx: 40, ry: 26 } },
-    { frame: 'pine', x: 2330, y: 520, width: 230, footprint: { rx: 26, ry: 20 } },
-    { frame: 'oak', x: 150, y: 900, width: 320, footprint: { rx: 37, ry: 24 } },
-    { frame: 'pine', x: 2330, y: 1000, width: 260, footprint: { rx: 30, ry: 20 } },
-    { frame: 'oak', x: 2250, y: 1460, width: 340, footprint: { rx: 39, ry: 24 } },
-    { frame: 'pine', x: 560, y: 1560, width: 260, footprint: { rx: 28, ry: 20 } },
-    { frame: 'oak', x: 1900, y: 1560, width: 330, footprint: { rx: 38, ry: 24 } },
-    { frame: 'boulders', x: 620, y: 560, width: 170, footprint: { rx: 76, ry: 28 } },
-    { frame: 'boulders', x: 1880, y: 860, width: 180, footprint: { rx: 80, ry: 30 } },
-    { frame: 'rock', x: 700, y: 1150, width: 110, footprint: { rx: 49, ry: 24 } },
-    { frame: 'rock', x: 1500, y: 1430, width: 100, footprint: { rx: 44, ry: 22 } },
-    { frame: 'shrub', x: 880, y: 380, width: 105, footprint: { rx: 43, ry: 19 } },
-    { frame: 'stump', x: 420, y: 1250, width: 100, footprint: { rx: 40, ry: 22 } },
-    { frame: 'flowers', x: 960, y: 820, width: 75 },
-    { frame: 'flowers', x: 1400, y: 760, width: 70 },
-    { frame: 'flowers', x: 520, y: 980, width: 65 },
-    { frame: 'flowers', x: 1750, y: 1320, width: 70 },
-    { frame: 'flowers', x: 1150, y: 1300, width: 75 },
-    southSign.prop,
-  ],
+  bounds: FIELD_BOUNDS,
+  walkPolygon: FIELD_POLYGON,
+  obstacles: FIELD_OBSTACLES,
+  props: [southSign.prop],
   buildings: [],
   npcs: [],
-  groundTint: 0xf2ecc8,
   spawn: { x: 1180, y: 420 },
   enemies: [
-    { key: 'slime-green', x: 2000, y: 1200 },
-    { key: 'slime-blue', x: 2210, y: 1280 },
-    { key: 'slime-green', x: 430, y: 1460 },
+    { key: 'slime-green', x: 1800, y: 1000 },
+    { key: 'slime-blue', x: 1600, y: 1200 },
+    { key: 'slime-green', x: 600, y: 1150 },
     { key: 'slime-blue', x: 1000, y: 1430 },
   ],
   exits: [
@@ -300,13 +281,14 @@ export function isMapId(value: unknown): value is MapId {
 /** 맵의 장애물: 건물의 벽(마을만), 소품의 바닥 접점, 실내 가구 */
 export function mapObstacles(map: GameMap): Obstacle[] {
   return [
-    ...buildingObstacles(map.buildings), ...propObstacles(map.props),
+    ...buildingObstacles(map.buildings), ...propObstacles(map.props), ...(map.obstacles ?? []),
     ...(map.interior ? furnitureObstacles(map.interior) : []),
   ];
 }
 
 /** 걸을 수 있는 영역의 꼭짓점 (WalkArea용) */
 export function mapPolygon(map: GameMap): number[] {
+  if (map.walkPolygon) return map.walkPolygon;
   const b = map.bounds;
   return [b.left, b.top, b.right, b.top, b.right, b.bottom, b.left, b.bottom];
 }
@@ -322,5 +304,5 @@ export function findExit(map: GameMap, x: number, y: number): MapExit | undefine
 
 /** Phaser 없이 걸을 수 있는지 판단한다 (테스트용, WalkArea와 같은 규칙). */
 export function walkable(map: GameMap, x: number, y: number, obstacles: readonly Obstacle[] = mapObstacles(map)): boolean {
-  return insideRect(map.bounds, x, y) && !obstacles.some((o) => insideObstacle(o, x, y));
+  return insideRect(map.bounds, x, y) && (!map.walkPolygon || insidePolygon(map.walkPolygon, x, y)) && !obstacles.some((o) => insideObstacle(o, x, y));
 }

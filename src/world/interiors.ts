@@ -5,7 +5,7 @@ import type { BuildingFrame } from './villageLayout.ts';
  * 로웬 마을 건물의 실내.
  *
  * 건물 문 앞에서 "들어가기"를 누르면 그 건물의 실내 맵으로 옮겨 가고, 아래쪽 문으로 나오면 그 건물 문 앞으로 돌아온다.
- * 실내 그림이 아직 없어서 바닥·벽·가구를 코드로 그린다(world/interiorArt.ts). 그림이 생기면 그리는 부분만 바꾼다.
+ * 원화와 같은 좌표에서 바닥 경계·가구·문을 측정한다. 그리기는 world/interiorArt.ts에서 처리한다.
  * 가구 좌표는 방의 왼쪽 위(바닥이 시작하는 곳) 기준이고, (x, y)는 가구가 바닥에 닿는 앞쪽 가운데다.
  * 가구는 [x - w/2, x + w/2] × [y - d, y]의 바닥을 차지한다.
  * 이 파일은 Phaser를 쓰지 않아 tools/interiors.test.mjs가 직접 불러 검사한다.
@@ -44,112 +44,128 @@ export interface Interior {
 /** 깔개처럼 밟고 지나갈 수 있는 가구 */
 export const WALKABLE_FURNITURE: readonly FurnitureKind[] = ['rug'];
 
-export const INTERIORS: Interior[] = [
-  {
-    id: 'home', building: 'family-house', name: '시온의 집', width: 1000, depth: 520, floor: 0xa0714a, wall: 0xe8d6b4,
+type PixelRect = readonly [number, number, number, number];
+
+/** 원화 픽셀 좌표. 가구는 바닥 접촉 영역이며, foreground는 인물을 가리는 전경 조각이다. */
+export interface InteriorArtwork {
+  width: number;
+  height: number;
+  floor: PixelRect;
+  doorX: number;
+  /** 닫힌 문 원화는 아치 앞에서 출입한다. 방 아래쪽까지 밟고 올라가지 않는다. */
+  doorY?: number;
+  furniture: readonly (readonly [FurnitureKind, PixelRect])[];
+  foreground?: readonly PixelRect[];
+  shop?: { x: number; y: number; talkY: number };
+}
+
+export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
+  home: {
+    width: 1536, height: 1024, floor: [90, 410, 1445, 840], doorX: 750,
     furniture: [
-      { kind: 'hearth', x: 170, y: 70, w: 210, d: 70 },
-      { kind: 'shelf', x: 420, y: 45, w: 170, d: 45 },
-      { kind: 'bed', x: 660, y: 250, w: 140, d: 210, color: 0xc0504d },
-      { kind: 'bed', x: 860, y: 250, w: 140, d: 210, color: 0x4f6fa8 },
-      { kind: 'table', x: 330, y: 330, w: 200, d: 110 },
-      { kind: 'chair', x: 250, y: 375, w: 46, d: 40 },
-      { kind: 'chair', x: 410, y: 375, w: 46, d: 40 },
-      { kind: 'rug', x: 500, y: 470, w: 300, d: 130, color: 0x8a3b3b },
-      { kind: 'plant', x: 60, y: 480, w: 50, d: 40 },
+      ['hearth', [90, 410, 355, 450]], ['shelf', [355, 410, 850, 440]],
+      ['bed', [890, 410, 1115, 455]], ['bed', [1160, 410, 1285, 448]], ['bed', [1300, 410, 1425, 448]],
+      ['table', [130, 500, 480, 790]], ['crate', [1120, 625, 1405, 810]], ['plant', [1350, 480, 1440, 610]],
     ],
   },
-  {
-    // 창가 꽃병, 일지를 쓰는 책상, 침대 (src/assets/village/rowen/interiors/linea.png 원화 참고)
-    id: 'linea', building: 'linea-house', name: '리네아의 집', width: 900, depth: 480, floor: 0xa47a52, wall: 0xeadcc0,
+  linea: {
+    width: 1536, height: 1024, floor: [100, 445, 1445, 850], doorX: 765,
     furniture: [
-      { kind: 'bed', x: 720, y: 240, w: 140, d: 210, color: 0x7fa9a0 },
-      { kind: 'table', x: 300, y: 120, w: 190, d: 80 },
-      { kind: 'chair', x: 300, y: 165, w: 46, d: 40 },
-      { kind: 'plant', x: 500, y: 60, w: 50, d: 40 },
-      { kind: 'shelf', x: 110, y: 45, w: 150, d: 45 },
-      { kind: 'hearth', x: 110, y: 330, w: 150, d: 65 },
-      { kind: 'rug', x: 450, y: 400, w: 260, d: 120, color: 0x5f8f86 },
-      { kind: 'plant', x: 850, y: 450, w: 50, d: 40 },
+      ['hearth', [100, 445, 355, 500]], ['shelf', [355, 445, 730, 465]],
+      ['bed', [1250, 445, 1430, 700]], ['table', [1100, 445, 1240, 510]],
+      ['table', [130, 510, 475, 770]], ['plant', [1300, 710, 1440, 840]],
     ],
   },
-  {
-    id: 'chief', building: 'chief-house', name: '촌장의 집', width: 1100, depth: 540, floor: 0x8c6a4c, wall: 0xd9cfb8,
+  chief: {
+    width: 1774, height: 887, floor: [125, 370, 1650, 735], doorX: 960, doorY: 620,
     furniture: [
-      { kind: 'books', x: 200, y: 45, w: 200, d: 45 },
-      { kind: 'books', x: 420, y: 45, w: 200, d: 45 },
-      { kind: 'hearth', x: 900, y: 70, w: 200, d: 70 },
-      { kind: 'table', x: 760, y: 280, w: 250, d: 110 },
-      { kind: 'chair', x: 760, y: 160, w: 50, d: 40 },
-      { kind: 'rug', x: 450, y: 380, w: 380, d: 170, color: 0x3d5a80 },
-      { kind: 'plant', x: 60, y: 500, w: 50, d: 40 },
-      { kind: 'plant', x: 1040, y: 500, w: 50, d: 40 },
+      ['books', [540, 370, 1120, 390]], ['table', [205, 370, 450, 410]],
+      ['table', [220, 420, 700, 650]], ['bench', [1200, 370, 1470, 440]], ['hearth', [1470, 370, 1650, 560]],
     ],
   },
-  {
-    id: 'clinic', building: 'clinic', name: '치유소', width: 1100, depth: 540, floor: 0xb89870, wall: 0xf1ead8,
+  clinic: {
+    width: 1536, height: 1024, floor: [170, 445, 1350, 750], doorX: 725, doorY: 720,
     furniture: [
-      { kind: 'bed', x: 150, y: 260, w: 140, d: 210, color: 0xe9efe6 },
-      { kind: 'bed', x: 330, y: 260, w: 140, d: 210, color: 0xe9efe6 },
-      { kind: 'herbs', x: 800, y: 45, w: 280, d: 45 },
-      { kind: 'table', x: 800, y: 320, w: 190, d: 100 },
-      { kind: 'barrel', x: 1030, y: 220, w: 70, d: 50 },
-      { kind: 'plant', x: 560, y: 90, w: 60, d: 45 },
-      { kind: 'plant', x: 1040, y: 500, w: 50, d: 40 },
+      ['bed', [180, 445, 490, 510]], ['bed', [180, 545, 470, 695]],
+      ['herbs', [535, 445, 740, 465]], ['table', [910, 445, 1090, 520]],
+      ['plant', [1110, 445, 1350, 700]], ['plant', [170, 700, 370, 750]],
     ],
   },
-  {
-    id: 'hall', building: 'training-hall', name: '수련소', width: 1200, depth: 580, floor: 0x9c7b55, wall: 0xcdb48c,
+  hall: {
+    width: 1536, height: 1024, floor: [100, 420, 1440, 840], doorX: 750,
     furniture: [
-      { kind: 'rug', x: 520, y: 420, w: 560, d: 230, color: 0x6f7b4a },
-      { kind: 'dummy', x: 300, y: 230, w: 60, d: 40 },
-      { kind: 'dummy', x: 520, y: 230, w: 60, d: 40 },
-      { kind: 'dummy', x: 740, y: 230, w: 60, d: 40 },
-      { kind: 'weapons', x: 1010, y: 45, w: 240, d: 45 },
-      { kind: 'bench', x: 1010, y: 420, w: 220, d: 50 },
-      { kind: 'barrel', x: 120, y: 90, w: 70, d: 50 },
+      ['dummy', [330, 420, 410, 440]], ['dummy', [450, 420, 550, 440]], ['dummy', [580, 420, 670, 440]],
+      ['weapons', [830, 420, 1150, 440]], ['barrel', [150, 420, 245, 480]],
+      ['bench', [1290, 460, 1430, 640]], ['barrel', [1310, 655, 1440, 750]],
     ],
   },
-  {
-    id: 'store', building: 'general-store', name: '잡화점', width: 1000, depth: 520, floor: 0xa98256, wall: 0xe6d3a8,
+  store: {
+    width: 1536, height: 1024, floor: [95, 380, 1440, 840], doorX: 750,
     furniture: [
-      { kind: 'shelf', x: 240, y: 45, w: 230, d: 45 },
-      { kind: 'shelf', x: 760, y: 45, w: 230, d: 45 },
-      { kind: 'counter', x: 500, y: 250, w: 420, d: 70 },
-      { kind: 'barrel', x: 90, y: 300, w: 70, d: 50 },
-      { kind: 'barrel', x: 910, y: 300, w: 70, d: 50 },
-      { kind: 'crate', x: 110, y: 470, w: 90, d: 60 },
-      { kind: 'crate', x: 890, y: 470, w: 90, d: 60 },
+      ['shelf', [310, 380, 590, 475]], ['counter', [670, 430, 1240, 560]], ['shelf', [1240, 380, 1410, 450]],
+      ['plant', [1270, 600, 1435, 650]], ['crate', [95, 635, 290, 840]], ['crate', [1210, 655, 1435, 840]],
     ],
+    foreground: [[670, 390, 1240, 560]], shop: { x: 960, y: 410, talkY: 590 },
   },
-  {
-    id: 'smithy', building: 'smithy', name: '대장간', width: 1100, depth: 540, floor: 0x6f6458, wall: 0x9b8c7a,
+  smithy: {
+    width: 1536, height: 1024, floor: [90, 510, 1440, 850], doorX: 750,
     furniture: [
-      { kind: 'forge', x: 220, y: 100, w: 260, d: 100 },
-      { kind: 'anvil', x: 470, y: 290, w: 120, d: 60 },
-      { kind: 'barrel', x: 640, y: 270, w: 70, d: 50 },
-      { kind: 'weapons', x: 850, y: 45, w: 260, d: 45 },
-      { kind: 'crate', x: 960, y: 400, w: 100, d: 70 },
-      { kind: 'crate', x: 120, y: 470, w: 90, d: 60 },
+      ['forge', [160, 510, 520, 535]], ['anvil', [210, 560, 400, 760]], ['barrel', [95, 630, 200, 840]],
+      ['table', [810, 510, 1230, 530]], ['bench', [1240, 510, 1430, 550]],
     ],
+    shop: { x: 600, y: 650, talkY: 650 },
   },
-  {
-    id: 'inn', building: 'inn', name: '여관', width: 1400, depth: 600, floor: 0x9a6b45, wall: 0xe2c99e,
+  inn: {
+    width: 1536, height: 1024, floor: [95, 370, 1440, 840], doorX: 720,
     furniture: [
-      { kind: 'hearth', x: 200, y: 75, w: 230, d: 75 },
-      { kind: 'counter', x: 1070, y: 230, w: 460, d: 70 },
-      { kind: 'barrel', x: 960, y: 70, w: 70, d: 50 },
-      { kind: 'barrel', x: 1180, y: 70, w: 70, d: 50 },
-      { kind: 'shelf', x: 640, y: 45, w: 220, d: 45 },
-      { kind: 'table', x: 300, y: 330, w: 150, d: 90 },
-      { kind: 'table', x: 560, y: 470, w: 150, d: 90 },
-      { kind: 'table', x: 960, y: 470, w: 150, d: 90 },
-      { kind: 'chair', x: 200, y: 378, w: 44, d: 38 },
-      { kind: 'chair', x: 400, y: 378, w: 44, d: 38 },
-      { kind: 'rug', x: 700, y: 330, w: 260, d: 120, color: 0x7a3550 },
+      ['hearth', [100, 370, 380, 430]], ['shelf', [380, 370, 700, 415]],
+      ['counter', [720, 400, 1100, 445]], ['bench', [1200, 370, 1430, 445]],
+      ['table', [115, 445, 365, 605]], ['table', [100, 630, 390, 820]],
+      ['table', [1160, 445, 1425, 620]], ['table', [1130, 645, 1440, 820]],
     ],
+    foreground: [[725, 320, 1095, 445]], shop: { x: 930, y: 385, talkY: 500 },
   },
+};
+
+const ROOMS: readonly [InteriorId, BuildingFrame, string, number][] = [
+  ['home', 'family-house', '시온의 집', 1000], ['linea', 'linea-house', '리네아의 집', 900],
+  ['chief', 'chief-house', '촌장의 집', 1100], ['clinic', 'clinic', '치유소', 1100],
+  ['hall', 'training-hall', '수련소', 1200], ['store', 'general-store', '잡화점', 1000],
+  ['smithy', 'smithy', '대장간', 1100], ['inn', 'inn', '여관', 1400],
 ];
+
+export const INTERIORS: Interior[] = ROOMS.map(([id, building, name, width]) => {
+  const art = INTERIOR_ART[id], [left, top, right, bottom] = art.floor;
+  const scale = width / (right - left);
+  return {
+    id, building, name, width, depth: (bottom - top) * scale, floor: 0xa0714a, wall: 0xe8d6b4,
+    furniture: art.furniture.map(([kind, [x0, y0, x1, y1]]) => ({
+      kind, x: ((x0 + x1) / 2 - left) * scale, y: (y1 - top) * scale,
+      w: (x1 - x0) * scale, d: (y1 - y0) * scale,
+    })),
+  };
+});
+
+/** 원화의 픽셀 위치를 가로세로 비율을 유지한 월드 좌표로 바꾼다. */
+export function interiorArtPoint(interior: Interior, x: number, y: number): { x: number; y: number } {
+  const art = INTERIOR_ART[interior.id], room = roomRect(interior);
+  const scale = interior.width / (art.floor[2] - art.floor[0]);
+  return { x: room.left + (x - art.floor[0]) * scale, y: room.top + (y - art.floor[1]) * scale };
+}
+
+/** 원화 전체의 표시 영역: 카메라가 지붕·벽·문턱을 잘라내지 않게 한다. */
+export function interiorArtRect(interior: Interior) {
+  const art = INTERIOR_ART[interior.id];
+  const a = interiorArtPoint(interior, 0, 0), b = interiorArtPoint(interior, art.width, art.height);
+  return { left: a.x, top: a.y, right: b.x, bottom: b.y };
+}
+
+export function interiorShop(id: InteriorId): { x: number; y: number; inside: InteriorId; talkOffset: number } {
+  const interior = INTERIORS.find(i => i.id === id)!, shop = INTERIOR_ART[id].shop!;
+  const at = interiorArtPoint(interior, shop.x, shop.y);
+  const talk = interiorArtPoint(interior, shop.x, shop.talkY);
+  return { ...at, inside: id, talkOffset: talk.y - at.y };
+}
 
 /** 실내를 월드 좌표에 놓는 곳: 방 가운데 */
 export const ROOM_CENTER = { x: 1200, y: 820 };
@@ -172,8 +188,8 @@ export function furnitureAt(interior: Interior, f: Furniture): { x: number; y: n
 
 /** 문(방 아래쪽 가운데)의 월드 좌표 */
 export function doorOf(interior: Interior): { x: number; y: number } {
-  const room = roomRect(interior);
-  return { x: (room.left + room.right) / 2, y: room.bottom };
+  const art = INTERIOR_ART[interior.id];
+  return interiorArtPoint(interior, art.doorX, art.doorY ?? art.floor[3]);
 }
 
 /** 들어왔을 때 서는 자리: 문 바로 안쪽 */
