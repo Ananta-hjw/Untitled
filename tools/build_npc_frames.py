@@ -6,7 +6,9 @@ from statistics import median
 
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parents[1] / 'src/assets/characters'
+ASSETS = Path(__file__).resolve().parents[1] / 'src/assets'
+ROOT = ASSETS / 'characters'
+COMMANDERS = ['noctur', 'orwen', 'lumiera', 'kantor']
 SHEETS = {
     'walk_cardinal.png': ['down', 'left', 'right', 'up'],
     'walk_diagonal.png': ['down-left', 'down-right', 'up-left', 'up-right'],
@@ -18,11 +20,11 @@ CHARACTERS = [
 ]
 
 
-def build(character):
+def build(character, root=ROOT):
     frames = []
     sheets = {}
     for filename, directions in SHEETS.items():
-        with Image.open(ROOT / character / filename) as image:
+        with Image.open(root / character / filename) as image:
             assert image.mode == 'RGBA', filename
             alpha = image.getchannel('A')
             assert alpha.histogram()[0] > image.width * image.height * .25
@@ -61,13 +63,18 @@ def build(character):
         'referenceHeight': reference_height, 'sheets': sheets, 'frames': frames,
         'anchorNote': 'Measured head center projected to the boot baseline; verify in-game before integration.',
     }
-    (ROOT / character / 'walk_frames.json').write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+    (root / character / 'walk_frames.json').write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
     print(f'{character}: {len(frames)} frames, 8 directions, reference height {reference_height}')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--characters', nargs='+', choices=CHARACTERS, default=CHARACTERS,
+    parser.add_argument('--asset-group', choices=['characters', 'commanders'], default='characters')
+    parser.add_argument('--characters', nargs='+', choices=CHARACTERS + COMMANDERS,
                         help='Measure only the named characters; defaults to all walk sheets.')
-    for name in parser.parse_args().characters:
-        build(name)
+    args = parser.parse_args()
+    available = COMMANDERS if args.asset_group == 'commanders' else CHARACTERS
+    for name in args.characters or available:
+        if name not in available:
+            parser.error(f'{name} does not belong to {args.asset_group}')
+        build(name, ASSETS / args.asset_group)
