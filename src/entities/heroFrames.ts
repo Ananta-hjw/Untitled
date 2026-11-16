@@ -19,6 +19,11 @@ const POSE_STARTS = {
   dodge: [0, 60, 130, 240],
 };
 
+/** 콤보 단계(0~2)에서 휘두르는 그림(타격 자세)이 나타나는 시각(ms). 이때 칼 궤적을 그린다. */
+export function strikePoseStart(stage: number): number {
+  return POSE_STARTS[`attack${stage + 1}` as 'attack1' | 'attack2' | 'attack3'][2];
+}
+
 /** Phaser world Y grows downward; only actual displacement changes walking direction. */
 export function movementFacing(dx: number, dy: number, previous: Facing, moving: boolean): Facing {
   if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.abs(dx) + Math.abs(dy) < 0.001) return previous;

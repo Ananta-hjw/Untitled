@@ -35,7 +35,7 @@ import { browserStorage, loadProgress, saveProgress, type SaveStorage } from '..
 import { ActionButton } from '../ui/ActionButton';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { HERO_SPRITE_HEIGHT, HeroSprite, preloadHeroSprite } from '../entities/HeroSprite';
-import { attackFacingFor, attackVector, insideAttackLane, movementFacing } from '../entities/heroFrames';
+import { attackFacingFor, attackVector, insideAttackLane, movementFacing, strikePoseStart } from '../entities/heroFrames';
 import { createPlaceholderArt } from '../world/placeholderArt';
 import type { WalkArea } from '../world/walkArea';
 import { NavGrid } from '../world/navGrid';
@@ -997,6 +997,12 @@ export class GameScene extends Phaser.Scene {
     const lastElapsed = trace.elapsed;
     trace.elapsed = elapsed;
     const end = combo.hitDelayMs + PLAYER.hitWindowMs;
+    // 휘두르는 그림이 나타나는 순간, 직전 자세의 칼에서 지금 칼까지 초승달 궤적을 그린다.
+    const strikeAt = strikePoseStart(trace.stage);
+    if (lastElapsed < strikeAt && elapsed >= strikeAt) {
+      trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, combo.hitDelayMs, player.y + 2);
+      this.effects.slash(trace.effect, previous, current, time, trace.direction.x);
+    }
     const sweep = clipBladeSweep(previous, current, lastElapsed, elapsed, combo.hitDelayMs, end);
     if (elapsed >= end) this.attackTrace = undefined;
     if (!sweep) return;
