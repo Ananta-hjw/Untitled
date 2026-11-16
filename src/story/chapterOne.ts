@@ -98,7 +98,7 @@ const executioner = (x: number, y: number): RaidSpawn => ({ x, y, key: 'corrosio
  */
 export const RAID_WAVES: Array<{ step: number; map: MapId; spawns: RaidSpawn[] }> = [
   { step: 0, map: 'village', spawns: [tracker(1180, 1320), tracker(1310, 1220), tracker(1460, 1130)] },
-  { step: 2, map: 'village', spawns: [tracker(inn.x - 160, inn.y + 110), tracker(inn.x + 200, inn.y + 60), tracker(inn.x - 300, inn.y + 120)] },
+  { step: 2, map: 'village', spawns: [tracker(inn.x - 260, inn.y + 30), tracker(inn.x + 180, inn.y + 40), tracker(inn.x - 90, inn.y + 45)] },
   { step: 4, map: 'village-north', spawns: [tracker(LINEA_YARD.x + 260, LINEA_YARD.y + 90), executioner(LINEA_YARD.x + 380, LINEA_YARD.y - 20),
     tracker(LINEA_YARD.x + 120, LINEA_YARD.y + 170)] },
 ];
