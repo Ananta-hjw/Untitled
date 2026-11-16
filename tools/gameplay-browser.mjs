@@ -1956,3 +1956,70 @@ test('빈 슬롯 등록·가방에서 교체·해제·저장이 가능하고 20�
   assert.equal(result.middle.seconds,10);assert.ok(result.middle.step>=179&&result.middle.step<=181);
   assert.deepEqual(result.restored.slots,[null,'lunch']);assert.ok(result.restored.cooldown>19000);
 });
+
+test('회피·막기·회전베기는 원형 대기가 줄어들고 메뉴에서는 멈추며 성공 초기화와 마나 부족을 구분한다', async () => {
+  await load('village');
+  const result=await evaluate(`(()=>{
+    const s=window.__game.scene.getScene('game');
+    const tick=(n=1)=>{for(let i=0;i<n;i++)s.update(0,50);};
+    const state=b=>({seconds:b.cooldownSeconds,step:b.cooldownStep,visible:b.cooldownShade.visible});
+    s.dodgeButton.pressed=true;tick();const dodge=state(s.dodgeButton);
+    tick(100);const half=state(s.dodgeButton);
+    s.openPause();const pausedAt=s.now;tick(20);
+    const frozen=s.now===pausedAt&&s.dodgeButton.cooldownStep===half.step;s.pauseMenu.close();
+    s.onJustDodge({interrupt(){}});s.hitStopLeft=0;s.slowMotionLeft=0;tick();
+    const reset=state(s.dodgeButton);
+    s.derived.dodgeCooldown=.5;s.dodgeButton.pressed=true;tick();const dex=state(s.dodgeButton);
+    tick(8);s.blockButton.pressed=true;tick();const block=state(s.blockButton);
+    tick(10);const blockHalf=state(s.blockButton);
+    tick(12);const blockDone=state(s.blockButton);
+    s.mp=s.maxMp;s.skillButton.pressed=true;tick();const skill=state(s.skillButton);
+    const labels=[s.dodgeButton,s.skillButton].every(b=>{
+      const a=b.cooldownText.getBounds(),c=b.text.getBounds();return a.bottom<c.top&&c.bottom<b.image.y+b.size;
+    });
+    tick(10);const skillHalf=state(s.skillButton);
+    tick(12);s.mp=0;tick();const noMana=state(s.skillButton);
+    return {dodge,half,frozen,reset,dex,block,blockHalf,blockDone,skill,skillHalf,noMana,labels};
+  })()`);
+  assert.deepEqual(result.dodge,{seconds:10,step:360,visible:true});
+  assert.equal(result.half.seconds,5);assert.ok(Math.abs(result.half.step-180)<=1);
+  assert.equal(result.frozen,true);assert.equal(result.reset.visible,false);
+  assert.equal(result.dex.seconds,5);assert.equal(result.dex.step,360);
+  assert.equal(result.block.visible,true);assert.equal(result.block.step,360);
+  assert.ok(Math.abs(result.blockHalf.step-180)<=1);assert.equal(result.blockDone.visible,false);
+  assert.equal(result.skill.visible,true);assert.equal(result.skill.step,360);
+  assert.ok(result.skillHalf.step>0&&result.skillHalf.step<360);
+  assert.equal(result.noMana.visible,false);assert.equal(result.labels,true);
+});
+
+test('캐릭터 창·장비창·대장간은 기존 아이템과 새 철검·가죽 갑옷 아이콘을 원본 비율로 재사용한다', async () => {
+  await load('village');
+  const result=await evaluate(`(()=>{
+    const s=window.__game.scene.getScene('game');
+    s.inventory={gold:1000,items:{potion:3,lunch:2,'slime-gel':4}};
+    s.character.gear={bag:{'wooden-sword':1,'iron-sword':1,'leather-armor':1,'cloth-hood':1},equipped:{weapon:'iron-sword',body:'leather-armor'}};
+    s.openCharacterPanel('items');const m=s.characterPanel;
+    const read=c=>({key:c.image.texture.key,frame:c.image.frame.name,image:c.image.visible,glyph:c.glyph.text,
+      fits:Math.abs(Math.max(c.image.displayWidth,c.image.displayHeight)-c.size*.82)<.01});
+    const cells=Object.fromEntries(m.entries.map((e,i)=>[e.id,read(m.cells[i])]));
+    const details={};m.entries.forEach((e,i)=>{m.selectCell(i);details[e.id]=read(m.detailIcon);});
+    m.close();s.openCharacterPanel('equip');
+    const weapon=read(m.slots[0].icon),body=read(m.slots[2].icon);
+    m.close();s.openCharacterPanel('items',true);
+    const shop=Object.fromEntries(m.entries.map((e,i)=>[e.id,read(m.cells[i])]));m.close();
+    const textures=Object.keys(s.textures.list).length;
+    for(let i=0;i<3;i++){s.openCharacterPanel('items');m.close();}
+    return {cells,details,weapon,body,shop,reused:Object.keys(s.textures.list).length===textures};
+  })()`);
+  for(const id of ['potion','lunch','slime-gel','iron-sword','leather-armor']){
+    for(const group of [result.cells,result.details]){
+      assert.deepEqual(group[id],{key:'item-icons',frame:id,image:true,glyph:'',fits:true});
+    }
+  }
+  assert.equal(result.cells['wooden-sword'].key,'icon:items/wooden-sword');
+  assert.equal(result.cells['wooden-sword'].image,true);assert.equal(result.cells['cloth-hood'].image,false);
+  for(const [cell,id] of [[result.weapon,'iron-sword'],[result.body,'leather-armor'],[result.shop['iron-sword'],'iron-sword'],[result.shop['leather-armor'],'leather-armor']]){
+    assert.equal(cell.key,'item-icons');assert.equal(cell.frame,id);assert.equal(cell.image,true);assert.equal(cell.fits,true);
+  }
+  assert.equal(result.reused,true);
+});

@@ -436,7 +436,7 @@ export class GameScene extends Phaser.Scene {
     this.potionButton.setSizeScale(sizeScale(this.settings.buttonSize));
     this.lunchButton.setSizeScale(sizeScale(this.settings.buttonSize));
     this.potionKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q)] : [];
-    this.skillButton = new ActionButton(this, { x: 0, y: 0, radius: 50, label: `회전베기\nMP ${SPIN_SLASH.cost}`, color: 0x2f5fa8, fontSize: 17 });
+    this.skillButton = new ActionButton(this, { x: 0, y: 0, radius: 50, label: `회전베기\nMP ${SPIN_SLASH.cost}`, color: 0x2f5fa8, fontSize: 17, cooldown: true });
     this.skillButton.setSizeScale(sizeScale(this.settings.buttonSize));
     this.skillKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K)] : [];
     this.itemPanel = new ItemPanel(this, (action) => this.onItemAction(action), () => this.onResume(), slot => { this.itemPanel?.close(); this.openQuickSlot(slot); });
@@ -605,6 +605,7 @@ export class GameScene extends Phaser.Scene {
     this.updateInteraction(time);
     this.updatePotion(time);
     this.updateSkill(time, gameStep);
+    this.updateCombatCooldowns(time);
   }
 
   // ---------------------------------------------------------------- 월드
@@ -713,10 +714,11 @@ export class GameScene extends Phaser.Scene {
       y: VIEW_HEIGHT - 95,
       radius: 56,
       label: '회피',
+      cooldown: true,
       color: 0x2f4a86,
       fontSize: 24,
     });
-    this.blockButton = new ActionButton(this, { x: 0, y: 0, radius: 44, label: '막기', color: 0x5a6b7a, fontSize: 20 });
+    this.blockButton = new ActionButton(this, { x: 0, y: 0, radius: 44, label: '막기', color: 0x5a6b7a, fontSize: 20, cooldown: true });
     this.blockKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L)] : [];
     this.shield = this.add.graphics().setVisible(false);
 
@@ -1506,6 +1508,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------- 골드와 아이템
+
+  /** 실제 게임 시계와 성공 시 초기화된 기한을 표시에도 그대로 반영한다. */
+  private updateCombatCooldowns(time: number): void {
+    this.dodgeButton.setEnabled(time >= this.dodgeReadyAt);
+    this.dodgeButton.setCooldown(Math.max(0, this.dodgeReadyAt - time), DODGE.cooldownMs * this.derived.dodgeCooldown);
+    this.blockButton?.setEnabled(time >= this.parryReadyAt);
+    this.blockButton?.setCooldown(Math.max(0, this.parryReadyAt - time), BLOCK.cooldownMs);
+    this.skillButton?.setCooldown(Math.max(0, this.nextSpinAt - time), SPIN_SLASH.cooldownMs);
+  }
 
   // ---------------------------------------------------------------- 마나와 회전 베기
 

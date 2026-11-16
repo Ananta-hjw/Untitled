@@ -5,7 +5,7 @@ import type { ItemId } from '../items/inventory';
 
 export const ITEM_ICON_TEXTURE = 'item-icons';
 
-/** 세 아이콘은 작은 아틀라스 한 장으로 읽고, 창을 다시 열어도 같은 텍스처를 쓴다. */
+/** 아이템·장비 아이콘은 작은 아틀라스 한 장으로 읽고, 창을 다시 열어도 같은 텍스처를 쓴다. */
 export function preloadItemIcons(scene: Phaser.Scene): void {
   if (!scene.textures.exists(ITEM_ICON_TEXTURE)) scene.load.image(ITEM_ICON_TEXTURE, atlasUrl);
 }

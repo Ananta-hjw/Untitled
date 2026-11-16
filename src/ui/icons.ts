@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
+import { ITEM_ICON_TEXTURE } from './itemIcons';
 
 /**
  * 아이콘 그림. src/assets/icons/<group>/<id>.png(또는 .webp)를 넣으면 자동으로 읽어 쓴다.
  *  - items/<아이템·장비 id>   예: items/potion.png, items/iron-sword.png
  *  - stats/<능력치 id>        예: stats/str.png
  *  - slots/<장비 칸 id>       빈 칸에 흐리게 보이는 그림. 예: slots/weapon.png
- * 그림이 없으면 색 상자와 글자로 임시 아이콘을 그린다(src/assets/icons/README.md).
+ * 아이템 공용 아틀라스도 재사용하며, 둘 다 없으면 색 상자와 글자로 임시 아이콘을 그린다(src/assets/icons/README.md).
  */
 
 export type IconGroup = 'items' | 'stats' | 'slots';
@@ -67,13 +68,17 @@ export class IconView {
   /** 그림을 정한다. 그림 파일이 없으면 fallback 글자를 쓴다. */
   set(group: IconGroup, id: string, fallback: IconFallback, count?: number, dim = false): this {
     const key = iconKey(group, id);
-    const has = this.scene.textures.exists(key);
+    const standalone = this.scene.textures.exists(key);
+    const inAtlas = group === 'items' && this.scene.textures.exists(ITEM_ICON_TEXTURE)
+      && this.scene.textures.get(ITEM_ICON_TEXTURE).has(id);
+    const has = standalone || inAtlas;
     this.color = fallback.color;
     this.dim = dim;
     if (has) {
-      const source = this.scene.textures.get(key).getSourceImage() as { width: number; height: number };
-      const scale = (this.size * 0.82) / Math.max(source.width, source.height);
-      this.image.setTexture(key).setScale(scale);
+      this.image.setTexture(standalone ? key : ITEM_ICON_TEXTURE, standalone ? undefined : id);
+      const frame = this.image.frame;
+      const scale = (this.size * 0.82) / Math.max(frame.width, frame.height);
+      this.image.setScale(scale);
     }
     this.image.setData('has', has);
     this.glyph.setText(has ? '' : fallback.glyph);

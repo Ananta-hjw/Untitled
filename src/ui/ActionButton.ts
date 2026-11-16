@@ -200,7 +200,7 @@ export class ActionButton {
     g.fillStyle(0x04110e, .62).beginPath().moveTo(x, y);
     g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * this.cooldownStep / 360, false);
     g.closePath().fillPath();
-    this.cooldownText?.setPosition(x, y - 5 * this.sizeScale).setText(`${this.cooldownSeconds}`)
+    this.cooldownText?.setPosition(x, y - (this.iconAssigned ? 5 : 12) * this.sizeScale).setText(`${this.cooldownSeconds}`)
       .setScale(this.sizeScale);
   }
 
@@ -220,9 +220,9 @@ export class ActionButton {
     const scale = (this.isDown ? 0.93 : 1) * this.sizeScale;
     const cooling = this.cooldownStep > 0;
     this.image.setAlpha(!this.enabled && !cooling ? 0.3 : this.isDown ? 1 : 0.7).setScale(scale);
-    this.text.setAlpha(this.enabled || cooling ? 1 : 0.4).setScale(scale);
+    this.text.setAlpha(this.enabled || cooling ? 1 : 0.4).setScale(scale * (cooling && !this.iconAssigned ? .7 : 1));
     this.icon?.setAlpha(this.enabled || cooling ? 1 : 0.35).setDisplaySize(this.radius * 1.25 * scale, this.radius * 1.25 * scale);
-    this.text.setY(this.image.y + (this.iconAssigned ? this.radius * .63 * scale : 0));
+    this.text.setY(this.image.y + (this.iconAssigned ? this.radius * .63 * scale : cooling ? this.radius * .48 * scale : 0));
     this.icon?.setY(this.image.y - this.radius * .2 * scale);
     this.drawCooldown();
   }
