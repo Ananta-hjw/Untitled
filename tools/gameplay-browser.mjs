@@ -1008,7 +1008,7 @@ test('골드와 아이템: 슬라임이 골드를 떨어뜨리고, 물약 버튼
     s.scene.restart(); g.step(t += 16, 16);
     return { start, afterKill, fullHp, healed, paused, shop, reloaded };
   })()`);
-  assert.deepEqual(result.start, { gold: 0, hud: '● 0 G', label: '+ 등록\nQ' });
+  assert.deepEqual(result.start, { gold: 0, hud: '● 0 G', label: '등록' });
   assert.equal(result.afterKill.alive, false);
   assert.ok(result.afterKill.gold >= 3 && result.afterKill.gold <= 6, String(result.afterKill.gold));
   assert.equal(result.afterKill.hud, `● ${result.afterKill.gold} G`);

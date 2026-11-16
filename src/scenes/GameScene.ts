@@ -1903,7 +1903,7 @@ export class GameScene extends Phaser.Scene {
   private refreshQuickButton(slot: 0 | 1, button: ActionButton | undefined): void {
     const id = this.quickSlots[slot];
     button?.setIcon(ITEM_ICON_TEXTURE, id);
-    button?.setLabel(id ? `${ITEMS[id].name.replace('회복 ', '')} ${countOf(this.inventory, id)}` : `+ 등록\n${slot === 0 ? 'Q' : 'R'}`);
+    button?.setLabel(id ? `${ITEMS[id].name.replace('회복 ', '')} ${countOf(this.inventory, id)}` : '등록');
     button?.setCooldown(id ? Math.max(0, this.nextUseAt - this.now) : 0, USE_COOLDOWN_MS);
   }
 
