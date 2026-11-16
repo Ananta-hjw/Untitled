@@ -2,6 +2,7 @@ package com.untitled.rpg;
 
 import android.os.Bundle;
 import android.os.Process;
+import android.view.Display;
 import android.view.WindowManager;
 import android.webkit.WebView;
 import androidx.core.view.WindowCompat;
@@ -16,6 +17,28 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         // 플레이 중에는 화면이 꺼지지 않게 한다.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        preferSixtyHertz();
+    }
+
+    /**
+     * 120Hz 화면이면 60Hz로 바꿔 달라고 요청한다. 게임은 1초에 60번만 그리므로(core/frameRate.ts)
+     * 화면과 WebView가 120번씩 갱신할 필요가 없고, 그만큼 전력과 발열이 준다.
+     * 같은 해상도에서 60Hz에 가장 가까운 모드를 고르며, 기기가 따르지 않으면 그대로 둔다.
+     */
+    private void preferSixtyHertz() {
+        Display display = getWindowManager().getDefaultDisplay();
+        Display.Mode current = display.getMode();
+        Display.Mode best = null;
+        for (Display.Mode mode : display.getSupportedModes()) {
+            if (mode.getPhysicalWidth() != current.getPhysicalWidth()
+                || mode.getPhysicalHeight() != current.getPhysicalHeight()
+                || mode.getRefreshRate() < 59f) continue;
+            if (best == null || mode.getRefreshRate() < best.getRefreshRate()) best = mode;
+        }
+        WindowManager.LayoutParams params = getWindow().getAttributes();
+        if (best != null) params.preferredDisplayModeId = best.getModeId();
+        params.preferredRefreshRate = best != null ? best.getRefreshRate() : 60f;
+        getWindow().setAttributes(params);
     }
 
     /**

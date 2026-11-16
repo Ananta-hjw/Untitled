@@ -51,8 +51,6 @@ export const PLAYER = {
   hitWindowMs: 55,
   bladeRadius: 6,
   attackLane: 52,
-  /** 공격 중 이동 속도 비율 */
-  attackMoveRatio: 0.3,
   /** 입력이 없을 때 이 거리 안의 적 쪽으로 자동으로 돌아선다 */
   autoFaceRange: 230,
   knockback: 340,

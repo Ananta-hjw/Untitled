@@ -48,6 +48,41 @@ DIAGONAL_ATTACK_ANCHORS = {
 }
 
 
+# The game draws the unarmed sheets (unarmed/*.webp; weapons are separate layers).
+# Their walk poses were redrawn up to ~46 px left of the armed sheet's poses, so the
+# measured armed rectangles cut off part of the body. Shift (dx, dy) of each unarmed
+# walk pose relative to the armed one, found by matching the opaque silhouettes.
+UNARMED_WALK_SHIFT = [
+    (1, 0), (-20, -1), (-25, 0), (-46, -1),
+    (1, -1), (-16, -1), (-25, 0), (-42, -1),
+    (2, 0), (-18, -1), (-19, 0), (-35, -2),
+    (0, 0), (-17, -1), (-25, 0), (-42, -1),
+]
+SHEETS = {
+    'hero-academy-walk': 'player_walk', 'hero-academy-diagonal': 'player_walk_diagonal',
+    'hero-academy-combat': 'player_combat', 'hero-academy-attack-down': 'player_attack_down',
+    'hero-academy-attack-up': 'player_attack_up',
+}
+
+
+def fit_to_unarmed(frame, cell):
+    """Grow the rectangle to every visible pixel of the unarmed sheet in its cell, keeping anchors fixed in the sheet."""
+    with Image.open(ROOT / 'unarmed' / f"{SHEETS[frame['texture']]}.png") as sheet:
+        # Alpha below 8 is invisible generation noise spread over the whole cell.
+        bounds = sheet.crop(cell).getchannel('A').point(lambda a: 255 if a >= 8 else 0).getbbox()
+    assert bounds is not None
+    left = min(frame['x'], cell[0] + bounds[0])
+    top = min(frame['y'], cell[1] + bounds[1])
+    right = max(frame['x'] + frame['w'], cell[0] + bounds[2])
+    bottom = max(frame['y'] + frame['h'], cell[1] + bounds[3])
+    origin = (frame['x'] + frame['originX'] * frame['w'], frame['y'] + frame['originY'] * frame['h'])
+    move = lambda p: dict(x=p['x'] + frame['x'] - left, y=p['y'] + frame['y'] - top)
+    if frame['blade']:
+        frame['blade'] = dict(base=move(frame['blade']['base']), tip=move(frame['blade']['tip']))
+    w, h = right - left, bottom - top
+    frame.update(x=left, y=top, w=w, h=h, originX=(origin[0] - left) / w, originY=(origin[1] - top) / h)
+
+
 def main():
     atlas_path = ROOT / 'player_walk_atlas.json'
     atlas = json.loads(atlas_path.read_text())
@@ -70,8 +105,9 @@ def main():
     frames = []
     for i, frame in enumerate(atlas['frames']):
         # Unity metadata uses bottom-left coordinates, Phaser uses top-left.
+        dx, dy = UNARMED_WALK_SHIFT[i]
         frames.append(dict(name=f'walk-{i}', texture='hero-academy-walk',
-                           x=frame['x'], y=atlas['height'] - frame['y'] - frame['height'],
+                           x=frame['x'] + dx, y=atlas['height'] - frame['y'] - frame['height'] + dy,
                            w=frame['width'], h=frame['height'],
                            originX=(frame.get('footX', frame['x'] + frame['width'] / 2) - frame['x']) / frame['width'], originY=1,
                            scale=1, blade=None))
@@ -149,7 +185,24 @@ def main():
                                    x=left + x, y=top + y, w=w, h=h,
                                    originX=(foot_x - x) / w, originY=(foot_y - y) / h, scale=.9375,
                                    blade=dict(base=point(guard), tip=point(tip))))
+    # Label height stays the armed walk height measured above.
     height = max(304, max(f['h'] for f in frames if f['blade'] is None))
+    for frame in frames:
+        with Image.open(ROOT / 'unarmed' / f"{SHEETS[frame['texture']]}.png") as sheet:
+            width, full = sheet.size
+        if frame['texture'].startswith('hero-academy-attack-'):
+            cw = ch = 362
+        else:
+            cw, ch = width / 4, full / 4
+        col = int((frame['x'] + frame['w'] / 2) // cw)
+        row = int((frame['y'] + frame['h'] / 2) // ch)
+        cell = [round(col * cw), round(row * ch), round((col + 1) * cw), round((row + 1) * ch)]
+        # Keep the thrust's spill out of its neighbour (see the combat measurement above).
+        if frame['name'] == 'combat-10':
+            cell[2] += 12
+        if frame['name'] == 'combat-11':
+            cell[0] += 28
+        fit_to_unarmed(frame, tuple(cell))
     (ROOT / 'frames.json').write_text(json.dumps(dict(height=height, frames=frames), indent=2) + '\n')
     print(f'{len(frames)} frames: eight-direction walk, horizontal/diagonal combos, dodge')
 

@@ -11,12 +11,13 @@ export function weaponId(id: GearId | undefined): WeaponId | null {
   return id === 'iron-sword' || id === 'short-sword' || id === 'long-sword' ? 'iron-sword' : null;
 }
 
-// Empty scabbard mouths measured in the original 313.5px cells, in row/pose order.
+// Empty scabbard mouths in the 313.5px cells of the unarmed walk sheet, in row/pose order
+// (measured on the armed sheet, then moved with its poses: UNARMED_WALK_SHIFT in tools/build_hero_frames.py).
 const WALK = [
-  [124, 150], [125, 151], [124, 150], [125, 152],
-  [194, 132], [194, 132], [194, 132], [194, 132],
-  [115, 130], [123, 135], [117, 130], [123, 136],
-  [201, 136], [202, 136], [201, 136], [202, 136],
+  [125, 150], [105, 150], [99, 150], [79, 151],
+  [195, 131], [178, 131], [169, 132], [152, 131],
+  [117, 130], [105, 134], [98, 130], [88, 134],
+  [201, 136], [185, 135], [176, 136], [160, 135],
 ];
 const DIAGONAL = [
   [200, 143], [201, 143], [200, 143], [201, 143],

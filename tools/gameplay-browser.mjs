@@ -262,6 +262,34 @@ test('터치·키보드의 짧은 공격과 콤보 예약을 처리하고 누르
   }
 });
 
+test('공격 중에는 조이스틱으로 움직이지 않고 공격 자체의 전진만 하며, 공격이 끝나면 다시 걷는다', async () => {
+  await load();
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player;
+    s.enemies = []; s.joystick.vector.set(0, 0);
+    p.revive(1000, 650); s.now = 1000; s.nextAttackAt = 0; s.comboStage = 0; s.comboExpiresAt = 0;
+    s.dodgeProgress = 1; s.dodgeUntil = 0; s.dodgeReadyAt = 0;
+    const tick = () => s.update(0, 16);
+    // 오른쪽을 보고 서서 공격한 뒤, 공격 중에 조이스틱을 아래로 민다.
+    s.joystick.vector.set(1, 0); tick(); s.joystick.vector.set(0, 0); tick();
+    const start = { x: p.x, y: p.y };
+    s.attackButton.pressed = true; tick();
+    const attacking = p.isAttacking;
+    s.joystick.vector.set(0, 1);
+    let maxDrift = 0;
+    while (p.isAttacking && s.now < 3000) { tick(); if (p.isAttacking) maxDrift = Math.max(maxDrift, Math.abs(p.y - start.y)); }
+    const lunged = p.x - start.x;
+    const before = p.y;
+    for (let i = 0; i < 20; i++) tick();
+    s.joystick.vector.set(0, 0);
+    return { attacking, maxDrift, lunged, walksAfter: p.y - before };
+  })()`);
+  assert.equal(result.attacking, true);
+  assert.ok(result.maxDrift < 0.5, `공격 중 아래로 ${result.maxDrift}px 움직임`);
+  assert.ok(result.lunged > 5, `공격 전진 ${result.lunged}px`);
+  assert.ok(result.walksAfter > 20, `공격 뒤 걷기 ${result.walksAfter}px`);
+});
+
 test('회피·포커스 이탈·사망은 이전 공격 예약을 취소하고 부활 직전의 죽은 상태 입력도 버린다', async () => {
   await load();
   const results = await evaluate(`(() => {

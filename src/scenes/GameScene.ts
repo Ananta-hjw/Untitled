@@ -53,6 +53,7 @@ import { DamageNumbers } from '../ui/DamageNumbers';
 import { DialogueBox, preloadDialogue } from '../ui/DialogueBox';
 import { PauseMenu } from '../ui/PauseMenu';
 import { TITLE_FADE_MS } from './TitleScene';
+import { IDLE_FPS, PLAY_FPS, frameRate } from '../core/frameRate';
 import { OpeningDirector } from './OpeningDirector';
 import { OPENING, OPENING_HINT, OPENING_SAVE_KEY, OPENING_WALK_SCALE, shouldPlayOpening } from '../story/opening';
 import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings } from '../ui/settingsData';
@@ -531,6 +532,9 @@ export class GameScene extends Phaser.Scene {
     const step = Math.min(delta, 50);
     // 맵을 옮기는 동안에는 아무것도 진행하지 않는다.
     if (this.traveling) return;
+    // 메뉴·대화·창이 열려 게임이 멈춰 있는 동안에는 덜 자주 그린다(발열·전력).
+    frameRate.fps = this.quickSlotPanel?.isOpen || this.storyChoice?.isOpen || this.pauseMenu.isOpen || this.itemPanel?.isOpen
+      || this.characterPanel?.isOpen || this.worldMap?.isOpen || this.dialogue.isOpen ? IDLE_FPS : PLAY_FPS;
 
     // 일시정지 중에는 게임 시계를 멈춘다. Esc는 메뉴에서 한 단계 뒤로.
     let escape = false;
@@ -975,8 +979,9 @@ export class GameScene extends Phaser.Scene {
 
     const fromX = player.x;
     const fromY = player.y;
-    if (force > 0) {
-      const speed = PLAYER_SPEED * (player.isAttacking ? PLAYER.attackMoveRatio : 1) * (this.now < this.slowedUntil ? ASH_SLOW.speedScale : 1)
+    // 공격 중에는 조이스틱으로 움직이지 않는다. 앞으로 나가는 것은 공격 자체의 전진(lunge)뿐이다.
+    if (force > 0 && !player.isAttacking) {
+      const speed = PLAYER_SPEED * (this.now < this.slowedUntil ? ASH_SLOW.speedScale : 1)
         * (this.blocking ? BLOCK.moveScale : 1);
       const next = this.walkArea.move(
         player.x,

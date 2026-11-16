@@ -11,9 +11,11 @@ test('원본 4방향 시트는 Unity 아래쪽 좌표를 Phaser 위쪽 좌표로
   const original = JSON.parse(readFileSync(new URL('player_walk_atlas.json', root)));
   for (let i = 0; i < 16; i++) {
     const source = original.frames[i], frame = data.frames[i];
-    assert.equal(frame.y, original.height - source.y - source.height);
-    assert.equal(frame.h, source.height);
-    assert.equal(frame.originY, 1);
+    // 영역은 실제로 그리는 unarmed 시트의 그림 전체로 넓혔고, 발은 그 그림의 위치(최대 2px 위)로 옮겼다.
+    const foot = frame.y + frame.originY * frame.h;
+    const bottom = original.height - source.y;
+    assert.ok(foot <= bottom && foot >= bottom - 2, frame.name);
+    assert.ok(frame.h >= source.height);
     assert.equal(frame.scale, 1);
   }
 });

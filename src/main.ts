@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { MAX_ASPECT, MIN_ASPECT, VIEW_HEIGHT } from './config';
+import { frameRate, shouldRunFrame } from './core/frameRate';
 import { GameScene } from './scenes/GameScene';
 import { TitleScene } from './scenes/TitleScene';
 
@@ -26,6 +27,15 @@ const game = new Phaser.Game({
   input: { activePointers: 3 },
   scene: skipTitle ? [GameScene, TitleScene] : [TitleScene, GameScene],
 });
+
+// 화면 갱신(requestAnimationFrame)마다 그리지 않고 frameRate.fps만큼만 그린다(core/frameRate.ts).
+// 건너뛴 갱신에서는 Phaser의 시계도 멈춰 있으므로, 다음에 그릴 때 지난 시간 전체가 한 번에 넘어간다.
+const loop = game.loop as Phaser.Core.TimeStep & { lastTime: number };
+const loopStep = loop.step.bind(loop);
+loop.step = (time: number) => {
+  if (!shouldRunFrame(time - loop.lastTime, frameRate.fps)) return;
+  loopStep(time);
+};
 
 function resize(): void {
   const width = viewWidth();
