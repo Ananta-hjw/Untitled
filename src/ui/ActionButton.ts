@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { cooldownDisplay } from './cooldownDisplay';
 import { DEPTH_UI } from '../config';
 
 export interface ActionButtonOptions {
@@ -180,8 +181,7 @@ export class ActionButton {
 
   /** 원형 암부가 시계 방향으로 줄어든다. 각도·남은 초가 바뀔 때만 다시 그린다. */
   setCooldown(remaining: number, duration: number): void {
-    const step = Math.ceil(Math.max(0, Math.min(1, remaining / duration)) * 360);
-    const seconds = Math.ceil(Math.max(0, remaining) / 1000);
+    const { step, seconds } = cooldownDisplay(remaining, duration);
     if (step === this.cooldownStep && seconds === this.cooldownSeconds) return;
     const wasActive = this.cooldownStep > 0;
     this.cooldownStep = step;

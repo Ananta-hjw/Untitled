@@ -84,7 +84,8 @@ after(async () => {
     await new Promise((resolve) => { child.once('exit', resolve); child.kill(); });
   };
   await Promise.all([stop(chrome), stop(vite)]);
-  if (profile) await rm(profile, { recursive: true, force: true });
+  // 크롬 본 프로세스가 끝난 뒤에도 보조 프로세스가 잠깐 프로필에 파일을 쓸 수 있어, 비우는 동안 ENOTEMPTY가 나면 다시 시도한다.
+  if (profile) await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 test('장면을 다섯 번 재시작해도 적·포인터·텍스처 수와 초기 상태가 유지된다', async () => {
@@ -2002,6 +2003,8 @@ test('회피·막기·회전베기는 원형 대기가 줄어들고 메뉴에서
     const s=window.__game.scene.getScene('game');
     const tick=(n=1)=>{for(let i=0;i<n;i++)s.update(0,50);};
     const state=b=>({seconds:b.cooldownSeconds,step:b.cooldownStep,visible:b.cooldownShade.visible});
+    // 게임 시계가 소수 ms에서 시작해도(실제 프레임 간격에 따라 달라진다) 남은 초가 1초 더 보이지 않아야 한다.
+    s.now=1573.3629902798957;
     s.dodgeButton.pressed=true;tick();const dodge=state(s.dodgeButton);
     tick(100);const half=state(s.dodgeButton);
     s.openPause();const pausedAt=s.now;tick(20);

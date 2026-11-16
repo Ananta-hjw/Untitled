@@ -119,23 +119,24 @@ export const JUST_DODGE = {
  *  - squashMs / squash: 맞은 적이 납작해졌다가 출렁이며 돌아오는 시간과 정도
  */
 export const HIT_FEEL = {
-  hitStopMs: 55,
+  // 연타 중에 툭툭 끊겨 보이지 않도록 짧게 멈춘다(예전 55·85·105·130·80ms의 절반 남짓).
+  hitStopMs: 30,
   /** 치명타: 일반 타격보다 길고 마무리 일격보다 짧게 멈춘다 */
-  critHitStopMs: 85,
-  finisherHitStopMs: 105,
-  counterHitStopMs: 130,
-  hurtHitStopMs: 80,
+  critHitStopMs: 50,
+  finisherHitStopMs: 65,
+  counterHitStopMs: 80,
+  hurtHitStopMs: 60,
   /** 치명타 확률과 피해 배율 (반격에는 치명타가 붙지 않는다. 반격 자체가 강하다) */
   critChance: 0.15,
   critDamage: 1.6,
   /** 화면 흔들림: [길이(ms), 세기]. 묵직하게, 하지만 화면이 어지럽지 않게 짧게 */
   shake: {
-    normal: [80, 0.005],
-    crit: [120, 0.009],
-    finisher: [160, 0.012],
-    counter: [190, 0.014],
-    hurt: [150, 0.011],
-    kill: [110, 0.007],
+    normal: [60, 0.004],
+    crit: [90, 0.008],
+    finisher: [120, 0.011],
+    counter: [140, 0.012],
+    hurt: [120, 0.01],
+    kill: [90, 0.006],
   } as Record<'normal' | 'crit' | 'finisher' | 'counter' | 'hurt' | 'kill', readonly [number, number]>,
   /** 마무리 일격·치명타의 넉백 배율 */
   heavyKnockback: 1.35,
