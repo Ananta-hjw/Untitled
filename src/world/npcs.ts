@@ -13,12 +13,18 @@ import { LINEA_YARD, type VillageArea } from './villageLayout.ts';
  * 이 파일은 Phaser를 쓰지 않아 tools/npcs.test.mjs가 직접 불러 검사한다.
  */
 
-export type NpcId =
+export type NamedNpcId =
   | 'serena' | 'sia' | 'linea' | 'ruan' | 'herman' | 'eila'
   | 'merina' | 'doran' | 'rosetta' | 'vernel' | 'teon';
 
+export type NpcSkin = NamedNpcId | 'soldier';
+export type NpcId = NamedNpcId | `guard-${string}`;
+
 export interface NpcDef {
   id: NpcId;
+  /** 여러 일반 병사는 위치·대화만 다르고 하나의 그래픽을 공유한다. */
+  skin?: NpcSkin;
+  facing?: Direction8;
   /** 머리 위 이름표와 대화창에 나오는 이름 */
   name: string;
   /** 하는 일 (문서용, 화면에는 아직 쓰지 않는다) */
@@ -40,6 +46,8 @@ export interface NpcDef {
   /** 카운터 뒤처럼 바로 다가갈 수 없는 자리면, 말을 거는 자리를 이만큼 앞(아래)으로 옮긴다. */
   talkOffset?: number;
 }
+
+export function npcSkin(def: NpcDef): NpcSkin { return def.skin ?? def.id as NamedNpcId; }
 
 export const NPCS: NpcDef[] = [
   // 북쪽 맵: 집들 앞

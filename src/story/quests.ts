@@ -1,6 +1,6 @@
 import type { MonsterKind } from '../combat/monsterTypes.ts';
 import { HERO_NAME, type DialogueLine } from './dialogues.ts';
-import type { NpcId } from '../world/npcs.ts';
+import type { NpcId, NamedNpcId } from '../world/npcs.ts';
 import type { MapId } from '../world/maps.ts';
 import type { ItemId } from '../items/inventory.ts';
 
@@ -68,7 +68,7 @@ export interface QuestDef {
 }
 
 const hero = (text: string): DialogueLine => ({ speaker: HERO_NAME, portrait: 'hero-neutral', text });
-const line = (npc: NpcId, speaker: string, text: string): DialogueLine => ({ speaker, portrait: npc, text });
+const line = (npc: NamedNpcId, speaker: string, text: string): DialogueLine => ({ speaker, portrait: npc, text });
 const ruan = (text: string) => line('ruan', '루안', text);
 
 export const QUESTS: QuestDef[] = [

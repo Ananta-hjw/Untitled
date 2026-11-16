@@ -10,6 +10,7 @@ import merinaPortrait from '../assets/characters/merina/dialogue-768.webp?url';
 import doranPortrait from '../assets/characters/doran/dialogue-768.webp?url';
 import rosettaPortrait from '../assets/characters/rosetta/dialogue-768.webp?url';
 import vernelPortrait from '../assets/characters/vernel/dialogue-768.webp?url';
+import soldierPortrait from '../assets/characters/soldier/dialogue-768.webp?url';
 import teonPortrait from '../assets/characters/teon/dialogue-768.webp?url';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 import type { DialogueLine, Portrait } from '../story/dialogues';
@@ -36,6 +37,7 @@ const PORTRAITS: Record<Portrait, { key: string; url: string }> = {
   rosetta: { key: 'portrait-rosetta', url: rosettaPortrait },
   vernel: { key: 'portrait-vernel', url: vernelPortrait },
   teon: { key: 'portrait-teon', url: teonPortrait },
+  soldier: { key: 'portrait-soldier', url: soldierPortrait },
 };
 /** 초당 나오는 글자 수 */
 const CHARS_PER_SECOND = 38;

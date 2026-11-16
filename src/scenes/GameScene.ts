@@ -60,6 +60,7 @@ import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialo
 import {
   currentObjective, MARKER_PRIORITY, QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestMarker, type QuestState,
 } from '../story/quests';
+import { GUARDS, guardsForMap } from '../world/guards';
 import type { NpcId } from '../world/npcs';
 import { ItemPanel, type PanelAction } from '../ui/ItemPanel';
 import { WorldMap } from '../ui/WorldMap';
@@ -340,7 +341,7 @@ export class GameScene extends Phaser.Scene {
     preloadHeroSprite(this);
     preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns()]);
     preloadVillage(this, this.map);
-    preloadNpcs(this, NPCS);
+    preloadNpcs(this, [...NPCS, ...GUARDS]);
     preloadDialogue(this);
   }
 
@@ -525,7 +526,7 @@ export class GameScene extends Phaser.Scene {
       this.enemies.push(enemy);
       this.raidEnemies.add(enemy);
     }
-    let defs = chapterNpcs(this.map.npcs, this.quests, this.mapId);
+    let defs = chapterNpcs([...this.map.npcs, ...guardsForMap(this.mapId)], this.quests, this.mapId);
     if (this.stressCount > 0 && this.mapId === 'village' && chapterPhase(this.quests) === 'day') {
       const area = this.walkArea, b = this.map.bounds;
       defs = [...defs, ...stressNpcs(this.stressCount, defs, Math.random, b, (x, y) => area.contains(x, y) && !findExit(this.map, x, y))];
