@@ -6,7 +6,7 @@ import { bladeHitsEllipse, clipBladeSweep, type Blade } from '../combat/blade';
 import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
 import { preloadMonsters } from '../combat/MonsterSprite';
-import { enemyHitReaches, type EnemyHit } from '../combat/monsterTypes';
+import { ASH_SLOW, enemyHitReaches, type EnemyHit } from '../combat/monsterTypes';
 import { isJustDodge, slowMotionScale, strikeReaches } from '../combat/justDodge';
 import { critMultiplier, gameTimeScale, heavierKind, hitStopMs, strikeKind, type HitKind } from '../combat/hitFeel';
 import { ImpactEffects } from '../combat/ImpactEffects';
@@ -37,7 +37,7 @@ import { createPlaceholderArt } from '../world/placeholderArt';
 import type { WalkArea } from '../world/walkArea';
 import { NavGrid } from '../world/navGrid';
 import { buildMap, preloadVillage } from '../world/village';
-import { MAPS, START_MAP, findExit, isMapId, type GameMap, type MapExit, type MapId, type Point } from '../world/maps';
+import { MAPS, START_MAP, fieldPoint, findExit, isMapId, type GameMap, type MapExit, type MapId, type Point } from '../world/maps';
 import { Hud } from '../ui/Hud';
 import { DamageNumbers } from '../ui/DamageNumbers';
 import { DialogueBox, preloadDialogue } from '../ui/DialogueBox';
@@ -52,7 +52,7 @@ import { PerfOverlay } from '../ui/PerfOverlay';
 import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
 import { StoryChoice } from '../ui/StoryChoice';
-import { chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, raidSpawns, INSPECTION_LINES } from '../story/chapterOne';
+import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, isDusk, raidSpawns, INSPECTION_LINES } from '../story/chapterOne';
 import {
   currentObjective, MARKER_PRIORITY, QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestMarker, type QuestState,
 } from '../story/quests';
@@ -149,6 +149,8 @@ export class GameScene extends Phaser.Scene {
   private stats: LevelStats = statsForLevel(1);
   private storage?: SaveStorage;
   private fromTitle = false;
+  /** 잿빛 나방의 가루에 닿아 느려진 상태가 끝나는 게임 시각 */
+  private slowedUntil = 0;
   /** 지금 있는 맵. 재시작해도 유지되고, 맵을 옮길 때만 바뀐다. */
   private mapId: MapId = START_MAP;
   private map: GameMap = MAPS[START_MAP];
@@ -227,7 +229,14 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** 해 질 무렵(chapterOne.isDusk)에는 남쪽 들판에 잿빛 나방이 더 나온다. */
+  private duskSpawns(): Array<{ key: 'ashen-moth'; x: number; y: number }> {
+    if (this.mapId !== 'south-field' || !isDusk(this.quests)) return [];
+    return DUSK_MOTH_POINTS.map(([x, y]) => ({ key: 'ashen-moth', ...fieldPoint(x, y) }));
+  }
+
   private resetState(): void {
+    this.slowedUntil = 0;
     this.enemies = [];
     this.npcs = [];
     this.interactables = [];
@@ -287,7 +296,7 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     preloadHeroSprite(this);
-    preloadMonsters(this, this.map.enemies);
+    preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns()]);
     preloadVillage(this, this.map);
     preloadNpcs(this, NPCS);
     preloadDialogue(this);
@@ -458,7 +467,7 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 월드
 
   private buildCharacters(): void {
-    for (const spawn of this.map.enemies) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y));
+    for (const spawn of [...this.map.enemies, ...this.duskSpawns()]) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y));
     for (const point of raidSpawns(this.quests, this.mapId)) {
       const enemy = new Enemy(this, 'retainer-ash', point.x, point.y);
       this.enemies.push(enemy);
@@ -582,7 +591,8 @@ export class GameScene extends Phaser.Scene {
       }) as GameScene['keys'];
     }
 
-    this.hud = new Hud(this, this.mapId === 'village' && chapterPhase(this.quests) === 'raid' ? '마을 습격 · 권속을 저지하고 주민들의 안전을 확인하세요' : this.map.hint);
+    this.hud = new Hud(this, this.mapId === 'village' && chapterPhase(this.quests) === 'raid' ? '마을 습격 · 권속을 저지하고 주민들의 안전을 확인하세요'
+      : this.duskSpawns().length ? '해 질 무렵의 남쪽 들판 · 처음 보는 잿빛 나방이 날아다닙니다' : this.map.hint);
     this.drawHud();
   }
 
@@ -691,7 +701,7 @@ export class GameScene extends Phaser.Scene {
     const fromX = player.x;
     const fromY = player.y;
     if (force > 0) {
-      const speed = PLAYER_SPEED * (player.isAttacking ? PLAYER.attackMoveRatio : 1);
+      const speed = PLAYER_SPEED * (player.isAttacking ? PLAYER.attackMoveRatio : 1) * (this.now < this.slowedUntil ? ASH_SLOW.speedScale : 1);
       const next = this.walkArea.move(
         player.x,
         player.y,
@@ -1366,6 +1376,12 @@ export class GameScene extends Phaser.Scene {
     const died = player.hurt(enemy.stats.damage, 0xff5a4a);
     player.knockback.set((hit?.dx ?? c.facing) * ENEMY.knockback, (hit?.dy ?? 0) * ENEMY.knockback * VERTICAL_SPEED_RATIO);
     this.showDamage(player.x, player.y - 190, enemy.stats.damage, '#ff8a7a');
+    if (enemy.kind === 'ashen-moth') {
+      // 부식성 가루: 잠깐 몸이 무거워진다.
+      if (now >= this.slowedUntil) this.hud.showCallout('잿빛 가루에 몸이 무거워졌다');
+      this.slowedUntil = now + ASH_SLOW.durationMs;
+      this.impacts.dust(player.x, player.y - 60, 5, now, 40);
+    }
     const [shakeMs, shakeIntensity] = HIT_FEEL.shake.hurt;
     this.cameras.main.shake(shakeMs, shakeIntensity);
     this.impacts.screenFlash(0xff3b2f, 0.14, 160);

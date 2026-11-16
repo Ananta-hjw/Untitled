@@ -52,6 +52,8 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     const idleHeight = Math.max(...data.frames.filter(f => f.animation === 'walk' && f.pose === 0).map(f => f.h * f.scale));
     this.scale0 = MONSTERS[kind].height / idleHeight;
     this.image = scene.add.image(0, 0, keyFor(kind, 'walk_cardinal.png'));
+    // 나방은 땅에서 조금 떠서 난다. 그림자는 바닥(컨테이너 원점)에 그대로 남는다.
+    if (kind === 'ashen-moth') this.image.setY(-28);
     this.add(this.image);
     this.showFrame();
   }
@@ -81,7 +83,9 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
 
   private showFrame(): void {
     const pose = this.attackPose ?? (this.motion === 'walk' ? [1, 2, 3, 2][Math.floor(this.elapsed / 125) % 4] : 0);
-    const f = this.frames.get(`${this.attackPose === undefined ? 'walk' : 'attack'}-${this.direction}-${pose}`)!;
+    // 공격 그림이 없는 종류(잿빛 나방)는 같은 자세의 이동(날갯짓) 그림으로 공격한다.
+    const f = this.frames.get(`${this.attackPose === undefined ? 'walk' : 'attack'}-${this.direction}-${pose}`)
+      ?? this.frames.get(`walk-${this.direction}-${pose}`)!;
     const texture = this.scene.textures.get(keyFor(this.kind, f.sheet));
     const source = frameData(this.kind).sheets[f.sheet];
     const sx = texture.getSourceImage().width / source.width, sy = texture.getSourceImage().height / source.height;

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { QUESTS, currentObjective, continueMainQuest, markerFor, parseQuests, questDef, recordEvent, serializeQuests, talkTo, trackedQuests } from '../src/story/quests.ts';
-import { chapterPhase, chapterNpcs, chapterSpots, raidSpawns } from '../src/story/chapterOne.ts';
+import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, isDusk, raidSpawns } from '../src/story/chapterOne.ts';
 import { NPCS } from '../src/world/npcs.ts';
-import { MAPS, walkable } from '../src/world/maps.ts';
+import { MAPS, fieldPoint, findExit, walkable } from '../src/world/maps.ts';
 
 const through = id => {
   const result = {};
@@ -110,5 +110,19 @@ test('추가 조사 지점·습격 배치·이동한 NPC는 장애물 안에 놓
         assert.ok(walkable(MAPS[map], point.x, point.y), `${map}: ${JSON.stringify(point)}`);
       }
     }
+  }
+});
+
+test('잿빛 나방은 해 질 무렵의 순찰을 받은 뒤부터 축제 전야 전까지만, 남쪽 들판의 걸을 수 있는 곳에 나온다', () => {
+  assert.equal(isDusk(through('ruan-forest')), false, '낮에는 없다');
+  assert.equal(isDusk(through('sia-knot')), true, '순찰을 받으면 해 질 무렵');
+  assert.equal(isDusk(through('evening-patrol')), true, '순찰을 보고한 뒤에도 축제 전까지는 있다');
+  assert.equal(isDusk(through('festival-eve')), false, '습격이 시작되면 사라진다');
+  const field = MAPS['south-field'];
+  for (const [x, y] of DUSK_MOTH_POINTS) {
+    const p = fieldPoint(x, y);
+    assert.equal(walkable(field, p.x, p.y), true, `${x},${y}`);
+    assert.equal(findExit(field, p.x, p.y), undefined);
+    assert.ok(Math.hypot(p.x - field.spawn.x, p.y - field.spawn.y) > 300, '들어오자마자 덮치지 않는다');
   }
 });

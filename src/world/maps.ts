@@ -77,7 +77,7 @@ function sign(id: string, x: number, y: number, dialogue: DialogueId): { prop: V
   };
 }
 
-const fieldPoint = (x: number, y: number): Point => ({ x: Math.round(x * MAP_SIZE_SCALE * 1000) / 1000, y: Math.round(y * MAP_SIZE_SCALE * 1000) / 1000 });
+export const fieldPoint = (x: number, y: number): Point => ({ x: Math.round(x * MAP_SIZE_SCALE * 1000) / 1000, y: Math.round(y * MAP_SIZE_SCALE * 1000) / 1000 });
 const southSign = sign('south-field-sign', 1420 * MAP_SIZE_SCALE, 330 * MAP_SIZE_SCALE, 'south-field-sign');
 const forestSign = sign('west-forest-sign', 2180, 900, 'west-forest-sign');
 const streamSign = sign('east-stream-sign', 260, 760, 'east-stream-sign');

@@ -4,7 +4,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1] / 'src/assets/monsters'
-for name in ['slime', 'waterdrop-mushroom', 'iron-scale-lizard']:
+for name in ['slime', 'waterdrop-mushroom', 'iron-scale-lizard', 'ashen-moth']:
     for source in sorted((ROOT / name).glob('*.png')):
         if not (source.stem.startswith(('walk_', 'attack_')) or source.stem == 'projectile'):
             continue

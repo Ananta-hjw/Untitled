@@ -50,6 +50,17 @@ export const INSPECTION_LINES: Record<string, DialogueLine[]> = {
   ],
 };
 
+/**
+ * 해 질 무렵: "해 질 무렵의 순찰"을 받은 뒤부터 축제 전야가 시작되기 전까지
+ * 남쪽 들판에 잿빛 나방(소멸의 하급 권속)이 나타난다. 습격 전에 네이룬 계열을 처음 마주하는 복선이다.
+ * 좌표는 남쪽 들판 원화 기준(maps.ts의 fieldPoint로 바꾼다). 마을에는 몬스터를 두지 않는다.
+ */
+export const DUSK_MOTH_POINTS: ReadonlyArray<readonly [number, number]> = [[860, 720], [1500, 760], [1250, 980], [700, 950]];
+
+export function isDusk(state: QuestState): boolean {
+  return !!state['evening-patrol'] && chapterPhase(state) === 'day';
+}
+
 /** 재접속해도 남은 수만 다시 배치한다. 일반 필드 처치와 구분한다. */
 export function raidSpawns(state: QuestState, map: MapId): Array<{ x: number; y: number }> {
   if (map !== 'village' || chapterPhase(state) !== 'raid') return [];
