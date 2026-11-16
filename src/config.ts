@@ -151,7 +151,8 @@ export const KNOCKBACK_DAMPING = 7;
 
 /**
  * 경험치와 레벨.
- *  - 다음 레벨까지 필요한 경험치 = xpBase + xpStep × (현재 레벨 - 1)  →  30, 50, 70, 90 …
+ *  - 다음 레벨까지 필요한 경험치 = xpBase + xpStep × (현재 레벨 - 1)  →  36, 60, 84, 108 …
+ *    (예전 30, 50, 70 …보다 레벨마다 20% 더 필요하다. 천천히 오르도록)
  *  - 레벨이 오를 때마다 최대 체력 +hpPerLevel, 공격력(최소·최대 모두) +damagePerLevel (소수점은 반올림)
  *    레벨만으로 오르는 기본 성장이다. 나머지는 레벨업 포인트로 올리는 능력치(ATTRIBUTES)와 장비가 더한다.
  * 레벨 1의 체력·공격력은 위의 PLAYER.maxHp, damageMin, damageMax다.
@@ -159,8 +160,8 @@ export const KNOCKBACK_DAMPING = 7;
 export const PROGRESSION = {
   /** 슬라임 한 마리를 잡으면 얻는 경험치 */
   slimeXp: 10,
-  xpBase: 30,
-  xpStep: 20,
+  xpBase: 36,
+  xpStep: 24,
   maxLevel: 30,
   hpPerLevel: 4,
   damagePerLevel: 0.5,

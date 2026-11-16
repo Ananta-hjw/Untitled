@@ -592,10 +592,10 @@ test('적을 쓰러뜨리면 경험치가 쌓이고 레벨이 오르면 체력·
     const before = { level: s.progress.level, xp: s.progress.xp, maxHp: p.maxHp, damageMax: s.stats.damageMax };
     p.hurt(30);
     const hurtHp = p.hp;
-    // 실제 처치 경로와 같은 함수로 경험치를 준다. 세 마리째에 레벨 2가 된다.
+    // 실제 처치 경로와 같은 함수로 경험치를 준다. 레벨 2까지 36이 필요하다(10 + 10 + 16).
     s.gainXp(10, p.x, p.y); s.gainXp(10, p.x, p.y);
     const twoKills = { level: s.progress.level, xp: s.progress.xp, hp: p.hp };
-    s.gainXp(10, p.x, p.y);
+    s.gainXp(16, p.x, p.y);
     const levelUp = { level: s.progress.level, xp: s.progress.xp, hp: p.hp, maxHp: p.maxHp,
       damageMax: s.stats.damageMax, label: p.list.find((o) => o.text?.startsWith?.('Lv.'))?.text };
     s.scene.restart(); g.step(performance.now(), 16); g.step(performance.now() + 16, 16);
