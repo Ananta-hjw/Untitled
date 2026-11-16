@@ -58,7 +58,7 @@ export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
       .setOrigin(.5, 1).setDisplaySize(p.width, p.height).setDepth(p.y).setName(p.name);
   }
   for (const p of map.props) {
-    const image = scene.add.image(p.x, p.y, 'village-props', p.frame).setOrigin(.5, 1).setDepth(p.y);
+    const image = scene.add.image(p.x, p.y, 'village-props', p.frame).setOrigin(.5, 1).setDepth(p.y).setName(`village-prop-${p.frame}`);
     image.setScale(p.width / image.width);
   }
   for (const b of map.buildings) {

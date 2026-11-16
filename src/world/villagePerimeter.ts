@@ -1,4 +1,4 @@
-import { WORLD_HEIGHT } from '../config.ts';
+import { WORLD_HEIGHT, WORLD_WIDTH } from '../config.ts';
 import type { Obstacle } from './obstacles.ts';
 
 /** 두 마을 맵의 좌우 외곽은 같은 선을 따른다. 마을 내부의 남북 연결 길은 열어 둔다. */
@@ -8,6 +8,11 @@ export const VILLAGE_GATES = {
   east: { x: 2290, top: 960, bottom: 1140 },
   south: { left: 1134, right: 1228, y: 1600 },
 };
+// 대각선 걷기 그림(발에서 최대65.25px)과 그림자(반폭55px)가 담 안쪽에 남을 여유를 둔다.
+export const WALL_HALF_WIDTH = 32;
+export const WALL_CHARACTER_CLEARANCE = 68;
+export const WALL_INNER_LEFT = VILLAGE_EDGE.left + WALL_HALF_WIDTH + WALL_CHARACTER_CLEARANCE;
+export const WALL_INNER_RIGHT = VILLAGE_EDGE.right - WALL_HALF_WIDTH - WALL_CHARACTER_CLEARANCE;
 export const PERIMETER_TEXTURE = 'village-perimeter';
 export interface PerimeterPiece {
   frame: 'wall-horizontal' | 'wall-vertical' | 'gatepost';
@@ -31,12 +36,15 @@ function vertical(map: string, x: number, from: number, to: number): void {
   for (let i = 0; i < count; i++) pieces[map].push({
     frame: 'wall-vertical', x, y: from + step * (i + 1), width: 64, height: step + 2, name: 'village-wall',
   });
-  obstacles[map].push(rect(x - 24, from, x + 24, to + 6));
+  const reach = WALL_HALF_WIDTH + WALL_CHARACTER_CLEARANCE;
+  obstacles[map].push(x === VILLAGE_EDGE.left
+    ? rect(0, from, x + reach, to + 6)
+    : rect(x - reach, from, WORLD_WIDTH, to + 6));
 }
 function post(map: string, x: number, y: number, name: string): void {
   pieces[map].push({ frame: 'gatepost', x: x + 8, y, width: 80, height: 142, name });
   // The lantern extends to the right of the masonry; collision follows only the stone base.
-  obstacles[map].push(rect(x - 27, y - 25, x + 27, y + 6));
+  obstacles[map].push(rect(x - 27 - WALL_CHARACTER_CLEARANCE, y - 25, x + 27 + WALL_CHARACTER_CLEARANCE, y + 6));
 }
 
 const e = VILLAGE_EDGE;
@@ -60,6 +68,8 @@ for (const [from, to] of [[e.left, 867], [1481, e.right]]) {
   obstacles.village.push(rect(from - 24, e.south - 24, to + 24, e.south + 6));
 }
 for (const x of [e.left, e.right]) post('village', x, e.south + 6, 'village-wall-corner');
+// 바깥쪽 잔디는 걷기·순찰·성능 테스트의 생성 지점으로 사용하지 않는다.
+obstacles.village.push(rect(0, e.south + 6, WORLD_WIDTH, WORLD_HEIGHT));
 
 export function perimeterPieces(map: string): readonly PerimeterPiece[] { return pieces[map] ?? []; }
 export function perimeterObstacles(map: string): readonly Obstacle[] { return obstacles[map] ?? []; }

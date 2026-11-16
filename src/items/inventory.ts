@@ -34,7 +34,7 @@ export const ITEM_IDS = Object.keys(ITEMS) as ItemId[];
 export const MAX_STACK = 99;
 export const MAX_GOLD = 999_999;
 /** 물약을 연달아 마시지 못하게 하는 간격 (게임 시계 ms) */
-export const USE_COOLDOWN_MS = 800;
+export const USE_COOLDOWN_MS = 20_000;
 
 export interface Inventory {
   gold: number;

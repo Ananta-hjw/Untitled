@@ -108,20 +108,20 @@ export interface VillageProp {
   footprint?: { rx: number; ry: number };
 }
 
-/** 광장(village)의 소품 */
+/** 광장(village)의 소품. 수관 전체가 좌우 돌담 안에 들어오도록 둔다. */
 export const PROPS: VillageProp[] = [
   // 마을 한가운데 큰 나무
   { frame: 'oak', x: 1180, y: 900, width: 420, footprint: { rx: 46, ry: 28 } },
   // 위쪽: 북쪽 맵으로 가는 길(가운데) 양옆의 숲
-  { frame: 'pine', x: 100, y: 420, width: 210, footprint: { rx: 25, ry: 18 } },
+  { frame: 'pine', x: 270, y: 420, width: 210, footprint: { rx: 25, ry: 18 } },
   { frame: 'oak', x: 420, y: 470, width: 320, footprint: { rx: 37, ry: 24 } },
   { frame: 'pine', x: 790, y: 360, width: 220, footprint: { rx: 26, ry: 18 } },
   { frame: 'oak', x: 1540, y: 330, width: 290, footprint: { rx: 34, ry: 22 } },
   { frame: 'pine', x: 1900, y: 420, width: 230, footprint: { rx: 27, ry: 19 } },
-  { frame: 'pine', x: 2320, y: 420, width: 210, footprint: { rx: 25, ry: 18 } },
+  { frame: 'pine', x: 2130, y: 420, width: 210, footprint: { rx: 25, ry: 18 } },
   { frame: 'boulders', x: 2170, y: 470, width: 160, footprint: { rx: 72, ry: 27 } },
-  { frame: 'oak', x: 110, y: 1320, width: 230, footprint: { rx: 30, ry: 20 } },
-  { frame: 'pine', x: 2320, y: 1300, width: 210, footprint: { rx: 25, ry: 18 } },
+  { frame: 'oak', x: 280, y: 800, width: 230, footprint: { rx: 30, ry: 20 } },
+  { frame: 'pine', x: 2130, y: 650, width: 210, footprint: { rx: 25, ry: 18 } },
   { frame: 'shrub', x: 980, y: 690, width: 100, footprint: { rx: 41, ry: 18 } },
   { frame: 'shrub', x: 1530, y: 580, width: 110, footprint: { rx: 45, ry: 19 } },
   { frame: 'shrub', x: 840, y: 1270, width: 100, footprint: { rx: 41, ry: 18 } },
@@ -140,14 +140,14 @@ export const PROPS: VillageProp[] = [
 
 /** 북쪽 맵(village-north)의 소품: 집 사이의 나무와 텃밭 꽃 */
 export const NORTH_PROPS: VillageProp[] = [
-  { frame: 'pine', x: 100, y: 420, width: 210, footprint: { rx: 25, ry: 18 } },
+  { frame: 'pine', x: 820, y: 720, width: 210, footprint: { rx: 25, ry: 18 } },
   { frame: 'pine', x: 790, y: 330, width: 220, footprint: { rx: 26, ry: 18 } },
   { frame: 'oak', x: 1540, y: 330, width: 290, footprint: { rx: 34, ry: 22 } },
-  { frame: 'pine', x: 2320, y: 420, width: 210, footprint: { rx: 25, ry: 18 } },
+  { frame: 'pine', x: 1550, y: 760, width: 210, footprint: { rx: 25, ry: 18 } },
   { frame: 'oak', x: 1650, y: 1060, width: 360, footprint: { rx: 40, ry: 26 } },
-  { frame: 'oak', x: 130, y: 1300, width: 260, footprint: { rx: 32, ry: 21 } },
-  { frame: 'pine', x: 2300, y: 1280, width: 220, footprint: { rx: 26, ry: 18 } },
-  { frame: 'pine', x: 2150, y: 900, width: 210, footprint: { rx: 25, ry: 18 } },
+  { frame: 'oak', x: 310, y: 1470, width: 260, footprint: { rx: 32, ry: 21 } },
+  { frame: 'pine', x: 2110, y: 1280, width: 220, footprint: { rx: 26, ry: 18 } },
+  { frame: 'pine', x: 2130, y: 900, width: 210, footprint: { rx: 25, ry: 18 } },
   { frame: 'shrub', x: 770, y: 640, width: 100, footprint: { rx: 41, ry: 18 } },
   { frame: 'shrub', x: 1620, y: 640, width: 110, footprint: { rx: 45, ry: 19 } },
   { frame: 'shrub', x: 1000, y: 1300, width: 100, footprint: { rx: 41, ry: 18 } },

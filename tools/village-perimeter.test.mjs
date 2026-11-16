@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { MAPS, findExit, walkable } from '../src/world/maps.ts';
-import { perimeterPieces, VILLAGE_EDGE, VILLAGE_GATES } from '../src/world/villagePerimeter.ts';
+import { perimeterPieces, VILLAGE_EDGE, VILLAGE_GATES, WALL_HALF_WIDTH, WALL_CHARACTER_CLEARANCE, WALL_INNER_LEFT, WALL_INNER_RIGHT } from '../src/world/villagePerimeter.ts';
 
 test('마을 외곽 돌담은 닫혀 있고 실제 세 출입구와 마을 안길만 열려 있다', () => {
   const e = VILLAGE_EDGE;
@@ -54,4 +54,32 @@ test('동서문 앞에는 건물 지붕까지 침범하지 않는 진입 마당�
     assert.equal(walkable(map,b.door.x,b.door.y+24),true,`${b.frame} 문 앞`);
     assert.ok(b.door.y+24<VILLAGE_EDGE.south-24,`${b.frame} 문과 남쪽 담 간격`);
   }
+});
+
+test('나무의 수관은 좌우 담 안에 있고 줄기는 건물 안에 겹치지 않는다',()=>{
+  for(const id of ['village','village-north']){
+    const map=MAPS[id];
+    for(const tree of map.props.filter(p=>p.frame==='oak'||p.frame==='pine')){
+      assert.ok(tree.x-tree.width/2>=VILLAGE_EDGE.left+WALL_HALF_WIDTH+20,`${id} ${tree.frame} 왼쪽 수관`);
+      assert.ok(tree.x+tree.width/2<=VILLAGE_EDGE.right-WALL_HALF_WIDTH-20,`${id} ${tree.frame} 오른쪽 수관`);
+      for(const b of map.buildings)for(const o of b.footprint){
+        assert.ok(Math.abs(tree.x-o.x)>=o.rx||Math.abs(tree.y-o.y)>=o.ry,`${id} ${tree.frame} 줄기 / ${b.frame}`);
+      }
+    }
+  }
+});
+
+test('발뿐 아니라 캐릭터 몸·그림자 폭을 확보하고 담 바깥에는 NPC를 생성할 수 없다',()=>{
+  assert.ok(WALL_CHARACTER_CLEARANCE>=65.25);
+  for(const id of ['village','village-north']){
+    const map=MAPS[id];
+    for(const y of [650,800,1400]){
+      assert.equal(walkable(map,WALL_INNER_LEFT-1,y),false,`${id} 왼쪽 몸 여유`);
+      assert.equal(walkable(map,WALL_INNER_RIGHT+1,y),false,`${id} 오른쪽 몸 여유`);
+      assert.equal(walkable(map,70,y),false,`${id} 왼쪽 담 바깥`);
+      assert.equal(walkable(map,2500,y),false,`${id} 오른쪽 담 바깥`);
+    }
+  }
+  assert.equal(walkable(MAPS.village,1800,1710),false,'남쪽 담 바깥');
+  for(const [x,y] of [[100,1050],[2291,1050],[1180,1610]])assert.equal(walkable(MAPS.village,x,y),true,'실제 문 통행');
 });
