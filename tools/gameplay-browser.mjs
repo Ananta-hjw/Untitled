@@ -380,7 +380,7 @@ test('회피 잔상은 프레임 이미지를 재사용하고 장면 재시작 �
     assert.equal(run.pool, result.counts[0].pool);
     assert.ok(run.pool <= 6);
     assert.equal(run.hidden, true);
-    assert.ok(run.children.every((n) => n === 1));
+    assert.ok(run.children.every((n) => n === 3));
   }
   assert.equal(result.oldAttackPool, 0);
   assert.equal(result.oldGhostPool, 0);
@@ -408,7 +408,7 @@ test('실제 이동 방향에 맞는 원본 프레임을 표시하고 정지·�
     const ghost = hero.spawnGhost(p.x, p.y, p.y - 1, 0x9fc4ff, .35);
     hero.play('walk'); hero.setMovement(-1, -1);
     hero.spawnGhost(p.x, p.y, p.y - 1, 0x9fc4ff, .35, ghost);
-    const copy = ghost.getAt(0);
+    const copy = ghost.getAt(1);
     const reused = copy.texture.key === hero.image.texture.key && copy.frame.name === hero.image.frame.name;
     ghost.destroy();
     return { runs, reused };
@@ -2073,4 +2073,40 @@ test('캐릭터 창·장비창·대장간은 기존 아이템과 새 철검·가
   }
   assert.equal(result.shop['iron-sword'],undefined,'철검은 대장간에서 팔지 않는다');
   assert.equal(result.reused,true);
+});
+
+test('무기 교체·해제는 별도 레이어와 칼집 손잡이·잔상·저장에 반영되고 검날과 타격 기준점이 일치한다', async () => {
+  await load('village');
+  const result=await evaluate(`(()=>{
+    const g=window.__game,s=g.scene.getScene('game'),h=s.player.sprite;
+    s.character.gear.bag={'iron-sword':1};s.openCharacterPanel('items');
+    const m=s.characterPanel;m.selectCell(m.entries.findIndex(e=>e.id==='iron-sword'));m.primary();m.close();
+    h.play('hero-idle');const equipped=h.weapon==='iron-sword'&&h.weaponFront.frame.name==='iron-sword-hilt'&&!h.weaponBack.visible;
+    const errors=[];
+    for(const weapon of ['wooden-sword','iron-sword']){
+      h.setWeapon(weapon);
+      for(const facing of ['left','right','down-left','down-right','up-left','up-right'])for(const action of ['attack1','attack2','attack3','dodge']){
+        h.setAttackFacing(facing);h.setFlipX(facing.includes('left'));h.play('hero-'+action);
+        for(let i=0;i<8;i++){
+          h.advance(30);const f=h.frame,b=h.getBlade(),matrix=h.image.getWorldTransformMatrix();
+          const expected=p=>matrix.transformPoint(p.x-f.originX*f.w,p.y-f.originY*f.h);
+          const a=expected(f.blade.base),z=expected(f.blade.tip);
+          errors.push(Math.hypot(a.x-b.base.x,a.y-b.base.y),Math.hypot(z.x-b.tip.x,z.y-b.tip.y));
+        }
+      }
+    }
+    h.setWeapon('iron-sword');h.play('hero-attack1');h.advance(50);
+    const ghost=h.spawnGhost(s.player.x,s.player.y,0,0x9fc4ff,.3),copies=ghost.list.map(o=>o.texture.key+':'+o.frame.name);
+    h.setWeapon(undefined);const empty=!h.weaponFront.visible&&!h.weaponBack.visible&&Math.hypot(h.getBlade().tip.x-h.getBlade().base.x,h.getBlade().tip.y-h.getBlade().base.y)===0;
+    h.spawnGhost(s.player.x,s.player.y,0,0x9fc4ff,.3,ghost);
+    const emptyGhost=!ghost.getAt(0).visible&&!ghost.getAt(2).visible;ghost.destroy();
+    s.scene.restart();g.step(performance.now(),16);g.step(performance.now()+16,16);
+    const restored=s.player.sprite.weapon==='iron-sword';
+    s.openCharacterPanel('equip');s.characterPanel.selectSlot('weapon');s.characterPanel.primary();s.characterPanel.close();
+    const unequipped=s.player.sprite.weapon===null&&!s.player.sprite.weaponFront.visible;
+    return {equipped,maxError:Math.max(...errors),copies,empty,emptyGhost,restored,unequipped};
+  })()`);
+  for(const key of ['equipped','empty','emptyGhost','restored','unequipped'])assert.equal(result[key],true,key);
+  assert.ok(result.maxError<.001,JSON.stringify(result));
+  assert.equal(result.copies[0],'hero-weapons:iron-sword-grip');assert.equal(result.copies[2],'hero-weapons:iron-sword-blade');
 });

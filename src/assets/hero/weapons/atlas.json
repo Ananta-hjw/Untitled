@@ -1,0 +1,60 @@
+{
+  "guardX": 118,
+  "bladeLength": 390,
+  "frames": [
+    {
+      "name": "iron-sword-blade",
+      "x": 108,
+      "y": 0,
+      "w": 404,
+      "h": 96,
+      "originX": 0.024752475247524754,
+      "originY": 0.5
+    },
+    {
+      "name": "iron-sword-grip",
+      "x": 0,
+      "y": 0,
+      "w": 108,
+      "h": 96,
+      "originX": 1.0925925925925926,
+      "originY": 0.5
+    },
+    {
+      "name": "iron-sword-hilt",
+      "x": 0,
+      "y": 0,
+      "w": 134,
+      "h": 96,
+      "originX": 0.8805970149253731,
+      "originY": 0.5
+    },
+    {
+      "name": "wooden-sword-blade",
+      "x": 108,
+      "y": 96,
+      "w": 404,
+      "h": 96,
+      "originX": 0.024752475247524754,
+      "originY": 0.5208333333333334
+    },
+    {
+      "name": "wooden-sword-grip",
+      "x": 0,
+      "y": 96,
+      "w": 108,
+      "h": 96,
+      "originX": 1.0925925925925926,
+      "originY": 0.5208333333333334
+    },
+    {
+      "name": "wooden-sword-hilt",
+      "x": 0,
+      "y": 96,
+      "w": 134,
+      "h": 96,
+      "originX": 0.8805970149253731,
+      "originY": 0.5208333333333334
+    }
+  ]
+}
