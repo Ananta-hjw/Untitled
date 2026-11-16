@@ -5,6 +5,8 @@ import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import { bladeHitsEllipse, clipBladeSweep, type Blade } from '../combat/blade';
 import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
+import { preloadMonsters } from '../combat/MonsterSprite';
+import { enemyHitReaches, type EnemyHit } from '../combat/monsterTypes';
 import { isJustDodge, slowMotionScale, strikeReaches } from '../combat/justDodge';
 import { critMultiplier, gameTimeScale, heavierKind, hitStopMs, strikeKind, type HitKind } from '../combat/hitFeel';
 import { ImpactEffects } from '../combat/ImpactEffects';
@@ -15,7 +17,6 @@ import {
   ENEMY,
   KNOCKBACK_DAMPING,
   PLAYER,
-  PROGRESSION,
   PLAYER_SPEED,
   VERTICAL_SPEED_RATIO,
   VIEW_HEIGHT,
@@ -286,6 +287,7 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     preloadHeroSprite(this);
+    preloadMonsters(this, this.map.enemies);
     preloadVillage(this, this.map);
     preloadNpcs(this, NPCS);
     preloadDialogue(this);
@@ -819,7 +821,9 @@ export class GameScene extends Phaser.Scene {
 
     if (time >= this.nextGhostAt) {
       this.nextGhostAt = time + 45;
-      this.effects.spawnGhost(player.sprite, player.x, player.y, player.y - 1, time);
+      if (player.sprite instanceof HeroSprite || player.sprite instanceof Phaser.GameObjects.Sprite) {
+        this.effects.spawnGhost(player.sprite, player.x, player.y, player.y - 1, time);
+      }
     }
   }
 
@@ -938,9 +942,9 @@ export class GameScene extends Phaser.Scene {
         this.impacts.splatter(c.x, c.y, enemy.color, this.now);
         const raid = this.raidEnemies.has(enemy);
         if (!raid) this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
-        this.gainXp(PROGRESSION.slimeXp, c.x, c.y - 185);
-        this.questEvent({ type: 'kill', map: this.mapId, ...(raid ? { encounter: 'village-raid' as const } : {}) });
-        if (!raid) this.collectDrop(c.x, c.y);
+        this.gainXp(enemy.stats.xp, c.x, c.y - 185);
+        this.questEvent({ type: 'kill', map: this.mapId, monster: enemy.kind, ...(raid ? { encounter: 'village-raid' as const } : {}) });
+        if (!raid) this.collectDrop(c.x, c.y, enemy);
       } else {
         const heavy = strike.kind !== 'normal' ? HIT_FEEL.heavyKnockback : 1;
         const push = PLAYER.knockback * combo.knockback * heavy;
@@ -1230,9 +1234,9 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  /** 쓰러진 슬라임이 떨어뜨린 골드와 아이템을 바로 줍는다. */
-  private collectDrop(x: number, y: number): void {
-    const drop = slimeDrop(Math.random);
+  /** 몬스터 보상을 바로 줍는다. 점액은 슬라임만 떨어뜨린다. */
+  private collectDrop(x: number, y: number, enemy: Enemy): void {
+    const drop = enemy.kind === 'slime' ? slimeDrop(Math.random) : { gold: Phaser.Math.Between(5, 9), items: [] };
     this.inventory = applyDrop(this.inventory, drop);
     this.progressEffects.showPopup(x, y - 150, `+${drop.gold} G`, '#ffd23f');
     drop.items.forEach((item, i) => this.progressEffects.showPopup(x, y - 120 + i * 26, `${ITEMS[item.id].name} +${item.count}`, '#a8f0ff'));
@@ -1340,27 +1344,28 @@ export class GameScene extends Phaser.Scene {
   });
 
   /** 몬스터의 돌진이 닿는 순간. 화살표 함수라서 콜백으로 그대로 넘길 수 있다. */
-  private readonly onEnemyStrike = (enemy: Enemy): void => {
+  private readonly onEnemyStrike = (enemy: Enemy, hit?: EnemyHit): boolean => {
     const player = this.player;
     const c = enemy.character;
     const now = this.now;
-    if (!player.alive || this.dialogue.isOpen) return;
+    if (!player.alive || this.dialogue.isOpen) return false;
+    const reaches = (x: number, y: number) => hit ? enemyHitReaches(hit, x, y) : strikeReaches(c.x, c.y, c.facing, x, y);
 
     // 공격이 닿기 직전에 피했고, 피하지 않았다면 맞았을 자리였으면 저스트 회피다.
     if (!this.justDodged && enemy.lastStrikeAt !== undefined
       && isJustDodge(this.dodgeStartedAt, enemy.lastStrikeAt, this.justDodgeWindow)
-      && strikeReaches(c.x, c.y, c.facing, this.dodgeOrigin.x, this.dodgeOrigin.y)) {
+      && reaches(this.dodgeOrigin.x, this.dodgeOrigin.y)) {
       this.onJustDodge(enemy);
-      return;
+      return true;
     }
 
-    if (now < player.invulnerableUntil) return;
-    if (!strikeReaches(c.x, c.y, c.facing, player.x, player.y)) return;
+    if (now < player.invulnerableUntil) return false;
+    if (!reaches(player.x, player.y)) return false;
 
     player.invulnerableUntil = now + PLAYER.invulnerableMs;
-    const died = player.hurt(ENEMY.damage, 0xff5a4a);
-    player.knockback.set(c.facing * ENEMY.knockback, 0);
-    this.showDamage(player.x, player.y - 190, ENEMY.damage, '#ff8a7a');
+    const died = player.hurt(enemy.stats.damage, 0xff5a4a);
+    player.knockback.set((hit?.dx ?? c.facing) * ENEMY.knockback, (hit?.dy ?? 0) * ENEMY.knockback * VERTICAL_SPEED_RATIO);
+    this.showDamage(player.x, player.y - 190, enemy.stats.damage, '#ff8a7a');
     const [shakeMs, shakeIntensity] = HIT_FEEL.shake.hurt;
     this.cameras.main.shake(shakeMs, shakeIntensity);
     this.impacts.screenFlash(0xff3b2f, 0.14, 160);
@@ -1368,6 +1373,7 @@ export class GameScene extends Phaser.Scene {
     this.hitStop('hurt');
     this.drawHud();
     if (died) this.onPlayerDeath();
+    return true;
   };
 
   /** 게임 시간을 잠깐 멈춘다. 겹치면 더 긴 쪽을 따른다. */

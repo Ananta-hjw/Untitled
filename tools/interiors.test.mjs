@@ -25,7 +25,7 @@ test('가구는 방 안에 있고 서로 겹치지 않으며, 들어온 자리�
     const map = MAPS[`in-${interior.id}`];
     for (const f of interior.furniture) {
       const p = furnitureAt(interior, f);
-      assert.ok(p.x - f.w / 2 >= room.left && p.x + f.w / 2 <= room.right && p.y - f.d >= room.top && p.y <= room.bottom, `${interior.id} ${f.kind}`);
+      assert.ok(p.x - f.w / 2 >= room.left - 1e-6 && p.x + f.w / 2 <= room.right + 1e-6 && p.y - f.d >= room.top - 1e-6 && p.y <= room.bottom + 1e-6, `${interior.id} ${f.kind}`);
     }
     const solid = furnitureObstacles(interior);
     assert.equal(solid.length, interior.furniture.filter((f) => !WALKABLE_FURNITURE.includes(f.kind)).length);

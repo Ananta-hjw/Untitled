@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { WORLD_WIDTH, WORLD_HEIGHT } from '../config';
 import home from '../assets/village/rowen/interiors/home.webp?url';
 import linea from '../assets/village/rowen/interiors/linea.webp?url';
 import chief from '../assets/village/rowen/interiors/chief.webp?url';
@@ -22,7 +23,7 @@ export function preloadMapArt(scene: Phaser.Scene, map: GameMap): void {
 
 export function drawFieldArt(scene: Phaser.Scene): void {
   const key = mapArtKey('south-field');
-  scene.add.image(0, 0, key).setOrigin(0).setDisplaySize(2400, 1600).setDepth(-100).setName('map-art-background');
+  scene.add.image(0, 0, key).setOrigin(0).setDisplaySize(WORLD_WIDTH, WORLD_HEIGHT).setDepth(-100).setName('map-art-background');
   for (const [index, layer] of FIELD_FOREGROUND.entries()) {
     const xs = layer.polygon.filter((_, i) => i % 2 === 0), ys = layer.polygon.filter((_, i) => i % 2 === 1);
     const left = Math.min(...xs), top = Math.min(...ys);

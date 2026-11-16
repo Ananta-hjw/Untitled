@@ -43,16 +43,16 @@ test('루안의 수련은 순서대로 열리고, 완료하면 다음 메인이 
 
 test('처치는 정해진 맵에서만 세고, 맵을 가리지 않는 퀘스트는 어디서든 센다', () => {
   let state = { 'ruan-field': { status: 'active', count: 0 }, 'doran-gel': { status: 'active', count: 0 } };
-  const forest = recordEvent(state, { type: 'kill', map: 'west-forest' });
+  const forest = recordEvent(state, { type: 'kill', map: 'west-forest', monster: 'slime' });
   assert.equal(forest.state['ruan-field'].count, 0);
   assert.equal(forest.state['doran-gel'].count, 1);
   assert.deepEqual(forest.updates.map((u) => u.quest.id), ['doran-gel']);
   state = forest.state;
-  for (let i = 0; i < 6; i++) state = recordEvent(state, { type: 'kill', map: 'south-field' }).state;
+  for (let i = 0; i < 6; i++) state = recordEvent(state, { type: 'kill', map: 'south-field', monster: 'slime' }).state;
   assert.deepEqual(state['ruan-field'], { status: 'ready', count: 5 });
   assert.deepEqual(state['doran-gel'], { status: 'ready', count: 5 });
   // 완료를 기다리는 퀘스트는 더 세지 않는다.
-  assert.equal(recordEvent(state, { type: 'kill', map: 'south-field' }).updates.length, 0);
+  assert.equal(recordEvent(state, { type: 'kill', map: 'south-field', monster: 'slime' }).updates.length, 0);
 });
 
 test('심부름 퀘스트: 테온에게 받고, 로제타에게 말을 걸면 채워지고, 테온에게 완료한다', () => {

@@ -27,7 +27,7 @@ test('숲 이후 보고부터 서신까지 모든 메인 목표가 순서대로 
       const o = currentObjective(quest, progress);
       if (o.event === 'talk') result = talkTo(o.npc, state);
       else {
-        const event = o.event === 'kill' ? { type: 'kill', map: o.map, encounter: o.encounter } : { type: 'inspect', map: o.map, spot: o.spot };
+        const event = o.event === 'kill' ? { type: 'kill', map: o.map, encounter: o.encounter, monster: o.monster } : { type: 'inspect', map: o.map, spot: o.spot };
         result = recordEvent(state, event);
       }
     }

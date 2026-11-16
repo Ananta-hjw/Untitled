@@ -3,8 +3,10 @@ export const VIEW_HEIGHT = 720;
 export const MIN_ASPECT = 4 / 3;
 export const MAX_ASPECT = 2.4;
 
-export const WORLD_WIDTH = 2400;
-export const WORLD_HEIGHT = 1600;
+/** 기존 배치를 보존하며 야외 경계와 실내 바닥을 약 10% 넓힌다. */
+export const MAP_SIZE_SCALE = 1.1;
+export const WORLD_WIDTH = Math.round(2400 * MAP_SIZE_SCALE);
+export const WORLD_HEIGHT = Math.round(1600 * MAP_SIZE_SCALE);
 
 /** 벽과 바닥이 만나는 높이 */
 export const FLOOR_TOP = 400;

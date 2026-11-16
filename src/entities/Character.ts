@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { HeroSprite } from './HeroSprite';
+import { MonsterSprite } from '../combat/MonsterSprite';
+import type { MonsterKind } from '../combat/monsterTypes';
 
 export interface CharacterOptions {
   /** 텍스처/애니메이션 키 접두어. `${key}-idle`, `${key}-walk` 애니메이션이 있어야 한다. */
@@ -16,6 +18,7 @@ export interface CharacterOptions {
   scale?: number;
   /** 스프라이트 대신 주인공 프레임 시트를 쓴다. 애니메이션 이름은 같은 규칙(`${key}-idle` 등)을 따른다. */
   hero?: boolean;
+  monster?: MonsterKind;
 }
 
 const HP_BAR_WIDTH = 70;
@@ -31,7 +34,7 @@ const HP_BAR_WIDTH = 70;
  */
 export class Character extends Phaser.GameObjects.Container {
   /** 캐릭터의 몸. 프레임 스프라이트이거나 주인공 프레임 시트다. */
-  readonly sprite: Phaser.GameObjects.Sprite | HeroSprite;
+  readonly sprite: Phaser.GameObjects.Sprite | HeroSprite | MonsterSprite;
   maxHp: number;
   hp: number;
   alive = true;
@@ -63,7 +66,9 @@ export class Character extends Phaser.GameObjects.Container {
     this.shadow.setDisplaySize(options.shadowWidth ?? 90, (options.shadowWidth ?? 90) * 0.3);
     this.add(this.shadow);
 
-    if (options.hero) {
+    if (options.monster) {
+      this.sprite = new MonsterSprite(scene, options.monster).setScale(this.baseScale);
+    } else if (options.hero) {
       this.sprite = new HeroSprite(scene).setScale(this.baseScale);
     } else {
       const first = scene.anims.get(`${options.key}-idle`)!.frames[0]!;

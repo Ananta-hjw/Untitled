@@ -385,7 +385,7 @@ test('회피 잔상은 프레임 이미지를 재사용하고 장면 재시작 �
   assert.equal(result.oldGhostPool, 0);
   assert.equal(result.newAttackPool, 0);
   assert.equal(result.newGhostPool, 0);
-  assert.equal(result.enemies, 4);
+  assert.equal(result.enemies, 10);
 });
 
 test('실제 이동 방향에 맞는 원본 프레임을 표시하고 정지·잔상에서 발 위치와 그림을 유지한다', async () => {
@@ -455,7 +455,7 @@ test('새 공격 그림의 실제 검날은 20·30·60·120fps와 좌우 모든 
 test('대각선 4방향의 모든 콤보는 20·30·60·120fps에서 앞쪽만 명중하고 같은 방향으로 전진·넉백한다', async () => {
   await load();
   const result = await evaluate(`(() => {
-    const s = window.__game.scene.getScene('game'), p = s.player, hero = p.sprite, enemies = s.enemies, runs = [];
+    const s = window.__game.scene.getScene('game'), p = s.player, hero = p.sprite, enemies = s.enemies.slice(0, 4), runs = [];
     s.joystick.vector.set(0, 0);
     const directions = [['down-left', -1, 1], ['down-right', 1, 1], ['up-left', -1, -1], ['up-right', 1, -1]];
     for (const fps of [20, 30, 60, 120]) for (const [facing, signX, signY] of directions) for (const stage of [0, 1, 2]) {
@@ -541,13 +541,13 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
   })()`);
   assert.deepEqual(result.initial, { x: 430, y: 640, walkable: true, safe: true });
   assert.equal(result.home, true);
-  assert.deepEqual(result.ground, { width: 2400, height: 1600 });
+  assert.deepEqual(result.ground, { width: 2640, height: 1760 });
   assert.equal(result.oldRoom, false);
   assert.equal(result.ui.attack, result.ui.width - 170);
   assert.equal(result.ui.dodge, result.ui.width - 330);
   assert.equal(result.ui.hp, 'HP 100 / 100');
-  assert.equal(result.boundsHeight, 1600);
-  assert.ok(result.scroll > 400 && result.bottom <= 1600);
+  assert.equal(result.boundsHeight, 1760);
+  assert.ok(result.scroll > 400 && result.bottom <= 1760);
   assert.ok(result.nameTop >= 0);
 });
 
@@ -1086,12 +1086,21 @@ test('북쪽 건물 뒤의 틈으로는 들어갈 수 없고, 다른 건물 뒤�
 });
 test('미니맵을 누르면 전체 지도가 열리고, 가 본 곳만 이름이 보이며, 여는 동안 게임이 멈춘다', async () => {
   await load('village');
-  const result = await evaluate(`(() => {
+  const result = await evaluate(`(async () => {
     const g = window.__game;
     let s = g.scene.getScene('game');
     let t = performance.now();
+    const restart = async (map) => {
+      s.scene.restart({ map });
+      for (let i=0;i<300;i++) {
+        g.step(t += 16,16);
+        if(s.mapId===map && s.sys.isActive() && s.worldMap) return;
+        await new Promise(resolve=>setTimeout(resolve,10));
+      }
+      throw new Error('map load timeout: '+map);
+    };
     localStorage.removeItem('untitled-rpg.visited');
-    s.scene.restart({ map: 'village' }); g.step(t += 16, 16);
+    await restart('village');
     s.minimap.image.emit('pointerup');
     const card = (id) => s.worldMap.cards.find(c => c.region === id);
     const first = { open: s.worldMap.isOpen, village: card('village').name.visible, east: card('east-stream').name.visible,
@@ -1099,7 +1108,7 @@ test('미니맵을 누르면 전체 지도가 열리고, 가 본 곳만 이름�
     const frozen = s.now; g.step(t += 16, 16); const paused = s.now === frozen;
     s.worldMap.shade.emit('pointerup');
     const closed = !s.worldMap.isOpen;
-    s.scene.restart({ map: 'east-stream' }); g.step(t += 16, 16);
+    await restart('east-stream');
     s.openWorldMap();
     const after = { east: card('east-stream').name.visible, south: card('south-field').unknown.visible,
       saved: JSON.parse(localStorage.getItem('untitled-rpg.visited')) };
@@ -1134,7 +1143,7 @@ test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 �
     const village = { enemies: s.enemies.length, map: s.mapId };
     s.player.hurt(25);
     const south = await travel(1180, 1540);
-    const backFromSouth = await travel(1180, 260);
+    const backFromSouth = await travel(1298, 286);
     const west = await travel(80, 1050);
     const backFromWest = await travel(2330, 1050);
     const east = await travel(2330, 1050);
@@ -1145,9 +1154,9 @@ test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 �
   assert.equal(result.south.started, true);
   assert.equal(result.south.frozen, true);
   assert.equal(result.south.map, 'south-field');
-  assert.deepEqual([result.south.x, result.south.y], [1180, 420]);
+  assert.deepEqual([result.south.x, result.south.y], [1298, 462]);
   assert.equal(result.south.hp, 75);
-  assert.equal(result.south.enemies, 4);
+  assert.equal(result.south.enemies, 10);
   assert.equal(result.south.traveling, false);
   assert.equal(result.backFromSouth.map, 'village');
   assert.deepEqual([result.backFromSouth.x, result.backFromSouth.y], [1180, 1420]);
@@ -1157,7 +1166,7 @@ test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 �
   assert.equal(result.backFromWest.map, 'village');
   assert.deepEqual([result.backFromWest.x, result.backFromWest.y], [230, 1050]);
   assert.equal(result.east.map, 'east-stream');
-  assert.equal(result.east.enemies, 3);
+  assert.equal(result.east.enemies, 5);
   // 같은 맵에서 다시 시작하면 그 맵에 남고, 체력은 다시 이어 받지 않는다.
   assert.equal(result.restartedHere.map, 'east-stream');
   assert.equal(result.restartedHere.hp, result.restartedHere.maxHp);
@@ -1254,7 +1263,7 @@ test('원화가 있는 실내 여덟 곳과 남쪽 들판은 해당 그림만 �
         textures: Object.keys(s.textures.list).filter(k => k.startsWith('map-art-')),
         foreground: foreground.map(c => ({ width: c.displayWidth, depth: c.depth })),
         walkable: s.walkArea.contains(s.player.x, s.player.y),
-        blocked: s.map.interior ? s.map.interior.furniture.every(f => !s.walkArea.contains(s.map.bounds.left + f.x, s.map.bounds.top + f.y - f.d / 2)) : !s.walkArea.contains(835 * 2400 / 1536, 938 * 1600 / 1024) };
+        blocked: s.map.interior ? s.map.interior.furniture.every(f => !s.walkArea.contains(s.map.bounds.left + f.x, s.map.bounds.top + f.y - f.d / 2)) : !s.walkArea.contains(835 * 2640 / 1536, 938 * 1760 / 1024) };
     })()`);
     assert.equal(art.key, 'map-art-' + id);
     assert.ok(art.textures.every(k => k === art.key || k.startsWith(art.key + '-foreground-')), id + ': 다른 맵 원화를 미리 읽지 않는다');
@@ -1314,4 +1323,91 @@ test('맵을 지정하지 않으면 처음 화면에서 시작하고, 시작하�
   assert.equal(after.map, 'village-north');
   assert.equal(after.fadeIn, true);
   await evaluate('window.__game.loop.sleep()');
+});
+
+test('몬스터 원화는 8방향 이동과 공격 단계를 표시하며 맵별로 필요한 시트만 읽는다', async () => {
+  await load();
+  const field = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), e = s.enemies[0], art = e.character.sprite;
+    const directions = [[0,1],[-1,0],[1,0],[0,-1],[-1,1],[1,1],[-1,-1],[1,-1]];
+    const frames = directions.map(([x,y]) => { art.play('slime-green-walk'); art.setMovement(x,y); art.advance(140); return art.list[0].frame.name; });
+    art.showAttack(100,480,110,220); const windup=art.list[0].frame.name;
+    art.showAttack(500,480,110,220); const strike=art.list[0].frame.name;
+    art.showAttack(620,480,110,220); const recover=art.list[0].frame.name;
+    return { kinds:s.enemies.map(e=>e.kind), frames, windup,strike,recover,
+      textures:Object.keys(s.textures.list).filter(k=>k.startsWith('monster-')) };
+  })()`);
+  assert.deepEqual(new Set(field.kinds), new Set(['slime', 'waterdrop-mushroom']));
+  assert.equal(new Set(field.frames).size, 8);
+  assert.ok(field.windup.endsWith('-1') && field.strike.endsWith('-2') && field.recover.endsWith('-3'));
+  assert.equal(field.textures.some(k => k.includes('iron-scale-lizard')), false);
+  await load('west-forest');
+  const kinds = await evaluate(`window.__game.scene.getScene('game').enemies.map(e=>e.kind)`);
+  assert.deepEqual(new Set(kinds), new Set(['waterdrop-mushroom', 'iron-scale-lizard']));
+});
+
+test('버섯 물방울은 준비 뒤 발사하고 경로에서 한 번만 맞으며 중단·사망·벽으로 취소된다', async () => {
+  await load('west-forest');
+  const r = await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'), p=s.player, e=s.enemies.find(e=>e.kind==='waterdrop-mushroom');
+    e.character.placeAt(900,700); p.revive(1150,700); p.invulnerableUntil=0;
+    e.beginWindup(0,250,0);
+    e.update(759,.016,p,s.walkArea,s.nav,s.onEnemyStrike); const before=!!e.projectile;
+    s.now=760; e.update(760,.001,p,s.walkArea,s.nav,s.onEnemyStrike); const launched=!!e.projectile;
+    const hp=p.hp;
+    for(let time=810;time<=1500;time+=50){s.now=time;e.update(time,.05,p,s.walkArea,s.nav,s.onEnemyStrike);}
+    const damage=hp-p.hp, consumed=!e.projectile;
+    e.beginWindup(2000,250,0);e.interrupt(2100);e.update(2800,.05,p,s.walkArea,s.nav,s.onEnemyStrike);const interrupted=!e.projectile;
+    e.fireProjectile(3000);e.kill();const dead=!e.projectile;
+    e.respawn(1100,1020);e.aim={x:1,y:0};e.fireProjectile(4000);p.revive(1450,1020);
+    const hpWall=p.hp;for(let time=4050;time<=4800;time+=50){s.now=time;e.updateProjectile(time,.05,p,s.walkArea,s.onEnemyStrike);}
+    return {before,launched,damage,consumed,interrupted,dead,wall:!e.projectile&&p.hp===hpWall};
+  })()`);
+  assert.deepEqual(r, { before:false, launched:true, damage:6, consumed:true, interrupted:true, dead:true, wall:true });
+});
+
+test('도마뱀은 준비 중 멈추고 잠근 방향으로 돌진하며 한 번만 명중하고 옆으로 피하면 빗나간다', async () => {
+  await load('west-forest');
+  const r = await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'),p=s.player,e=s.enemies.find(e=>e.kind==='iron-scale-lizard');
+    const run=(evade)=>{
+      e.respawn(900,700);p.revive(1100,700);p.invulnerableUntil=0;e.beginWindup(0,200,0);
+      e.update(799,.05,p,s.walkArea,s.nav,s.onEnemyStrike);const still=e.character.x===900;
+      if(evade)p.placeAt(1100,850);const hp=p.hp;
+      for(let t=800;t<=1400;t+=40){s.now=t;e.update(t,.04,p,s.walkArea,s.nav,s.onEnemyStrike);}
+      return {still,moved:e.character.x>1100,damage:hp-p.hp,y:e.character.y};
+    };
+    const hit=run(false),miss=run(true);
+    e.respawn(900,700);e.beginWindup(0,200,0);e.interrupt(700);e.update(1000,.05,p,s.walkArea,s.nav,s.onEnemyStrike);
+    return {hit,miss,interrupted:e.character.x===900};
+  })()`);
+  assert.equal(r.hit.still,true);assert.equal(r.hit.moved,true);assert.equal(r.hit.damage,12);
+  assert.equal(r.miss.damage,0);assert.equal(r.miss.y,700);assert.equal(r.interrupted,true);
+});
+
+test('새 몬스터도 실제 검날에 맞아 쓰러지고 종류별 경험치를 주며 버섯 물방울은 일시정지 중 멈춘다', async () => {
+  const kills=[];
+  for(const [map,kind] of [['south-field','slime'],['west-forest','waterdrop-mushroom'],['west-forest','iron-scale-lizard']]) {
+    await load(map);
+    kills.push(await evaluate(`(() => {
+      const s=window.__game.scene.getScene('game'),p=s.player,e=s.enemies.find(e=>e.kind==='${kind}');
+      for(const other of s.enemies) { other.character.placeAt(200,1400);other.state='recover';other.timer=1e12; }
+      p.revive(1000,700);e.character.revive(1110,700);e.character.hp=1;
+      s.wantsAttack=()=>false;s.now=0;s.nextAttackAt=0;s.comboStage=0;
+      let xp=0;s.gainXp=(amount)=>{xp+=amount;};
+      s.startAttack(0,1,0);
+      for(let i=0;i<50;i++)s.update(0,16);
+      return {kind:e.kind,dead:e.state==='dead',xp};
+    })()`));
+  }
+  assert.deepEqual(kills,[{kind:'slime',dead:true,xp:10},{kind:'waterdrop-mushroom',dead:true,xp:12},{kind:'iron-scale-lizard',dead:true,xp:18}]);
+  await load('west-forest');
+  const paused=await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'),e=s.enemies.find(e=>e.kind==='waterdrop-mushroom');
+    e.character.placeAt(900,700);s.player.placeAt(1200,700);e.fireProjectile(s.now);
+    const x=e.projectile.x,now=s.now;s.openPause();
+    for(let i=0;i<20;i++)s.update(0,50);
+    return s.now===now&&e.projectile.x===x;
+  })()`);
+  assert.equal(paused,true);
 });

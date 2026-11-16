@@ -1,3 +1,4 @@
+import { MAP_SIZE_SCALE } from '../config.ts';
 import type { Obstacle } from './obstacles.ts';
 import type { BuildingFrame } from './villageLayout.ts';
 
@@ -155,7 +156,8 @@ const ROOMS: readonly [InteriorId, BuildingFrame, string, number][] = [
   ['smithy', 'smithy', '대장간', 1100], ['inn', 'inn', '여관', 1400],
 ];
 
-export const INTERIORS: Interior[] = ROOMS.map(([id, building, name, width]) => {
+export const INTERIORS: Interior[] = ROOMS.map(([id, building, name, baseWidth]) => {
+  const width = baseWidth * MAP_SIZE_SCALE;
   const art = INTERIOR_ART[id], [left, top, right, bottom] = art.floor;
   const scale = width / (right - left);
   return {

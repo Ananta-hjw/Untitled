@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { FIELD_SCALE } from '../src/world/southFieldLayout.ts';
 import { DIALOGUES } from '../src/story/dialogues.ts';
 import { findInteractable } from '../src/world/interactables.ts';
 import { MAPS, START_MAP, findExit, insideRect, isMapId, mapObstacles, walkable } from '../src/world/maps.ts';
@@ -95,7 +96,7 @@ test('마을 광장에서 세 사냥터와 마을 북쪽으로, 사냥터에서 
 });
 
 test('남쪽 들판은 원화의 물가를 막고, 다리와 흙길은 열며 나무·바위의 접점을 막는다', () => {
-  const field = MAPS['south-field'], scale = 2400 / 1536;
+  const field = MAPS['south-field'], scale = FIELD_SCALE;
   const canWalk = (x, y) => walkable(field, x * scale, y * scale);
   assert.equal(canWalk(1350, 440), true, '다리 위');
   assert.equal(canWalk(1350, 560), false, '다리 아래의 개울');

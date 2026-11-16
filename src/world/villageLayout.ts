@@ -1,3 +1,4 @@
+import { WORLD_WIDTH, WORLD_HEIGHT } from '../config.ts';
 import type { Obstacle } from './obstacles';
 
 /**
@@ -14,7 +15,7 @@ import type { Obstacle } from './obstacles';
 
 export const PLAYER_SPAWN = { x: 430, y: 640 };
 // Reserve room for the full walking sprite and its name plate at camera boundaries.
-export const WALK_BOUNDS = { left: 64, top: 224, right: 2336, bottom: 1560 };
+export const WALK_BOUNDS = { left: 64, top: 224, right: WORLD_WIDTH - 64, bottom: WORLD_HEIGHT - 40 };
 
 /** 마을의 두 맵 (maps.ts의 MapId와 같은 이름) */
 export type VillageArea = 'village' | 'village-north';

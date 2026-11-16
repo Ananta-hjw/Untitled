@@ -1,7 +1,8 @@
+import { WORLD_WIDTH } from '../config.ts';
 import type { Obstacle } from './obstacles.ts';
 
-/** 남쪽 들판 원화(1536×1024)를 2400×1600 월드에 같은 비율로 표시한다. */
-export const FIELD_SCALE = 2400 / 1536;
+/** 남쪽 들판 원화(1536×1024)를 확장된 월드에 같은 비율로 표시한다. */
+export const FIELD_SCALE = WORLD_WIDTH / 1536;
 
 // 물가를 따라 걷기 경계를 잡고, 다리 위만 동쪽으로 돌출시킨다.
 const SHORE = [

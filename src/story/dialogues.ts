@@ -31,11 +31,11 @@ export const DIALOGUES = {
     { speaker: HERO_NAME, portrait: 'hero-neutral', text: '표지판에 누가 수확제 리본을 묶어 놨네. 리네아 솜씨다.' },
   ],
   'south-field-sign': [
-    { speaker: '표지판', text: '남쪽 들판\n북쪽: 로웬 마을 (슬라임 출몰 주의)' },
+    { speaker: '표지판', text: '남쪽 들판\n북쪽: 로웬 마을 (슬라임·물방울 버섯 출몰 주의)' },
     { speaker: HERO_NAME, portrait: 'hero-neutral', text: '풀이 무릎까지 자랐네. 슬라임이 숨어 있기 딱 좋겠어.' },
   ],
   'west-forest-sign': [
-    { speaker: '표지판', text: '서쪽 숲길\n동쪽: 로웬 마을' },
+    { speaker: '표지판', text: '서쪽 숲길\n동쪽: 로웬 마을\n물방울 버섯·쇠비늘 도마뱀 출몰 주의' },
     { speaker: HERO_NAME, portrait: 'hero-neutral', text: '나무가 빽빽해서 낮인데도 어둑하다. 길을 잃지 않게 조심하자.' },
   ],
   'east-stream-sign': [

@@ -1,3 +1,4 @@
+import type { MonsterKind } from '../combat/monsterTypes.ts';
 import { HERO_NAME, type DialogueLine } from './dialogues.ts';
 import type { NpcId } from '../world/npcs.ts';
 import type { MapId } from '../world/maps.ts';
@@ -18,7 +19,7 @@ export type QuestId = 'ruan-training' | 'ruan-field' | 'ruan-forest' | 'doran-ge
 
 /** 게임에서 일어나서 퀘스트 목표를 채우는 일 */
 export type QuestEvent =
-  | { type: 'kill'; map: MapId; encounter?: 'village-raid' }
+  | { type: 'kill'; map: MapId; monster?: MonsterKind; encounter?: 'village-raid' }
   | { type: 'finisher' }
   | { type: 'talk'; npc: NpcId }
   | { type: 'inspect'; spot: 'south-watch' | 'home-search'; map: MapId };
@@ -34,6 +35,7 @@ export interface QuestObjective {
   npc?: NpcId;
   spot?: string;
   encounter?: 'village-raid';
+  monster?: MonsterKind;
   lines?: DialogueLine[];
 }
 
@@ -84,7 +86,7 @@ export const QUESTS: QuestDef[] = [
   },
   {
     id: 'ruan-field', title: '들판의 슬라임', giver: 'ruan', main: true, requires: 'ruan-training',
-    objective: { label: '남쪽 들판의 슬라임', need: 5, event: 'kill', map: 'south-field' },
+    objective: { label: '남쪽 들판의 슬라임', need: 5, event: 'kill', map: 'south-field', monster: 'slime' },
     rewardXp: 30, rewardGold: 50,
     offer: [
       ruan('실전 감각을 익혀라. 남쪽 입구로 나가면 들판에 슬라임이 있다.'),
@@ -200,7 +202,7 @@ export const QUESTS: QuestDef[] = [
   },
   {
     id: 'doran-gel', title: '담금질 재료', giver: 'doran',
-    objective: { label: '슬라임 처치 (점액 모으기)', need: 5, event: 'kill' },
+    objective: { label: '슬라임 처치 (점액 모으기)', need: 5, event: 'kill', monster: 'slime' },
     rewardXp: 20, rewardGold: 30,
     offer: [
       line('doran', '도란', '마침 잘 왔다! 슬라임 점액이 담금질에 그만이거든.'),
@@ -345,7 +347,7 @@ export function recordEvent(state: QuestState, event: QuestEvent): { state: Ques
     const o = currentObjective(q, state[q.id]);
     if (state[q.id]?.status !== 'active' || o.event !== event.type || event.type === 'talk') continue;
     if ('map' in event && o.map && o.map !== event.map) continue;
-    if (event.type === 'kill' && o.encounter !== event.encounter) continue;
+    if (event.type === 'kill' && (o.encounter !== event.encounter || (o.monster && o.monster !== event.monster))) continue;
     if (event.type === 'inspect' && o.spot !== event.spot) continue;
     next = advance(next, q, 1);
     updates.push({ quest: q, count: Math.min(o.need, state[q.id]!.count + 1), need: o.need, ready: next[q.id]!.status === 'ready' });

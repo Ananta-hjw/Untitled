@@ -9,6 +9,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1] / 'src/assets/monsters'
 MONSTERS = ['slime', 'waterdrop-mushroom', 'iron-scale-lizard', 'frost-beetle']
+WALK_ONLY = ['ashen-moth', 'corrosion-tracker', 'corrosion-executioner']
 DIRECTIONS = {
     'cardinal': ['down', 'left', 'right', 'up'],
     'diagonal': ['down-left', 'down-right', 'up-left', 'up-right'],
@@ -17,7 +18,7 @@ DIRECTIONS = {
 
 def build(name):
     frames, sheets, rows = [], {}, []
-    for animation in ['walk', 'attack']:
+    for animation in (['walk'] if name in WALK_ONLY else ['walk', 'attack']):
         for kind, directions in DIRECTIONS.items():
             filename = f'{animation}_{kind}.png'
             with Image.open(ROOT / name / filename) as image:
@@ -75,12 +76,16 @@ def build(name):
         'sheets': sheets, 'frames': frames,
         'anchorNote': 'Fixed idle silhouette center and baseline per direction; scales measured from idle area. Verify contact and projectile origins on game integration.',
     }
+    if name in WALK_ONLY:
+        del data['animations']['attack']
+    if name == 'ashen-moth':
+        data['anchorNote'] = 'Fixed idle silhouette pivot per direction for hovering flight; wings move around this pivot. Set flight height on game integration.'
     (ROOT / name / 'animation_frames.json').write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
-    print(f'{name}: {len(frames)} frames, 8 directions, movement + attack')
+    print(f'{name}: {len(frames)} frames, 8 directions, ' + ('movement' if name in WALK_ONLY else 'movement + attack'))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--monsters', nargs='+', choices=MONSTERS, default=MONSTERS)
+    parser.add_argument('--monsters', nargs='+', choices=MONSTERS + WALK_ONLY, default=MONSTERS + WALK_ONLY)
     for monster in parser.parse_args().monsters:
         build(monster)

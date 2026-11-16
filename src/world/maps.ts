@@ -1,5 +1,6 @@
+import type { EnemyKey } from '../combat/monsterTypes.ts';
 import { FIELD_BOUNDS, FIELD_OBSTACLES, FIELD_POLYGON, insidePolygon } from './southFieldLayout.ts';
-import { WORLD_HEIGHT, WORLD_WIDTH } from '../config.ts';
+import { MAP_SIZE_SCALE, WORLD_HEIGHT, WORLD_WIDTH } from '../config.ts';
 import type { DialogueId } from '../story/dialogues.ts';
 import { INTERACTABLES, type Interactable } from './interactables.ts';
 import { insideObstacle, type Obstacle } from './obstacles.ts';
@@ -39,7 +40,7 @@ export interface MapExit {
   labelAt: Point;
 }
 
-export interface MapEnemySpawn { key: 'slime-green' | 'slime-blue'; x: number; y: number }
+export interface MapEnemySpawn { key: Exclude<EnemyKey, 'retainer-ash'>; x: number; y: number }
 
 export interface GameMap {
   id: MapId;
@@ -76,7 +77,8 @@ function sign(id: string, x: number, y: number, dialogue: DialogueId): { prop: V
   };
 }
 
-const southSign = sign('south-field-sign', 1420, 330, 'south-field-sign');
+const fieldPoint = (x: number, y: number): Point => ({ x: Math.round(x * MAP_SIZE_SCALE * 1000) / 1000, y: Math.round(y * MAP_SIZE_SCALE * 1000) / 1000 });
+const southSign = sign('south-field-sign', 1420 * MAP_SIZE_SCALE, 330 * MAP_SIZE_SCALE, 'south-field-sign');
 const forestSign = sign('west-forest-sign', 2180, 900, 'west-forest-sign');
 const streamSign = sign('east-stream-sign', 260, 760, 'east-stream-sign');
 
@@ -115,7 +117,7 @@ const VILLAGE: GameMap = {
       arrive: { x: LINK_X, y: 1440 }, label: '▲ 마을 북쪽 (집)', labelAt: { x: LINK_X, y: 300 } },
     // 남쪽 입구 아치의 두 기둥 사이로 나간다.
     { to: 'south-field', zone: { left: SOUTH_GATE_PASSAGE.left, top: 1500, right: SOUTH_GATE_PASSAGE.right, bottom: WORLD_HEIGHT },
-      arrive: { x: 1180, y: 420 }, label: '▼ 남쪽 들판', labelAt: { x: 1181, y: 1478 } },
+      arrive: fieldPoint(1180, 420), label: '▼ 남쪽 들판', labelAt: { x: 1181, y: 1478 } },
     { to: 'west-forest', zone: { left: 0, top: 940, right: 112, bottom: 1160 },
       arrive: { x: 2150, y: 1050 }, label: '◀ 서쪽 숲길', labelAt: { x: 150, y: 1000 } },
     { to: 'east-stream', zone: { left: 2290, top: 960, right: WORLD_WIDTH, bottom: 1140 },
@@ -128,23 +130,23 @@ const VILLAGE: GameMap = {
 const SOUTH_FIELD: GameMap = {
   id: 'south-field',
   name: '남쪽 들판',
-  hint: '남쪽 들판 · 슬라임이 나타납니다',
+  hint: '남쪽 들판 · 슬라임과 물방울 버섯이 나타납니다',
   bounds: FIELD_BOUNDS,
   walkPolygon: FIELD_POLYGON,
   obstacles: FIELD_OBSTACLES,
   props: [southSign.prop],
   buildings: [],
   npcs: [],
-  spawn: { x: 1180, y: 420 },
+  spawn: fieldPoint(1180, 420),
   enemies: [
-    { key: 'slime-green', x: 1800, y: 1000 },
-    { key: 'slime-blue', x: 1600, y: 1200 },
-    { key: 'slime-green', x: 600, y: 1150 },
-    { key: 'slime-blue', x: 1000, y: 1430 },
+    ...[[1800, 1000], [600, 1150], [400, 700], [900, 1000], [1700, 900]].map(([x, y]): MapEnemySpawn =>
+      ({ key: 'slime-green', ...fieldPoint(x, y) })),
+    ...[[1600, 1200], [1000, 1430], [500, 1400], [1400, 1080], [1800, 700]].map(([x, y]): MapEnemySpawn =>
+      ({ key: 'waterdrop-mushroom', ...fieldPoint(x, y) })),
   ],
   exits: [
-    { to: 'village', zone: { left: 1040, top: 0, right: 1320, bottom: 290 },
-      arrive: { x: 1180, y: 1420 }, label: '▲ 로웬 마을', labelAt: { x: 1180, y: 262 } },
+    { to: 'village', zone: { left: 1040 * MAP_SIZE_SCALE, top: 0, right: 1320 * MAP_SIZE_SCALE, bottom: 290 * MAP_SIZE_SCALE },
+      arrive: { x: 1180, y: 1420 }, label: '▲ 로웬 마을', labelAt: fieldPoint(1180, 262) },
   ],
   interactables: [southSign.spot],
 };
@@ -152,7 +154,7 @@ const SOUTH_FIELD: GameMap = {
 const WEST_FOREST: GameMap = {
   id: 'west-forest',
   name: '서쪽 숲길',
-  hint: '서쪽 숲길 · 나무 사이를 조심하세요',
+  hint: '서쪽 숲길 · 버섯의 물방울과 도마뱀의 돌진을 조심하세요',
   bounds: FULL_BOUNDS,
   props: [
     ...([
@@ -177,10 +179,10 @@ const WEST_FOREST: GameMap = {
   groundTint: 0xb9cfa4,
   spawn: { x: 2150, y: 1050 },
   enemies: [
-    { key: 'slime-green', x: 900, y: 700 },
-    { key: 'slime-blue', x: 600, y: 1150 },
-    { key: 'slime-green', x: 1300, y: 1350 },
-    { key: 'slime-blue', x: 1500, y: 700 },
+    ...[[900, 700], [1300, 1350], [400, 900], [1500, 1050], [1800, 450]].map(([x, y]): MapEnemySpawn =>
+      ({ key: 'waterdrop-mushroom', x, y })),
+    ...[[600, 1150], [1500, 700], [600, 450], [1200, 600], [1600, 1400]].map(([x, y]): MapEnemySpawn =>
+      ({ key: 'iron-scale-lizard', x, y })),
   ],
   exits: [
     { to: 'village', zone: { left: 2290, top: 940, right: WORLD_WIDTH, bottom: 1160 },
@@ -220,6 +222,8 @@ const EAST_STREAM: GameMap = {
     { key: 'slime-blue', x: 1200, y: 750 },
     { key: 'slime-green', x: 1700, y: 1150 },
     { key: 'slime-blue', x: 2000, y: 650 },
+    { key: 'slime-green', x: 900, y: 1100 },
+    { key: 'slime-green', x: 1450, y: 1350 },
   ],
   exits: [
     { to: 'village', zone: { left: 0, top: 820, right: 110, bottom: 1000 },
