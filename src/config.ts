@@ -13,9 +13,9 @@ export const FLOOR_TOP = 400;
 export const PLAYER_SPEED = 300;
 /**
  * 주인공 걷기 그림을 기본 속도(초당 8장)로 넘길 때 발이 바닥에 맞는 이동 속도(px/초).
- * 걷기 그림은 실제 이동 속도 ÷ 이 값의 배율로 넘긴다. 전속력(300)에서는 2배 빠르게 넘겨 발이 미끄러지지 않는다.
+ * 걷기 그림은 실제 이동 속도 ÷ 이 값의 배율로 넘긴다. 전속력(300)에서 약 1.4배(초당 11장)로, 팔다리가 너무 바쁘게 움직이지 않게 보폭을 넉넉히 잡았다.
  */
-export const HERO_WALK_NATURAL_SPEED = 150;
+export const HERO_WALK_NATURAL_SPEED = 220;
 export const VERTICAL_SPEED_RATIO = 0.7;
 
 /** UI는 월드 오브젝트(깊이 = y좌표)보다 항상 위에 그린다. */

@@ -51,7 +51,8 @@ test('마을 사람은 자기 맵의 걸을 수 있는 곳에 서 있고, 출구
   const mapOf = (npc) => MAPS[npc.inside ? `in-${npc.inside}` : npc.area ?? 'village'];
   for (const npc of NPCS) {
     const map = mapOf(npc);
-    assert.equal(walkable(map, npc.x, npc.y), true, npc.id);
+    // 장사하는 사람은 카운터 뒤처럼 손님이 못 들어가는 곳에 설 수 있다. 대신 말을 거는 자리는 걸을 수 있어야 한다.
+    if (!npc.shop) assert.equal(walkable(map, npc.x, npc.y), true, npc.id);
     assert.equal(findExit(map, npc.x, npc.y), undefined, npc.id);
     assert.ok(Math.hypot(npc.x - map.spawn.x, npc.y - map.spawn.y) > 110, `${npc.id} on spawn`);
     // 말을 거는 자리(카운터 앞 등)는 걸어서 설 수 있는 곳이다.

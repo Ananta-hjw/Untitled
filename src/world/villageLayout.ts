@@ -49,26 +49,37 @@ export interface Building {
 const wall = (left: number, top: number, right: number, bottom: number): Obstacle =>
   ({ x: (left + right) / 2, y: (top + bottom) / 2, rx: (right - left) / 2, ry: (bottom - top) / 2, shape: 'rect' });
 
+/**
+ * 건물 그림이 땅을 차지하는 영역 전체를 막는 벽. 그림 아래 끝(y)보다 FRONT만큼 앞까지, 그림 양옆보다 SIDE만큼 바깥까지 막는다.
+ * 캐릭터는 발(y)로 깊이를 정하므로, 발이 그림 아래 끝보다 위에 있으면 건물 그림에 몸이 가려져
+ * 문 앞에서 위로 걷거나 옆에서 다가갈 때 건물 안으로 걸어 들어가는 것처럼 보였다.
+ * 이렇게 막으면 앞과 옆에서는 늘 건물 앞에 그려진다(뒤쪽 지붕에 가려지는 것은 그대로 둔다).
+ */
+const FRONT = 6;
+const SIDE = 24;
+const body = (x: number, y: number, width: number, top: number): Obstacle =>
+  wall(x - width / 2 - SIDE, top, x + width / 2 + SIDE, y + FRONT);
+
 // 북쪽 맵 위쪽 줄 건물(시온의 집, 촌장의 집, 치유소)은 뒤쪽 벽이 걸을 수 있는 영역의 위쪽 끝에 닿아,
 // 지붕 뒤의 좁은 틈으로 들어가 캐릭터가 통째로 가려지는 일이 없다.
 export const BUILDINGS: Building[] = [
   { frame: 'family-house', area: 'village-north', x: 430, y: 540, width: 500, label: '시온의 집',
-    footprint: [wall(200, WALK_BOUNDS.top, 660, 532)], door: { x: 415, y: 580 } },
+    footprint: [body(430, 540, 500, WALK_BOUNDS.top)], door: { x: 415, y: 580 } },
   { frame: 'chief-house', area: 'village-north', x: 1180, y: 470, width: 380, label: '촌장의 집',
-    footprint: [wall(1000, WALK_BOUNDS.top, 1360, 462)], door: { x: 1180, y: 510 } },
+    footprint: [body(1180, 470, 380, WALK_BOUNDS.top)], door: { x: 1180, y: 510 } },
   { frame: 'clinic', area: 'village-north', x: 1950, y: 500, width: 540, label: '치유소',
-    footprint: [wall(1700, WALK_BOUNDS.top, 2200, 492)], door: { x: 1912, y: 540 } },
+    footprint: [body(1950, 500, 540, WALK_BOUNDS.top)], door: { x: 1912, y: 540 } },
   // 리네아의 집: 시온의 집 아래쪽 꽃밭 옆 낮은 오두막 (1장의 창문 매듭 장면)
   { frame: 'linea-house', area: 'village-north', x: 720, y: 1100, width: 380, label: '리네아의 집',
-    footprint: [wall(540, 985, 900, 1093)], door: { x: 700, y: 1140 } },
+    footprint: [body(720, 1100, 380, 985)], door: { x: 700, y: 1140 } },
   { frame: 'training-hall', area: 'village', x: 450, y: 990, width: 520, label: '수련소',
-    footprint: [wall(205, 840, 695, 982)], door: { x: 450, y: 1030 } },
+    footprint: [body(450, 990, 520, 840)], door: { x: 450, y: 1030 } },
   { frame: 'general-store', area: 'village', x: 1960, y: 900, width: 420, label: '잡화점',
-    footprint: [wall(1770, 700, 2150, 892)], door: { x: 1960, y: 940 } },
+    footprint: [body(1960, 900, 420, 700)], door: { x: 1960, y: 940 } },
   { frame: 'smithy', area: 'village', x: 470, y: 1460, width: 520, label: '대장간',
-    footprint: [wall(225, 1270, 715, 1452)], door: { x: 402, y: 1500 } },
+    footprint: [body(470, 1460, 520, 1270)], door: { x: 402, y: 1500 } },
   { frame: 'inn', area: 'village', x: 1930, y: 1460, width: 600, label: '여관',
-    footprint: [wall(1650, 1260, 2210, 1452)], door: { x: 1858, y: 1500 } },
+    footprint: [body(1930, 1460, 600, 1260)], door: { x: 1858, y: 1500 } },
   // 남쪽 입구: 왼쪽 초소와 오른쪽 행상 수레 사이, 아치 기둥 안쪽만 지나갈 수 있다.
   { frame: 'south-gate', area: 'village', x: 1174, y: 1560, width: 640, label: '',
     footprint: [wall(867, 1370, 1134, 1600), wall(1228, 1440, 1481, 1600)], door: { x: 1181, y: 1440 } },

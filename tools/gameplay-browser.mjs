@@ -1021,12 +1021,15 @@ test('건물 문 앞에서 들어가기를 누르면 실내로 들어가고, 아
     const counter = s.map.interior.furniture.find(f => f.kind === 'counter');
     const room = s.map.bounds;
     const blocked = !s.walkArea.contains(room.left + counter.x, room.top + counter.y - counter.d / 2);
-    // 아래쪽 문으로 나간다.
-    const exit = s.map.exits[0];
-    s.player.placeAt((exit.zone.left + exit.zone.right) / 2, room.bottom - 2); step();
+    // 문 근처를 지나가기만 해서는 나가지 않는다.
+    const exitSpot = s.interactables.find(i => i.id === 'exit-inn');
+    s.player.placeAt(exitSpot.x, exitSpot.y - 10); step(3);
+    const nearDoor = { map: s.mapId, button: s.talkButton.text.text, visible: s.talkButton.image.visible, marker: s.talkMarker.text };
+    // 나가기 버튼을 누르면 나간다.
+    s.talkButton.pressed = true; step();
     await waitMap('village');
     step(2);
-    return { atDoor, started, inside, blocked, back: { map: s.mapId, x: s.player.x, y: s.player.y, door: { x: door.x, y: door.y } } };
+    return { atDoor, started, inside, blocked, nearDoor, back: { map: s.mapId, x: s.player.x, y: s.player.y, door: { x: door.x, y: door.y } } };
   })()`);
   assert.equal(result.atDoor.visible, true);
   assert.equal(result.atDoor.button, '들어가기');
@@ -1037,6 +1040,7 @@ test('건물 문 앞에서 들어가기를 누르면 실내로 들어가고, 아
   assert.deepEqual([result.inside.npcs, result.inside.enemies, result.inside.minimap], [1, 0, '여관'], '여관 안에는 로제타가 있다');
   assert.equal(result.inside.bounds, true);
   assert.equal(result.blocked, true);
+  assert.deepEqual(result.nearDoor, { map: 'in-inn', button: '나가기', visible: true, marker: '▼ 나가기' });
   assert.equal(result.back.map, 'village');
   assert.ok(Math.hypot(result.back.x - result.back.door.x, result.back.y - result.back.door.y) < 40);
 });
@@ -1260,9 +1264,11 @@ test('원화가 있는 실내 여덟 곳과 남쪽 들판은 해당 그림만 �
     if (id === 'south-field') assert.ok(art.foreground.every(c => c.width < 1000), '전경이 배경 전체를 덮지 않는다');
     else {
       const back = await evaluate(`(async () => {
-        const g = window.__game, s = g.scene.getScene('game'), exit = s.map.exits[0];
+        const g = window.__game, s = g.scene.getScene('game'), spot = s.interactables.find(i => i.enter), exit = spot.enter;
         let t = performance.now();
-        s.player.placeAt((exit.zone.left + exit.zone.right) / 2, exit.zone.top + 2);
+        s.player.placeAt(spot.x, spot.y - 10);
+        for (let i = 0; i < 3; i++) g.step(t += 16, 16);
+        s.talkButton.pressed = true;
         for (let i = 0; i < 300; i++) {
           g.step(t += 16, 16);
           if (s.mapId === exit.to && s.sys.isActive() && s.minimap) return { map: s.mapId, expected: exit.to, walkable: s.walkArea.contains(s.player.x, s.player.y) };

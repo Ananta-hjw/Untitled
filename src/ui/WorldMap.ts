@@ -1,13 +1,11 @@
 import Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
-import { MARKER_STYLE } from '../entities/Npc';
-import type { QuestMarker } from '../story/quests';
 import { REGIONS, ROUTES, type RegionId } from '../world/worldMap';
 
 /**
  * 전체 지도 화면. 미니맵을 누르거나 M 키로 연다.
  * 지역을 칸으로 놓고 길을 잇는다. 가 본 곳은 땅 그림과 이름, 안 가 본 곳은 "?"로 보여 준다.
- * 지금 있는 지역은 테두리와 점으로, 퀘스트가 걸린 지역은 !/? 표시로 알려 준다.
+ * 지금 있는 지역은 테두리와 점으로 알려 준다. 퀘스트 표시는 띄우지 않는다.
  * 열려 있는 동안 씬은 게임 시계를 멈춘다. 객체는 처음에 만들어 두고 다시 쓴다.
  */
 
@@ -24,7 +22,6 @@ interface Card {
   details: Phaser.GameObjects.Graphics;
   name: Phaser.GameObjects.Text;
   unknown: Phaser.GameObjects.Text;
-  marker: Phaser.GameObjects.Text;
 }
 
 export class WorldMap {
@@ -38,7 +35,6 @@ export class WorldMap {
   private width = 0;
   private current: RegionId = 'village';
   private visited = new Set<RegionId>();
-  private markers = new Map<RegionId, QuestMarker>();
 
   constructor(private readonly scene: Phaser.Scene, private readonly onClose: () => void) {
     this.shade = scene.add.rectangle(0, 0, 10, VIEW_HEIGHT, 0x000000, 0.65).setOrigin(0).setScrollFactor(0).setDepth(DEPTH);
@@ -53,8 +49,7 @@ export class WorldMap {
       const details = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH + 3);
       const name = this.text(region.name, 19, '#fff4d6').setOrigin(0.5).setStroke('#1a1008', 5).setDepth(DEPTH + 4);
       const unknown = this.text('?', 64, '#8a7f6e').setOrigin(0.5).setDepth(DEPTH + 4);
-      const marker = this.text('', 34, '#ffd23f').setOrigin(0.5).setStroke('#1a1008', 6).setDepth(DEPTH + 5);
-      this.cards.push({ region: region.id, ground, details, name, unknown, marker });
+      this.cards.push({ region: region.id, ground, details, name, unknown });
     }
     this.setVisible(false);
   }
@@ -63,10 +58,9 @@ export class WorldMap {
     return this.open;
   }
 
-  show(current: RegionId, visited: Set<RegionId>, markers: Map<RegionId, QuestMarker>): void {
+  show(current: RegionId, visited: Set<RegionId>): void {
     this.current = current;
     this.visited = visited;
-    this.markers = markers;
     this.open = true;
     this.setVisible(true);
     this.draw();
@@ -132,9 +126,6 @@ export class WorldMap {
       if (known) this.drawDetails(card.details, region.id, left, top);
       card.name.setVisible(known).setPosition(p.x, top + CARD_H - 16);
       card.unknown.setVisible(!known).setPosition(p.x, p.y - 8);
-      const marker = this.markers.get(region.id);
-      card.marker.setVisible(!!marker).setPosition(left + CARD_W - 14, top + 16);
-      if (marker) card.marker.setText(MARKER_STYLE[marker].text).setColor(MARKER_STYLE[marker].color);
       if (isHere) this.here.setPosition(p.x, p.y - 12);
     }
     this.here.setVisible(true);
@@ -161,8 +152,8 @@ export class WorldMap {
 
   private setVisible(visible: boolean): void {
     for (const o of [this.shade, this.panel, this.title, this.hint, this.here]) o.setVisible(visible);
-    for (const c of this.cards) for (const o of [c.ground, c.details, c.name, c.unknown, c.marker]) o.setVisible(visible && o.visible);
-    if (!visible) for (const c of this.cards) for (const o of [c.ground, c.details, c.name, c.unknown, c.marker]) o.setVisible(false);
+    for (const c of this.cards) for (const o of [c.ground, c.details, c.name, c.unknown]) o.setVisible(visible && o.visible);
+    if (!visible) for (const c of this.cards) for (const o of [c.ground, c.details, c.name, c.unknown]) o.setVisible(false);
   }
 
   private text(content: string, size: number, color: string): Phaser.GameObjects.Text {

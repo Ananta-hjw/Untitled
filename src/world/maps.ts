@@ -5,7 +5,7 @@ import { INTERACTABLES, type Interactable } from './interactables.ts';
 import { insideObstacle, type Obstacle } from './obstacles.ts';
 import { NPCS, type NpcDef } from './npcs.ts';
 import {
-  INTERIORS, arrivalOf, doorOf, furnitureObstacles, interiorFor, roomRect, type Interior, type InteriorId,
+  INTERIORS, arrivalOf, doorOf, furnitureObstacles, interiorFor, interiorWalkPolygon, roomRect, type Interior, type InteriorId,
 } from './interiors.ts';
 import {
   BUILDINGS, NORTH_PROPS, PLAYER_SPAWN, PROPS as VILLAGE_PROPS, SOUTH_GATE_PASSAGE, VILLAGE_LINK, WALK_BOUNDS as VILLAGE_BOUNDS,
@@ -246,18 +246,20 @@ function interiorMap(interior: Interior): GameMap {
   return {
     id: `in-${interior.id}`,
     name: interior.name,
-    hint: `${interior.name} · 아래쪽 문으로 나갈 수 있어요`,
+    hint: `${interior.name} · 문 앞에서 나가기를 누르면 밖으로 나가요`,
     bounds: roomRect(interior),
+    walkPolygon: interiorWalkPolygon(interior),
     props: [],
     buildings: [],
     npcs: NPCS.filter((n) => n.inside === interior.id),
     spawn: arrivalOf(interior),
     enemies: [],
-    exits: [{
-      to: building.area, zone: { left: door.x - 70, top: door.y - 26, right: door.x + 70, bottom: WORLD_HEIGHT },
-      arrive: { x: building.door.x, y: building.door.y + 18 }, label: '▼ 나가기', labelAt: { x: door.x, y: door.y + 74 },
+    // 문 근처를 지나가기만 해도 나가지 않도록, 들어올 때처럼 문 앞에서 "나가기" 버튼으로 나간다.
+    exits: [],
+    interactables: [{
+      id: `exit-${interior.id}`, x: door.x, y: door.y - 15, radius: 90, markerHeight: 150,
+      enter: { to: building.area, at: { x: building.door.x, y: building.door.y + 18 }, label: '나가기' },
     }],
-    interactables: [],
     interior,
   };
 }

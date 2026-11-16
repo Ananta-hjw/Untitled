@@ -83,6 +83,15 @@ test('북쪽 줄 건물 뒤에는 캐릭터가 숨을 틈이 없다', () => {
   }
 });
 
+test('문 앞에서 위로, 옆에서 다가가도 발이 건물 그림 아래 끝보다 위로 가지 않는다 (건물 앞에 그려진다)', () => {
+  for (const b of BUILDINGS.filter((x) => x.frame !== 'south-gate')) {
+    for (let x = b.x - b.width / 2; x <= b.x + b.width / 2; x += 20) {
+      assert.equal(containsIn(b.area, x, b.y - 1), false, `${b.frame} 그림 아래 끝 (${x})`);
+    }
+    for (const side of [-1, 1]) assert.equal(containsIn(b.area, b.x + side * (b.width / 2 + 16), b.y - 20), false, `${b.frame} 옆`);
+  }
+});
+
 /** VP8X(투명 WebP) 머리에서 그림 크기를 읽는다. */
 function webpSize(buffer) {
   assert.equal(buffer.toString('ascii', 0, 4), 'RIFF');

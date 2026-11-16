@@ -110,10 +110,14 @@ test('사냥터의 표지판은 대사가 있고, 시작점에서는 대화 버�
     for (const spot of map.interactables) {
       if (spot.enter) {
         // 건물 문: 들어가는 실내가 있고, 들어가면 걸을 수 있는 자리에 선다.
-        const inside = MAPS[spot.enter.to];
-        assert.ok(inside?.interior, spot.id);
-        assert.equal(walkable(inside, spot.enter.at.x, spot.enter.at.y), true, spot.id);
-        assert.equal(findInteractable(spot.x, spot.y + 20, map.interactables)?.id, spot.id);
+        // 실내의 "나가기": 나가면 바깥 마을의 걸을 수 있는 자리에 선다.
+        const target = MAPS[spot.enter.to];
+        if (map.interior) assert.ok(!target.interior, spot.id);
+        else assert.ok(target?.interior, spot.id);
+        assert.equal(walkable(target, spot.enter.at.x, spot.enter.at.y), true, spot.id);
+        const y = map.interior ? spot.y - 20 : spot.y + 20;
+        assert.equal(findInteractable(spot.x, y, map.interactables)?.id, spot.id);
+        if (map.interior) assert.equal(walkable(map, spot.x, y), true, `${spot.id} 문 앞`);
         continue;
       }
       const lines = DIALOGUES[spot.dialogue];
