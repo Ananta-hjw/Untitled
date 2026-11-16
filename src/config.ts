@@ -163,3 +163,29 @@ export const PROGRESSION = {
   hpPerLevel: 12,
   damagePerLevel: 1.5,
 };
+
+/**
+ * 마나와 회전 베기.
+ *  - 최대 마나 = base + perLevel × (레벨 - 1). 레벨이 오르면 가득 찬다.
+ *  - 게임 시계로 초당 regenPerSecond씩 저절로 차고, 검으로 적을 벨 때마다 perHit씩 찬다.
+ *  - 집·여관에서 쉬거나 치유소에서 치료받으면 가득 찬다.
+ */
+export const MANA = {
+  base: 30,
+  perLevel: 3,
+  regenPerSecond: 0.5,
+  perHit: 2,
+};
+
+/**
+ * 회전 베기(스킬 버튼, 키 K): 마나를 써서 주인공 둘레(지면 타원, 반지름 radius)의 적을 한꺼번에 벤다.
+ * 세 번째 콤보 자세를 쓰고, hitDelayMs 뒤에 한 번 맞힌다. 피해 = 공격력 × damage.
+ */
+export const SPIN_SLASH = {
+  cost: 15,
+  radius: 230,
+  damage: 1.5,
+  knockback: 1.8,
+  hitDelayMs: 180,
+  cooldownMs: 900,
+};

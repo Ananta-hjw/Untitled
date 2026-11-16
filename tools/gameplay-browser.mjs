@@ -1470,6 +1470,35 @@ test('새 몬스터도 실제 검날에 맞아 쓰러지고 종류별 경험치�
   assert.equal(paused,true);
 });
 
+test('회전 베기는 마나를 써서 둘레의 적을 한꺼번에 베고, 마나가 모자라면 쓸 수 없으며, 마나는 다시 찬다', async () => {
+  await load('south-field');
+  await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.length >= 3; })()`));
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+    let t = performance.now();
+    const step = (n) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    const [a, b, c] = s.enemies;
+    a.character.placeAt(p.x - 150, p.y); b.character.placeAt(p.x + 120, p.y + 40);
+    c.character.placeAt(p.x + 900, p.y);
+    const before = [a, b, c].map(e => e.character.hp);
+    const full = s.mp === s.maxMp;
+    s.skillButton.pressed = true;
+    step(2);
+    const spent = s.mp < s.maxMp - 10;
+    step(20);
+    const after = [a, b, c].map(e => e.character.hp);
+    // 마나가 모자라면 쓰지 못한다.
+    s.mp = 1; s.nextSpinAt = 0; step(60);
+    const low = s.mp;
+    s.skillButton.pressed = true; step(2);
+    const blocked = s.spinHitAt === undefined && s.mp >= low;
+    // 저절로 찬다.
+    const regen = s.mp > low;
+    return { full, spent, hitNear: after[0] < before[0] && after[1] < before[1], missFar: after[2] === before[2], blocked, regen };
+  })()`);
+  assert.deepEqual(result, { full: true, spent: true, hitNear: true, missFar: true, blocked: true, regen: true });
+});
+
 test('여관의 로제타에게 쉬어 가거나 집 침대에서 쉬면 체력이 차고, 처음 화면에서 시작하면 그곳에서 이어진다', async () => {
   await load('in-inn');
   const inn = await evaluate(`(() => {
@@ -1510,13 +1539,33 @@ test('여관의 로제타에게 쉬어 가거나 집 침대에서 쉬면 체력�
     s.player.placeAt(bed.x, bed.y + 30);
     s.player.hp = 5;
     s.slowedUntil = s.now + 99999;
+    s.mp = 0;
     let t = performance.now();
     for (let i = 0; i < 3; i++) g.step(t += 16, 16);
     const label = s.talkButton.text.text;
     s.openDialogue(bed);
-    return { label, full: s.player.hp === s.player.maxHp, slowed: s.now < s.slowedUntil, saved: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
+    const base = s.stats.maxHp;
+    return { label, full: s.player.hp === s.player.maxHp, boosted: s.player.maxHp === base + s.herb && s.herb > 0, mpFull: s.mp === s.maxMp, slowed: s.now < s.slowedUntil, saved: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
   })()`);
-  assert.deepEqual(clinic, { label: '치료받기', full: true, slowed: false, saved: 'home' });
+  assert.deepEqual(clinic, { label: '치료받기', full: true, boosted: true, mpFull: true, slowed: false, saved: 'home' });
+
+  // 약초 기운은 맵을 옮겨도 이어지고, 처음 맞으면 사라진다.
+  await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    s.scene.restart({ map: 'south-field', hp: s.player.hp, herb: s.herb }); g.step(performance.now(), 16);
+  })()`);
+  // 남쪽 들판의 몬스터 그림을 읽고 몬스터가 생길 때까지 기다린다.
+  await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.mapId === 'south-field' && s.enemies.length > 0; })()`));
+  const herb = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    const carried = s.mapId === 'south-field' && s.herb > 0 && s.player.maxHp === s.stats.maxHp + s.herb && s.player.hp === s.player.maxHp;
+    const enemy = s.enemies[0], c = enemy.character, p = s.player;
+    c.placeAt(p.x - 60, p.y); c.facing = 1;
+    p.invulnerableUntil = 0;
+    const struck = s.onEnemyStrike(enemy);
+    return { carried, struck, gone: s.herb === 0 && p.maxHp === s.stats.maxHp, hp: p.hp <= s.stats.maxHp };
+  })()`);
+  assert.deepEqual(herb, { carried: true, struck: true, gone: true, hp: true });
 
   // 처음 화면에서 시작하면 마지막으로 쉰 시온의 집 안에서 시작한다.
   const search = '?test=' + ++navigation;

@@ -46,6 +46,18 @@ const clinic = INTERIORS.find((i) => i.id === 'clinic')!;
  */
 export const CLINIC_BED_SPOT = { id: 'heal-clinic', ...interiorArtPoint(clinic, 530, 545), radius: 110, markerHeight: 150 };
 
+/**
+ * 약초 기운: 치유소에서 치료받으면 최대 체력이 기본의 HERB_BONUS_RATIO만큼 오르고 그만큼 채워진다.
+ * 시간으로 끝나지 않고, 처음으로 체력이 깎일 때(맞을 때) 사라진다. 맵을 옮겨도 이어지고,
+ * 쓰러지거나 게임을 다시 켜면 사라진다. 여러 번 치료받아도 겹치지 않는다.
+ */
+export const HERB_BONUS_RATIO = 0.1;
+
+/** 기본 최대 체력에 붙는 약초 기운의 양 */
+export function herbBonus(baseMaxHp: number): number {
+  return Math.max(1, Math.round(baseMaxHp * HERB_BONUS_RATIO));
+}
+
 /** 지금 쉴 수 있는지. 습격의 밤에는 쉴 수 없다. */
 export function canRest(state: QuestState): boolean {
   return chapterPhase(state) !== 'raid';

@@ -1,17 +1,20 @@
 import Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 
-/** 화면에 고정된 정보 표시: 체력·경험치 막대, 버전 표시, 첫 조작 안내, 레벨 업 알림. */
+/** 화면에 고정된 정보 표시: 체력·마나·경험치 막대, 버전 표시, 첫 조작 안내, 레벨 업 알림. */
 
 const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 const BAR = { x: 44, y: 26, width: 300, height: 26 };
-const XP_BAR = { x: BAR.x, y: BAR.y + BAR.height + 9, width: BAR.width, height: 10 };
+const MP_BAR = { x: BAR.x, y: BAR.y + BAR.height + 8, width: BAR.width, height: 14 };
+const XP_BAR = { x: BAR.x, y: MP_BAR.y + MP_BAR.height + 8, width: BAR.width, height: 10 };
 
 export class Hud {
   private readonly scene: Phaser.Scene;
   private readonly bar: Phaser.GameObjects.Graphics;
   private readonly hpText: Phaser.GameObjects.Text;
   private readonly badge: Phaser.GameObjects.Text;
+  private readonly mpBar: Phaser.GameObjects.Graphics;
+  private readonly mpText: Phaser.GameObjects.Text;
   private readonly xpBar: Phaser.GameObjects.Graphics;
   private readonly xpText: Phaser.GameObjects.Text;
   private readonly goldText: Phaser.GameObjects.Text;
@@ -53,6 +56,21 @@ export class Hud {
         fontSize: '17px',
         fontStyle: 'bold',
         color: '#f5ead2',
+        stroke: '#1a1008',
+        strokeThickness: 4,
+      })
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_UI + 1)
+      .setResolution(2);
+
+    this.mpBar = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH_UI);
+    this.mpText = scene.add
+      .text(MP_BAR.x + MP_BAR.width + 12, MP_BAR.y + MP_BAR.height / 2, '', {
+        fontFamily: FONT,
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: '#9fd0ff',
         stroke: '#1a1008',
         strokeThickness: 4,
       })
@@ -148,6 +166,23 @@ export class Hud {
     if (visible) this.slowTint.setAlpha(0.16 * amount);
   }
 
+  /** 마나 막대. 보이는 값(내림한 정수)이 바뀔 때만 부른다. */
+  setMp(mp: number, maxMp: number): void {
+    const { x, y, width, height } = MP_BAR;
+    const bar = this.mpBar;
+    bar.clear();
+    bar.fillStyle(0x1a1008, 0.85);
+    bar.fillRoundedRect(x - 3, y - 3, width + 6, height + 6, 7);
+    bar.fillStyle(0x12223a);
+    bar.fillRoundedRect(x, y, width, height, 5);
+    const ratio = maxMp > 0 ? mp / maxMp : 0;
+    if (ratio > 0) {
+      bar.fillStyle(0x3f86e0);
+      bar.fillRoundedRect(x, y, Math.max(8, width * ratio), height, 5);
+    }
+    this.mpText.setText(`MP ${mp} / ${maxMp}`);
+  }
+
   /** 경험치가 바뀔 때만 부른다. need가 0이면 최고 레벨이다. */
   setXp(level: number, xp: number, need: number): void {
     const { x, y, width, height } = XP_BAR;
@@ -185,7 +220,8 @@ export class Hud {
     this.goldText.setText(`● ${gold.toLocaleString()} G`);
   }
 
-  setHp(hp: number, maxHp: number): void {
+  /** herb: 약초 기운으로 늘어난 최대 체력. 막대 끝의 그만큼을 초록색으로 그린다. */
+  setHp(hp: number, maxHp: number, herb = 0): void {
     const { x, y, width, height } = BAR;
     const ratio = hp / maxHp;
     const bar = this.bar;
@@ -195,10 +231,19 @@ export class Hud {
     bar.fillStyle(0x3a1512);
     bar.fillRoundedRect(x, y, width, height, 7);
     if (ratio > 0) {
-      bar.fillStyle(ratio > 0.3 ? 0xc8443a : 0xe07a2e);
-      bar.fillRoundedRect(x, y, Math.max(14, width * ratio), height, 7);
+      const filled = Math.max(14, width * ratio);
+      const base = (maxHp - herb) / maxHp * width;
+      if (herb > 0 && filled > base) {
+        bar.fillStyle(0x5fae5a);
+        bar.fillRoundedRect(x, y, filled, height, 7);
+        bar.fillStyle(0xc8443a);
+        bar.fillRoundedRect(x, y, base, height, { tl: 7, bl: 7, tr: 0, br: 0 });
+      } else {
+        bar.fillStyle(ratio > 0.3 ? 0xc8443a : 0xe07a2e);
+        bar.fillRoundedRect(x, y, filled, height, 7);
+      }
     }
-    this.hpText.setText(`HP ${hp} / ${maxHp}`);
+    this.hpText.setText(herb > 0 ? `HP ${hp} / ${maxHp}  약초 +${herb}` : `HP ${hp} / ${maxHp}`);
   }
 
   layout(width: number): void {

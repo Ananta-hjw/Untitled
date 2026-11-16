@@ -24,7 +24,10 @@ import {
   WORLD_WIDTH,
   HIT_FEEL,
   HERO_WALK_NATURAL_SPEED,
+  MANA,
+  SPIN_SLASH,
 } from '../config';
+import { addMana, inSpinRadius, maxManaForLevel, regenMana } from '../combat/mana';
 import { dodgeDistanceRatio, lungeProgress, locomotionRate } from '../entities/movement';
 import { Character } from '../entities/Character';
 import { addXp, statsForLevel, xpToNext, type LevelStats, type Progress } from '../entities/progression';
@@ -52,7 +55,7 @@ import { PerfOverlay } from '../ui/PerfOverlay';
 import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
 import { StoryChoice } from '../ui/StoryChoice';
-import { CLINIC_BED_SPOT, HOME_BED_SPOT, REST_POINTS, REST_SAVE_KEY, canRest, parseRestPoint, serializeRestPoint, type RestPointId } from '../story/restPoints';
+import { CLINIC_BED_SPOT, HOME_BED_SPOT, REST_POINTS, herbBonus, REST_SAVE_KEY, canRest, parseRestPoint, serializeRestPoint, type RestPointId } from '../story/restPoints';
 import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, isDusk, raidSpawns, INSPECTION_LINES } from '../story/chapterOne';
 import {
   currentObjective, MARKER_PRIORITY, QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestMarker, type QuestState,
@@ -85,6 +88,10 @@ interface SceneData {
   at?: Point;
   /** 맵을 옮길 때 이어지는 체력. 한 번 쓰고 지운다. */
   hp?: number;
+  /** 맵을 옮길 때 이어지는 약초 기운(최대 체력 보너스). 한 번 쓰고 지운다. */
+  herb?: number;
+  /** 맵을 옮길 때 이어지는 마나. 한 번 쓰고 지운다. */
+  mp?: number;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -158,6 +165,20 @@ export class GameScene extends Phaser.Scene {
   private map: GameMap = MAPS[START_MAP];
   private arrival?: Point;
   private carriedHp?: number;
+  private carriedHerb?: number;
+  /** 약초 기운: 치유소에서 치료받으면 붙는 최대 체력 보너스. 처음 맞을 때 사라진다. 0이면 없음 */
+  private herb = 0;
+  /** 마나 (소수로 흘러가고, 화면에는 내림한 값) */
+  private mp = 0;
+  private maxMp = 0;
+  /** HUD에 마지막으로 그린 마나(정수). 바뀔 때만 다시 그린다. */
+  private shownMp = -1;
+  private carriedMp?: number;
+  /** 회전 베기가 맞히는 시각 (게임 시계). 없으면 쓰는 중이 아님 */
+  private spinHitAt?: number;
+  private nextSpinAt = 0;
+  private skillButton?: ActionButton;
+  private skillKeys: Phaser.Input.Keyboard.Key[] = [];
   /** 다른 맵으로 옮겨 가는 중(화면이 어두워지는 동안). 그동안 게임은 멈춘다. */
   private traveling = false;
   private nav!: NavGrid;
@@ -217,6 +238,10 @@ export class GameScene extends Phaser.Scene {
     this.carriedHp = data.hp;
     // 같은 data가 다음 재시작에도 다시 넘어오므로, 체력은 한 번만 이어 받는다.
     data.hp = undefined;
+    this.carriedHerb = data.herb;
+    data.herb = undefined;
+    this.carriedMp = data.mp;
+    data.mp = undefined;
     // 저장된 진행 상황이 있으면 그 레벨로 시작한다 (재시작 포함).
     this.storage = browserStorage();
     this.quests = this.loadQuests();
@@ -299,6 +324,16 @@ export class GameScene extends Phaser.Scene {
     this.traveling = false;
     this.arrival = undefined;
     this.carriedHp = undefined;
+    this.carriedHerb = undefined;
+    this.herb = 0;
+    this.mp = 0;
+    this.maxMp = 0;
+    this.shownMp = -1;
+    this.carriedMp = undefined;
+    this.spinHitAt = undefined;
+    this.nextSpinAt = 0;
+    this.skillButton = undefined;
+    this.skillKeys = [];
   }
 
   preload(): void {
@@ -345,6 +380,9 @@ export class GameScene extends Phaser.Scene {
     this.questTracker = new QuestTracker(this);
     this.potionButton = new ActionButton(this, { x: 0, y: 0, radius: 44, label: '', color: 0x7a3b2a, fontSize: 18 });
     this.potionKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q)] : [];
+    this.skillButton = new ActionButton(this, { x: 0, y: 0, radius: 50, label: `회전베기\nMP ${SPIN_SLASH.cost}`, color: 0x2f5fa8, fontSize: 17 });
+    this.skillButton.setSizeScale(sizeScale(this.settings.buttonSize));
+    this.skillKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K)] : [];
     this.itemPanel = new ItemPanel(this, (action) => this.onItemAction(action), () => this.onResume());
     this.worldMap = new WorldMap(this, this.map, () => this.onResume());
     this.exitHint = new ExitHint(this, this.map);
@@ -475,6 +513,7 @@ export class GameScene extends Phaser.Scene {
     this.damageNumbers.update(gameStep);
     this.updateInteraction(time);
     this.updatePotion(time);
+    this.updateSkill(time, gameStep);
   }
 
   // ---------------------------------------------------------------- 월드
@@ -518,6 +557,14 @@ export class GameScene extends Phaser.Scene {
       shadowWidth: 110,
       maxHp: this.stats.maxHp,
     });
+    if (this.carriedHerb) {
+      // 맵을 옮겨도 약초 기운은 이어진다.
+      this.herb = herbBonus(this.stats.maxHp);
+      this.player.setMaxHp(this.stats.maxHp + this.herb, true);
+    }
+    // 마나: 처음에는 가득, 맵을 옮길 때는 이어 받는다.
+    this.maxMp = maxManaForLevel(this.progress.level);
+    this.mp = this.carriedMp !== undefined ? Phaser.Math.Clamp(this.carriedMp, 0, this.maxMp) : this.maxMp;
     if (this.carriedHp !== undefined) this.player.hp = Phaser.Math.Clamp(Math.round(this.carriedHp), 1, this.player.maxHp);
   }
 
@@ -541,7 +588,7 @@ export class GameScene extends Phaser.Scene {
     this.player.setMotion(false);
     this.talkButton.setVisible(false);
     this.talkMarker.setVisible(false);
-    const data: SceneData = { map: exit.to, at: exit.arrive, hp: this.player.hp };
+    const data: SceneData = { map: exit.to, at: exit.arrive, hp: this.player.hp, herb: this.herb, mp: this.mp };
     const camera = this.cameras.main;
     camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart(data));
     camera.fadeOut(TRAVEL_FADE_MS, 0, 0, 0);
@@ -614,8 +661,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawHud(): void {
-    this.hud.setHp(this.player.hp, this.player.maxHp);
+    this.hud.setHp(this.player.hp, this.player.maxHp, this.herb);
+    this.drawMp(true);
     this.hud.setXp(this.progress.level, this.progress.xp, xpToNext(this.progress.level));
+  }
+
+  /** 마나 막대는 보이는 값(정수)이 바뀔 때만 다시 그린다. */
+  private drawMp(force = false): void {
+    const shown = Math.floor(this.mp);
+    if (!force && shown === this.shownMp) return;
+    this.shownMp = shown;
+    this.hud.setMp(shown, this.maxMp);
   }
 
   /** 화면 너비가 바뀔 때(회전, 창 크기 변경) 화면에 고정된 요소를 다시 배치한다. */
@@ -650,7 +706,10 @@ export class GameScene extends Phaser.Scene {
     this.minimap?.layout(width - 172, 92);
     if (this.minimap) this.questTracker?.layout(width - 20, this.minimap.bottom + 4);
     // 물약 버튼은 회피 버튼 바로 위
-    this.potionButton?.setPosition(width - 330, VIEW_HEIGHT - 95 - this.dodgeButton.size - (this.potionButton?.size ?? 0) - 18);
+    const potionY = VIEW_HEIGHT - 95 - this.dodgeButton.size - (this.potionButton?.size ?? 0) - 18;
+    this.potionButton?.setPosition(width - 330, potionY);
+    // 회전 베기 버튼은 물약 버튼 위
+    this.skillButton?.setPosition(width - 330, potionY - (this.potionButton?.size ?? 0) - (this.skillButton?.size ?? 0) - 14);
     this.itemPanel?.layout(width);
     this.worldMap?.layout(width);
     this.exitHint?.layout(width);
@@ -791,6 +850,7 @@ export class GameScene extends Phaser.Scene {
     this.attackBufferedUntil = undefined;
     this.keyboardAttackPressed = false;
     this.attackButton?.consumePress();
+    this.skillButton?.consumePress();
   }
 
   private wantsAttack(time = this.now): boolean {
@@ -965,21 +1025,10 @@ export class GameScene extends Phaser.Scene {
       // 칼이 닿은 자리(몸 가운데)에서 섬광과 불꽃이 튄다.
       this.impacts.impact(bounds.centerX, bounds.centerY, trace.direction.x, trace.direction.y,
         strike.crit && strike.kind === 'finisher' ? 'finisher' : strike.kind, this.now, c.y);
-      if (died) {
-        enemy.kill();
-        this.impacts.splatter(c.x, c.y, enemy.color, this.now);
-        const raid = this.raidEnemies.has(enemy);
-        if (!raid) this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
-        this.gainXp(enemy.stats.xp, c.x, c.y - 185);
-        this.questEvent({ type: 'kill', map: this.mapId, monster: enemy.kind, ...(raid ? { encounter: 'village-raid' as const } : {}) });
-        if (!raid) this.collectDrop(c.x, c.y, enemy);
-      } else {
-        const heavy = strike.kind !== 'normal' ? HIT_FEEL.heavyKnockback : 1;
-        const push = PLAYER.knockback * combo.knockback * heavy;
-        c.knockback.set(trace.direction.x * push, trace.direction.y * push * VERTICAL_SPEED_RATIO);
-        enemy.interrupt(this.now);
-        enemy.onHit(this.now);
-      }
+      // 검으로 벨 때마다 마나가 조금 찬다.
+      this.mp = addMana(this.mp, this.maxMp, MANA.perHit);
+      const heavy = strike.kind !== 'normal' ? HIT_FEEL.heavyKnockback : 1;
+      this.resolveEnemyHit(enemy, died, trace.direction.x, trace.direction.y, PLAYER.knockback * combo.knockback * heavy);
     }
     if (heaviest) {
       const [ms, intensity] = HIT_FEEL.shake[heaviest];
@@ -987,6 +1036,24 @@ export class GameScene extends Phaser.Scene {
       this.hitStop(heaviest);
       if (heaviest === 'counter') this.impacts.screenFlash(0x9fdcff, 0.16);
       else if (heaviest !== 'normal') this.impacts.screenFlash(0xffffff, heaviest === 'finisher' ? 0.1 : 0.07);
+    }
+  }
+
+  /** 맞은 적의 뒤처리: 쓰러졌으면 경험치·퀘스트·전리품, 아니면 밀려나고 움찔한다. */
+  private resolveEnemyHit(enemy: Enemy, died: boolean, dirX: number, dirY: number, push: number): void {
+    const c = enemy.character;
+    if (died) {
+      enemy.kill();
+      this.impacts.splatter(c.x, c.y, enemy.color, this.now);
+      const raid = this.raidEnemies.has(enemy);
+      if (!raid) this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
+      this.gainXp(enemy.stats.xp, c.x, c.y - 185);
+      this.questEvent({ type: 'kill', map: this.mapId, monster: enemy.kind, ...(raid ? { encounter: 'village-raid' as const } : {}) });
+      if (!raid) this.collectDrop(c.x, c.y, enemy);
+    } else {
+      c.knockback.set(dirX * push, dirY * push * VERTICAL_SPEED_RATIO);
+      enemy.interrupt(this.now);
+      enemy.onHit(this.now);
     }
   }
 
@@ -1000,7 +1067,10 @@ export class GameScene extends Phaser.Scene {
     if (result.levelsGained > 0) {
       const player = this.player;
       this.stats = statsForLevel(result.level);
-      player.setMaxHp(this.stats.maxHp, player.alive);
+      if (this.herb) this.herb = herbBonus(this.stats.maxHp);
+      player.setMaxHp(this.stats.maxHp + this.herb, player.alive);
+      this.maxMp = maxManaForLevel(result.level);
+      this.mp = this.maxMp;
       player.setLevel(result.level);
       this.hud.showLevelUp(result.level);
       this.progressEffects.levelUpBurst(player.x, player.y);
@@ -1050,6 +1120,7 @@ export class GameScene extends Phaser.Scene {
     this.dodgeButton.setSizeScale(buttons);
     this.talkButton.setSizeScale(buttons);
     this.potionButton?.setSizeScale(buttons);
+    this.skillButton?.setSizeScale(buttons);
     this.joystick.setSizeScale(sizeScale(settings.joystickSize));
     this.justDodgeWindow = justDodgeWindowMs(settings.justDodgeTiming);
     if (this.pauseMenu) this.layout();
@@ -1209,6 +1280,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.player.setMaxHp(this.player.maxHp, true);
+    this.mp = this.maxMp;
     this.drawHud();
     try {
       this.storage?.setItem(REST_SAVE_KEY, serializeRestPoint(id));
@@ -1218,12 +1290,17 @@ export class GameScene extends Phaser.Scene {
     this.hud.showCallout(`푹 쉬었다 · 다음에는 ${REST_POINTS[id].name}에서 시작한다`);
   }
 
-  /** 치유소 침대: 체력을 채우고 둔화를 푼다. 다시 시작할 자리는 저장하지 않는다. */
+  /**
+   * 치유소 침대: 체력을 채우고 둔화를 풀고, 약초 기운(최대 체력 보너스)을 준다.
+   * 약초 기운은 처음 맞을 때까지 이어진다. 다시 시작할 자리는 저장하지 않는다.
+   */
   private healAtClinic(): void {
-    this.player.setMaxHp(this.player.maxHp, true);
+    this.herb = herbBonus(this.stats.maxHp);
+    this.player.setMaxHp(this.stats.maxHp + this.herb, true);
+    this.mp = this.maxMp;
     this.slowedUntil = 0;
     this.drawHud();
-    this.hud.showCallout('치료를 받았다 · 체력이 다 찼다');
+    this.hud.showCallout(`치료를 받았다 · 약초 기운으로 최대 체력 +${this.herb} (맞기 전까지)`);
   }
 
   private loadRestPoint() {
@@ -1285,6 +1362,79 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------- 골드와 아이템
+
+  // ---------------------------------------------------------------- 마나와 회전 베기
+
+  /** 마나가 저절로 차고, 스킬 버튼(또는 K)으로 회전 베기를 쓴다. 맞히는 순간도 여기서 처리한다. */
+  private updateSkill(time: number, gameStep: number): void {
+    const player = this.player;
+    if (player.alive) this.mp = regenMana(this.mp, this.maxMp, gameStep);
+    if (this.spinHitAt !== undefined && time >= this.spinHitAt) {
+      this.spinHitAt = undefined;
+      if (player.alive) this.spinHit();
+    }
+    const button = this.skillButton;
+    let pressed = button?.consumePress() ?? false;
+    for (const key of this.skillKeys) if (Phaser.Input.Keyboard.JustDown(key)) pressed = true;
+    const ready = player.alive && time >= this.nextSpinAt && !player.isAttacking && time >= this.dodgeUntil
+      && this.spinHitAt === undefined;
+    const enough = this.mp >= SPIN_SLASH.cost;
+    button?.setEnabled(ready && enough);
+    if (pressed) {
+      if (ready && enough) this.startSpin(time);
+      else if (ready) this.hud.showCallout('마나가 부족하다');
+    }
+    this.drawMp();
+  }
+
+  /** 회전 베기를 시작한다: 마나를 쓰고 세 번째 콤보 자세를 취한다. 제자리에서 돈다. */
+  private startSpin(time: number): void {
+    const player = this.player;
+    const hero = player.sprite;
+    this.mp -= SPIN_SLASH.cost;
+    this.dismissHint();
+    this.attackTrace = undefined;
+    this.attackLunge = undefined;
+    this.comboStage = 0;
+    const finisher = PLAYER.combo[PLAYER.combo.length - 1];
+    this.nextAttackAt = time + finisher.intervalMs;
+    this.nextSpinAt = time + SPIN_SLASH.cooldownMs;
+    this.spinHitAt = time + SPIN_SLASH.hitDelayMs;
+    if (hero instanceof HeroSprite) hero.setAttackFacing(attackFacingFor(hero.lookDirection, player.facing));
+    player.playAttack(PLAYER.combo.length);
+    this.impacts.dust(player.x, player.y, 6, time, SPIN_SLASH.radius * 0.4);
+    this.drawMp(true);
+  }
+
+  /** 회전 베기가 맞는 순간: 둘레(지면 타원) 안의 모든 적을 한 번씩 벤다. */
+  private spinHit(): void {
+    const player = this.player;
+    const now = this.now;
+    let hits = 0;
+    for (const enemy of this.enemies) {
+      const c = enemy.character;
+      if (!c.alive) continue;
+      const dx = c.x - player.x, dy = c.y - player.y;
+      if (!inSpinRadius(dx, dy, SPIN_SLASH.radius, VERTICAL_SPEED_RATIO)) continue;
+      hits++;
+      const length = Math.hypot(dx, dy / VERTICAL_SPEED_RATIO) || 1;
+      const dirX = dx / length, dirY = dy / VERTICAL_SPEED_RATIO / length;
+      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * SPIN_SLASH.damage);
+      const died = c.hurt(damage);
+      this.showDamage(c.x, c.y - 100, damage, '#8fc8ff', 46);
+      const bounds = c.sprite.getBounds(this.boundsScratch);
+      this.impacts.impact(bounds.centerX, bounds.centerY, dirX, dirY, 'finisher', now, c.y);
+      this.resolveEnemyHit(enemy, died, dirX, dirY, PLAYER.knockback * SPIN_SLASH.knockback);
+    }
+    // 빈 곳을 베어도 둘레에 바람과 먼지가 인다.
+    this.impacts.dust(player.x, player.y, 10, now, SPIN_SLASH.radius * 0.8);
+    this.impacts.screenFlash(0x8fc8ff, hits ? 0.14 : 0.06);
+    if (hits) {
+      const [ms, intensity] = HIT_FEEL.shake.finisher;
+      this.cameras.main.shake(ms, intensity);
+      this.hitStop('finisher');
+    }
+  }
 
   /** 물약 버튼(또는 Q): 모자란 체력에 알맞은 회복 아이템을 쓴다. */
   private updatePotion(time: number): void {
@@ -1449,6 +1599,12 @@ export class GameScene extends Phaser.Scene {
 
     player.invulnerableUntil = now + PLAYER.invulnerableMs;
     const died = player.hurt(enemy.stats.damage, 0xff5a4a);
+    if (this.herb) {
+      // 약초 기운은 처음 맞을 때 사라진다. 남은 체력이 기본 최대보다 많으면 기본 최대로 맞춘다.
+      this.herb = 0;
+      player.setMaxHp(this.stats.maxHp, false);
+      if (!died) this.hud.showCallout('약초 기운이 사라졌다');
+    }
     player.knockback.set((hit?.dx ?? c.facing) * ENEMY.knockback, (hit?.dy ?? 0) * ENEMY.knockback * VERTICAL_SPEED_RATIO);
     this.showDamage(player.x, player.y - 190, enemy.stats.damage, '#ff8a7a');
     if (enemy.kind === 'ashen-moth') {
