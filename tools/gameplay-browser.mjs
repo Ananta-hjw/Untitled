@@ -809,7 +809,7 @@ test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제
     let t = performance.now();
     s.player.placeAt(s.map.spawn.x, s.map.spawn.y);
     const start = Object.fromEntries(s.npcs.map(n => [n.def.id, { x: n.x, y: n.y }]));
-    const names = Object.fromEntries(s.npcs.map(n => [n.def.id, n.list.find(o => o.text !== undefined)?.text]));
+    const names = Object.fromEntries(s.npcs.filter(n=>!n.def.id.startsWith('guard-')).map(n => [n.def.id, n.list.find(o => o.text !== undefined)?.text]));
     const visible = s.npcs.every(n => n.list.some(o => o.texture && o.texture.key !== 'shadow' && o.texture.key !== '__MISSING' && o.displayHeight > 100));
     // 돌아다니다 제자리 근처로 돌아올 수도 있으니, 처음 자리에서 가장 멀리 간 거리를 잰다.
     const moved = Object.fromEntries(s.npcs.map(n => [n.def.id, 0]));
@@ -819,20 +819,20 @@ test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제
       for (const n of s.npcs) moved[n.def.id] = Math.max(moved[n.def.id], Math.round(Math.hypot(n.x - start[n.def.id].x, n.y - start[n.def.id].y)));
     }
     let onGround = s.npcs.every(n => s.walkArea.contains(n.x, n.y));
-    const count = s.npcs.length;
+    const count = s.npcs.filter(n=>!n.def.id.startsWith('guard-')).length;
     // 마을 북쪽(집들)의 네 사람도 이름표를 달고 돌아다닌다.
     s.scene.restart({ map: 'village-north' }); g.step(t += 16, 16);
     s = g.scene.getScene('game');
     s.player.placeAt(1180, 1440);
     const northStart = Object.fromEntries(s.npcs.map(n => [n.def.id, { x: n.x, y: n.y }]));
-    Object.assign(names, Object.fromEntries(s.npcs.map(n => [n.def.id, n.list.find(o => o.text !== undefined)?.text])));
+    Object.assign(names, Object.fromEntries(s.npcs.filter(n=>!n.def.id.startsWith('guard-')).map(n => [n.def.id, n.list.find(o => o.text !== undefined)?.text])));
     for (const n of s.npcs) moved[n.def.id] = 0;
     for (let i = 0; i < 900; i++) {
       s.update(t += 16, 16);
       for (const n of s.npcs) moved[n.def.id] = Math.max(moved[n.def.id], Math.round(Math.hypot(n.x - northStart[n.def.id].x, n.y - northStart[n.def.id].y)));
     }
     onGround &&= s.npcs.every(n => s.walkArea.contains(n.x, n.y));
-    const northCount = s.npcs.length;
+    const northCount = s.npcs.filter(n=>!n.def.id.startsWith('guard-')).length;
     s.scene.restart({ map: 'village' }); g.step(t += 16, 16);
     s = g.scene.getScene('game');
     // 루안 옆에 서면 루안이 멈추고, 대화하면 루안의 이름과 그림이 나온다.
@@ -848,7 +848,7 @@ test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제
     const dialogue = { open: s.dialogue.isOpen, name: s.dialogue.nameText.text, portrait: s.dialogue.portrait.texture.key };
     s.dialogue.close();
     return { count, northCount, names, visible, moved, onGround, stayed, spotFollows, dialogue,
-      talkable: s.interactables.filter(i => i.id.startsWith('npc-')).length };
+      talkable: s.interactables.filter(i => i.id.startsWith('npc-')&&!i.id.startsWith('npc-guard-')).length };
   })()`);
   // 장사하는 세 사람(메리나·도란·로제타)은 가게 안, 에일라는 치유소 안, 시온의 가족·이웃 넷은 마을 북쪽, 셋은 광장에 있다.
   assert.equal(result.count, 3);
@@ -908,15 +908,15 @@ test('성능 테스트 모드는 마을에 사람을 더 세우고 FPS·메모�
     g.step(t += 16, 16);
     return { before, on, kept, next, off: { npcs: s.npcs.length, perf: !!s.perf, label: label() } };
   })()`);
-  assert.deepEqual(result.before, { npcs: 3, perf: false, label: '성능 테스트: 끔' });
-  assert.equal(result.on.npcs, 103);
+  assert.deepEqual(result.before, { npcs: 11, perf: false, label: '성능 테스트: 끔' });
+  assert.equal(result.on.npcs, 111);
   assert.equal(result.on.label, '성능 테스트: 100명');
   assert.equal(result.on.onGround, true);
   assert.match(result.on.perf, /FPS \d+/);
-  assert.match(result.on.perf, /인물 103 · 그림 메모리 \d+MB/);
-  assert.equal(result.kept, 103);
-  assert.equal(result.next, 203);
-  assert.deepEqual(result.off, { npcs: 3, perf: false, label: '성능 테스트: 끔' });
+  assert.match(result.on.perf, /인물 111 · 그림 메모리 \d+MB/);
+  assert.equal(result.kept, 111);
+  assert.equal(result.next, 211);
+  assert.deepEqual(result.off, { npcs: 11, perf: false, label: '성능 테스트: 끔' });
 });
 test('퀘스트: 머리 위 표시, 대화로 받고 완료, 목록 표시, 저장 후 재시작에도 유지되고 미니맵에 그려진다', async () => {
   await load('village');
@@ -1808,4 +1808,41 @@ test('마을 돌담은 긴 이동·회피 거리도 막고 세 문은 통과하�
     return {y:out.y,walls:s.children.list.filter(o=>o.name==='village-wall').length};
   })()`);
   assert.ok(north.y>=254&&north.y<270);assert.ok(north.walls>30);
+});
+
+test('일반 병사들은 그림을 공유하고 세 문에 두 명씩 서며 순찰·8방향 모션·대화가 동작한다', async () => {
+  await load('village');
+  await evaluate(`localStorage.removeItem('untitled-rpg.quests')`);
+  await load('village');
+  const plaza=await evaluate(`(()=>{
+    const s=window.__game.scene.getScene('game'),guards=s.npcs.filter(n=>n.def.skin==='soldier');
+    const start=new Map(guards.map(n=>[n.def.id,{x:n.x,y:n.y}]));
+    const moved=Object.fromEntries(guards.map(n=>[n.def.id,0]));
+    s.player.placeAt(1180,380);
+    for(let i=0;i<1100;i++){
+      s.update(i*16,16);
+      for(const n of guards){const p=start.get(n.def.id);moved[n.def.id]=Math.max(moved[n.def.id],Math.hypot(p.x-n.x,p.y-n.y));}
+    }
+    const posts=guards.filter(n=>n.def.gate),patrol=guards.filter(n=>n.def.wander);
+    const frames=[];const n=guards[0];
+    for(const d of ['down','left','right','up','down-left','down-right','up-left','up-right'])for(let p=0;p<4;p++){
+      n.direction=d;n.showFrame(p);frames.push(n.figure.texture.key+':'+n.figure.frame.name);
+    }
+    n.showFrame(0);
+    const shared=guards.every(g=>g.walk===n.walk);
+    const textures=Object.keys(s.textures.list).filter(k=>k.startsWith('npc-soldier-'));
+    s.player.placeAt(n.spot.x,n.spot.y+20);s.openDialogue(n.spot);
+    const dialogue={open:s.dialogue.isOpen,name:s.dialogue.nameText.text,key:s.dialogue.portrait.texture.key};
+    while(s.dialogue.isOpen)s.dialogue.advance();
+    return {count:guards.length,posts:posts.length,patrol:patrol.length,stationary:posts.every(n=>moved[n.def.id]===0),
+      walking:patrol.every(n=>moved[n.def.id]>20),onGround:guards.every(n=>s.walkArea.contains(n.x,n.y)),
+      frames:new Set(frames).size,shared,textures,dialogue};
+  })()`);
+  assert.deepEqual([plaza.count,plaza.posts,plaza.patrol],[8,6,2]);
+  for(const key of ['stationary','walking','onGround','shared'])assert.equal(plaza[key],true,key);
+  assert.equal(plaza.frames,32);assert.equal(plaza.textures.length,2);
+  assert.deepEqual(plaza.dialogue,{open:true,name:'서문 병사',key:'portrait-soldier'});
+  await load('village-north');
+  const north=await evaluate(`(()=>{const s=window.__game.scene.getScene('game');return s.npcs.filter(n=>n.def.skin==='soldier').map(n=>({wander:n.def.wander,clear:s.walkArea.contains(n.x,n.y)}));})()`);
+  assert.equal(north.length,2);assert.ok(north.every(n=>n.wander>0&&n.clear));
 });

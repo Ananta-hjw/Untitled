@@ -6,10 +6,10 @@
  * 이 파일은 Phaser를 쓰지 않아 tools/dialogue.test.mjs가 직접 불러 검사한다.
  */
 
-import type { NpcId } from '../world/npcs.ts';
+import type { NpcSkin } from '../world/npcs.ts';
 
 /** 대화창 왼쪽에 크게 나오는 그림. 마을 사람은 자기 id를 쓴다. 그림이 없는 화자(표지판 등)는 비워 둔다. */
-export type Portrait = 'hero-neutral' | NpcId;
+export type Portrait = 'hero-neutral' | NpcSkin;
 
 export interface DialogueLine {
   speaker: string;
@@ -42,6 +42,11 @@ export const DIALOGUES = {
     { speaker: '표지판', text: '동쪽 개울가\n서쪽: 로웬 마을' },
     { speaker: HERO_NAME, portrait: 'hero-neutral', text: '물소리가 시원하다. 발을 헛디디지 않게 조심하자.' },
   ],
+
+  'guard-west': [{ speaker: '서문 병사', portrait: 'soldier', text: '이 문을 나가면 서쪽 숲길입니다. 숲 안에서는 길을 따라 움직이고, 날이 어두워지기 전에 돌아오세요.' }],
+  'guard-east': [{ speaker: '동문 병사', portrait: 'soldier', text: '동쪽 개울가로 가시나요? 젖은 바위가 미끄러우니 물가에서는 발밑을 잘 살피세요.' }],
+  'guard-south': [{ speaker: '남문 병사', portrait: 'soldier', text: '남쪽 들판은 마을 밖입니다. 물약은 챙기셨죠? 무리하지 말고 위험하면 바로 돌아오세요.' }],
+  'guard-patrol': [{ speaker: '순찰 병사', portrait: 'soldier', text: '마을을 순찰하고 있습니다. 도움이 필요하거나 수상한 것을 발견하면 저희에게 알려 주세요.' }],
 
   // 로웬 마을 사람들의 첫날 대사 (docs/story-chapter1.md: 수확제 전날, 평화로운 하루. 아주 작은 복선만 둔다)
   'npc-serena': [

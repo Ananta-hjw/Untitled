@@ -3,8 +3,8 @@ import type { Interactable } from '../world/interactables';
 import type { QuestMarker } from '../story/quests';
 import type { WalkArea } from '../world/walkArea';
 import {
-  NPC_NOTICE_RADIUS, NPC_WALK_SPEED, direction8, pickWanderTarget, walkPose, wanderPauseMs,
-  type Direction8, type NpcDef, type NpcId,
+  NPC_NOTICE_RADIUS, NPC_WALK_SPEED, npcSkin, direction8, pickWanderTarget, walkPose, wanderPauseMs,
+  type Direction8, type NpcDef, type NpcSkin,
 } from '../world/npcs';
 
 interface WalkFrame {
@@ -31,21 +31,21 @@ export const MARKER_STYLE: Record<QuestMarker, { text: string; color: string }> 
   target: { text: '!', color: '#8fd6ff' },
 };
 
-const sheetKey = (id: NpcId, sheet: string) => `npc-${id}-${sheet.startsWith('walk_cardinal') ? 'cardinal' : 'diagonal'}`;
-const sheetUrl = (id: NpcId, sheet: string) => SHEET_URLS[`../assets/characters/${id}/${sheet}-60.webp`];
-const walkData = (id: NpcId) => FRAME_DATA[`../assets/characters/${id}/walk_frames.json`];
+const sheetKey = (id: NpcSkin, sheet: string) => `npc-${id}-${sheet.startsWith('walk_cardinal') ? 'cardinal' : 'diagonal'}`;
+const sheetUrl = (id: NpcSkin, sheet: string) => SHEET_URLS[`../assets/characters/${id}/${sheet}-60.webp`];
+const walkData = (id: NpcSkin) => FRAME_DATA[`../assets/characters/${id}/walk_frames.json`];
 
 export function preloadNpcs(scene: Phaser.Scene, npcs: readonly NpcDef[]): void {
-  for (const npc of npcs) {
+  for (const id of new Set(npcs.map(npcSkin))) {
     for (const sheet of ['walk_cardinal', 'walk_diagonal']) {
-      const key = sheetKey(npc.id, sheet);
-      if (!scene.textures.exists(key)) scene.load.image(key, sheetUrl(npc.id, sheet));
+      const key = sheetKey(id, sheet);
+      if (!scene.textures.exists(key)) scene.load.image(key, sheetUrl(id, sheet));
     }
   }
 }
 
 /** 걷는 시트의 프레임을 텍스처에 등록한다. 원본 좌표를 줄인 시트 배율에 맞춘다. */
-function registerWalkFrames(scene: Phaser.Scene, id: NpcId, data: WalkData): void {
+function registerWalkFrames(scene: Phaser.Scene, id: NpcSkin, data: WalkData): void {
   const s = WALK_SHEET_SCALE;
   for (const f of data.frames) {
     const texture = scene.textures.get(sheetKey(id, f.sheet));
@@ -63,6 +63,7 @@ export class Npc extends Phaser.GameObjects.Container {
   readonly def: NpcDef;
   /** 대화 대상. 걷는 동안 위치를 따라 옮긴다. */
   readonly spot: Interactable;
+  private readonly skin: NpcSkin;
   private readonly figure: Phaser.GameObjects.Image;
   private readonly walk: WalkData;
   private readonly frames: Map<string, WalkFrame>;
@@ -86,11 +87,13 @@ export class Npc extends Phaser.GameObjects.Container {
     const shadow = scene.add.image(0, 0, 'shadow').setAlpha(0.4).setDisplaySize(def.height * 0.5, def.height * 0.15);
     this.add(shadow);
 
-    this.walk = walkData(def.id);
-    registerWalkFrames(scene, def.id, this.walk);
+    this.skin = npcSkin(def);
+    this.direction = def.facing ?? 'down';
+    this.walk = walkData(this.skin);
+    registerWalkFrames(scene, this.skin, this.walk);
     this.frames = new Map(this.walk.frames.map((f) => [f.name, f]));
     this.scale0 = def.height / (this.walk.referenceHeight * WALK_SHEET_SCALE);
-    this.figure = scene.add.image(0, 0, sheetKey(def.id, 'walk_cardinal'), 'down-0');
+    this.figure = scene.add.image(0, 0, sheetKey(this.skin, 'walk_cardinal'), 'down-0');
     this.showFrame(this.walk.idlePose);
     this.restUntil = rand() * 2000;
     this.add(this.figure);
@@ -134,7 +137,7 @@ export class Npc extends Phaser.GameObjects.Container {
     }
     if (this.def.wander === undefined) {
       // 장사하는 사람은 손님이 떠나면 다시 앞을 본다.
-      this.direction = 'down';
+      this.direction = this.def.facing ?? 'down';
       this.showFrame(idle);
       return;
     }
@@ -169,7 +172,7 @@ export class Npc extends Phaser.GameObjects.Container {
 
   private showFrame(pose: number): void {
     const frame = this.frames.get(`${this.direction}-${pose}`)!;
-    this.figure.setTexture(sheetKey(this.def.id, frame.sheet), frame.name)
+    this.figure.setTexture(sheetKey(this.skin, frame.sheet), frame.name)
       .setOrigin(frame.originX, frame.originY)
       .setScale(this.scale0 * frame.scale);
   }

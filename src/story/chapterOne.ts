@@ -1,5 +1,6 @@
 import type { DialogueLine } from './dialogues.ts';
 import { currentObjective, questDef, type QuestState } from './quests.ts';
+import { GUARDS, isGuardId } from '../world/guards.ts';
 import { NPCS, type NpcDef, type NpcId } from '../world/npcs.ts';
 import type { MapId } from '../world/maps.ts';
 import type { Interactable } from '../world/interactables.ts';
@@ -83,6 +84,12 @@ export function raidSpawns(state: QuestState, map: MapId): Array<{ x: number; y:
 export function chapterDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined {
   const phase = chapterPhase(state);
   if (phase === 'day') return undefined;
+  if (isGuardId(npc)) {
+    const guard = GUARDS.find(g => g.id === npc);
+    return guard ? [{ speaker: guard.name, portrait: 'soldier', text: phase === 'raid'
+      ? '주민들이 대피할 길을 확보하고 있습니다. 위험하니 마물 가까이에서는 조심하세요!'
+      : '다친 주민들을 살피고 경비를 다시 세우고 있습니다. 도움이 필요하면 말씀하세요.' }] : undefined;
+  }
   const texts: Partial<Record<NpcId, string>> = {
     ruan: '조금만 쉬면 괜찮아질 거다. 넌 네가 해야 할 일을 하렴. 다만 혼자 감당하려 들진 말고.',
     linea: '시온… 시아는 찾았어? 그 아이, 혼자 있으면 안 되는데…',

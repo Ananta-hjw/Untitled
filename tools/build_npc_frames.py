@@ -16,7 +16,7 @@ SHEETS = {
 CHARACTERS = [
     'linea', 'sia', 'ruan', 'serena', 'doran', 'merina',
     'herman', 'eila', 'teon', 'rosetta', 'vernel', 'fern',
-    'bram', 'mirel', 'kairen', 'velka', 'razen',
+    'bram', 'mirel', 'kairen', 'velka', 'razen', 'soldier',
 ]
 
 
