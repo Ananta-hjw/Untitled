@@ -54,6 +54,7 @@ import { DialogueBox, preloadDialogue } from '../ui/DialogueBox';
 import { PauseMenu } from '../ui/PauseMenu';
 import { TITLE_FADE_MS } from './TitleScene';
 import { IDLE_FPS, PLAY_FPS, frameRate } from '../core/frameRate';
+import { BUTTON_RADIUS, JOYSTICK_REST, SKILL_SLOT_COUNT, combatButtonLayout, joystickZone } from '../ui/buttonLayout';
 import { OpeningDirector } from './OpeningDirector';
 import { OPENING, OPENING_HINT, OPENING_SAVE_KEY, OPENING_WALK_SCALE, shouldPlayOpening } from '../story/opening';
 import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings } from '../ui/settingsData';
@@ -87,6 +88,9 @@ import {
 import { ProgressEffects } from '../ui/ProgressEffects';
 
 /** Scale shared by all academy frames. */
+/** 기술 칸에 넣을 수 있는 기술 (배우는 방법은 아직 없다) */
+type SkillId = 'spin';
+
 const HERO_SCALE = 0.5;
 const NAV_CELL = 32;
 /** 맵을 옮길 때 화면이 어두워졌다 밝아지는 시간(ms). 연출만 담당하고 게임 시계와는 무관하다. */
@@ -216,7 +220,9 @@ export class GameScene extends Phaser.Scene {
   /** 회전 베기가 맞히는 시각 (게임 시계). 없으면 쓰는 중이 아님 */
   private spinHitAt?: number;
   private nextSpinAt = 0;
-  private skillButton?: ActionButton;
+  /** 공격 버튼 둘레의 기술 칸 다섯. 기술은 배우면 칸에 넣는다(지금은 모두 비어 있다). 키 1~5. */
+  private skillButtons: ActionButton[] = [];
+  private skillSlots: (SkillId | null)[] = [];
   private skillKeys: Phaser.Input.Keyboard.Key[] = [];
   /** 다른 맵으로 옮겨 가는 중(화면이 어두워지는 동안). 그동안 게임은 멈춘다. */
   private traveling = false;
@@ -404,7 +410,8 @@ export class GameScene extends Phaser.Scene {
     this.carriedMp = undefined;
     this.spinHitAt = undefined;
     this.nextSpinAt = 0;
-    this.skillButton = undefined;
+    this.skillButtons = [];
+    this.skillSlots = Array<SkillId | null>(SKILL_SLOT_COUNT).fill(null);
     this.skillKeys = [];
   }
 
@@ -454,15 +461,18 @@ export class GameScene extends Phaser.Scene {
     this.minimap = new Minimap(this, this.map);
     this.questTracker = new QuestTracker(this);
     registerItemIcons(this);
-    this.potionButton = new ActionButton(this, { x: 0, y: 0, radius: 48, label: '', color: 0x3e2221, fontSize: 18, icon: { texture: ITEM_ICON_TEXTURE, frame: 'potion' }, cooldown: true, releaseToPress: true, onLongPress: () => this.openQuickSlot(0) });
-    this.lunchButton = new ActionButton(this, { x: 0, y: 0, radius: 48, label: '', color: 0x38442a, fontSize: 18, icon: { texture: ITEM_ICON_TEXTURE, frame: 'lunch' }, cooldown: true, releaseToPress: true, onLongPress: () => this.openQuickSlot(1) });
+    this.potionButton = new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.item, label: '', color: 0x3e2221, fontSize: 18, icon: { texture: ITEM_ICON_TEXTURE, frame: 'potion' }, cooldown: true, releaseToPress: true, onLongPress: () => this.openQuickSlot(0) });
+    this.lunchButton = new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.item, label: '', color: 0x38442a, fontSize: 18, icon: { texture: ITEM_ICON_TEXTURE, frame: 'lunch' }, cooldown: true, releaseToPress: true, onLongPress: () => this.openQuickSlot(1) });
     this.lunchKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R)] : [];
     this.potionButton.setSizeScale(sizeScale(this.settings.buttonSize));
     this.lunchButton.setSizeScale(sizeScale(this.settings.buttonSize));
     this.potionKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q)] : [];
-    this.skillButton = new ActionButton(this, { x: 0, y: 0, radius: 50, label: `회전베기\nMP ${SPIN_SLASH.cost}`, color: 0x2f5fa8, fontSize: 17, cooldown: true });
-    this.skillButton.setSizeScale(sizeScale(this.settings.buttonSize));
-    this.skillKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K)] : [];
+    this.skillButtons = this.skillSlots.map(() => new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.skill, label: '', color: 0x2a3140, fontSize: 13, cooldown: true }));
+    for (const button of this.skillButtons) button.setSizeScale(sizeScale(this.settings.buttonSize));
+    const digits = [Phaser.Input.Keyboard.KeyCodes.ONE, Phaser.Input.Keyboard.KeyCodes.TWO, Phaser.Input.Keyboard.KeyCodes.THREE,
+      Phaser.Input.Keyboard.KeyCodes.FOUR, Phaser.Input.Keyboard.KeyCodes.FIVE];
+    this.skillKeys = this.input.keyboard ? digits.slice(0, SKILL_SLOT_COUNT).map(code => this.input.keyboard!.addKey(code)) : [];
+    this.refreshSkillButtons();
     this.itemPanel = new ItemPanel(this, (action) => this.onItemAction(action), () => this.onResume(), slot => { this.itemPanel?.close(); this.openQuickSlot(slot); });
     this.quickSlotPanel = new QuickSlotPanel(this, (slot, id) => {
       this.quickSlots[slot] = id;
@@ -533,8 +543,7 @@ export class GameScene extends Phaser.Scene {
     // 맵을 옮기는 동안에는 아무것도 진행하지 않는다.
     if (this.traveling) return;
     // 메뉴·대화·창이 열려 게임이 멈춰 있는 동안에는 덜 자주 그린다(발열·전력).
-    frameRate.fps = this.quickSlotPanel?.isOpen || this.storyChoice?.isOpen || this.pauseMenu.isOpen || this.itemPanel?.isOpen
-      || this.characterPanel?.isOpen || this.worldMap?.isOpen || this.dialogue.isOpen ? IDLE_FPS : PLAY_FPS;
+    frameRate.fps = this.menuOpen() ? IDLE_FPS : PLAY_FPS;
 
     // 일시정지 중에는 게임 시계를 멈춘다. Esc는 메뉴에서 한 단계 뒤로.
     let escape = false;
@@ -768,7 +777,11 @@ export class GameScene extends Phaser.Scene {
 
   private buildUi(): void {
     // 포인터 수는 main.ts의 activePointers로 설정한다. 재시작 때 추가하지 않는다.
-    this.joystick = new VirtualJoystick(this, { x: 190, y: VIEW_HEIGHT - 170 });
+    this.joystick = new VirtualJoystick(this, {
+      x: JOYSTICK_REST.x, y: VIEW_HEIGHT - JOYSTICK_REST.y,
+      // 메뉴·창·대화·오프닝 중에는 그 아래 버튼을 누르는 것이므로 조이스틱을 잡지 않는다.
+      canGrab: () => !this.menuOpen() && !this.opening,
+    });
 
     this.attackButton = new ActionButton(this, { x: 0, y: VIEW_HEIGHT - 170, label: '공격' });
     this.talkButton = new ActionButton(this, {
@@ -788,13 +801,13 @@ export class GameScene extends Phaser.Scene {
     this.dodgeButton = new ActionButton(this, {
       x: 0,
       y: VIEW_HEIGHT - 95,
-      radius: 56,
+      radius: BUTTON_RADIUS.dodge,
       label: '회피',
       cooldown: true,
       color: 0x2f4a86,
       fontSize: 24,
     });
-    this.blockButton = new ActionButton(this, { x: 0, y: 0, radius: 44, label: '막기', color: 0x5a6b7a, fontSize: 20, cooldown: true });
+    this.blockButton = new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.block, label: '막기', color: 0x5a6b7a, fontSize: 22, cooldown: true });
     this.blockKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L)] : [];
     this.shield = this.add.graphics().setVisible(false);
 
@@ -869,16 +882,26 @@ export class GameScene extends Phaser.Scene {
     camera.setBounds(cx - width / 2, cy - height / 2, width, height);
   }
 
+  /** 게임을 멈추는 메뉴·창·대화가 열려 있는지 */
+  private menuOpen(): boolean {
+    return !!(this.quickSlotPanel?.isOpen || this.storyChoice?.isOpen || this.pauseMenu?.isOpen || this.itemPanel?.isOpen
+      || this.characterPanel?.isOpen || this.worldMap?.isOpen || this.dialogue?.isOpen);
+  }
+
   private layout(): void {
     const { width } = this.scale.gameSize;
     if (this.map) this.setCameraBounds();
     this.hud.layout(width);
-    this.attackButton.setPosition(width - 170, VIEW_HEIGHT - 185);
-    this.dodgeButton.setPosition(width - 330, VIEW_HEIGHT - 105);
-    // 막기 버튼은 공격 버튼 오른쪽 아래 모서리
-    this.blockButton?.setPosition(width - 58, VIEW_HEIGHT - 58);
-    // 대화 버튼은 공격 버튼 바로 위. 버튼 크기 설정이 바뀌어도 겹치지 않게 간격을 다시 잡는다.
-    this.talkButton.setPosition(width - 170, VIEW_HEIGHT - 185 - this.attackButton.size - this.talkButton.size - 16);
+    // 전투 버튼 자리는 ui/buttonLayout.ts가 정한다(서로 겹치지 않음을 tools/button-layout.test.mjs가 검사).
+    const buttons = combatButtonLayout(width, VIEW_HEIGHT, sizeScale(this.settings.buttonSize));
+    this.joystick.setZone(joystickZone(width, VIEW_HEIGHT, sizeScale(this.settings.buttonSize)));
+    this.attackButton.setPosition(buttons.attack.x, buttons.attack.y);
+    this.dodgeButton.setPosition(buttons.dodge.x, buttons.dodge.y);
+    this.blockButton?.setPosition(buttons.block.x, buttons.block.y);
+    this.talkButton.setPosition(buttons.talk.x, buttons.talk.y);
+    this.potionButton?.setPosition(buttons.items[0].x, buttons.items[0].y);
+    this.lunchButton?.setPosition(buttons.items[1].x, buttons.items[1].y);
+    this.skillButtons.forEach((button, i) => button.setPosition(buttons.skills[i].x, buttons.skills[i].y));
     this.pauseButton.setPosition(width - 46, 74);
     this.characterButton?.setPosition(width - 46, 148);
     this.characterPanel?.layout(width);
@@ -886,12 +909,6 @@ export class GameScene extends Phaser.Scene {
     // 미니맵은 일시정지 버튼 왼쪽, 퀘스트 목록은 그 아래에 오른쪽으로 맞춘다.
     this.minimap?.layout(width - 172, 92);
     if (this.minimap) this.questTracker?.layout(width - 20, this.minimap.bottom + 4);
-    // 두 아이템과 전투 버튼의 실제 터치 반경(1.2배) 사이에 여유를 둔다.
-    const itemSize = this.potionButton?.size ?? 48;
-    const itemY = VIEW_HEIGHT - 105 - this.dodgeButton.size * 1.2 - itemSize * 1.2 - 20;
-    this.potionButton?.setPosition(width - 350, itemY);
-    this.lunchButton?.setPosition(width - 350 - itemSize * 2.4 - 16, itemY);
-    this.skillButton?.setPosition(width - 350, itemY - itemSize * 1.2 - (this.skillButton?.size ?? 50) * 1.2 - 16);
     this.itemPanel?.layout(width);
     this.quickSlotPanel?.layout(width);
     this.worldMap?.layout(width);
@@ -1054,7 +1071,7 @@ export class GameScene extends Phaser.Scene {
     this.attackBufferedUntil = undefined;
     this.keyboardAttackPressed = false;
     this.attackButton?.consumePress();
-    this.skillButton?.consumePress();
+    for (const button of this.skillButtons) button.consumePress();
   }
 
   private wantsAttack(time = this.now): boolean {
@@ -1335,7 +1352,7 @@ export class GameScene extends Phaser.Scene {
     this.talkButton.setSizeScale(buttons);
     this.potionButton?.setSizeScale(buttons);
     this.lunchButton?.setSizeScale(buttons);
-    this.skillButton?.setSizeScale(buttons);
+    for (const button of this.skillButtons) button.setSizeScale(buttons);
     this.joystick.setSizeScale(sizeScale(settings.joystickSize));
     this.justDodgeWindow = justDodgeWindowMs(settings.justDodgeTiming);
     if (this.pauseMenu) this.layout();
@@ -1631,7 +1648,9 @@ export class GameScene extends Phaser.Scene {
     this.dodgeButton.setCooldown(Math.max(0, this.dodgeReadyAt - time), DODGE.cooldownMs * this.derived.dodgeCooldown);
     this.blockButton?.setEnabled(time >= this.parryReadyAt);
     this.blockButton?.setCooldown(Math.max(0, this.parryReadyAt - time), BLOCK.cooldownMs);
-    this.skillButton?.setCooldown(Math.max(0, this.nextSpinAt - time), SPIN_SLASH.cooldownMs);
+    this.skillSlots.forEach((skill, i) => {
+      if (skill === 'spin') this.skillButtons[i]?.setCooldown(Math.max(0, this.nextSpinAt - time), SPIN_SLASH.cooldownMs);
+    });
   }
 
   // ---------------------------------------------------------------- 마나와 회전 베기
@@ -1644,19 +1663,31 @@ export class GameScene extends Phaser.Scene {
       this.spinHitAt = undefined;
       if (player.alive) this.spinHit();
     }
-    const button = this.skillButton;
-    let pressed = button?.consumePress() ?? false;
-    for (const key of this.skillKeys) if (Phaser.Input.Keyboard.JustDown(key)) pressed = true;
-    if (this.opening) pressed = false;
     const ready = player.alive && time >= this.nextSpinAt && !player.isAttacking && time >= this.dodgeUntil
       && this.spinHitAt === undefined;
     const enough = this.mp >= SPIN_SLASH.cost;
-    button?.setEnabled(ready && enough);
-    if (pressed) {
+    this.skillButtons.forEach((button, i) => {
+      let pressed = button.consumePress();
+      const key = this.skillKeys[i];
+      if (key && Phaser.Input.Keyboard.JustDown(key)) pressed = true;
+      const skill = this.skillSlots[i];
+      // 빈 칸은 눌러도 아무 일도 없다.
+      if (skill !== 'spin') return;
+      button.setEnabled(ready && enough);
+      if (!pressed || this.opening) return;
       if (ready && enough) this.startSpin(time);
       else if (ready) this.hud.showCallout('마나가 부족하다');
-    }
+    });
     this.drawMp();
+  }
+
+  /** 기술 칸의 글자: 빈 칸은 비워 두고 흐리게, 기술이 든 칸은 이름 한 줄(작은 칸이라 대기 초와 겹치지 않게). */
+  private refreshSkillButtons(): void {
+    this.skillButtons.forEach((button, i) => {
+      const skill = this.skillSlots[i];
+      button.setLabel(skill === 'spin' ? '회전베기' : '');
+      if (!skill) button.setEnabled(false);
+    });
   }
 
   /** 회전 베기를 시작한다: 마나를 쓰고 세 번째 콤보 자세를 취한다. 제자리에서 돈다. */

@@ -290,6 +290,39 @@ test('공격 중에는 조이스틱으로 움직이지 않고 공격 자체의 �
   assert.ok(result.walksAfter > 20, `공격 뒤 걷기 ${result.walksAfter}px`);
 });
 
+test('조이스틱은 왼쪽 아래 영역 어디를 눌러도 그 자리에서 시작하고, 손을 떼면 쉬는 자리로 돌아가며, 버튼·메뉴 위에서는 잡히지 않는다', async () => {
+  await load();
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), j = s.joystick, H = 720, W = s.scale.gameSize.width;
+    const rest = { x: j.centerX, y: j.centerY };
+    const ptr = (id, x, y) => ({ id, x, y });
+    // 예전 패드에서 먼 곳(쉬는 자리에서 300px 오른쪽 위)을 누른다.
+    s.input.emit('pointerdown', ptr(41, rest.x + 300, rest.y - 200));
+    const grabbed = j.isActive, center = { x: j.centerX, y: j.centerY };
+    s.input.emit('pointermove', ptr(41, rest.x + 300 + j.size, rest.y - 200));
+    const right = j.vector.x;
+    s.input.emit('pointerup', ptr(41, rest.x + 300 + j.size, rest.y - 200));
+    const released = !j.isActive && j.vector.length() === 0 && j.centerX === rest.x && j.centerY === rest.y;
+    // 화면 모서리를 누르면 패드가 화면 안으로 당겨진다.
+    s.input.emit('pointerdown', ptr(42, 3, H - 2));
+    const corner = { x: j.centerX, y: j.centerY, r: j.size };
+    s.input.emit('pointerup', ptr(42, 3, H - 2));
+    // 공격 버튼, 화면 위쪽(체력 표시)은 잡지 않는다.
+    s.input.emit('pointerdown', ptr(43, s.attackButton.image.x, s.attackButton.image.y));
+    const onAttack = j.isActive; s.input.emit('pointerup', ptr(43, s.attackButton.image.x, s.attackButton.image.y));
+    s.input.emit('pointerdown', ptr(44, 200, 100));
+    const onHud = j.isActive; s.input.emit('pointerup', ptr(44, 200, 100));
+    // 메뉴가 열려 있으면 잡지 않는다.
+    s.openPause();
+    s.input.emit('pointerdown', ptr(45, rest.x, rest.y));
+    const onMenu = j.isActive; s.input.emit('pointerup', ptr(45, rest.x, rest.y));
+    s.pauseMenu.close();
+    return { grabbed, center: center.x === rest.x + 300 && center.y === rest.y - 200, right: right > 0.9, released,
+      corner: corner.x === corner.r && corner.y === H - corner.r, onAttack, onHud, onMenu };
+  })()`);
+  assert.deepEqual(result, { grabbed: true, center: true, right: true, released: true, corner: true, onAttack: false, onHud: false, onMenu: false });
+});
+
 test('회피·포커스 이탈·사망은 이전 공격 예약을 취소하고 부활 직전의 죽은 상태 입력도 버린다', async () => {
   await load();
   const results = await evaluate(`(() => {
@@ -564,8 +597,13 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
     const nameTop = p.list.find(o => o.text === '시온').getBounds().top;
     return { initial, home: !!home, ground: { width: ground.displayWidth, height: ground.displayHeight },
       oldRoom: s.children.list.some(o => o.texture?.key === 'room'),
-      ui: { width: s.scale.gameSize.width, attack: s.attackButton.image.x, dodge: s.dodgeButton.image.x, hp: s.hud.hpText.text },
+      ui: { width: s.scale.gameSize.width, attack: s.attackButton.image.x, dodge: s.dodgeButton.image.x, hp: s.hud.hpText.text,
+        block: s.blockButton.image.x, gap: Math.hypot(s.blockButton.image.x - s.dodgeButton.image.x, s.blockButton.image.y - s.dodgeButton.image.y)
+          - (s.blockButton.size + s.dodgeButton.size) * 1.2 },
       scroll: south.scroll, bottom: south.bottom, nameTop,
+      skills: (() => { const mp = s.mp; s.skillButtons[0].pressed = true; s.update(0, 16);
+        return { count: s.skillButtons.length, empty: s.skillSlots.every(x => x === null),
+          labels: s.skillButtons.every(b => b.text.text === ''), noSpin: s.spinHitAt === undefined && s.mp >= mp }; })(),
       boundsHeight: camera.getBounds().height };
   })()`);
   assert.deepEqual(result.initial, { x: 430, y: 640, walkable: true, safe: true });
@@ -573,7 +611,11 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
   assert.deepEqual(result.ground, { width: 2640, height: 1760 });
   assert.equal(result.oldRoom, false);
   assert.equal(result.ui.attack, result.ui.width - 170);
-  assert.equal(result.ui.dodge, result.ui.width - 330);
+  // 막기는 공격 버튼 왼쪽 아래, 회피는 오른쪽 아래 모서리이며 터치 범위가 겹치지 않는다.
+  assert.equal(result.ui.block, result.ui.width - 330);
+  assert.ok(result.ui.dodge > result.ui.attack && result.ui.gap > 0, JSON.stringify(result.ui));
+  // 기술 칸 다섯은 비어 있고, 눌러도 아무 기술도 나가지 않는다.
+  assert.deepEqual(result.skills, { count: 5, empty: true, labels: true, noSpin: true });
   assert.equal(result.ui.hp, 'HP 100 / 100');
   assert.equal(result.boundsHeight, 1760);
   assert.ok(result.scroll > 400 && result.bottom <= 1760);
@@ -1712,12 +1754,14 @@ test('회전 베기는 마나를 써서 둘레의 적을 한꺼번에 베고, �
     const g = window.__game, s = g.scene.getScene('game'), p = s.player;
     let t = performance.now();
     const step = (n) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    // 기술은 배워야 칸에 들어간다. 아직 배우는 방법이 없어 시험에서 첫 칸에 직접 넣는다.
+    s.skillSlots[0] = 'spin'; s.refreshSkillButtons();
     const [a, b, c] = s.enemies;
     a.character.placeAt(p.x - 150, p.y); b.character.placeAt(p.x + 120, p.y + 40);
     c.character.placeAt(p.x + 900, p.y);
     const before = [a, b, c].map(e => e.character.hp);
     const full = s.mp === s.maxMp;
-    s.skillButton.pressed = true;
+    s.skillButtons[0].pressed = true;
     step(2);
     const spent = s.mp < s.maxMp - 10;
     step(20);
@@ -1725,7 +1769,7 @@ test('회전 베기는 마나를 써서 둘레의 적을 한꺼번에 베고, �
     // 마나가 모자라면 쓰지 못한다.
     s.mp = 1; s.nextSpinAt = 0; step(60);
     const low = s.mp;
-    s.skillButton.pressed = true; step(2);
+    s.skillButtons[0].pressed = true; step(2);
     const blocked = s.spinHitAt === undefined && s.mp >= low;
     // 저절로 찬다.
     const regen = s.mp > low;
@@ -2008,7 +2052,7 @@ test('물약·도시락 바로 사용 버튼은 해당 물품만 쓰고 대기�
       s.applySettings({...s.settings,buttonSize:size,joystickSize:'large'});
       // Use the same layout method as a resize without changing the canvas underneath the browser harness.
       const original=s.scale.gameSize.width;s.scale.gameSize.width=width;s.layout();
-      const items=[s.potionButton,s.lunchButton],other=[s.attackButton,s.dodgeButton,s.skillButton,s.talkButton];
+      const items=[s.potionButton,s.lunchButton],other=[s.attackButton,s.dodgeButton,s.blockButton,...s.skillButtons,s.talkButton];
       layouts.push(items.every((a,i)=>{
         const all=[...other,...items.filter((_,j)=>j!==i)];
         return a.image.x-a.size*1.2>=0&&a.image.x+a.size*1.2<=width&&a.image.y+a.size*1.2<=720&&
@@ -2078,6 +2122,7 @@ test('회피·막기·회전베기는 원형 대기가 줄어들고 메뉴에서
   const result=await evaluate(`(()=>{
     const s=window.__game.scene.getScene('game');
     const tick=(n=1)=>{for(let i=0;i<n;i++)s.update(0,50);};
+    s.skillSlots[0]='spin';s.refreshSkillButtons();const skillButton=s.skillButtons[0];
     const state=b=>({seconds:b.cooldownSeconds,step:b.cooldownStep,visible:b.cooldownShade.visible});
     // 게임 시계가 소수 ms에서 시작해도(실제 프레임 간격에 따라 달라진다) 남은 초가 1초 더 보이지 않아야 한다.
     s.now=1573.3629902798957;
@@ -2091,12 +2136,12 @@ test('회피·막기·회전베기는 원형 대기가 줄어들고 메뉴에서
     tick(8);s.blockButton.pressed=true;tick();const block=state(s.blockButton);
     tick(10);const blockHalf=state(s.blockButton);
     tick(12);const blockDone=state(s.blockButton);
-    s.mp=s.maxMp;s.skillButton.pressed=true;tick();const skill=state(s.skillButton);
-    const labels=[s.dodgeButton,s.skillButton].every(b=>{
+    s.mp=s.maxMp;skillButton.pressed=true;tick();const skill=state(skillButton);
+    const labels=[s.dodgeButton,skillButton].every(b=>{
       const a=b.cooldownText.getBounds(),c=b.text.getBounds();return a.bottom<c.top&&c.bottom<b.image.y+b.size;
     });
-    tick(10);const skillHalf=state(s.skillButton);
-    tick(12);s.mp=0;tick();const noMana=state(s.skillButton);
+    tick(10);const skillHalf=state(skillButton);
+    tick(12);s.mp=0;tick();const noMana=state(skillButton);
     return {dodge,half,frozen,reset,dex,block,blockHalf,blockDone,skill,skillHalf,noMana,labels};
   })()`);
   assert.deepEqual(result.dodge,{seconds:10,step:360,visible:true});

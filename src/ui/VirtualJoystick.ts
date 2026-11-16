@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH_UI } from '../config';
+import { joystickCenter, type Rect } from './buttonLayout';
 
 export interface JoystickOptions {
   x: number;
@@ -8,12 +9,16 @@ export interface JoystickOptions {
   radius?: number;
   /** 이 비율보다 작은 입력은 무시한다 (0~1) */
   deadZone?: number;
+  /** false면 누르기를 받지 않는다 (메뉴·창이 열려 있을 때) */
+  canGrab?: () => boolean;
 }
 
 /**
- * 화면에 고정된 원형 가상 조이스틱.
+ * 누른 자리에서 시작하는 원형 가상 조이스틱.
  *
- * - 패드 안(약간의 여유 포함)에서 시작한 터치만 잡는다.
+ * - 왼쪽 아래 영역(setZone) 안 어디를 눌러도 그 자리가 패드의 중심이 된다.
+ *   영역을 정하지 않았으면 쉬는 자리의 패드 안(약간의 여유 포함)에서 시작한 터치만 잡는다.
+ * - 손을 떼면 패드는 쉬는 자리(setPosition)로 돌아간다.
  * - 터치마다 포인터 ID를 기억하므로 다른 손가락으로 버튼을 눌러도 간섭하지 않는다.
  * - `vector`는 방향(360도)과 세기(0~1)를 함께 담는다.
  */
@@ -34,6 +39,11 @@ export class VirtualJoystick {
   private pointerId: number | null = null;
   private centerX: number;
   private centerY: number;
+  /** 손을 뗐을 때 돌아가는 자리 */
+  private restX: number;
+  private restY: number;
+  private zone?: Rect;
+  private readonly canGrab: () => boolean;
 
   constructor(scene: Phaser.Scene, options: JoystickOptions) {
     this.scene = scene;
@@ -42,6 +52,9 @@ export class VirtualJoystick {
     this.deadZone = options.deadZone ?? 0.12;
     this.centerX = options.x;
     this.centerY = options.y;
+    this.restX = options.x;
+    this.restY = options.y;
+    this.canGrab = options.canGrab ?? (() => true);
 
     VirtualJoystick.ensureTextures(scene, this.baseRadius);
 
@@ -87,20 +100,41 @@ export class VirtualJoystick {
     return this.pointerId !== null;
   }
 
+  /** 쉬는 자리. 잡고 있지 않으면 패드도 바로 옮긴다. */
   setPosition(x: number, y: number): void {
+    this.restX = x;
+    this.restY = y;
+    if (this.isActive) return;
     this.centerX = x;
     this.centerY = y;
     this.base.setPosition(x, y);
-    if (!this.isActive) this.thumb.setPosition(x, y);
+    this.thumb.setPosition(x, y);
+  }
+
+  /** 누르면 그 자리에서 조이스틱이 시작되는 영역 (화면 좌표) */
+  setZone(zone: Rect): void {
+    this.zone = zone;
   }
 
   private onDown(pointer: Phaser.Input.Pointer): void {
-    if (this.pointerId !== null) return;
-    // 패드 가장자리를 살짝 벗어난 터치도 받아준다.
-    const grab = this.radius * 1.35;
-    const dx = pointer.x - this.centerX;
-    const dy = pointer.y - this.centerY;
-    if (dx * dx + dy * dy > grab * grab) return;
+    if (this.pointerId !== null || !this.canGrab()) return;
+    const zone = this.zone;
+    if (zone) {
+      if (pointer.x < zone.left || pointer.x > zone.right || pointer.y < zone.top || pointer.y > zone.bottom) return;
+      // 누른 자리가 패드의 중심이 된다(화면 밖으로 나가지 않게만 당긴다).
+      const { width, height } = this.scene.scale.gameSize;
+      const center = joystickCenter(pointer.x, pointer.y, this.radius, width, height);
+      this.scene.tweens.killTweensOf([this.base, this.thumb]);
+      this.centerX = center.x;
+      this.centerY = center.y;
+      this.base.setPosition(center.x, center.y);
+    } else {
+      // 패드 가장자리를 살짝 벗어난 터치도 받아준다.
+      const grab = this.radius * 1.35;
+      const dx = pointer.x - this.centerX;
+      const dy = pointer.y - this.centerY;
+      if (dx * dx + dy * dy > grab * grab) return;
+    }
 
     this.pointerId = pointer.id;
     this.base.setAlpha(0.8);
@@ -124,11 +158,15 @@ export class VirtualJoystick {
     this.vector.set(0, 0);
     this.base.setAlpha(0.55);
     this.thumb.setAlpha(0.8);
+    // 패드와 스틱이 함께 쉬는 자리로 돌아간다.
+    this.centerX = this.restX;
+    this.centerY = this.restY;
+    this.scene.tweens.killTweensOf([this.base, this.thumb]);
     this.scene.tweens.add({
-      targets: this.thumb,
-      x: this.centerX,
-      y: this.centerY,
-      duration: 90,
+      targets: [this.base, this.thumb],
+      x: this.restX,
+      y: this.restY,
+      duration: 120,
       ease: 'Quad.easeOut',
     });
   }
