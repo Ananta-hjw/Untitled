@@ -604,22 +604,24 @@ test('적을 쓰러뜨리면 경험치가 쌓이고 레벨이 오르면 체력·
       label: s2.player.list.find((o) => o.text?.startsWith?.('Lv.'))?.text };
     return { before, hurtHp, twoKills, levelUp, restarted, saved: JSON.parse(localStorage.getItem('untitled-rpg.save')) };
   })()`);
-  assert.deepEqual(result.before, { level: 1, xp: 0, maxHp: 100, damageMax: 13 });
+  // 레벨 1: 기본 체력, 공격력은 처음 끼고 있는 연습용 검(STR +1)만큼 높다.
+  assert.deepEqual(result.before, { level: 1, xp: 0, maxHp: 100, damageMax: 14 });
   assert.deepEqual(result.twoKills, { level: 1, xp: 20, hp: result.hurtHp });
   assert.equal(result.levelUp.level, 2);
   assert.equal(result.levelUp.xp, 0);
-  assert.equal(result.levelUp.maxHp, 112);
-  assert.equal(result.levelUp.hp, 112);
+  // 레벨만으로는 체력이 조금 오르고(나머지는 능력치 포인트로 올린다), 레벨이 오르면 가득 찬다.
+  assert.equal(result.levelUp.maxHp, 104);
+  assert.equal(result.levelUp.hp, 104);
   assert.ok(result.levelUp.damageMax > result.before.damageMax);
   assert.equal(result.levelUp.label, 'Lv. 2');
-  assert.deepEqual(result.restarted, { level: 2, xp: 7, maxHp: 112, hp: 112, label: 'Lv. 2' });
+  assert.deepEqual(result.restarted, { level: 2, xp: 7, maxHp: 104, hp: 104, label: 'Lv. 2' });
   assert.deepEqual(result.saved, { version: 1, level: 2, xp: 7 });
 
   // 페이지를 새로 열어도(앱을 껐다 켠 것과 같음) 이어서 시작하고, 깨진 저장은 무시한다.
   await load();
   const reopened = await evaluate(`(() => { const s = window.__game.scene.getScene('game');
     return { level: s.progress.level, xp: s.progress.xp, maxHp: s.player.maxHp }; })()`);
-  assert.deepEqual(reopened, { level: 2, xp: 7, maxHp: 112 });
+  assert.deepEqual(reopened, { level: 2, xp: 7, maxHp: 104 });
   await evaluate(`localStorage.setItem('untitled-rpg.save', '{broken'); true`);
   await load();
   const corrupted = await evaluate(`(() => { const s = window.__game.scene.getScene('game');
@@ -1457,7 +1459,7 @@ test('도마뱀은 준비 중 멈추고 잠근 방향으로 돌진하며 한 번
     e.respawn(900,700);e.beginWindup(0,200,0);e.interrupt(700);e.update(1000,.05,p,s.walkArea,s.nav,s.onEnemyStrike);
     return {hit,miss,interrupted:e.character.x===900};
   })()`);
-  assert.equal(r.hit.still,true);assert.equal(r.hit.moved,true);assert.equal(r.hit.damage,12);
+  assert.equal(r.hit.still,true);assert.equal(r.hit.moved,true);assert.equal(r.hit.damage,11); // 12에서 처음 입은 낡은 수련복(DEF +1)만큼 줄어든다
   assert.equal(r.miss.damage,0);assert.equal(r.miss.y,700);assert.equal(r.interrupted,true);
 });
 
@@ -1486,6 +1488,103 @@ test('새 몬스터도 실제 검날에 맞아 쓰러지고 종류별 경험치�
     return s.now===now&&e.projectile.x===x;
   })()`);
   assert.equal(paused,true);
+});
+
+test('캐릭터 창: 포인트로 능력치를 올리고, 도란에게 장비를 사서 끼면 전투 수치가 바뀌며, 다시 켜도 남는다', async () => {
+  await load('village');
+  await evaluate(`localStorage.setItem('untitled-rpg.save', JSON.stringify({ version: 1, level: 3, xp: 0 }));
+    localStorage.setItem('untitled-rpg.inventory', JSON.stringify({ version: 1, gold: 500, items: {} }));
+    localStorage.removeItem('untitled-rpg.character'); localStorage.removeItem('untitled-rpg.quests');`);
+  await load('in-smithy');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    let t = performance.now();
+    const before = { damage: s.stats.damageMax, maxHp: s.player.maxHp, points: s.characterView().pointsLeft };
+    // 정보 버튼으로 상태 탭을 열면 게임이 멈춘다.
+    s.characterButton.pressed = true;
+    g.step(t += 16, 16);
+    const opened = s.characterPanel.isOpen && s.characterPanel.currentTab === 'status';
+    const clock = s.now; g.step(t += 16, 16);
+    const frozen = s.now === clock;
+    s.allocateStat('vit'); s.allocateStat('vit');
+    const vit = { maxHp: s.player.maxHp, points: s.characterView().pointsLeft };
+    s.characterPanel.close();
+    // 도란과 평소 대화를 마치면 대장간이 열린다.
+    const doran = s.npcs.find(n => n.def.id === 'doran');
+    // 처음에는 도란이 퀘스트를 준다(그 대화 뒤에는 열지 않는다). 다시 말을 걸면 대장간이 열린다.
+    for (let i = 0; i < 2; i++) {
+      s.openDialogue(doran.spot);
+      while (s.dialogue.isOpen) s.dialogue.advance();
+    }
+    const smithy = s.characterPanel.isOpen && s.characterPanel.mode === 'smithy';
+    s.tradeGear('iron-sword', 'buy');
+    const gold = s.inventory.gold;
+    s.characterPanel.close();
+    s.openCharacterPanel('equip');
+    s.characterPanel.selectCell(0);
+    s.characterPanel.primary();
+    const equipped = s.character.gear.equipped.weapon;
+    s.characterPanel.close();
+    return { before, opened, frozen, vit, smithy, gold, equipped, damage: s.stats.damageMax };
+  })()`);
+  assert.equal(result.opened, true);
+  assert.equal(result.frozen, true);
+  assert.equal(result.before.points, 6);
+  assert.deepEqual(result.vit, { maxHp: result.before.maxHp + 20, points: 4 });
+  assert.equal(result.smithy, true, JSON.stringify(result));
+  assert.equal(result.gold, 200);
+  assert.equal(result.equipped, 'iron-sword');
+  assert.ok(result.damage > result.before.damage, JSON.stringify(result));
+  // 다시 불러와도 분배와 장비가 남는다.
+  await load('in-smithy');
+  const reloaded = await evaluate(`(() => { const s = window.__game.scene.getScene('game');
+    const r = { weapon: s.character.gear.equipped.weapon, vit: s.character.alloc.vit, bag: s.character.gear.bag['practice-sword'] };
+    localStorage.removeItem('untitled-rpg.character'); localStorage.removeItem('untitled-rpg.save'); localStorage.removeItem('untitled-rpg.inventory'); localStorage.removeItem('untitled-rpg.quests');
+    return r; })()`);
+  assert.deepEqual(reloaded, { weapon: 'iron-sword', vit: 2, bag: 1 });
+});
+
+test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공격은 피해가 없고 적이 휘청이며 반격이 열리고, 늦거나 뒤에서 오면 그대로 맞으며, 민첩이 높으면 피하기도 한다', async () => {
+  await load('south-field');
+  await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.length > 0; })()`));
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player, e = s.enemies[0];
+    let t = performance.now();
+    const settle = () => { for (let i = 0; i < 60; i++) g.step(t += 16, 16); };
+    s.derived.evadeChance = 0;
+    const strike = (side) => {
+      e.character.placeAt(p.x + 80 * side * p.facing, p.y);
+      e.character.facing = -side * p.facing;
+      p.invulnerableUntil = 0; p.hp = p.maxHp;
+      s.onEnemyStrike(e);
+      return p.maxHp - p.hp;
+    };
+    const parry = () => { s.parryReadyAt = 0; s.blockButton.pressed = true; g.step(t += 16, 16); };
+    parry();
+    const blocking = s.blocking, shield = s.shield.visible;
+    const front = strike(1);
+    const stunned = e.state, counter = s.counterUntil > s.now, again = s.now >= s.parryReadyAt;
+    settle();
+    const open = strike(1);
+    settle(); parry();
+    const back = strike(-1);
+    settle(); parry(); settle();
+    const late = strike(1);
+    // 민첩: 회피 확률이 100%면 맞지 않는다.
+    settle(); s.derived.evadeChance = 1;
+    const evaded = strike(1);
+    s.derived.evadeChance = 0;
+    return { blocking, shield, front, stunned, counter, again, open, back, late, evaded };
+  })()`);
+  assert.equal(result.blocking, true);
+  assert.equal(result.shield, true);
+  assert.equal(result.front, 0, '패링하면 피해가 없다');
+  assert.ok(result.open > 0, JSON.stringify(result));
+  assert.equal(result.counter, true);
+  assert.equal(result.again, true, '패링에 성공하면 바로 다시 막을 수 있다');
+  assert.equal(result.back, result.open, '뒤에서 온 공격은 막지 못한다');
+  assert.equal(result.late, result.open, '판정 시간이 지나면 막지 못한다');
+  assert.equal(result.evaded, 0);
 });
 
 test('회전 베기는 마나를 써서 둘레의 적을 한꺼번에 베고, 마나가 모자라면 쓸 수 없으며, 마나는 다시 찬다', async () => {

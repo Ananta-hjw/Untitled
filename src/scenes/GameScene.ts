@@ -26,8 +26,14 @@ import {
   HERO_WALK_NATURAL_SPEED,
   MANA,
   SPIN_SLASH,
+  BLOCK,
 } from '../config';
-import { addMana, inSpinRadius, maxManaForLevel, regenMana } from '../combat/mana';
+import { addMana, inSpinRadius, regenMana } from '../combat/mana';
+import { allocate, deriveStats, mitigate, pointsLeft, totalStats, type DerivedStats, type StatId } from '../entities/attributes';
+import { CHARACTER_SAVE_KEY, newCharacter, parseCharacter, serializeCharacter, type CharacterData } from '../entities/characterData';
+import { GEAR, SLOT_INFO, buyGear, equip, gearBonus, sellGear, unequip, type GearId } from '../items/equipment';
+import { CharacterPanel, type CharacterTab, type CharacterView } from '../ui/CharacterPanel';
+import { preloadIcons } from '../ui/icons';
 import { dodgeDistanceRatio, lungeProgress, locomotionRate } from '../entities/movement';
 import { Character } from '../entities/Character';
 import { addXp, statsForLevel, xpToNext, type LevelStats, type Progress } from '../entities/progression';
@@ -115,6 +121,16 @@ export class GameScene extends Phaser.Scene {
   private comboStage = 0;
   private comboExpiresAt = 0;
   private dodgeButton!: ActionButton;
+  /** 막기 버튼(누르고 있는 동안 막는다) */
+  private blockButton?: ActionButton;
+  private blockKeys: Phaser.Input.Keyboard.Key[] = [];
+  /** 지금 막고 있는지 (패링 판정 시간 안인지, updatePlayer가 매 프레임 정한다) */
+  private blocking = false;
+  /** 패링 판정이 끝나는 시각과, 다시 막을 수 있는 시각 (게임 시계) */
+  private parryUntil = 0;
+  private parryReadyAt = 0;
+  /** 막는 동안 주인공 앞에 그리는 방패 빛 */
+  private shield?: Phaser.GameObjects.Graphics;
   private dodgeKeys: Phaser.Input.Keyboard.Key[] = [];
   private dodgeUntil = 0;
   private dodgeProgress = 1;
@@ -156,6 +172,13 @@ export class GameScene extends Phaser.Scene {
   /** 플레이어의 레벨과 경험치. 쓰러져도 잃지 않고, 바뀔 때마다 기기에 저장한다. */
   private progress: Progress = { level: 1, xp: 0 };
   private stats: LevelStats = statsForLevel(1);
+  /** 능력치 분배와 장비 (untitled-rpg.character에 저장) */
+  private character: CharacterData = newCharacter();
+  /** 레벨·능력치·장비로 계산한 전투 수치. 바뀔 때마다 recomputeStats()로 다시 만든다. */
+  private derived: DerivedStats = deriveStats(1, totalStats(newCharacter().alloc));
+  private characterPanel?: CharacterPanel;
+  private characterButton?: ActionButton;
+  private characterKeys: Phaser.Input.Keyboard.Key[] = [];
   private storage?: SaveStorage;
   private fromTitle = false;
   /** 잿빛 나방의 가루에 닿아 느려진 상태가 끝나는 게임 시각 */
@@ -256,8 +279,9 @@ export class GameScene extends Phaser.Scene {
     const saved = loadProgress(this.storage);
     if (saved) {
       this.progress = saved;
-      this.stats = statsForLevel(saved.level);
     }
+    this.character = this.loadCharacter();
+    this.recomputeStats();
   }
 
   /** 해 질 무렵(chapterOne.isDusk)에는 남쪽 들판에 잿빛 나방이 더 나온다. */
@@ -319,6 +343,17 @@ export class GameScene extends Phaser.Scene {
     this.pauseKeys = [];
     this.progress = { level: 1, xp: 0 };
     this.stats = statsForLevel(1);
+    this.character = newCharacter();
+    this.derived = deriveStats(1, totalStats(this.character.alloc));
+    this.characterPanel = undefined;
+    this.characterButton = undefined;
+    this.characterKeys = [];
+    this.blockButton = undefined;
+    this.blockKeys = [];
+    this.blocking = false;
+    this.parryUntil = 0;
+    this.parryReadyAt = 0;
+    this.shield = undefined;
     this.playerRespawnAt = undefined;
     this.deathMessage = undefined;
     this.traveling = false;
@@ -338,6 +373,7 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     preloadHeroSprite(this);
+    preloadIcons(this);
     preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns()]);
     preloadVillage(this, this.map);
     preloadNpcs(this, NPCS);
@@ -384,6 +420,19 @@ export class GameScene extends Phaser.Scene {
     this.skillButton.setSizeScale(sizeScale(this.settings.buttonSize));
     this.skillKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K)] : [];
     this.itemPanel = new ItemPanel(this, (action) => this.onItemAction(action), () => this.onResume());
+    this.characterPanel = new CharacterPanel(this, {
+      allocate: (stat) => this.allocateStat(stat),
+      equip: (id, slot) => this.changeGear(equip(this.character.gear, id, slot), `${GEAR[id].name} 장착`),
+      unequip: (slot) => this.changeGear(unequip(this.character.gear, slot), `${SLOT_INFO[slot].name} 장비 해제`),
+      use: (id) => this.onItemAction({ type: 'use', id }),
+      buy: (id) => this.tradeGear(id, 'buy'),
+      sell: (id) => this.tradeGear(id, 'sell'),
+      close: () => this.onResume(),
+    });
+    // 캐릭터 창 버튼(일시정지 버튼 아래). I: 아이템, C: 상태
+    this.characterButton = new ActionButton(this, { x: 0, y: 0, radius: 30, label: '정보', color: 0x2a2018, fontSize: 17 });
+    this.characterKeys = this.input.keyboard
+      ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C), this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I)] : [];
     this.worldMap = new WorldMap(this, this.map, () => this.onResume());
     this.exitHint = new ExitHint(this, this.map);
     this.minimap.onTap(() => this.openWorldMap());
@@ -422,7 +471,7 @@ export class GameScene extends Phaser.Scene {
     if (this.player) {
       this.minimap?.update(delta, this.player, this.collectMinimap);
       this.exitHint?.update(this.player, this.traveling || !this.player.alive || this.dialogue.isOpen || this.pauseMenu.isOpen
-        || !!this.worldMap?.isOpen || !!this.itemPanel?.isOpen || !!this.storyChoice?.isOpen,
+        || !!this.worldMap?.isOpen || !!this.itemPanel?.isOpen || !!this.characterPanel?.isOpen || !!this.storyChoice?.isOpen,
         chapterPhase(this.quests) === 'raid' && this.mapId === 'village');
     }
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
@@ -450,6 +499,15 @@ export class GameScene extends Phaser.Scene {
       if (escape) this.itemPanel.close();
       return;
     }
+    // 캐릭터 창(상태·장비·아이템)도 열려 있으면 게임 시계를 멈춘다. Esc나 같은 키로 닫는다.
+    const characterKey = this.characterKeys.find((key) => Phaser.Input.Keyboard.JustDown(key));
+    if (this.characterPanel?.isOpen) {
+      if (escape || characterKey) this.characterPanel.close();
+      return;
+    }
+    if (this.characterButton?.consumePress()) this.openCharacterPanel('status');
+    else if (characterKey) this.openCharacterPanel(characterKey.keyCode === Phaser.Input.Keyboard.KeyCodes.I ? 'items' : 'status');
+    if (this.characterPanel?.isOpen) return;
     // 전체 지도도 열려 있으면 게임 시계를 멈춘다. Esc나 M으로 닫는다.
     let mapKey = false;
     for (const key of this.mapKeys) if (Phaser.Input.Keyboard.JustDown(key)) mapKey = true;
@@ -499,6 +557,7 @@ export class GameScene extends Phaser.Scene {
     this.updateRespawns(time);
     this.updateAttackLunge(time);
     this.updatePlayer(time, dt);
+    this.drawShield(time);
     if (this.checkExit()) return;
     this.updateAttackTrace(time);
     this.nav.setTarget(this.player.x, this.player.y);
@@ -565,7 +624,7 @@ export class GameScene extends Phaser.Scene {
       this.player.setMaxHp(this.stats.maxHp + this.herb, true);
     }
     // 마나: 처음에는 가득, 맵을 옮길 때는 이어 받는다.
-    this.maxMp = maxManaForLevel(this.progress.level);
+    this.maxMp = this.derived.maxMp;
     this.mp = this.carriedMp !== undefined ? Phaser.Math.Clamp(this.carriedMp, 0, this.maxMp) : this.maxMp;
     if (this.carriedHp !== undefined) this.player.hp = Phaser.Math.Clamp(Math.round(this.carriedHp), 1, this.player.maxHp);
   }
@@ -625,6 +684,9 @@ export class GameScene extends Phaser.Scene {
       color: 0x2f4a86,
       fontSize: 24,
     });
+    this.blockButton = new ActionButton(this, { x: 0, y: 0, radius: 44, label: '막기', color: 0x5a6b7a, fontSize: 20 });
+    this.blockKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L)] : [];
+    this.shield = this.add.graphics().setVisible(false);
 
     const keyboard = this.input.keyboard;
     if (keyboard) {
@@ -701,9 +763,13 @@ export class GameScene extends Phaser.Scene {
     this.hud.layout(width);
     this.attackButton.setPosition(width - 170, VIEW_HEIGHT - 185);
     this.dodgeButton.setPosition(width - 330, VIEW_HEIGHT - 105);
+    // 막기 버튼은 공격 버튼 오른쪽 아래 모서리
+    this.blockButton?.setPosition(width - 58, VIEW_HEIGHT - 58);
     // 대화 버튼은 공격 버튼 바로 위. 버튼 크기 설정이 바뀌어도 겹치지 않게 간격을 다시 잡는다.
     this.talkButton.setPosition(width - 170, VIEW_HEIGHT - 185 - this.attackButton.size - this.talkButton.size - 16);
     this.pauseButton.setPosition(width - 46, 74);
+    this.characterButton?.setPosition(width - 46, 148);
+    this.characterPanel?.layout(width);
     // 미니맵은 일시정지 버튼 왼쪽, 퀘스트 목록은 그 아래에 오른쪽으로 맞춘다.
     this.minimap?.layout(width - 172, 92);
     if (this.minimap) this.questTracker?.layout(width - 20, this.minimap.bottom + 4);
@@ -744,6 +810,9 @@ export class GameScene extends Phaser.Scene {
     }
     const attackPressed = this.attackButton.consumePress() || this.keyboardAttackPressed;
     this.keyboardAttackPressed = false;
+    let parryPressed = this.blockButton?.consumePress() ?? false;
+    for (const key of this.blockKeys) if (Phaser.Input.Keyboard.JustDown(key)) parryPressed = true;
+    this.blocking = false;
     if (!player.alive) {
       this.attackBufferedUntil = undefined;
       return;
@@ -776,11 +845,20 @@ export class GameScene extends Phaser.Scene {
       this.startAttack(time, v.x, v.y);
       this.attackBufferedUntil = undefined;
     }
+    // 막기(패링): 누르는 순간부터 짧게만 막는다. 공격·회전 베기 중에는 시작하지 않는다.
+    this.blockButton?.setEnabled(time >= this.parryReadyAt);
+    if (parryPressed && time >= this.parryReadyAt && !player.isAttacking && this.spinHitAt === undefined) {
+      this.parryUntil = time + BLOCK.windowMs;
+      this.parryReadyAt = time + BLOCK.cooldownMs;
+      this.dismissHint();
+    }
+    this.blocking = time < this.parryUntil && !player.isAttacking;
 
     const fromX = player.x;
     const fromY = player.y;
     if (force > 0) {
-      const speed = PLAYER_SPEED * (player.isAttacking ? PLAYER.attackMoveRatio : 1) * (this.now < this.slowedUntil ? ASH_SLOW.speedScale : 1);
+      const speed = PLAYER_SPEED * (player.isAttacking ? PLAYER.attackMoveRatio : 1) * (this.now < this.slowedUntil ? ASH_SLOW.speedScale : 1)
+        * (this.blocking ? BLOCK.moveScale : 1);
       const next = this.walkArea.move(
         player.x,
         player.y,
@@ -884,7 +962,8 @@ export class GameScene extends Phaser.Scene {
     this.dodgeOrigin.x = player.x;
     this.dodgeOrigin.y = player.y;
     this.justDodged = false;
-    this.dodgeReadyAt = time + DODGE.cooldownMs;
+    // 민첩(DEX)이 높을수록 회피를 빨리 다시 쓴다.
+    this.dodgeReadyAt = time + DODGE.cooldownMs * this.derived.dodgeCooldown;
     this.nextAttackAt = Math.max(this.nextAttackAt, this.dodgeUntil);
     this.nextGhostAt = 0;
     player.invulnerableUntil = Math.max(player.invulnerableUntil, this.dodgeUntil + DODGE.graceMs);
@@ -1022,7 +1101,8 @@ export class GameScene extends Phaser.Scene {
         bounds.width * 0.42 + PLAYER.bladeRadius, bounds.height * 0.42 + PLAYER.bladeRadius)) continue;
       trace.hit.add(enemy);
 
-      const strike = strikeKind(trace.counter, finisher, Math.random());
+      // 행운(LUK)만큼 치명타 확률이 오른다: 굴린 값을 그만큼 낮춘다.
+      const strike = strikeKind(trace.counter, finisher, Math.random() - (this.derived.critChance - HIT_FEEL.critChance));
       heaviest = heavierKind(heaviest, strike.kind);
       const bonus = trace.counter ? JUST_DODGE.counterDamage : 1;
       const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * combo.damage * bonus * critMultiplier(strike.crit));
@@ -1074,11 +1154,11 @@ export class GameScene extends Phaser.Scene {
 
     if (result.levelsGained > 0) {
       const player = this.player;
-      this.stats = statsForLevel(result.level);
+      this.recomputeStats();
       if (this.herb) this.herb = herbBonus(this.stats.maxHp);
       player.setMaxHp(this.stats.maxHp + this.herb, player.alive);
-      this.maxMp = maxManaForLevel(result.level);
       this.mp = this.maxMp;
+      this.hud.showCallout(`능력치 포인트 +${pointsLeft(result.level, this.character.alloc)} · 상태창에서 올려 보세요`);
       player.setLevel(result.level);
       this.hud.showLevelUp(result.level);
       this.progressEffects.levelUpBurst(player.x, player.y);
@@ -1108,7 +1188,7 @@ export class GameScene extends Phaser.Scene {
       stressLabel: () => `성능 테스트: ${this.stressCount ? `${this.stressCount}명` : '끔'}`,
       // 마을에서 사람 수를 바꿔 다시 시작한다. 끔 → 50 → 100 → 200 → 끔.
       onStress: () => this.scene.restart({ map: 'village', stress: nextStressCount(this.stressCount) }),
-      onBag: () => this.openItemPanel('bag'),
+      onBag: () => this.openCharacterPanel('items'),
     });
     this.pauseKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)] : [];
     // 안드로이드 뒤로가기: 바로 앱을 끄지 않고 일시정지 메뉴를 연다 (웹에서는 아무 일도 없다).
@@ -1126,6 +1206,7 @@ export class GameScene extends Phaser.Scene {
     const buttons = sizeScale(settings.buttonSize);
     this.attackButton.setSizeScale(buttons);
     this.dodgeButton.setSizeScale(buttons);
+    this.blockButton?.setSizeScale(buttons);
     this.talkButton.setSizeScale(buttons);
     this.potionButton?.setSizeScale(buttons);
     this.skillButton?.setSizeScale(buttons);
@@ -1145,12 +1226,15 @@ export class GameScene extends Phaser.Scene {
     if (this.storyChoice?.isOpen) return;
     if (!this.pauseMenu || this.pauseMenu.isOpen) return;
     this.pauseButton.setVisible(false);
+    this.characterButton?.setVisible(false);
     this.pauseMenu.open();
   }
 
   /** 메뉴를 닫을 때 메뉴를 누르던 입력이 공격·회피·대화로 이어지지 않게 비운다. */
   private onResume(): void {
     this.pauseButton.setVisible(true);
+    this.characterButton?.setVisible(true);
+    this.characterButton?.consumePress();
     this.clearAttackInput();
     this.dodgeButton.consumePress();
     this.talkButton.consumePress();
@@ -1263,6 +1347,9 @@ export class GameScene extends Phaser.Scene {
       }
       // 메리나와의 평소 대화가 끝나면 잡화점을 연다.
       if (!quest && target.id === 'npc-merina') this.openItemPanel('shop');
+      // 도란과 대화가 끝나면 대장간(장비 구매·판매)을 연다. 퀘스트를 막 받거나 끝낸 대화 뒤에는 열지 않는다
+      // (진행 중인 퀘스트를 다시 일러 주는 대화 뒤에는 연다. 그러지 않으면 퀘스트 동안 장비를 못 산다).
+      if (!quest?.accepted && !quest?.completed && target.id === 'npc-doran') this.openCharacterPanel('items', true);
       // 로제타와의 평소 대화가 끝나면 쉬어 갈지 묻는다 (습격의 밤에는 묻지 않는다).
       // 치유소의 에일라와 평소 대화가 끝나면 치료해 줄지 묻는다.
       if (!quest && target.id === 'npc-eila' && this.mapId === 'in-clinic') {
@@ -1437,7 +1524,7 @@ export class GameScene extends Phaser.Scene {
       hits++;
       const length = Math.hypot(dx, dy / VERTICAL_SPEED_RATIO) || 1;
       const dirX = dx / length, dirY = dy / VERTICAL_SPEED_RATIO / length;
-      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * SPIN_SLASH.damage);
+      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * SPIN_SLASH.damage * this.derived.skillDamage);
       const died = c.hurt(damage);
       this.showDamage(c.x, c.y - 100, damage, '#8fc8ff', 46);
       const bounds = c.sprite.getBounds(this.boundsScratch);
@@ -1486,7 +1573,9 @@ export class GameScene extends Phaser.Scene {
 
   /** 몬스터 보상을 바로 줍는다. 점액은 슬라임만 떨어뜨린다. */
   private collectDrop(x: number, y: number, enemy: Enemy): void {
-    const drop = enemy.kind === 'slime' ? slimeDrop(Math.random) : { gold: Phaser.Math.Between(5, 9), items: [] };
+    const rolled = enemy.kind === 'slime' ? slimeDrop(Math.random) : { gold: Phaser.Math.Between(5, 9), items: [] };
+    // 행운(LUK)만큼 골드를 더 줍는다.
+    const drop = { ...rolled, gold: Math.round(rolled.gold * this.derived.goldGain) };
     this.inventory = applyDrop(this.inventory, drop);
     this.progressEffects.showPopup(x, y - 150, `+${drop.gold} G`, '#ffd23f');
     drop.items.forEach((item, i) => this.progressEffects.showPopup(x, y - 120 + i * 26, `${ITEMS[item.id].name} +${item.count}`, '#a8f0ff'));
@@ -1507,12 +1596,13 @@ export class GameScene extends Phaser.Scene {
 
   /** 전체 지도를 연다. 대화·메뉴·이동 중에는 열지 않는다. */
   private openWorldMap(): void {
-    if (!this.worldMap || this.storyChoice?.isOpen || this.worldMap.isOpen || this.dialogue.isOpen || this.pauseMenu.isOpen || this.itemPanel?.isOpen || this.traveling) return;
+    if (!this.worldMap || this.storyChoice?.isOpen || this.worldMap.isOpen || this.dialogue.isOpen || this.pauseMenu.isOpen || this.itemPanel?.isOpen || this.characterPanel?.isOpen || this.traveling) return;
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
     this.talkButton.setVisible(false);
     this.talkMarker.setVisible(false);
     this.pauseButton.setVisible(false);
+    this.characterButton?.setVisible(false);
     // 지도에는 퀘스트 표시(!/?)를 띄우지 않는다. 퀘스트는 머리 위·미니맵·추적창으로 안내한다.
     this.exitHint?.update(this.player, true, false);
     this.worldMap.show(this.player, { npcs: this.npcs.map(n => ({ x: n.x, y: n.y })),
@@ -1536,12 +1626,123 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ---------------------------------------------------------------- 능력치와 장비
+
+  /** 레벨·분배한 능력치·장비로 전투 수치를 다시 계산한다. */
+  private recomputeStats(): void {
+    const stats = totalStats(this.character.alloc, gearBonus(this.character.gear));
+    this.derived = deriveStats(this.progress.level, stats);
+    this.stats = { maxHp: this.derived.maxHp, damageMin: this.derived.damageMin, damageMax: this.derived.damageMax };
+    this.maxMp = this.derived.maxMp;
+  }
+
+  /** 능력치나 장비가 바뀐 뒤: 최대 체력·마나를 맞추고(늘어난 만큼 채운다) 저장한다. */
+  private applyCharacterChange(): void {
+    const player = this.player;
+    const beforeHp = player?.maxHp ?? 0, beforeMp = this.maxMp;
+    this.recomputeStats();
+    if (player) {
+      const max = this.stats.maxHp + this.herb;
+      player.setMaxHp(max, false);
+      if (max > beforeHp && player.alive) player.hp = Math.min(max, player.hp + (max - beforeHp));
+    }
+    if (this.maxMp > beforeMp) this.mp = Math.min(this.maxMp, this.mp + (this.maxMp - beforeMp));
+    this.mp = Math.min(this.mp, this.maxMp);
+    this.saveCharacter();
+    this.drawHud();
+    this.characterPanel?.refresh(this.characterView());
+  }
+
+  private allocateStat(stat: StatId): void {
+    const next = allocate(this.character.alloc, stat, this.progress.level);
+    if (!next) {
+      this.characterPanel?.setStatus('남은 포인트가 없어요. 레벨이 오르면 받을 수 있어요.', true);
+      return;
+    }
+    this.character = { ...this.character, alloc: next };
+    this.applyCharacterChange();
+    this.characterPanel?.setStatus(`능력치를 올렸어요 · 남은 포인트 ${pointsLeft(this.progress.level, next)}`);
+  }
+
+  private changeGear(next: CharacterData['gear'] | null, message: string): void {
+    if (!next) {
+      this.characterPanel?.setStatus('이 칸에는 낄 수 없어요.', true);
+      return;
+    }
+    this.character = { ...this.character, gear: next };
+    this.applyCharacterChange();
+    this.characterPanel?.setStatus(message);
+  }
+
+  private tradeGear(id: GearId, type: 'buy' | 'sell'): void {
+    const result = type === 'buy' ? buyGear(this.inventory, this.character.gear, id) : sellGear(this.inventory, this.character.gear, id);
+    if (!result) {
+      this.characterPanel?.setStatus('거래할 수 없어요. 골드와 보유 수량을 확인해 주세요.', true);
+      return;
+    }
+    this.inventory = result.inventory;
+    this.character = { ...this.character, gear: result.gear };
+    this.saveInventory();
+    this.refreshInventory();
+    this.saveCharacter();
+    this.characterPanel?.refresh(this.characterView());
+    const def = GEAR[id];
+    this.characterPanel?.setStatus(type === 'buy' ? `${def.name} 구매 · −${def.price} G · 장비 탭에서 낄 수 있어요` : `${def.name} 판매 · +${def.sellPrice} G`);
+  }
+
+  private characterView(): CharacterView {
+    const bonus = gearBonus(this.character.gear);
+    return {
+      name: HERO_NAME,
+      level: this.progress.level,
+      hp: this.player?.hp ?? this.stats.maxHp,
+      mp: this.mp,
+      pointsLeft: pointsLeft(this.progress.level, this.character.alloc),
+      stats: totalStats(this.character.alloc, bonus),
+      bonus,
+      derived: { ...this.derived, maxHp: this.player?.maxHp ?? this.derived.maxHp },
+      inventory: this.inventory,
+      gear: this.character.gear,
+    };
+  }
+
+  /** 캐릭터 창을 연다. smithy면 도란의 대장간(장비 구매·판매). 대화·메뉴·이동 중에는 열지 않는다. */
+  private openCharacterPanel(tab: CharacterTab, smithy = false): void {
+    if (!this.characterPanel || this.characterPanel.isOpen || this.traveling || this.pauseMenu.isOpen || this.dialogue.isOpen
+      || this.itemPanel?.isOpen || this.worldMap?.isOpen || this.storyChoice?.isOpen) return;
+    this.clearAttackInput();
+    this.joystick.vector.set(0, 0);
+    this.talkButton.setVisible(false);
+    this.talkMarker.setVisible(false);
+    this.pauseButton.setVisible(false);
+    this.characterButton?.setVisible(false);
+    if (smithy) this.characterPanel.showSmithy(this.characterView());
+    else this.characterPanel.show(tab, this.characterView());
+  }
+
+  private loadCharacter(): CharacterData {
+    try {
+      return parseCharacter(this.storage?.getItem(CHARACTER_SAVE_KEY) ?? null, this.progress.level);
+    } catch {
+      return newCharacter();
+    }
+  }
+
+  private saveCharacter(): void {
+    try {
+      this.storage?.setItem(CHARACTER_SAVE_KEY, serializeCharacter(this.character));
+    } catch {
+      // 저장소가 막혀 있으면 이번 실행 동안만 기억한다.
+    }
+  }
+
   private openItemPanel(mode: 'bag' | 'shop'): void {
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
     this.talkButton.setVisible(false);
     this.talkMarker.setVisible(false);
     this.pauseButton.setVisible(false);
+    this.characterButton?.setVisible(false);
     this.itemPanel?.show(mode, this.inventory);
   }
 
@@ -1555,6 +1756,11 @@ export class GameScene extends Phaser.Scene {
       this.itemPanel?.setStatus(used ? `${ITEMS[action.id].name} 사용 · 체력 +${this.player.hp - before}`
         : this.player.hp >= this.player.maxHp ? '체력이 가득 차 있어요. 물품은 사용하지 않았습니다.' : '지금은 이 물품을 사용할 수 없어요.', !used);
       this.itemPanel?.refresh(this.inventory);
+      if (this.characterPanel?.isOpen) {
+        this.characterPanel.setStatus(used ? `${ITEMS[action.id].name} 사용 · 체력 +${this.player.hp - before}`
+          : this.player.hp >= this.player.maxHp ? '체력이 가득 차 있어요.' : '지금은 사용할 수 없어요.', !used);
+        this.characterPanel.refresh(this.characterView());
+      }
       return;
     }
     if (action.type === 'buy') next = buy(this.inventory, action.id);
@@ -1626,7 +1832,30 @@ export class GameScene extends Phaser.Scene {
     if (!reaches(player.x, player.y)) return false;
 
     player.invulnerableUntil = now + PLAYER.invulnerableMs;
-    const died = player.hurt(enemy.stats.damage, 0xff5a4a);
+    // 민첩(DEX): 일정 확률로 공격을 그냥 피한다.
+    if (Math.random() < this.derived.evadeChance) {
+      this.progressEffects.showPopup(player.x, player.y - 190, '회피', '#bfe9ff');
+      this.impacts.dust(player.x, player.y, 3, now, 30);
+      return true;
+    }
+    // 패링: 판정 시간 안에 앞쪽(바라보는 쪽)에서 온 공격은 피해 없이 막는다.
+    const sourceX = hit ? player.x - hit.dx : c.x;
+    if (this.blocking && (sourceX - player.x) * player.facing >= 0) {
+      // 방패 앞에서 불꽃이 튀고, 공격한 적은 휘청이며, 다음 공격은 반격이 된다. 바로 다시 막을 수 있다.
+      this.impacts.impact(player.x + player.facing * 60, player.y - 95, -player.facing, 0, 'counter', now, player.y);
+      this.hud.showCallout('패링!');
+      enemy.interrupt(now, BLOCK.stunMs);
+      this.counterUntil = now + JUST_DODGE.counterMs;
+      this.parryUntil = 0;
+      this.parryReadyAt = now;
+      this.cameras.main.shake(70, 0.002);
+      this.cameras.main.flash(90, 190, 215, 255);
+      this.hitStop('counter');
+      return true;
+    }
+    // 방어력(DEF)만큼 받는 피해가 줄어든다.
+    const taken = mitigate(enemy.stats.damage, this.derived);
+    const died = player.hurt(taken, 0xff5a4a);
     if (this.herb) {
       // 약초 기운은 처음 맞을 때 사라진다. 남은 체력이 기본 최대보다 많으면 기본 최대로 맞춘다.
       this.herb = 0;
@@ -1634,7 +1863,7 @@ export class GameScene extends Phaser.Scene {
       if (!died) this.hud.showCallout('약초 기운이 사라졌다');
     }
     player.knockback.set((hit?.dx ?? c.facing) * ENEMY.knockback, (hit?.dy ?? 0) * ENEMY.knockback * VERTICAL_SPEED_RATIO);
-    this.showDamage(player.x, player.y - 190, enemy.stats.damage, '#ff8a7a');
+    this.showDamage(player.x, player.y - 190, taken, '#ff8a7a');
     if (enemy.kind === 'ashen-moth') {
       // 부식성 가루: 잠깐 몸이 무거워진다.
       if (now >= this.slowedUntil) this.hud.showCallout('잿빛 가루에 몸이 무거워졌다');
@@ -1650,6 +1879,21 @@ export class GameScene extends Phaser.Scene {
     if (died) this.onPlayerDeath();
     return true;
   };
+
+  /** 막는 동안 주인공 앞(바라보는 쪽)에 반투명한 방패 빛을 그린다. */
+  private drawShield(time: number): void {
+    const shield = this.shield, player = this.player;
+    if (!shield) return;
+    shield.setVisible(this.blocking);
+    if (!this.blocking) return;
+    const x = player.x + player.facing * 58, y = player.y - 95;
+    const pulse = 0.75 + 0.25 * Math.sin(time / 90);
+    shield.clear().setDepth(player.y + 1);
+    shield.fillStyle(0x9fc4ff, 0.18 * pulse).fillEllipse(x, y, 46, 150);
+    shield.lineStyle(4, 0xd6e6ff, 0.75 * pulse).beginPath();
+    shield.arc(x - player.facing * 40, y, 80, player.facing > 0 ? -0.9 : Math.PI - 0.9, player.facing > 0 ? 0.9 : Math.PI + 0.9);
+    shield.strokePath();
+  }
 
   /** 게임 시간을 잠깐 멈춘다. 겹치면 더 긴 쪽을 따른다. */
   private hitStop(kind: HitKind): void {

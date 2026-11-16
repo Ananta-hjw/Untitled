@@ -65,7 +65,7 @@ export const PLAYER = {
 export const DODGE = {
   distance: 250,
   durationMs: 300,
-  cooldownMs: 900,
+  cooldownMs: 10000,
   /** 회피가 끝난 직후에도 잠깐 더 무적 */
   graceMs: 80,
 };
@@ -152,6 +152,7 @@ export const KNOCKBACK_DAMPING = 7;
  * 경험치와 레벨.
  *  - 다음 레벨까지 필요한 경험치 = xpBase + xpStep × (현재 레벨 - 1)  →  30, 50, 70, 90 …
  *  - 레벨이 오를 때마다 최대 체력 +hpPerLevel, 공격력(최소·최대 모두) +damagePerLevel (소수점은 반올림)
+ *    레벨만으로 오르는 기본 성장이다. 나머지는 레벨업 포인트로 올리는 능력치(ATTRIBUTES)와 장비가 더한다.
  * 레벨 1의 체력·공격력은 위의 PLAYER.maxHp, damageMin, damageMax다.
  */
 export const PROGRESSION = {
@@ -160,19 +161,19 @@ export const PROGRESSION = {
   xpBase: 30,
   xpStep: 20,
   maxLevel: 30,
-  hpPerLevel: 12,
-  damagePerLevel: 1.5,
+  hpPerLevel: 4,
+  damagePerLevel: 0.5,
 };
 
 /**
  * 마나와 회전 베기.
- *  - 최대 마나 = base + perLevel × (레벨 - 1). 레벨이 오르면 가득 찬다.
+ *  - 최대 마나 = base + perLevel × (레벨 - 1) + 지능(INT)의 몫. 레벨이 오르면 가득 찬다.
  *  - 게임 시계로 초당 regenPerSecond씩 저절로 차고, 검으로 적을 벨 때마다 perHit씩 찬다.
  *  - 집·여관에서 쉬거나 치유소에서 치료받으면 가득 찬다.
  */
 export const MANA = {
   base: 30,
-  perLevel: 3,
+  perLevel: 1,
   regenPerSecond: 0.5,
   perHit: 2,
 };
@@ -188,4 +189,45 @@ export const SPIN_SLASH = {
   knockback: 1.8,
   hitDelayMs: 180,
   cooldownMs: 900,
+};
+
+/**
+ * 능력치(상태창). 모두 base에서 시작하고, 레벨이 오를 때마다 pointsPerLevel 포인트를 받아 직접 올린다.
+ * 장비도 능력치를 더한다. 각 능력치가 base보다 1 높을 때마다:
+ *  - 힘(STR): 공격력 +damagePerStr
+ *  - 체력(VIT): 최대 체력 +hpPerVit
+ *  - 방어력(DEF): 받는 피해 = 100 / (100 + defensePerDef × 초과분) 배 (최소 1)
+ *  - 민첩(DEX): 적의 공격을 그냥 피할 확률 +evadePerDex (최대 maxEvade),
+ *               회피 재사용 대기 −dodgePerDex (1 − dodgePerDex × 초과분 배, 최소 minDodgeScale, 즉 최대 30% 감소)
+ *  - 지능(INT): 최대 마나 +mpPerInt, 스킬·마법 피해 +skillPerInt
+ *  - 행운(LUK): 치명타 확률 +critPerLuk, 골드 +goldPerLuk
+ */
+export const ATTRIBUTES = {
+  base: 5,
+  pointsPerLevel: 3,
+  damagePerStr: 1.2,
+  hpPerVit: 10,
+  defensePerDef: 5,
+  evadePerDex: 0.002,
+  maxEvade: 0.3,
+  dodgePerDex: 0.005,
+  minDodgeScale: 0.7,
+  mpPerInt: 3,
+  skillPerInt: 0.03,
+  critPerLuk: 0.005,
+  goldPerLuk: 0.02,
+};
+
+/**
+ * 막기(패링, 막기 버튼·키 L): 누르는 순간부터 windowMs 동안만 막는다(누르고 있어도 길어지지 않는다).
+ * 그 사이 앞쪽(바라보는 쪽)에서 온 공격을 막으면 패링: 피해가 전혀 없고 밀리지도 않으며,
+ * 그 적은 stunMs 동안 휘청이고, 다음 공격은 저스트 회피처럼 반격(JUST_DODGE.counterMs 안)이 된다.
+ * 헛막으면 cooldownMs 동안 다시 막을 수 없다(패링에 성공하면 바로 다시 막을 수 있다).
+ * 막는 동안에는 moveScale배로 천천히 움직인다.
+ */
+export const BLOCK = {
+  windowMs: 250,
+  cooldownMs: 1000,
+  stunMs: 1200,
+  moveScale: 0.4,
 };
