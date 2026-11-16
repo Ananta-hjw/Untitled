@@ -818,7 +818,7 @@ test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제
     }
     let onGround = s.npcs.every(n => s.walkArea.contains(n.x, n.y));
     const count = s.npcs.length;
-    // 마을 북쪽(집들)의 다섯 사람도 이름표를 달고 돌아다닌다.
+    // 마을 북쪽(집들)의 네 사람도 이름표를 달고 돌아다닌다.
     s.scene.restart({ map: 'village-north' }); g.step(t += 16, 16);
     s = g.scene.getScene('game');
     s.player.placeAt(1180, 1440);
@@ -848,22 +848,40 @@ test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제
     return { count, northCount, names, visible, moved, onGround, stayed, spotFollows, dialogue,
       talkable: s.interactables.filter(i => i.id.startsWith('npc-')).length };
   })()`);
-  // 장사하는 세 사람(메리나·도란·로제타)은 가게 안, 시온의 가족·이웃 다섯은 마을 북쪽, 셋은 광장에 있다.
+  // 장사하는 세 사람(메리나·도란·로제타)은 가게 안, 에일라는 치유소 안, 시온의 가족·이웃 넷은 마을 북쪽, 셋은 광장에 있다.
   assert.equal(result.count, 3);
-  assert.equal(result.northCount, 5);
+  assert.equal(result.northCount, 4);
   assert.equal(result.talkable, 3);
   assert.equal(result.visible, true);
   assert.deepEqual(result.names, {
-    serena: '세레나', sia: '시아', linea: '리네아', ruan: '루안', herman: '헤르만', eila: '에일라',
+    serena: '세레나', sia: '시아', linea: '리네아', ruan: '루안', herman: '헤르만',
     vernel: '베르넬', teon: '테온',
   });
-  for (const id of ['serena', 'sia', 'linea', 'ruan', 'herman', 'eila', 'vernel', 'teon']) {
+  for (const id of ['serena', 'sia', 'linea', 'ruan', 'herman', 'vernel', 'teon']) {
     assert.ok(result.moved[id] > 15, `${id} moved ${result.moved[id]}`);
   }
   assert.equal(result.onGround, true);
   assert.equal(result.stayed, true);
   assert.equal(result.spotFollows, true);
   assert.deepEqual(result.dialogue, { open: true, name: '루안', portrait: 'portrait-ruan' });
+
+  // 치유사 에일라는 치유소 안에서 조금씩 오간다. 시온은 멀리(침대 옆)에 세운다.
+  await load('in-clinic');
+  const clinic = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    let t = performance.now();
+    const bed = s.interactables.find(i => i.id === 'heal-clinic');
+    s.player.placeAt(bed.x, bed.y + 30);
+    const eila = s.npcs.find(n => n.def.id === 'eila');
+    const start = { x: eila.x, y: eila.y };
+    let moved = 0;
+    for (let i = 0; i < 900; i++) {
+      s.update(t += 16, 16);
+      moved = Math.max(moved, Math.hypot(eila.x - start.x, eila.y - start.y));
+    }
+    return { name: eila.list.find(o => o.text !== undefined)?.text, moved: moved > 15, onGround: s.walkArea.contains(eila.x, eila.y) };
+  })()`);
+  assert.deepEqual(clinic, { name: '에일라', moved: true, onGround: true });
 });
 test('성능 테스트 모드는 마을에 사람을 더 세우고 FPS·메모리를 보여 주며, 끄면 원래대로 돌아간다', async () => {
   await load('village');
@@ -1547,6 +1565,18 @@ test('여관의 로제타에게 쉬어 가거나 집 침대에서 쉬면 체력�
     const base = s.stats.maxHp;
     return { label, full: s.player.hp === s.player.maxHp, boosted: s.player.maxHp === base + s.herb && s.herb > 0, mpFull: s.mp === s.maxMp, slowed: s.now < s.slowedUntil, saved: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
   })()`);
+  // 에일라와 평소 대화를 마치면 치료해 줄지 묻고, 받으면 체력이 찬다.
+  const eilaHeal = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    const eila = s.npcs.find(n => n.def.id === 'eila');
+    s.player.hp = 5;
+    s.openDialogue(eila.spot);
+    while (s.dialogue.isOpen) s.dialogue.advance();
+    const asked = s.storyChoice.isOpen;
+    s.storyChoice.accept();
+    return { asked, full: s.player.hp === s.player.maxHp };
+  })()`);
+  assert.deepEqual(eilaHeal, { asked: true, full: true });
   assert.deepEqual(clinic, { label: '치료받기', full: true, boosted: true, mpFull: true, slowed: false, saved: 'home' });
 
   // 약초 기운은 맵을 옮겨도 이어지고, 처음 맞으면 사라진다.

@@ -36,7 +36,7 @@ export class Hud {
       .setResolution(2);
 
     this.hint = scene.add
-      .text(0, 90, hintText, {
+      .text(0, 122, hintText, {
         fontFamily: FONT,
         fontSize: '24px',
         fontStyle: 'bold',

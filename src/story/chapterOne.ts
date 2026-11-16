@@ -17,14 +17,24 @@ export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: Ma
   const phase = chapterPhase(state);
   if (phase === 'day') return [...base];
   const evacuated = ['serena', 'eila', 'herman'];
-  const source = phase === 'raid' && map === 'village'
+  let source = phase === 'raid' && map === 'village'
     ? [...base, ...NPCS.filter(n => evacuated.includes(n.id) && !base.some(b => b.id === n.id))]
     : phase === 'raid' && map === 'village-north' ? base.filter(n => !evacuated.includes(n.id)) : base;
+  // 에일라는 낮에는 치유소 안에 있지만, 습격 때는 광장, 습격 뒤에는 리네아 곁(마을 북쪽)에 있다.
+  if (map !== undefined) {
+    source = source.filter(n => n.id !== 'eila' || (phase === 'raid' && map === 'village'));
+    if (phase === 'aftermath' && map === 'village-north') source = [...source, NPCS.find(n => n.id === 'eila')!];
+  }
   return source.filter(n => n.id !== 'sia' && !(phase === 'raid' && n.id === 'linea')).map(n => {
+    if (n.id === 'eila') {
+      const outside: NpcDef = { ...n, area: phase === 'raid' ? 'village' : 'village-north', x: phase === 'raid' ? 1540 : LINEA_YARD.x + 130, y: phase === 'raid' ? 1200 : LINEA_YARD.y, wander: undefined };
+      delete outside.inside;
+      delete outside.talkOffset;
+      return outside;
+    }
     if (n.inside) return { ...n };
     if (n.id === 'ruan') return { ...n, x: 1080, y: 1150, wander: undefined };
     if (n.id === 'serena') return { ...n, x: phase === 'raid' ? 1500 : LINEA_YARD.x + 140, y: phase === 'raid' ? 1100 : LINEA_YARD.y + 90, wander: undefined };
-    if (n.id === 'eila') return { ...n, x: phase === 'raid' ? 1540 : LINEA_YARD.x + 130, y: phase === 'raid' ? 1200 : LINEA_YARD.y, wander: undefined };
     if (n.id === 'linea') return { ...n, ...LINEA_YARD, wander: undefined };
     return { ...n, wander: undefined };
   });

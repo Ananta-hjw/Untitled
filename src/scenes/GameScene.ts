@@ -538,7 +538,9 @@ export class GameScene extends Phaser.Scene {
       ...(this.mapId === 'in-clinic' ? [{ ...CLINIC_BED_SPOT }] : [])];
     for (const spot of this.map.interactables) {
       if (!spot.enter) continue;
-      const inside = NPCS.filter((n) => n.inside && `in-${n.inside}` === spot.enter!.to).map((n) => n.id);
+      // 문 위의 퀘스트 표시: 지금 그 건물 안에 있는 사람(이야기 진행에 따라 다르다, 예: 습격 뒤의 에일라)
+      const to = spot.enter.to;
+      const inside = isMapId(to) ? chapterNpcs(MAPS[to].npcs, this.quests, to).map((n) => n.id) : [];
       if (inside.length === 0) continue;
       const text = this.add.text(spot.x, spot.y - 150, '', {
         fontFamily: 'system-ui, sans-serif', fontSize: '40px', fontStyle: 'bold', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 7,
@@ -1256,6 +1258,13 @@ export class GameScene extends Phaser.Scene {
       // 메리나와의 평소 대화가 끝나면 잡화점을 연다.
       if (!quest && target.id === 'npc-merina') this.openItemPanel('shop');
       // 로제타와의 평소 대화가 끝나면 쉬어 갈지 묻는다 (습격의 밤에는 묻지 않는다).
+      // 치유소의 에일라와 평소 대화가 끝나면 치료해 줄지 묻는다.
+      if (!quest && target.id === 'npc-eila' && this.mapId === 'in-clinic') {
+        this.storyChoice?.open(() => this.healAtClinic(), {
+          text: '다친 데가 있으면 봐 줄게.\n체력과 마나가 모두 차고,\n약초 기운이 처음 맞을 때까지 남아.',
+          yes: '치료받기 [Enter]', no: '괜찮아요 [Esc]',
+        });
+      }
       if (!quest && target.id === 'npc-rosetta' && canRest(this.quests)) {
         this.storyChoice?.open(() => this.rest('inn'), {
           text: '여관에서 쉬어 갈까요?\n체력이 모두 회복되고,\n다음에 시작할 때 여관에서 이어집니다.',

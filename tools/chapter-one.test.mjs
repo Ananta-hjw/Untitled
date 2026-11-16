@@ -126,3 +126,15 @@ test('잿빛 나방은 해 질 무렵의 순찰을 받은 뒤부터 축제 전�
     assert.ok(Math.hypot(p.x - field.spawn.x, p.y - field.spawn.y) > 300, '들어오자마자 덮치지 않는다');
   }
 });
+
+test('에일라는 낮에는 치유소 안, 습격 때는 광장, 습격 뒤에는 마을 북쪽 리네아 곁에 있다', () => {
+  const where = (state) => Object.keys(MAPS).filter((map) => chapterNpcs(MAPS[map].npcs, state, map).some((n) => n.id === 'eila'));
+  const raid = { 'festival-eve': { status: 'done', count: 1 } };
+  const after = { ...raid, 'village-raid': { status: 'done', count: 3 } };
+  assert.deepEqual(where({}), ['in-clinic']);
+  assert.deepEqual(where(raid), ['village']);
+  assert.deepEqual(where(after), ['village-north']);
+  const outside = chapterNpcs(MAPS['village-north'].npcs, after, 'village-north').find((n) => n.id === 'eila');
+  assert.equal(outside.inside, undefined);
+  assert.equal(walkable(MAPS['village-north'], outside.x, outside.y), true);
+});

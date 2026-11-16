@@ -104,6 +104,8 @@ export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
       ['herbs', [535, 445, 740, 465]], ['table', [910, 445, 1090, 520]],
       ['plant', [1110, 445, 1350, 700]], ['plant', [170, 700, 370, 750]],
     ],
+    // 에일라는 약초 선반 앞 빈 바닥에서 지낸다(조금씩 오간다).
+    shop: { x: 800, y: 560, talkY: 560 },
   },
   hall: {
     width: 1536, height: 1024, floor: [100, 420, 1440, 840], doorX: 750,

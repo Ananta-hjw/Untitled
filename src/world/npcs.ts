@@ -7,6 +7,7 @@ import { LINEA_YARD, type VillageArea } from './villageLayout.ts';
  *
  * 모두 8방향 걷기 그림(walk_cardinal/walk_diagonal 시트)으로 그린다.
  * 장사를 하는 사람(도란, 메리나, 로제타)은 가게 안(실내 맵)에 서서 시온 쪽을 돌아볼 뿐 걷지 않는다.
+ * 치유사 에일라는 낮에는 치유소 안에서 지낸다(가게 주인은 아니라 조금씩 오간다).
  * 나머지는 자기 자리 주변을 천천히 돌아다닌다.
  * 페른은 습격 다음 날 도착하므로(docs/story-chapter1.md) 첫날에는 없다.
  * 이 파일은 Phaser를 쓰지 않아 tools/npcs.test.mjs가 직접 불러 검사한다.
@@ -46,13 +47,14 @@ export const NPCS: NpcDef[] = [
   { id: 'sia', name: '시아', role: '시온의 여동생', area: 'village-north', x: 290, y: 680, height: 132, dialogue: 'npc-sia', wander: 150 },
   { id: 'linea', name: '리네아', role: '시온의 친한 친구', area: 'village-north', ...LINEA_YARD, height: 142, dialogue: 'npc-linea', wander: 100 },
   { id: 'herman', name: '헤르만', role: '촌장', area: 'village-north', x: 1290, y: 525, height: 150, dialogue: 'npc-herman', wander: 100 },
-  { id: 'eila', name: '에일라', role: '치유사', area: 'village-north', x: 2070, y: 550, height: 146, dialogue: 'npc-eila', wander: 110 },
   // 광장
   { id: 'ruan', name: '루안', role: '첫 스승', x: 590, y: 1090, height: 156, dialogue: 'npc-ruan', wander: 120 },
   // 장사하는 사람은 가게 안: 메리나와 로제타는 카운터 뒤, 도란은 모루 옆
   { id: 'merina', name: '메리나', role: '잡화점 주인', ...interiorShop('store'), height: 144, dialogue: 'npc-merina', shop: true },
   { id: 'doran', name: '도란', role: '대장장이', ...interiorShop('smithy'), height: 156, dialogue: 'npc-doran', shop: true },
   { id: 'rosetta', name: '로제타', role: '여관 주인', ...interiorShop('inn'), height: 146, dialogue: 'npc-rosetta', shop: true },
+  // 치유사 에일라는 낮에는 치유소 안에서 조금씩 오간다. 습격 뒤 자리는 story/chapterOne.ts가 정한다.
+  { id: 'eila', name: '에일라', role: '치유사', ...interiorShop('clinic'), talkOffset: 0, height: 146, dialogue: 'npc-eila', wander: 70 },
   { id: 'vernel', name: '베르넬', role: '유적 연구자', x: 1580, y: 1250, height: 150, dialogue: 'npc-vernel', wander: 120 },
   { id: 'teon', name: '테온', role: '경비대원', x: 1330, y: 1290, height: 150, dialogue: 'npc-teon', wander: 100 },
 ];
