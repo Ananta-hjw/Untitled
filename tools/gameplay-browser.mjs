@@ -1225,6 +1225,15 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     };
     const flush = () => { while (s.dialogue.isOpen) s.dialogue.advance(); };
     const settle = () => { for (let i = 0; i < 30; i++) g.step(t += 16, 16); s = g.scene.getScene('game'); };
+    // 장면이 다른 맵으로 다시 시작할 때(습격 권속 그림을 읽는 동안) 준비될 때까지 기다린다.
+    const ready = async map => {
+      for (let i = 0; i < 300; i++) {
+        g.step(t += 16, 16); s = g.scene.getScene('game');
+        if (s.mapId === map && s.sys.isActive() && s.minimap && !s.traveling) return;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      throw Error('준비 시간 초과: ' + map);
+    };
     const talk = id => { const n = s.npcs.find(n => n.def.id === id); if (!n) throw Error('NPC 없음: ' + id); s.openDialogue(n.spot); flush(); };
     const inspect = id => { const spot = s.interactables.find(p => p.id === id); if (!spot) throw Error('조사 지점 없음: ' + id); s.openDialogue(spot); flush(); };
     await restart('village');
@@ -1232,9 +1241,21 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     talk('teon');
     await restart('in-inn'); talk('rosetta');
     await restart('village-north'); talk('linea'); talk('sia'); talk('linea');
+    // 수확제 일손: 헤르만 → 도란(걸쇠) → 메리나(초) → 헤르만
+    talk('herman');
+    await restart('in-smithy'); talk('doran'); s.characterPanel.close();
+    await restart('in-store'); talk('merina');
+    await restart('village-north'); talk('herman');
+    const harvest = s.quests['harvest-help']?.status;
     await restart('village');
     const patrolMarker = s.storyMarkers.length;
     inspect('story-south-watch'); talk('teon');
+    // 잿빛 날갯가루: 들판의 나방 4마리 → 풀숲 살피기 → 테온
+    await restart('south-field');
+    const moths = s.enemies.filter(e => e.kind === 'ashen-moth').length;
+    for (let i = 0; i < 4; i++) s.questEvent({ type: 'kill', map: 'south-field', monster: 'ashen-moth' });
+    inspect('story-moth-nest');
+    await restart('village'); talk('teon');
     await restart('in-inn');
     s.openDialogue(s.npcs.find(n => n.def.id === 'rosetta').spot);
     const choice = s.storyChoice.isOpen;
@@ -1242,7 +1263,7 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     s.storyChoice.cancel();
     const cancelled = s.quests['festival-eve'].status === 'active' && !s.quests['village-raid'];
     s.openDialogue(s.npcs.find(n => n.def.id === 'rosetta').spot);
-    s.storyChoice.accept(); flush(); settle();
+    s.storyChoice.accept(); flush(); await ready('village');
     const raid = { map: s.mapId, enemies: s.enemies.length, sia: s.npcs.some(n => n.def.id === 'sia'), shade: !!s.chapterShade };
     s.player.placeAt(1180, 1130); s.player.invulnerableUntil = Infinity;
     s.stats.damageMin = 1000; s.stats.damageMax = 1000;
@@ -1253,7 +1274,16 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     const battle = { alive: s.enemies.filter(e => e.character.alive).length, pending: s.enemyRespawns.length, step: s.quests['village-raid'].step };
     await restart('village');
     const noRespawn = s.enemies.length === 0;
-    talk('serena'); talk('eila'); talk('ruan'); settle();
+    // 테온을 살피면 여관 앞 골목에 다음 무리가 나타난다.
+    const clear = () => { for (const e of [...s.raidEnemies].filter(e => e.character.alive)) { e.character.hp = 0; s.resolveEnemyHit(e, true, 1, 0, 0); } };
+    talk('teon');
+    const wave2 = s.enemies.filter(e => e.character.alive).length;
+    clear(); talk('serena');
+    // 북쪽 길에는 집행자가 낀 마지막 무리
+    await restart('village-north');
+    const wave3 = s.enemies.map(e => e.kind);
+    clear(); inspect('story-north-alley');
+    await restart('village'); talk('eila'); talk('ruan'); settle();
     await restart('village-north');
     const aftermath = { sia: s.npcs.some(n => n.def.id === 'sia'), linea: s.npcs.some(n => n.def.id === 'linea'), shade: !!s.chapterShade };
     talk('serena');
@@ -1267,9 +1297,11 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     const tracker = s.questTracker.text.text;
     localStorage.removeItem('untitled-rpg.quests');
     await restart('village');
-    return { migrated, patrolMarker, choice, frozen, cancelled, raid, battle, noRespawn, aftermath, searchMarker, searchRestored, complete, tracker };
+    return { migrated, harvest, moths, patrolMarker, choice, frozen, cancelled, raid, battle, noRespawn, wave2, wave3, aftermath, searchMarker, searchRestored, complete, tracker };
   })()`);
   assert.equal(result.migrated, 'active');
+  assert.equal(result.harvest, 'done');
+  assert.equal(result.moths, 4);
   assert.equal(result.patrolMarker, 1);
   assert.equal(result.choice, true);
   assert.equal(result.frozen, true);
@@ -1277,6 +1309,8 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
   assert.deepEqual(result.raid, { map: 'village', enemies: 3, sia: false, shade: true });
   assert.deepEqual(result.battle, { alive: 0, pending: 0, step: 1 });
   assert.equal(result.noRespawn, true);
+  assert.equal(result.wave2, 3);
+  assert.deepEqual([...result.wave3].sort(), ['corrosion-executioner', 'corrosion-tracker', 'corrosion-tracker']);
   assert.deepEqual(result.aftermath, { sia: false, linea: true, shade: false });
   assert.equal(result.searchMarker, 1);
   assert.equal(result.searchRestored, true);
@@ -1439,9 +1473,11 @@ test('버섯 물방울은 준비 뒤 발사하고 경로에서 한 번만 맞으
     e.fireProjectile(3000);e.kill();const dead=!e.projectile;
     e.respawn(1100,1020);e.aim={x:1,y:0};e.fireProjectile(4000);p.revive(1450,1020);
     const hpWall=p.hp;for(let time=4050;time<=4800;time+=50){s.now=time;e.updateProjectile(time,.05,p,s.walkArea,s.onEnemyStrike);}
-    return {before,launched,damage,consumed,interrupted,dead,wall:!e.projectile&&p.hp===hpWall};
+    // 맞은 피해는 몬스터 레벨에 맞춘 공격력에 방어력을 적용한 값이다.
+    const expected=Math.max(1,Math.round(e.stats.damage*s.derived.damageTaken));
+    return {before,launched,damage:damage===expected,consumed,interrupted,dead,wall:!e.projectile&&p.hp===hpWall};
   })()`);
-  assert.deepEqual(r, { before:false, launched:true, damage:6, consumed:true, interrupted:true, dead:true, wall:true });
+  assert.deepEqual(r, { before:false, launched:true, damage:true, consumed:true, interrupted:true, dead:true, wall:true });
 });
 
 test('도마뱀은 준비 중 멈추고 잠근 방향으로 돌진하며 한 번만 명중하고 옆으로 피하면 빗나간다', async () => {
@@ -1453,19 +1489,21 @@ test('도마뱀은 준비 중 멈추고 잠근 방향으로 돌진하며 한 번
       e.update(799,.05,p,s.walkArea,s.nav,s.onEnemyStrike);const still=e.character.x===900;
       if(evade)p.placeAt(1100,850);const hp=p.hp;
       for(let t=800;t<=1400;t+=40){s.now=t;e.update(t,.04,p,s.walkArea,s.nav,s.onEnemyStrike);}
-      return {still,moved:e.character.x>1100,damage:hp-p.hp,y:e.character.y};
+      return {still,moved:e.character.x>1100,damage:hp-p.hp,y:e.character.y,expected:Math.max(1,Math.round(e.stats.damage*s.derived.damageTaken))};
     };
     const hit=run(false),miss=run(true);
     e.respawn(900,700);e.beginWindup(0,200,0);e.interrupt(700);e.update(1000,.05,p,s.walkArea,s.nav,s.onEnemyStrike);
     return {hit,miss,interrupted:e.character.x===900};
   })()`);
-  assert.equal(r.hit.still,true);assert.equal(r.hit.moved,true);assert.equal(r.hit.damage,11); // 12에서 처음 입은 낡은 수련복(DEF +1)만큼 줄어든다
+  assert.equal(r.hit.still,true);assert.equal(r.hit.moved,true);assert.equal(r.hit.damage,r.hit.expected); // 레벨에 맞춘 공격력에서 낡은 수련복(DEF +1)만큼 줄어든다
   assert.equal(r.miss.damage,0);assert.equal(r.miss.y,700);assert.equal(r.interrupted,true);
 });
 
 test('새 몬스터도 실제 검날에 맞아 쓰러지고 종류별 경험치를 주며 버섯 물방울은 일시정지 중 멈춘다', async () => {
   const kills=[];
   for(const [map,kind] of [['south-field','slime'],['west-forest','waterdrop-mushroom'],['west-forest','iron-scale-lizard']]) {
+    // 레벨 1로 시작해야 경험치가 줄지 않는다(앞선 테스트가 남긴 레벨을 지운다).
+    await evaluate(`localStorage.removeItem('untitled-rpg.save'); true`);
     await load(map);
     kills.push(await evaluate(`(() => {
       const s=window.__game.scene.getScene('game'),p=s.player,e=s.enemies.find(e=>e.kind==='${kind}');
@@ -1475,10 +1513,11 @@ test('새 몬스터도 실제 검날에 맞아 쓰러지고 종류별 경험치�
       let xp=0;s.gainXp=(amount)=>{xp+=amount;};
       s.startAttack(0,1,0);
       for(let i=0;i<50;i++)s.update(0,16);
-      return {kind:e.kind,dead:e.state==='dead',xp};
+      return {kind:e.kind,dead:e.state==='dead',xp:xp===e.stats.xp&&xp>0,level:e.level>=1};
     })()`));
   }
-  assert.deepEqual(kills,[{kind:'slime',dead:true,xp:10},{kind:'waterdrop-mushroom',dead:true,xp:12},{kind:'iron-scale-lizard',dead:true,xp:18}]);
+  // 레벨 1 주인공은 경험치 감소 없이 몬스터 레벨에 맞춘 경험치를 다 받는다.
+  assert.deepEqual(kills,[{kind:'slime',dead:true,xp:true,level:true},{kind:'waterdrop-mushroom',dead:true,xp:true,level:true},{kind:'iron-scale-lizard',dead:true,xp:true,level:true}]);
   await load('west-forest');
   const paused=await evaluate(`(() => {
     const s=window.__game.scene.getScene('game'),e=s.enemies.find(e=>e.kind==='waterdrop-mushroom');

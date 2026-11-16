@@ -29,6 +29,7 @@ import {
   BLOCK,
 } from '../config';
 import { addMana, inSpinRadius, regenMana } from '../combat/mana';
+import { DUSK_MOTH_LEVEL, levelHint, spawnLevel, xpForKill } from '../combat/monsterLevel';
 import { allocate, deriveStats, mitigate, pointsLeft, totalStats, type DerivedStats, type StatId } from '../entities/attributes';
 import { CHARACTER_SAVE_KEY, newCharacter, parseCharacter, serializeCharacter, type CharacterData } from '../entities/characterData';
 import { GEAR, SLOT_INFO, buyGear, equip, gearBonus, sellGear, unequip, type GearId } from '../items/equipment';
@@ -62,9 +63,10 @@ import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
 import { StoryChoice } from '../ui/StoryChoice';
 import { CLINIC_BED_SPOT, HOME_BED_SPOT, REST_POINTS, herbBonus, REST_SAVE_KEY, canRest, parseRestPoint, serializeRestPoint, type RestPointId } from '../story/restPoints';
-import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, isDusk, raidSpawns, INSPECTION_LINES } from '../story/chapterOne';
+import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, isDusk, raidSpawns, raidSpawnsAnyStep, INSPECTION_LINES } from '../story/chapterOne';
 import {
   currentObjective, MARKER_PRIORITY, QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestMarker, type QuestState,
+  type InspectSpot,
 } from '../story/quests';
 import { GUARDS, guardsForMap } from '../world/guards';
 import type { NpcId } from '../world/npcs';
@@ -375,7 +377,8 @@ export class GameScene extends Phaser.Scene {
   preload(): void {
     preloadHeroSprite(this);
     preloadIcons(this);
-    preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns()]);
+    // 습격 중에는 이 맵에 나올 모든 무리의 그림을 미리 읽는다(대화 뒤 다음 무리가 바로 나타난다).
+    preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...raidSpawnsAnyStep(this.quests, this.mapId)]);
     preloadVillage(this, this.map);
     preloadNpcs(this, [...NPCS, ...GUARDS]);
     preloadDialogue(this);
@@ -579,12 +582,10 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 월드
 
   private buildCharacters(): void {
-    for (const spawn of [...this.map.enemies, ...this.duskSpawns()]) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y));
-    for (const point of raidSpawns(this.quests, this.mapId)) {
-      const enemy = new Enemy(this, 'retainer-ash', point.x, point.y);
-      this.enemies.push(enemy);
-      this.raidEnemies.add(enemy);
-    }
+    // 사냥터 몬스터는 그 맵의 권장 레벨 범위를 차례로 받는다. 해 질 무렵의 나방은 따로 정한 레벨.
+    this.map.enemies.forEach((spawn, i) => this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, spawnLevel(this.mapId, i))));
+    for (const spawn of this.duskSpawns()) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, DUSK_MOTH_LEVEL));
+    this.syncRaidEnemies(false);
     let defs = chapterNpcs([...this.map.npcs, ...guardsForMap(this.mapId)], this.quests, this.mapId);
     if (this.stressCount > 0 && this.mapId === 'village' && chapterPhase(this.quests) === 'day') {
       const area = this.walkArea, b = this.map.bounds;
@@ -636,9 +637,10 @@ export class GameScene extends Phaser.Scene {
   private checkExit(): boolean {
     const player = this.player;
     if (!player.alive) return false;
-    if (chapterPhase(this.quests) === 'raid' && this.mapId === 'village') return false;
     const exit = findExit(this.map, player.x, player.y);
     if (!exit) return false;
+    // 습격 중 광장에서는 바깥 사냥터로 나가지 못한다. 마을 북쪽(집들)으로는 갈 수 있다.
+    if (chapterPhase(this.quests) === 'raid' && this.mapId === 'village' && exit.to !== 'village-north') return false;
     this.travel(exit);
     return true;
   }
@@ -720,8 +722,10 @@ export class GameScene extends Phaser.Scene {
       }) as GameScene['keys'];
     }
 
-    this.hud = new Hud(this, this.mapId === 'village' && chapterPhase(this.quests) === 'raid' ? '마을 습격 · 권속을 저지하고 주민들의 안전을 확인하세요'
-      : this.duskSpawns().length ? '해 질 무렵의 남쪽 들판 · 처음 보는 잿빛 나방이 날아다닙니다' : this.map.hint);
+    const raid = chapterPhase(this.quests) === 'raid';
+    this.hud = new Hud(this, raid && this.mapId === 'village' ? '마을 습격 · 권속을 저지하고 주민들의 안전을 확인하세요'
+      : raid && this.mapId === 'village-north' ? '습격당한 마을 북쪽 · 길을 막은 권속을 물리치고 시아와 리네아를 찾으세요'
+      : (this.duskSpawns().length ? '해 질 무렵의 남쪽 들판 · 처음 보는 잿빛 나방이 날아다닙니다' : this.map.hint) + levelHint(this.mapId));
     this.drawHud();
   }
 
@@ -1136,7 +1140,8 @@ export class GameScene extends Phaser.Scene {
       this.impacts.splatter(c.x, c.y, enemy.color, this.now);
       const raid = this.raidEnemies.has(enemy);
       if (!raid) this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
-      this.gainXp(enemy.stats.xp, c.x, c.y - 185);
+      // 주인공이 몬스터보다 너무 높으면 경험치가 줄어든다.
+      this.gainXp(xpForKill(enemy.stats.xp, enemy.level, this.progress.level), c.x, c.y - 185);
       this.questEvent({ type: 'kill', map: this.mapId, monster: enemy.kind, ...(raid ? { encounter: 'village-raid' as const } : {}) });
       if (!raid) this.collectDrop(c.x, c.y, enemy);
     } else {
@@ -1313,7 +1318,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (target.id.startsWith('story-')) {
       this.dialogue.open(INSPECTION_LINES[target.id] ?? [], () => {
-        const spot = target.id === 'story-south-watch' ? 'south-watch' : 'home-search';
+        const spot = target.id.slice('story-'.length) as InspectSpot;
         this.questEvent({ type: 'inspect', spot, map: this.mapId });
         this.onResume();
       });
@@ -1431,7 +1436,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 머리 위 표시와 퀘스트 목록을 지금 상태로 맞춘다. */
+  /**
+   * 습격의 다음 무리: 지금 단계에 이 맵에 나올 권속이 있고 살아 있는 권속이 없으면 소환한다.
+   * 장면을 만들 때와, 대화·처치로 퀘스트 단계가 바뀔 때마다 부른다.
+   */
+  private syncRaidEnemies(announce = true): void {
+    if ([...this.raidEnemies].some((e) => e.character.alive)) return;
+    const spawns = raidSpawns(this.quests, this.mapId);
+    if (spawns.length === 0) return;
+    for (const point of spawns) {
+      const enemy = new Enemy(this, point.key, point.x, point.y, point.level);
+      this.enemies.push(enemy);
+      this.raidEnemies.add(enemy);
+    }
+    if (announce) this.hud.showCallout(spawns.some((s) => s.key === 'corrosion-executioner') ? '부식의 집행자가 길을 막아선다!' : '권속이 몰려온다!');
+  }
+
   private refreshQuests(): void {
+    if (this.player) this.syncRaidEnemies();
     this.interactables = this.interactables.filter(spot => !spot.id.startsWith('story-'));
     for (const marker of this.storyMarkers) marker.destroy();
     this.storyMarkers = [];

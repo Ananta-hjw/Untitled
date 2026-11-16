@@ -19,6 +19,8 @@ export interface CharacterOptions {
   /** 스프라이트 대신 주인공 프레임 시트를 쓴다. 애니메이션 이름은 같은 규칙(`${key}-idle` 등)을 따른다. */
   hero?: boolean;
   monster?: MonsterKind;
+  /** 이름 없이 머리 위에 작게 "Lv. N"만 보여 준다 (몬스터) */
+  levelTag?: number;
 }
 
 const HP_BAR_WIDTH = 70;
@@ -114,6 +116,12 @@ export class Character extends Phaser.GameObjects.Container {
           .setResolution(2);
         this.add(this.levelText);
       }
+    }
+
+    if (options.levelTag !== undefined && !options.name) {
+      this.add(scene.add.text(0, top - 8, `Lv. ${options.levelTag}`, {
+        fontFamily: 'system-ui, sans-serif', fontSize: '16px', fontStyle: 'bold', color: '#f0d27a', stroke: '#1a1008', strokeThickness: 4,
+      }).setOrigin(0.5, 1).setResolution(2));
     }
 
     if (options.showHpBar) {

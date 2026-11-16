@@ -35,7 +35,7 @@ test('숲 이후 보고부터 서신까지 모든 메인 목표가 순서대로 
     if (result.completed) completed.push(result.completed.id);
     state = parseQuests(serializeQuests(result.state));
   }
-  assert.deepEqual(completed, ['watch-report', 'festival-supplies', 'sia-knot', 'evening-patrol', 'festival-eve', 'village-raid', 'missing-sia', 'sealed-letter']);
+  assert.deepEqual(completed, ['watch-report', 'festival-supplies', 'sia-knot', 'harvest-help', 'evening-patrol', 'moth-trail', 'festival-eve', 'village-raid', 'missing-sia', 'sealed-letter']);
   assert.equal(chapterPhase(state), 'aftermath');
   assert.equal(talkTo('vernel', state), undefined, '완료 보상을 다시 받을 수 없다');
 });
@@ -64,7 +64,7 @@ test('재료 전달과 매듭은 선행 대화를 생략할 수 없고 서브 �
   state = talkTo('sia', state).state;
   const knot = talkTo('linea', state);
   assert.equal(knot.completed.id, 'sia-knot');
-  assert.equal(knot.state['evening-patrol'].status, 'active');
+  assert.equal(knot.state['harvest-help'].status, 'active');
 });
 
 test('습격은 필드 슬라임으로 진행되지 않으며 남은 권속만 복원하고 시아를 숨긴다', () => {
@@ -104,8 +104,11 @@ test('수색은 맞는 장소·맵·순서에서만 진행되고 다단계 저�
 test('추가 조사 지점·습격 배치·이동한 NPC는 장애물 안에 놓이지 않는다', () => {
   const states = [through('sia-knot'), through('festival-eve'), through('village-raid')];
   states[2] = talkTo('serena', states[2]).state;
+  // 습격의 각 단계(입구·여관 앞·북쪽 길·북쪽 골목)와 해 질 무렵 들판의 풀숲
+  for (const step of [0, 2, 4, 5]) states.push({ ...through('festival-eve'), 'village-raid': { status: 'active', count: 0, step } });
+  states.push({ ...through('evening-patrol'), 'moth-trail': { status: 'active', count: 0, step: 1 } });
   for (const state of states) {
-    for (const map of ['village', 'village-north']) {
+    for (const map of ['village', 'village-north', 'south-field']) {
       for (const point of [...chapterSpots(state, map), ...raidSpawns(state, map), ...chapterNpcs(MAPS[map].npcs, state, map)]) {
         assert.ok(walkable(MAPS[map], point.x, point.y), `${map}: ${JSON.stringify(point)}`);
       }
@@ -115,7 +118,8 @@ test('추가 조사 지점·습격 배치·이동한 NPC는 장애물 안에 놓
 
 test('잿빛 나방은 해 질 무렵의 순찰을 받은 뒤부터 축제 전야 전까지만, 남쪽 들판의 걸을 수 있는 곳에 나온다', () => {
   assert.equal(isDusk(through('ruan-forest')), false, '낮에는 없다');
-  assert.equal(isDusk(through('sia-knot')), true, '순찰을 받으면 해 질 무렵');
+  assert.equal(isDusk(through('sia-knot')), false, '수확제 일손을 돕는 동안은 아직 낮');
+  assert.equal(isDusk(through('harvest-help')), true, '순찰을 받으면 해 질 무렵');
   assert.equal(isDusk(through('evening-patrol')), true, '순찰을 보고한 뒤에도 축제 전까지는 있다');
   assert.equal(isDusk(through('festival-eve')), false, '습격이 시작되면 사라진다');
   const field = MAPS['south-field'];
@@ -137,4 +141,17 @@ test('에일라는 낮에는 치유소 안, 습격 때는 광장, 습격 뒤에�
   const outside = chapterNpcs(MAPS['village-north'].npcs, after, 'village-north').find((n) => n.id === 'eila');
   assert.equal(outside.inside, undefined);
   assert.equal(walkable(MAPS['village-north'], outside.x, outside.y), true);
+});
+
+test('습격은 입구 → 여관 앞 → 북쪽 길의 세 무리이고, 마지막 무리에는 집행자가 있으며 남은 수만 복원한다', () => {
+  const at = (step, count = 0) => ({ ...through('festival-eve'), 'village-raid': { status: 'active', count, step } });
+  assert.equal(raidSpawns(at(0), 'village').length, 3);
+  assert.equal(raidSpawns(at(0), 'village-north').length, 0);
+  assert.equal(raidSpawns(at(1), 'village').length, 0, '테온과 이야기하는 동안은 적이 없다');
+  assert.equal(raidSpawns(at(2, 1), 'village').length, 2);
+  const north = raidSpawns(at(4), 'village-north');
+  assert.equal(north.length, 3);
+  assert.ok(north.some(s => s.key === 'corrosion-executioner'));
+  assert.equal(raidSpawns(at(4), 'village').length, 0);
+  assert.equal(chapterSpots(at(5), 'village-north').some(s => s.id === 'story-north-alley'), true);
 });

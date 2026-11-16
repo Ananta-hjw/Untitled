@@ -14,7 +14,7 @@ import type { ItemId } from '../items/inventory.ts';
  */
 
 export type QuestId = 'ruan-training' | 'ruan-field' | 'ruan-forest' | 'doran-gel' | 'teon-lunch'
-  | 'watch-report' | 'festival-supplies' | 'sia-knot' | 'evening-patrol'
+  | 'watch-report' | 'festival-supplies' | 'sia-knot' | 'harvest-help' | 'evening-patrol' | 'moth-trail'
   | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter';
 
 /** 게임에서 일어나서 퀘스트 목표를 채우는 일 */
@@ -22,7 +22,10 @@ export type QuestEvent =
   | { type: 'kill'; map: MapId; monster?: MonsterKind; encounter?: 'village-raid' }
   | { type: 'finisher' }
   | { type: 'talk'; npc: NpcId }
-  | { type: 'inspect'; spot: 'south-watch' | 'home-search'; map: MapId };
+  | { type: 'inspect'; spot: InspectSpot; map: MapId };
+
+/** 살펴보기 지점 (story/chapterOne.ts의 SPOTS) */
+export type InspectSpot = 'south-watch' | 'home-search' | 'moth-nest' | 'north-alley';
 
 export interface QuestObjective {
   /** 추적 표시에 나오는 글 (예: "남쪽 들판의 슬라임") */
@@ -140,24 +143,73 @@ export const QUESTS: QuestDef[] = [
     rewardXp: 15,
     offer: [line('linea', '리네아', '시아에게 말 좀 걸어 줘. 오빠한테도 자랑하고 싶어 하던데.')],
     reminder: [line('linea', '리네아', '시아가 창문 끈을 어떻게 묶었는지 물어봐.')],
-    done: [line('linea', '리네아', '테온이 해 지기 전에 입구를 한 번 더 봐 달랬어. 다녀오면 여관에서 만나자.')],
+    done: [line('linea', '리네아', '아, 헤르만 촌장님이 등불대를 세울 일손을 찾으시더라. 우린 여기 마무리할 테니 가 볼래?')],
   },
   {
-    id: 'evening-patrol', title: '해 질 무렵의 순찰', giver: 'linea', main: true, requires: 'sia-knot', turnIn: 'teon',
+    id: 'harvest-help', title: '수확제 일손', giver: 'herman', main: true, requires: 'sia-knot',
+    turnIn: 'herman', completeOnTarget: true,
+    objective: { label: '촌장의 집 앞 헤르만에게 일손 돕겠다고 말하기', need: 1, event: 'talk', npc: 'herman' },
+    steps: [
+      { label: '촌장의 집 앞 헤르만에게 일손 돕겠다고 말하기', need: 1, event: 'talk', npc: 'herman', lines: [
+        line('herman', '헤르만', '오, 시온이 왔구먼. 광장에 등불대를 세우는데 걸쇠가 모자라고 초도 다 떨어졌네.'),
+        line('herman', '헤르만', '대장간의 도란에게 걸쇠를, 잡화점의 메리나에게 초를 받아다 주겠나? 값은 내가 미리 치러 두었네.'),
+        hero('맡겨 주세요, 촌장님.')] },
+      { label: '대장간의 도란에게 등불 걸쇠 받기', need: 1, event: 'talk', npc: 'doran', lines: [
+        line('doran', '도란', '걸쇠? 벌써 다 두들겨 놨지! 올해는 바람에 떨어지는 등불이 하나도 없을 거다.'),
+        line('doran', '도란', '작년엔 내가 사다리에서 떨어졌다는 얘기는 하지 마라. 에일라가 아직도 놀린다고.')] },
+      { label: '잡화점의 메리나에게 초 받기', need: 1, event: 'talk', npc: 'merina', lines: [
+        line('merina', '메리나', '촌장님 초 말이지? 여기, 오래 타는 걸로 골라 뒀어.'),
+        line('merina', '메리나', '등불 띄울 때 리네아랑 시아 옆자리는 비워 둬. 그 둘, 매년 너 기다리잖아.'),
+        hero('…알았어요.')] },
+      { label: '촌장의 집 앞 헤르만에게 걸쇠와 초 전하기', need: 1, event: 'talk', npc: 'herman', lines: [
+        line('herman', '헤르만', '이걸로 등불대는 다 세웠군. 수고했네.'),
+        line('herman', '헤르만', '내가 너만 할 때는 이 축제가 일 년 중 제일 기다려졌지. 오늘 밤은 모두 웃을 수 있으면 좋겠구먼.')] },
+    ],
+    rewardXp: 25, rewardGold: 40,
+    offer: [line('herman', '헤르만', '마침 잘 왔네. 일손이 필요하던 참이야.')],
+    reminder: [line('herman', '헤르만', '도란에게 걸쇠를, 메리나에게 초를 받아 오게.')],
+    done: [line('herman', '헤르만', '그런데 테온이 입구 쪽이 어수선하다더군. 해 지기 전에 한 번만 살펴봐 주겠나? 그다음엔 여관으로 가게.')],
+  },
+  {
+    id: 'evening-patrol', title: '해 질 무렵의 순찰', giver: 'herman', main: true, requires: 'harvest-help', turnIn: 'teon',
     objective: { label: '마을 남쪽 입구의 흔적 살펴보기', need: 1, event: 'inspect', spot: 'south-watch', map: 'village' },
     rewardXp: 20, rewardItems: [{ id: 'potion', count: 2 }],
     offer: [hero('남쪽 입구를 살펴보고 테온에게 알려 주자.')],
-    reminder: [line('linea', '리네아', '입구를 살핀 뒤 테온에게 알려 줘. 너무 늦진 말고.')],
-    done: [hero('입구에 잿빛 나방이 모여 있었어. 이런 나방이 있었나?'), line('teon', '테온', '나도 처음 보네. 기억해 둘게. 밤에는 내가 지킬 테니 넌 여관으로 가.')] ,
+    reminder: [line('herman', '헤르만', '입구를 살핀 뒤 테온에게 알려 주게. 너무 늦진 말고.')],
+    done: [hero('입구에 잿빛 나방이 모여 있었어. 이런 나방이 있었나?'), line('teon', '테온', '나도 처음 보네. 들판 쪽에서 계속 날아오는 것 같아.')],
   },
   {
-    id: 'festival-eve', title: '축제 전야', giver: 'teon', main: true, requires: 'evening-patrol',
+    id: 'moth-trail', title: '잿빛 날갯가루', giver: 'teon', main: true, requires: 'evening-patrol', turnIn: 'teon',
+    objective: { label: '남쪽 들판의 잿빛 나방 쫓아내기', need: 4, event: 'kill', map: 'south-field', monster: 'ashen-moth' },
+    steps: [
+      { label: '남쪽 들판의 잿빛 나방 쫓아내기', need: 4, event: 'kill', map: 'south-field', monster: 'ashen-moth' },
+      { label: '들판의 나방이 모여 앉았던 풀숲 살펴보기', need: 1, event: 'inspect', spot: 'moth-nest', map: 'south-field' },
+    ],
+    rewardXp: 30, rewardItems: [{ id: 'potion', count: 2 }],
+    offer: [
+      line('teon', '테온', '미안하지만 들판에 모인 놈들 좀 쫓아 줄래? 난 입구를 비울 수가 없어.'),
+      line('teon', '테온', '가루를 뒤집어쓰면 몸이 무거워진대. 조심해.'),
+    ],
+    reminder: [line('teon', '테온', '들판의 나방은 아직이야? 어디서 날아오는지도 봐 줘.')],
+    done: [
+      hero('나방이 앉았던 풀이 잿빛으로 바스러져 있었어. 불에 탄 것도 아닌데.'),
+      line('teon', '테온', '바스러졌다고…? 축제가 끝나면 촌장님께 말씀드리자.'),
+      line('teon', '테온', '오늘 밤은 내가 입구를 지킬게. 로제타 아주머니가 기다리셔.'),
+    ],
+  },
+  {
+    id: 'festival-eve', title: '축제 전야', giver: 'teon', main: true, requires: 'moth-trail',
     turnIn: 'rosetta', completeOnTarget: true, confirm: true,
     objective: { label: '준비를 마치고 여관의 로제타에게 말하기', need: 1, event: 'talk', npc: 'rosetta' },
     rewardXp: 15,
     offer: [line('teon', '테온', '로제타 아주머니께 준비됐다고 하면 잔치를 시작할 거야. 남은 볼일이 있으면 먼저 보고 와.')],
     reminder: [line('teon', '테온', '여관은 남동쪽이야. 오늘은 내 몫까지 즐겨 줘.')],
-    target: [line('rosetta', '로제타', '다들 모였구나! 오늘만큼은 걱정 내려놓고 따뜻하게 먹자.'), line('serena', '세레나', '시아, 너무 서두르지 말고. 시온도 이쪽에 앉으렴.'), line('sia', '시아', '오빠, 등불 띄울 때 내 옆에 있어야 해!'), line('linea', '리네아', '둘 다 조금만 기다려. 나도 같이 갈 거니까.'), ruan('오늘 수고 많았다. 이렇게 웃을 수 있으면 좋은 날이지.'), { speaker: '로웬 마을', text: '잔치가 끝나고, 사람들은 각자의 집으로 돌아가기 시작했다.' }, line('teon', '테온', '남쪽 입구다! 모두 여관 쪽으로 물러서!')],
+    target: [line('rosetta', '로제타', '다들 모였구나! 오늘만큼은 걱정 내려놓고 따뜻하게 먹자.'),
+      line('herman', '헤르만', '올해도 무사히 거둬들였네. 모두 수고했어. 로웬을 위하여!'),
+      line('doran', '도란', '로웬을 위하여! 그리고 바람에 안 떨어지는 내 걸쇠를 위하여!'),
+      line('merina', '메리나', '도란 씨, 작년 얘기 꺼내기 전에 그만 마셔요.'),
+      line('serena', '세레나', '시아, 너무 서두르지 말고. 시온도 이쪽에 앉으렴.'), line('sia', '시아', '오빠, 등불 띄울 때 내 옆에 있어야 해!'),
+      line('linea', '리네아', '둘 다 조금만 기다려. 나도 같이 갈 거니까.'), ruan('오늘 수고 많았다. 이렇게 웃을 수 있으면 좋은 날이지.'), { speaker: '로웬 마을', text: '잔치가 끝나고, 사람들은 각자의 집으로 돌아가기 시작했다.' }, line('teon', '테온', '남쪽 입구다! 모두 여관 쪽으로 물러서!')],
     done: [ruan('시온, 나와 길을 열자! 사람들부터 안전한 곳으로 보내는 거다.')],
   },
   {
@@ -165,12 +217,19 @@ export const QUESTS: QuestDef[] = [
     objective: { label: '남쪽 입구에서 들어온 권속 저지하기', need: 3, event: 'kill', map: 'village', encounter: 'village-raid' },
     steps: [
       { label: '남쪽 입구에서 들어온 권속 저지하기', need: 3, event: 'kill', map: 'village', encounter: 'village-raid' },
-      { label: '광장의 세레나 안전 확인하기', need: 1, event: 'talk', npc: 'serena', lines: [line('serena', '세레나', '나는 괜찮아. 다친 사람들과 여관으로 갈게. 시아는… 리네아와 먼저 나갔는데.'), hero('제가 찾을게요. 어머니는 안으로 들어가세요.')] },
+      { label: '남쪽 입구의 테온 살피기', need: 1, event: 'talk', npc: 'teon', lines: [
+        line('teon', '테온', '윽… 괜찮아, 긁힌 거야. 그보다 몇 놈이 여관 쪽 골목으로 빠졌어!'),
+        line('teon', '테온', '사람들이 여관으로 모이고 있어. 시온, 그쪽을 막아 줘!'),
+        hero('알았어. 테온은 여기서 버텨!')] },
+      { label: '여관 앞 골목의 권속 저지하기', need: 3, event: 'kill', map: 'village', encounter: 'village-raid' },
+      { label: '광장의 세레나 안전 확인하기', need: 1, event: 'talk', npc: 'serena', lines: [line('serena', '세레나', '나는 괜찮아. 다친 사람들과 여관으로 갈게. 시아는… 리네아와 북쪽 집 쪽으로 먼저 갔는데.'), hero('북쪽으로요? 제가 가 볼게요. 어머니는 안으로 들어가세요.')] },
+      { label: '마을 북쪽 길을 막은 권속 저지하기', need: 3, event: 'kill', map: 'village-north', encounter: 'village-raid' },
+      { label: '리네아의 집 옆 골목 살펴보기', need: 1, event: 'inspect', spot: 'north-alley', map: 'village-north' },
       { label: '광장의 에일라에게 부상자 상황 확인하기', need: 1, event: 'talk', npc: 'eila', lines: [line('eila', '에일라', '북쪽 골목에서 리네아를 찾았어. 큰 외상은 없는데 쓰러져 있었어. 시아는 보이지 않고… 루안도 크게 다쳤으니 먼저 가 보렴.'), hero('리네아는요? 괜찮은 거죠?'), line('eila', '에일라', '내가 곁에 있을게. 지금은 모두 안전하게 옮기는 게 먼저야.')] },
     ],
     rewardXp: 50, rewardItems: [{ id: 'potion', count: 3 }],
     offer: [line('rosetta', '로제타', '여관 문은 열어 둘게! 밖에 남은 사람들을 부탁해!')],
-    reminder: [line('rosetta', '로제타', '길을 막는 권속부터 물리쳐 줘. 세레나와 에일라도 밖에 있어!')],
+    reminder: [line('rosetta', '로제타', '길을 막는 권속부터 물리쳐 줘. 세레나와 에일라도 밖에 있어! 북쪽 집들도 걱정이야.')],
     done: [ruan('더는 따라오지 않는구나… 사람들은 무사하니?'), hero('네. 하지만 시아가 안 보여요. 리네아도 다쳤고요.'), ruan('나는 조금 쉬어야겠다. 가족부터 찾아보렴. 혼자 너무 멀리 나가지는 말고.')],
   },
   {

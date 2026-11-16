@@ -1,7 +1,7 @@
 import { ENEMY, PROGRESSION } from '../config.ts';
 
-export type MonsterKind = 'slime' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth';
-export type EnemyKey = 'slime-green' | 'slime-blue' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'retainer-ash';
+export type MonsterKind = 'slime' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'corrosion-tracker' | 'corrosion-executioner';
+export type EnemyKey = 'slime-green' | 'slime-blue' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'corrosion-tracker' | 'corrosion-executioner' | 'retainer-ash';
 export function monsterKind(key: EnemyKey): MonsterKind | undefined {
   return key.startsWith('slime-') ? 'slime' : key === 'retainer-ash' ? undefined : key as MonsterKind;
 }
@@ -16,7 +16,23 @@ export const MONSTERS = {
   // 소멸(네이룬)의 하급 권속. 해 질 무렵부터 나타나 부식성 가루를 뿌리며 덮친다. 약하지만 닿으면 몸이 무거워진다.
   'ashen-moth': { name: '잿빛 나방', hp: 20, damage: 5, xp: 10, height: 100, speed: 120,
     windupMs: 450, strikeMs: 140, returnMs: 200, recoverMs: 1300, color: 0x9c96b3 },
+  // 습격의 권속 (소멸·네이룬 계열 중급). 추적자는 낮게 달려들어 할퀴고, 집행자는 길게 준비한 뒤 무겁게 돌진한다.
+  'corrosion-tracker': { name: '부식의 추적자', hp: 30, damage: 7, xp: 12, height: 100, speed: 150,
+    windupMs: 420, strikeMs: 120, returnMs: 200, recoverMs: 850, color: 0x6d6278 },
+  'corrosion-executioner': { name: '부식의 집행자', hp: 60, damage: 10, xp: 25, height: 150, speed: 95,
+    windupMs: 950, strikeMs: 340, returnMs: 260, recoverMs: 1300, color: 0x5e5468 },
 } as const;
+
+/** 길게 준비했다가 잠근 방향으로 돌진하는 몬스터 */
+export function isCharger(kind: MonsterKind | undefined): boolean {
+  return kind === 'iron-scale-lizard' || kind === 'corrosion-executioner';
+}
+
+/** 몬스터 한 마리의 능력치 (레벨을 반영한 값) */
+export interface MonsterStats {
+  name: string; hp: number; damage: number; xp: number; height: number; speed: number;
+  windupMs: number; strikeMs: number; returnMs: number; recoverMs: number; color: number;
+}
 
 /** 잿빛 나방의 부식성 가루에 닿으면 잠깐 느려진다 (게임 시계 ms, 이동 속도 배율). */
 export const ASH_SLOW = { durationMs: 2000, speedScale: 0.55 };

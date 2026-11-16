@@ -4,7 +4,9 @@ import { GUARDS, isGuardId } from '../world/guards.ts';
 import { NPCS, type NpcDef, type NpcId } from '../world/npcs.ts';
 import type { MapId } from '../world/maps.ts';
 import type { Interactable } from '../world/interactables.ts';
-import { LINEA_YARD } from '../world/villageLayout.ts';
+import { BUILDINGS, LINEA_YARD } from '../world/villageLayout.ts';
+import { fieldPoint } from '../world/maps.ts';
+import { RAID_LEVELS } from '../combat/monsterLevel.ts';
 
 export type ChapterPhase = 'day' | 'raid' | 'aftermath';
 
@@ -44,10 +46,14 @@ export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: Ma
 const SPOTS = {
   'south-watch': { id: 'story-south-watch', x: 1180, y: 1340, radius: 95, markerHeight: 55 },
   'home-search': { id: 'story-home-search', x: 415, y: 640, radius: 85, markerHeight: 55 },
+  // 해 질 무렵 남쪽 들판: 나방이 모여 앉았던 풀숲
+  'moth-nest': { id: 'story-moth-nest', ...fieldPoint(1250, 860), radius: 95, markerHeight: 55 },
+  // 습격 중 마을 북쪽: 리네아의 집 옆 골목
+  'north-alley': { id: 'story-north-alley', x: LINEA_YARD.x + 120, y: LINEA_YARD.y + 70, radius: 95, markerHeight: 55 },
 } satisfies Record<string, Interactable>;
 
 export function chapterSpots(state: QuestState, map: MapId): Interactable[] {
-  return Object.values(SPOTS).filter(spot => Object.entries(state).some(([id, p]) => {
+  return Object.values(SPOTS).filter((spot: Interactable) => Object.entries(state).some(([id, p]) => {
     const objective = currentObjective(questDef(id as Parameters<typeof questDef>[0]), p);
     return p.status === 'active' && objective.event === 'inspect' && objective.map === map && `story-${objective.spot}` === spot.id;
   }));
@@ -56,6 +62,13 @@ export function chapterSpots(state: QuestState, map: MapId): Interactable[] {
 export const INSPECTION_LINES: Record<string, DialogueLine[]> = {
   'story-south-watch': [
     { speaker: '시온', portrait: 'hero-neutral', text: '잿빛 나방이 이렇게 많이 모여 있네. 가까이 가도 날아가지 않아… 테온에게 알려 줘야겠어.' },
+  ],
+  'story-moth-nest': [
+    { speaker: '시온', portrait: 'hero-neutral', text: '나방이 앉아 있던 풀이 잿빛으로 바스러져 있어. 불에 탄 것도 아닌데… 만지기만 해도 가루가 돼.' },
+  ],
+  'story-north-alley': [
+    { speaker: '시온', portrait: 'hero-neutral', text: '리네아의 등불이 깨진 채 떨어져 있어. 그 옆에… 시아의 머리끈.' },
+    { speaker: '시온', portrait: 'hero-neutral', text: '둘이 여기 있었던 거야. 에일라가 다친 사람들을 광장으로 옮기고 있다고 했지. 가 보자.' },
   ],
   'story-home-search': [
     { speaker: '시온', portrait: 'hero-neutral', text: '시아야? …대답이 없어. 집 안에도 돌아온 흔적이 없고. 리네아라면 마지막으로 시아를 봤을 텐데… 에일라에게 가 보자.' },
@@ -73,12 +86,36 @@ export function isDusk(state: QuestState): boolean {
   return !!state['evening-patrol'] && chapterPhase(state) === 'day';
 }
 
+export interface RaidSpawn { x: number; y: number; key: 'corrosion-tracker' | 'corrosion-executioner'; level: number }
+
+const inn = BUILDINGS.find((b) => b.frame === 'inn')!.door;
+const tracker = (x: number, y: number): RaidSpawn => ({ x, y, key: 'corrosion-tracker', level: RAID_LEVELS.tracker });
+const executioner = (x: number, y: number): RaidSpawn => ({ x, y, key: 'corrosion-executioner', level: RAID_LEVELS.executioner });
+
+/**
+ * 습격의 세 무리 (꺼져 가는 등불의 전투 단계): 남쪽 입구 → 여관 앞 골목 → 마을 북쪽 길.
+ * 마지막 무리에는 부식의 집행자가 길을 막는다.
+ */
+export const RAID_WAVES: Array<{ step: number; map: MapId; spawns: RaidSpawn[] }> = [
+  { step: 0, map: 'village', spawns: [tracker(1180, 1320), tracker(1310, 1220), tracker(1460, 1130)] },
+  { step: 2, map: 'village', spawns: [tracker(inn.x - 160, inn.y + 110), tracker(inn.x + 200, inn.y + 60), tracker(inn.x - 300, inn.y + 120)] },
+  { step: 4, map: 'village-north', spawns: [tracker(LINEA_YARD.x + 260, LINEA_YARD.y + 90), executioner(LINEA_YARD.x + 380, LINEA_YARD.y - 20),
+    tracker(LINEA_YARD.x + 120, LINEA_YARD.y + 170)] },
+];
+
+/** 습격 중 이 맵에 나올 수 있는 모든 권속 (그림을 미리 읽어 두려고 쓴다). */
+export function raidSpawnsAnyStep(state: QuestState, map: MapId): RaidSpawn[] {
+  if (chapterPhase(state) !== 'raid') return [];
+  return RAID_WAVES.filter((w) => w.map === map).flatMap((w) => w.spawns);
+}
+
 /** 재접속해도 남은 수만 다시 배치한다. 일반 필드 처치와 구분한다. */
-export function raidSpawns(state: QuestState, map: MapId): Array<{ x: number; y: number }> {
-  if (map !== 'village' || chapterPhase(state) !== 'raid') return [];
+export function raidSpawns(state: QuestState, map: MapId): RaidSpawn[] {
+  if (chapterPhase(state) !== 'raid') return [];
   const progress = state['village-raid'];
-  if (progress?.status !== 'active' || (progress.step ?? 0) !== 0) return [];
-  return [{ x: 1180, y: 1320 }, { x: 1310, y: 1220 }, { x: 1460, y: 1130 }].slice(progress.count);
+  if (progress?.status !== 'active') return [];
+  const wave = RAID_WAVES.find((w) => w.step === (progress.step ?? 0) && w.map === map);
+  return wave ? wave.spawns.slice(progress.count) : [];
 }
 
 export function chapterDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined {

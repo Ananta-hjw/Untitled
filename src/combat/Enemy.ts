@@ -6,7 +6,8 @@ import { Character } from '../entities/Character';
 import type { NavGrid } from '../world/navGrid';
 import type { WalkArea } from '../world/walkArea';
 import { MonsterSprite } from './MonsterSprite';
-import { MONSTERS, WATER_SHOT, monsterKind, enemyHitReaches, type EnemyHit, type EnemyKey, type MonsterKind } from './monsterTypes';
+import { MONSTERS, WATER_SHOT, isCharger, monsterKind, enemyHitReaches, type EnemyHit, type EnemyKey, type MonsterKind, type MonsterStats } from './monsterTypes';
+import { scaleMonster } from './monsterLevel';
 
 type State = 'wander' | 'chase' | 'windup' | 'recover' | 'dead';
 
@@ -20,7 +21,9 @@ type State = 'wander' | 'chase' | 'windup' | 'recover' | 'dead';
 export class Enemy {
   readonly character: Character;
   readonly kind?: MonsterKind;
-  readonly stats: typeof MONSTERS[MonsterKind];
+  /** 레벨을 반영한 능력치 */
+  readonly stats: MonsterStats;
+  readonly level: number;
   private readonly aim = { x: 1, y: 0 };
   private chargeProgress = 0;
   private projectile?: { image: Phaser.GameObjects.Image; x: number; y: number; dx: number; dy: number; expires: number };
@@ -42,10 +45,11 @@ export class Enemy {
   /** 쓰러질 때 흩어지는 파편의 색 */
   readonly color: number;
 
-  constructor(scene: Phaser.Scene, key: EnemyKey, x: number, y: number) {
+  constructor(scene: Phaser.Scene, key: EnemyKey, x: number, y: number, level = 1) {
     this.scene = scene;
     this.kind = monsterKind(key);
-    this.stats = MONSTERS[this.kind ?? 'slime'];
+    this.level = level;
+    this.stats = scaleMonster<MonsterStats>(MONSTERS[this.kind ?? 'slime'], level);
     this.color = key === 'retainer-ash' ? 0x9c96b3 : this.stats.color;
     this.character = new Character(scene, x, y, {
       key,
@@ -53,6 +57,7 @@ export class Enemy {
       shadowWidth: 100,
       maxHp: this.stats.hp,
       showHpBar: true,
+      levelTag: level,
       labelOffset: this.kind ? this.stats.height + 8 : 96,
     });
     this.target.set(x, y);
@@ -103,7 +108,7 @@ export class Enemy {
           break;
         }
         const ranged = this.kind === 'waterdrop-mushroom';
-        const charge = this.kind === 'iron-scale-lizard';
+        const charge = isCharger(this.kind);
         const inRange = ranged ? Math.hypot(dx, dy) <= 350 && area.hasClearPath(c.x, c.y, player.x, player.y)
           : charge ? Math.hypot(dx, dy) <= 250 && area.hasClearPath(c.x, c.y, player.x, player.y)
           : Math.abs(dx) < ENEMY.attackRangeX && Math.abs(dy) < ENEMY.attackRangeY;
@@ -210,7 +215,7 @@ export class Enemy {
     const endAt = strikeAt + returnMs;
     if (sprite instanceof MonsterSprite) {
       sprite.showAttack(elapsed, windupMs, strikeMs, returnMs);
-      if (this.kind === 'iron-scale-lizard' && elapsed >= windupMs) {
+      if (isCharger(this.kind) && elapsed >= windupMs) {
         const progress = Math.min(1, (elapsed - windupMs) / strikeMs);
         if (progress > this.chargeProgress) {
           const c = this.character, fromX = c.x, fromY = c.y;
@@ -240,7 +245,7 @@ export class Enemy {
       const p = 1 - (1 - Math.min(1, (elapsed - strikeAt) / returnMs)) ** 2;
       sprite.setX(this.character.facing * 46 * (1 - p)).setScale(0.9 + 0.1 * p, 1.15 - 0.15 * p);
     }
-    if (elapsed >= strikeAt && !this.strikeLanded && this.kind !== 'iron-scale-lizard') {
+    if (elapsed >= strikeAt && !this.strikeLanded && !isCharger(this.kind)) {
       this.strikeLanded = true;
       this.lastStrikeAt = this.attackStartedAt + strikeAt;
       if (sprite instanceof MonsterSprite) sprite.showAttack(strikeAt - 1, windupMs, strikeMs, returnMs);
