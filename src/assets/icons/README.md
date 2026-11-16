@@ -9,7 +9,7 @@
 | 폴더 | 파일 이름 |
 | --- | --- |
 | `items/` (소모품·재료) | `potion`, `lunch`, `slime-gel` |
-| `items/` (장비) | `practice-sword`, `iron-sword`, `cloth-hood`, `worn-tunic`, `leather-armor`, `leather-gloves`, `light-boots`, `clover-charm`, `blue-bead` |
+| `items/` (장비) | `wooden-sword`, `iron-sword`, `cloth-hood`, `worn-tunic`, `leather-armor`, `leather-gloves`, `light-boots`, `clover-charm`, `blue-bead` |
 | `stats/` (능력치) | `str`, `vit`, `def`, `dex`, `int`, `luk` |
 | `slots/` (빈 장비 칸, 흐리게 표시) | `weapon`, `head`, `body`, `hands`, `feet`, `accessory` |
 

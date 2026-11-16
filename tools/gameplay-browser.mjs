@@ -604,7 +604,7 @@ test('적을 쓰러뜨리면 경험치가 쌓이고 레벨이 오르면 체력·
       label: s2.player.list.find((o) => o.text?.startsWith?.('Lv.'))?.text };
     return { before, hurtHp, twoKills, levelUp, restarted, saved: JSON.parse(localStorage.getItem('untitled-rpg.save')) };
   })()`);
-  // 레벨 1: 기본 체력, 공격력은 처음 끼고 있는 연습용 검(STR +1)만큼 높다.
+  // 레벨 1: 기본 체력, 공격력은 처음 끼고 있는 나무검(STR +1)만큼 높다.
   assert.deepEqual(result.before, { level: 1, xp: 0, maxHp: 100, damageMax: 14 });
   assert.deepEqual(result.twoKills, { level: 1, xp: 20, hp: result.hurtHp });
   assert.equal(result.levelUp.level, 2);
@@ -1538,7 +1538,7 @@ test('캐릭터 창: 포인트로 능력치를 올리고, 도란에게 장비를
   // 다시 불러와도 분배와 장비가 남는다.
   await load('in-smithy');
   const reloaded = await evaluate(`(() => { const s = window.__game.scene.getScene('game');
-    const r = { weapon: s.character.gear.equipped.weapon, vit: s.character.alloc.vit, bag: s.character.gear.bag['practice-sword'] };
+    const r = { weapon: s.character.gear.equipped.weapon, vit: s.character.alloc.vit, bag: s.character.gear.bag['wooden-sword'] };
     localStorage.removeItem('untitled-rpg.character'); localStorage.removeItem('untitled-rpg.save'); localStorage.removeItem('untitled-rpg.inventory'); localStorage.removeItem('untitled-rpg.quests');
     return r; })()`);
   assert.deepEqual(reloaded, { weapon: 'iron-sword', vit: 2, bag: 1 });

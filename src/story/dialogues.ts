@@ -89,7 +89,7 @@ export const DIALOGUES = {
     { speaker: '메리나', portrait: 'merina', text: '장부를 보면 마을 사정이 다 보여. 올해는 다들 웃는 얼굴이야. 테온은 외상값만 빼고.' },
   ],
   'npc-doran': [
-    { speaker: '도란', portrait: 'doran', text: '오, 시온! 그 무딘 연습용 검 들고 또 수련 가냐?' },
+    { speaker: '도란', portrait: 'doran', text: '오, 시온! 그 나무검 들고 또 수련 가냐?' },
     { speaker: '도란', portrait: 'doran', text: '언젠가 진짜 검 한 자루 두들겨 주마. 그때까지 손목 아껴 두라고!' },
     { speaker: '도란', portrait: 'doran', text: '요즘 숲에서 잡혔다는 도마뱀 비늘을 하나 봤는데, 쇠처럼 단단하더라. 마물 주제에 웬 쇠비늘인지.' },
   ],

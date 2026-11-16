@@ -23,7 +23,7 @@ export const SLOT_INFO: Record<SlotId, { name: string; kind: GearKind }> = {
 };
 
 export type GearId =
-  | 'practice-sword' | 'iron-sword' | 'cloth-hood' | 'worn-tunic' | 'leather-armor'
+  | 'wooden-sword' | 'iron-sword' | 'cloth-hood' | 'worn-tunic' | 'leather-armor'
   | 'leather-gloves' | 'light-boots' | 'clover-charm' | 'blue-bead';
 
 export interface GearDef {
@@ -38,7 +38,7 @@ export interface GearDef {
 }
 
 export const GEAR: Record<GearId, GearDef> = {
-  'practice-sword': { id: 'practice-sword', name: '연습용 검', description: '날이 무딘 수련용 검. 손에 익었다.', kind: 'weapon', stats: { str: 1 }, sellPrice: 5 },
+  'wooden-sword': { id: 'wooden-sword', name: '나무검', description: '수련소에서 쓰던 나무검. 손에 익었다.', kind: 'weapon', stats: { str: 1 }, sellPrice: 5 },
   'iron-sword': { id: 'iron-sword', name: '철검', description: '도란이 두들긴 튼튼한 검.', kind: 'weapon', stats: { str: 4 }, price: 300, sellPrice: 120 },
   'cloth-hood': { id: 'cloth-hood', name: '천 두건', description: '햇볕과 먼지를 막아 준다.', kind: 'head', stats: { def: 1, vit: 1 }, price: 80, sellPrice: 30 },
   'worn-tunic': { id: 'worn-tunic', name: '낡은 수련복', description: '수련소에서 입던 옷.', kind: 'body', stats: { def: 1 }, sellPrice: 5 },
@@ -57,9 +57,9 @@ export interface Gear {
   equipped: Partial<Record<SlotId, GearId>>;
 }
 
-/** 처음 상태: 연습용 검과 낡은 수련복을 입고 있다. */
+/** 처음 상태: 나무검과 낡은 수련복을 입고 있다. */
 export function startingGear(): Gear {
-  return { bag: {}, equipped: { weapon: 'practice-sword', body: 'worn-tunic' } };
+  return { bag: {}, equipped: { weapon: 'wooden-sword', body: 'worn-tunic' } };
 }
 
 export function gearCount(gear: Gear, id: GearId): number {
@@ -135,14 +135,18 @@ export function parseGear(data: unknown): Gear {
   if (typeof data !== 'object' || data === null) return startingGear();
   const { bag, equipped } = data as { bag?: unknown; equipped?: unknown };
   const gear: Gear = { bag: {}, equipped: {} };
+  // 예전 저장의 '연습용 검'(practice-sword)은 나무검으로 바꿔 읽는다.
+  const rename = (id: unknown): unknown => (id === 'practice-sword' ? 'wooden-sword' : id);
   const known = (id: unknown): id is GearId => typeof id === 'string' && Object.hasOwn(GEAR, id);
   if (typeof bag === 'object' && bag !== null) {
-    for (const [id, count] of Object.entries(bag)) {
+    for (const [raw, count] of Object.entries(bag)) {
+      const id = rename(raw);
       if (known(id) && Number.isInteger(count) && (count as number) > 0) gear.bag[id] = Math.min(MAX_GEAR_STACK, count as number);
     }
   }
   if (typeof equipped === 'object' && equipped !== null) {
-    for (const [slot, id] of Object.entries(equipped)) {
+    for (const [slot, raw] of Object.entries(equipped)) {
+      const id = rename(raw);
       if (Object.hasOwn(SLOT_INFO, slot) && known(id) && fits(id, slot as SlotId)) gear.equipped[slot as SlotId] = id;
     }
   }
