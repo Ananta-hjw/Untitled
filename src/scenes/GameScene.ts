@@ -1003,7 +1003,12 @@ export class GameScene extends Phaser.Scene {
         saveSettings(this.storage, settings);
       },
       canExit: Capacitor.isNativePlatform(),
-      onExit: () => void App.exitApp(),
+      // 게임 종료: 앱 화면만 닫으면(finish) 같은 프로세스에 이전 게임(그림·WebGL·게임 루프)이 남아,
+      // 다시 켰을 때 두 게임 몫의 메모리로 버벅인다. 먼저 Phaser 게임을 완전히 정리하고 앱을 닫는다.
+      onExit: () => window.setTimeout(() => {
+        this.game.destroy(true);
+        void App.exitApp();
+      }, 0),
       stressLabel: () => `성능 테스트: ${this.stressCount ? `${this.stressCount}명` : '끔'}`,
       // 마을에서 사람 수를 바꿔 다시 시작한다. 끔 → 50 → 100 → 200 → 끔.
       onStress: () => this.scene.restart({ map: 'village', stress: nextStressCount(this.stressCount) }),
