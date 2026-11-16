@@ -975,6 +975,7 @@ test('골드와 아이템: 슬라임이 골드를 떨어뜨리고, 물약 버튼
     const savedProgress = localStorage.getItem('untitled-rpg.save');
     localStorage.removeItem('untitled-rpg.inventory');
     s.scene.restart({ map: 'south-field' }); g.step(t += 16, 16);
+    s.quickSlots=[null,null];s.refreshInventory();
     const start = { gold: s.inventory.gold, hud: s.hud.goldText.text, label: s.potionButton.text.text };
     // 슬라임을 한 번에 쓰러뜨린다.
     const e = s.enemies[0], c = e.character, p = s.player;
@@ -984,6 +985,7 @@ test('골드와 아이템: 슬라임이 골드를 떨어뜨리고, 물약 버튼
     const afterKill = { alive: c.alive, gold: s.inventory.gold, hud: s.hud.goldText.text };
     // 물약: 체력이 가득하면 못 쓰고, 다치면 버튼으로 쓴다.
     s.inventory = { gold: 100, items: { potion: 2 } }; s.refreshInventory();
+    s.openQuickSlot(0);s.quickSlotPanel.rows[0].button.emit('pointerup');
     // 쓰러뜨린 순간의 히트스톱이 끝날 때까지 기다린다 (멈춘 동안 누른 버튼은 끝난 뒤 처리된다).
     for (let i = 0; i < 20; i++) g.step(t += 16, 16);
     s.potionButton.pressed = true; for (let i = 0; i < 3; i++) g.step(t += 16, 16);
@@ -1005,12 +1007,12 @@ test('골드와 아이템: 슬라임이 골드를 떨어뜨리고, 물약 버튼
     s.scene.restart(); g.step(t += 16, 16);
     return { start, afterKill, fullHp, healed, paused, shop, reloaded };
   })()`);
-  assert.deepEqual(result.start, { gold: 0, hud: '● 0 G', label: '물약\n0' });
+  assert.deepEqual(result.start, { gold: 0, hud: '● 0 G', label: '+ 등록\nQ' });
   assert.equal(result.afterKill.alive, false);
   assert.ok(result.afterKill.gold >= 3 && result.afterKill.gold <= 6, String(result.afterKill.gold));
   assert.equal(result.afterKill.hud, `● ${result.afterKill.gold} G`);
   assert.equal(result.fullHp, 2, '체력이 가득하면 물약을 쓰지 않는다');
-  assert.deepEqual(result.healed, { hp: 80, potions: 1, label: '물약\n1' });
+  assert.deepEqual(result.healed, { hp: 80, potions: 1, label: '물약 1' });
   assert.equal(result.paused, true, '잡화점이 열려 있으면 게임이 멈춘다');
   assert.deepEqual(result.shop, { gold: 100 - 20 + 4, potions: 2, gel: 1 });
   assert.deepEqual(result.reloaded, { gold: 84, items: { potion: 2, 'slime-gel': 1 } });
@@ -1785,17 +1787,31 @@ test('마을 돌담은 긴 이동·회피 거리도 막고 세 문은 통과하�
     const s=window.__game.scene.getScene('game');
     const out={x:0,y:0,set(x,y){this.x=x;this.y=y;return this;}};
     const move=(x,y,dx,dy)=>{s.walkArea.move(x,y,dx,dy,out);return {x:out.x,y:out.y};};
-    const west=move(200,700,-400,0),east=move(2230,750,500,0),south=move(800,1580,0,400);
+    const west=move(260,700,-400,0),east=move(2160,750,500,0),south=move(800,1580,0,400);
     const gates=[move(200,1050,-100,0),move(2180,1050,120,0),move(1180,1520,0,100)];
+    const bodyBounds=[];
+    const bodyInside=[west,east].every((point,i)=>{
+      s.player.placeAt(point.x,point.y);
+      return [[-1,0],[1,0],[-1,-1],[1,-1],[-1,1],[1,1],[0,-1],[0,1]].every(([dx,dy])=>{
+        s.player.sprite.setMovement(dx,dy);
+        s.player.sprite.play('hero-walk');
+        const body=s.player.sprite.getBounds(),shadow=s.player.shadow.getBounds();
+        bodyBounds.push({i,dx,dy,body,shadow,image:s.player.sprite.image.getBounds()});
+        return i===0?Math.min(body.left,shadow.left)>=144:Math.max(body.right,shadow.right)<=2258;
+      });
+    });
+    const treesInside=s.children.list.filter(o=>o.name==='village-prop-oak'||o.name==='village-prop-pine')
+      .every(o=>{const b=o.getBounds();return b.left>=164&&b.right<=2238;});
     const wallCount=s.children.list.filter(o=>o.name==='village-wall').length;
     const posts=s.children.list.filter(o=>o.name==='village-gate-west'||o.name==='village-gate-east').length;
     s.openWorldMap();
     const shared=s.worldMap.preview.key===s.minimap.preview.key;
     s.worldMap.close();
-    return {west,east,south,gates,wallCount,posts,shared};
+    return {west,east,south,gates,wallCount,posts,shared,bodyInside,treesInside,bodyBounds};
   })()`);
-  assert.ok(plaza.west.x>=136&&plaza.west.x<150);
-  assert.ok(plaza.east.x<=2266&&plaza.east.x>2250);
+  assert.equal(plaza.bodyInside,true,JSON.stringify(plaza.bodyBounds));assert.equal(plaza.treesInside,true);
+  assert.ok(plaza.west.x>=212&&plaza.west.x<226);
+  assert.ok(plaza.east.x<=2190&&plaza.east.x>2176);
   assert.ok(plaza.south.y<=1656&&plaza.south.y>1640);
   for (const [i, expected] of [{x:100,y:1050},{x:2300,y:1050},{x:1180,y:1620}].entries()) {
     assert.ok(Math.hypot(plaza.gates[i].x-expected.x,plaza.gates[i].y-expected.y)<1e-6);
@@ -1845,4 +1861,98 @@ test('일반 병사들은 그림을 공유하고 세 문에 두 명씩 서며 �
   await load('village-north');
   const north=await evaluate(`(()=>{const s=window.__game.scene.getScene('game');return s.npcs.filter(n=>n.def.skin==='soldier').map(n=>({wander:n.def.wander,clear:s.walkArea.contains(n.x,n.y)}));})()`);
   assert.equal(north.length,2);assert.ok(north.every(n=>n.wander>0&&n.clear));
+});
+
+test('물약·도시락 바로 사용 버튼은 해당 물품만 쓰고 대기시간·메뉴 입력·큰 버튼 배치를 처리한다', async () => {
+  await load('village');
+  const result=await evaluate(`(()=>{
+    const s=window.__game.scene.getScene('game');
+    const saved=localStorage.getItem('untitled-rpg.inventory');
+    s.player.setMaxHp(200,true);s.player.hp=10;s.drawHud();
+    s.quickSlots=['potion','lunch'];s.inventory={gold:0,items:{potion:3,lunch:2}};s.refreshInventory();
+    const tick=(n=1)=>{for(let i=0;i<n;i++)s.update(0,50);};
+    s.lunchButton.pressed=true;tick();
+    const lunch={hp:s.player.hp,p:s.inventory.items.potion,l:s.inventory.items.lunch};
+    s.potionButton.pressed=true;tick();const shared=s.player.hp===160&&s.inventory.items.potion===3;
+    tick(600);s.potionButton.pressed=true;tick();
+    const potion={hp:s.player.hp,p:s.inventory.items.potion,l:s.inventory.items.lunch};
+    tick(600);s.lunchButton.pressed=true;tick();const full=s.inventory.items.lunch===1;
+    s.player.hp=10;s.inventory={gold:0,items:{lunch:2}};s.refreshInventory();
+    s.potionButton.pressed=true;tick();const exact=s.player.hp===10&&s.inventory.items.lunch===2;
+    s.lunchButton.pressed=true;s.lunchButton.isDown=true;tick(40);s.lunchButton.isDown=false;
+    const once=s.player.hp===160&&s.inventory.items.lunch===1;
+    s.player.hp=10;s.inventory={gold:0,items:{potion:2,lunch:2}};s.refreshInventory();
+    s.openPause();s.potionButton.pressed=true;s.lunchButton.pressed=true;tick(2);s.pauseMenu.close();tick(2);
+    const noBufferedUse=s.player.hp===10&&s.inventory.items.potion===2&&s.inventory.items.lunch===2;
+    const guard=s.npcs.find(n=>n.def.skin==='soldier');s.openDialogue(guard.spot);
+    s.potionButton.pressed=true;s.lunchButton.pressed=true;while(s.dialogue.isOpen)s.dialogue.advance();tick(2);
+    const dialogueCleared=s.player.hp===10&&s.inventory.items.potion===2&&s.inventory.items.lunch===2;
+    const layouts=[];
+    for(const width of [960,1280,1728])for(const size of ['small','normal','large']){
+      s.applySettings({...s.settings,buttonSize:size,joystickSize:'large'});
+      // Use the same layout method as a resize without changing the canvas underneath the browser harness.
+      const original=s.scale.gameSize.width;s.scale.gameSize.width=width;s.layout();
+      const items=[s.potionButton,s.lunchButton],other=[s.attackButton,s.dodgeButton,s.skillButton,s.talkButton];
+      layouts.push(items.every((a,i)=>{
+        const all=[...other,...items.filter((_,j)=>j!==i)];
+        return a.image.x-a.size*1.2>=0&&a.image.x+a.size*1.2<=width&&a.image.y+a.size*1.2<=720&&
+          all.every(b=>Math.hypot(a.image.x-b.image.x,a.image.y-b.image.y)>=(a.size+b.size)*1.2+4)&&
+          Math.hypot(a.image.x-s.joystick.centerX,a.image.y-s.joystick.centerY)>a.size*1.2+s.joystick.size*1.35;
+      }));
+      s.scale.gameSize.width=original;
+    }
+    s.applySettings({...s.settings,buttonSize:'normal',joystickSize:'normal'});
+    const icons=[s.potionButton.icon.frame.name,s.lunchButton.icon.frame.name];
+    if(saved===null)localStorage.removeItem('untitled-rpg.inventory');else localStorage.setItem('untitled-rpg.inventory',saved);
+    return {lunch,shared,potion,full,exact,once,noBufferedUse,dialogueCleared,layouts,icons};
+  })()`);
+  assert.deepEqual(result.lunch,{hp:160,p:3,l:1});assert.deepEqual(result.potion,{hp:200,p:2,l:1});
+  for(const key of ['shared','full','exact','once','noBufferedUse','dialogueCleared'])assert.equal(result[key],true,key);
+  assert.ok(result.layouts.every(Boolean));assert.deepEqual(result.icons,['potion','lunch']);
+});
+
+test('빈 슬롯 등록·가방에서 교체·해제·저장이 가능하고 20초 원형 대기는 교체와 가방으로 우회되지 않는다', async () => {
+  await load('village');
+  await evaluate(`localStorage.removeItem('untitled-rpg.quick-slots')`);
+  await load('village');
+  const result=await evaluate(`(()=>{
+    const g=window.__game,s=g.scene.getScene('game');
+    s.player.setMaxHp(200,true);s.player.hp=10;s.inventory={gold:0,items:{potion:3,lunch:2}};s.refreshInventory();
+    const tick=(n=1)=>{for(let i=0;i<n;i++)s.update(0,50);};
+    const empty=s.quickSlots.every(x=>x===null)&&!s.potionButton.icon.visible;
+    s.potionButton.pressed=true;tick();const opened=s.quickSlotPanel.isOpen;
+    const frozenAt=s.now;tick(10);const frozen=s.now===frozenAt;
+    s.quickSlotPanel.rows[0].button.emit('pointerup');tick();
+    s.openItemPanel('bag');s.itemPanel.sellTab.emit('pointerup');
+    const bagSetup=s.quickSlotPanel.isOpen;s.quickSlotPanel.rows[1].button.emit('pointerup');tick();
+    const saved=JSON.parse(localStorage.getItem('untitled-rpg.quick-slots')).slots;
+    s.potionButton.pressed=true;tick();
+    const afterUse={hp:s.player.hp,p:s.inventory.items.potion,l:s.inventory.items.lunch,
+      seconds:s.potionButton.cooldownSeconds,visible:s.potionButton.cooldownShade.visible};
+    tick(200);const middle={seconds:s.potionButton.cooldownSeconds,step:s.potionButton.cooldownStep};
+    const remaining=s.nextUseAt-s.now;
+    s.openQuickSlot(0);s.quickSlotPanel.rows[1].button.emit('pointerup');
+    const kept=s.nextUseAt-s.now===remaining;
+    s.potionButton.pressed=true;tick();const swapBlocked=s.player.hp===60&&s.inventory.items.lunch===2;
+    s.openItemPanel('bag');s.onItemAction({type:'use',id:'potion'});
+    const bagBlocked=s.player.hp===60&&s.itemPanel.status.text.includes('재사용');s.itemPanel.close();
+    s.openCharacterPanel('items');
+    const characterHidesSlots=!s.potionButton.image.visible&&!s.lunchButton.image.visible;
+    s.onItemAction({type:'use',id:'potion'});s.openQuickSlot(0);
+    const characterBlocked=s.player.hp===60&&s.characterPanel.status.text.includes('재사용')&&!s.quickSlotPanel.isOpen;
+    s.characterPanel.close();
+    s.openQuickSlot(0);s.openCharacterPanel('items');
+    const selectorExclusive=!s.characterPanel.isOpen;s.quickSlotPanel.close();
+    tick(200);s.potionButton.pressed=true;tick();const expired=s.player.hp===200&&s.inventory.items.lunch===1;
+    s.openQuickSlot(0);s.quickSlotPanel.clear.emit('pointerup');
+    const cleared=s.quickSlots[0]===null&&!s.potionButton.icon.visible&&s.potionButton.cooldownStep===0;
+    s.scene.restart();g.step(performance.now(),16);g.step(performance.now()+16,16);
+    const restored={slots:s.quickSlots,cooldown:s.nextUseAt-s.now};
+    localStorage.removeItem('untitled-rpg.quick-slots');g.registry.set('quick-item-cooldown',0);s.nextUseAt=0;
+    return {empty,opened,frozen,bagSetup,saved,afterUse,middle,kept,swapBlocked,bagBlocked,characterHidesSlots,characterBlocked,selectorExclusive,expired,cleared,restored};
+  })()`);
+  for(const key of ['empty','opened','frozen','bagSetup','kept','swapBlocked','bagBlocked','characterHidesSlots','characterBlocked','selectorExclusive','expired','cleared'])assert.equal(result[key],true,key);
+  assert.deepEqual(result.saved,['potion','lunch']);assert.deepEqual(result.afterUse,{hp:60,p:2,l:2,seconds:20,visible:true});
+  assert.equal(result.middle.seconds,10);assert.ok(result.middle.step>=179&&result.middle.step<=181);
+  assert.deepEqual(result.restored.slots,[null,'lunch']);assert.ok(result.restored.cooldown>19000);
 });

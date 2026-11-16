@@ -68,12 +68,15 @@ import {
 } from '../story/quests';
 import { GUARDS, guardsForMap } from '../world/guards';
 import type { NpcId } from '../world/npcs';
+import { QuickSlotPanel } from '../ui/QuickSlotPanel';
+import { loadQuickSlots, saveQuickSlots, type QuickSlots } from '../items/quickSlots';
+import { ITEM_ICON_TEXTURE, preloadItemIcons, registerItemIcons } from '../ui/itemIcons';
 import { ItemPanel, type PanelAction } from '../ui/ItemPanel';
 import { WorldMap } from '../ui/WorldMap';
 import { ExitHint } from '../ui/ExitHint';
 import { VISITED_SAVE_KEY, parseVisited, regionOf, serializeVisited, type RegionId } from '../world/worldMap';
 import {
-  INVENTORY_SAVE_KEY, ITEMS, USE_COOLDOWN_MS, addGold, addItem, applyDrop, bestHealItem, buy, countOf, parseInventory,
+  INVENTORY_SAVE_KEY, ITEMS, USE_COOLDOWN_MS, addGold, addItem, applyDrop, buy, countOf, parseInventory,
   sell, serializeInventory, slimeDrop, useItem, type Inventory, type ItemId,
 } from '../items/inventory';
 import { ProgressEffects } from '../ui/ProgressEffects';
@@ -232,9 +235,13 @@ export class GameScene extends Phaser.Scene {
   private visited = new Set<RegionId>();
   private mapKeys: Phaser.Input.Keyboard.Key[] = [];
   private potionButton?: ActionButton;
+  private lunchButton?: ActionButton;
+  private lunchKeys: Phaser.Input.Keyboard.Key[] = [];
   private potionKeys: Phaser.Input.Keyboard.Key[] = [];
   /** 다음에 회복 아이템을 쓸 수 있는 시각 (게임 시계) */
   private nextUseAt = 0;
+  private quickSlots: QuickSlots = [null, null];
+  private quickSlotPanel?: QuickSlotPanel;
   private readonly boundsScratch = new Phaser.Geom.Rectangle();
   private keys?: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   private readonly input2 = new Phaser.Math.Vector2();
@@ -271,6 +278,9 @@ export class GameScene extends Phaser.Scene {
     this.quests = this.loadQuests();
     this.saveQuests();
     this.inventory = this.loadInventory();
+    this.quickSlots = loadQuickSlots(this.storage);
+    const cooldown = this.registry.get('quick-item-cooldown');
+    this.nextUseAt = typeof cooldown === 'number' && Number.isFinite(cooldown) ? Math.max(0, Math.min(USE_COOLDOWN_MS, cooldown)) : 0;
     // 들어온 지역을 가 본 곳으로 기록한다.
     this.visited = this.loadVisited();
     if (!this.visited.has(regionOf(this.mapId))) {
@@ -314,8 +324,11 @@ export class GameScene extends Phaser.Scene {
     this.visited = new Set();
     this.mapKeys = [];
     this.potionButton = undefined;
+    this.lunchButton = undefined;
+    this.lunchKeys = [];
     this.potionKeys = [];
     this.nextUseAt = 0;
+    this.quickSlotPanel = undefined;
     this.attackKeys = [];
     this.dodgeKeys = [];
     this.keys = undefined;
@@ -379,6 +392,7 @@ export class GameScene extends Phaser.Scene {
     preloadVillage(this, this.map);
     preloadNpcs(this, [...NPCS, ...GUARDS]);
     preloadDialogue(this);
+    preloadItemIcons(this);
   }
 
   create(): void {
@@ -415,12 +429,22 @@ export class GameScene extends Phaser.Scene {
     this.buildPause();
     this.minimap = new Minimap(this, this.map);
     this.questTracker = new QuestTracker(this);
-    this.potionButton = new ActionButton(this, { x: 0, y: 0, radius: 44, label: '', color: 0x7a3b2a, fontSize: 18 });
+    registerItemIcons(this);
+    this.potionButton = new ActionButton(this, { x: 0, y: 0, radius: 48, label: '', color: 0x3e2221, fontSize: 18, icon: { texture: ITEM_ICON_TEXTURE, frame: 'potion' }, cooldown: true, releaseToPress: true, onLongPress: () => this.openQuickSlot(0) });
+    this.lunchButton = new ActionButton(this, { x: 0, y: 0, radius: 48, label: '', color: 0x38442a, fontSize: 18, icon: { texture: ITEM_ICON_TEXTURE, frame: 'lunch' }, cooldown: true, releaseToPress: true, onLongPress: () => this.openQuickSlot(1) });
+    this.lunchKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R)] : [];
+    this.potionButton.setSizeScale(sizeScale(this.settings.buttonSize));
+    this.lunchButton.setSizeScale(sizeScale(this.settings.buttonSize));
     this.potionKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q)] : [];
     this.skillButton = new ActionButton(this, { x: 0, y: 0, radius: 50, label: `회전베기\nMP ${SPIN_SLASH.cost}`, color: 0x2f5fa8, fontSize: 17 });
     this.skillButton.setSizeScale(sizeScale(this.settings.buttonSize));
     this.skillKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K)] : [];
-    this.itemPanel = new ItemPanel(this, (action) => this.onItemAction(action), () => this.onResume());
+    this.itemPanel = new ItemPanel(this, (action) => this.onItemAction(action), () => this.onResume(), slot => { this.itemPanel?.close(); this.openQuickSlot(slot); });
+    this.quickSlotPanel = new QuickSlotPanel(this, (slot, id) => {
+      this.quickSlots[slot] = id;
+      saveQuickSlots(this.storage, this.quickSlots);
+      this.refreshInventory();
+    }, () => this.onResume());
     this.characterPanel = new CharacterPanel(this, {
       allocate: (stat) => this.allocateStat(stat),
       equip: (id, slot) => this.changeGear(equip(this.character.gear, id, slot), `${GEAR[id].name} 장착`),
@@ -458,6 +482,7 @@ export class GameScene extends Phaser.Scene {
       this.game.events.off(Phaser.Core.Events.HIDDEN, this.openPause, this);
       void this.backButtonListener?.then((listener) => listener.remove()).catch(() => undefined);
       this.backButtonListener = undefined;
+      this.registry.set('quick-item-cooldown', Math.max(0, this.nextUseAt - this.now));
       this.resetState();
     });
     this.layout();
@@ -472,9 +497,11 @@ export class GameScene extends Phaser.Scene {
     if (this.player) {
       this.minimap?.update(delta, this.player, this.collectMinimap);
       this.exitHint?.update(this.player, this.traveling || !this.player.alive || this.dialogue.isOpen || this.pauseMenu.isOpen
-        || !!this.worldMap?.isOpen || !!this.itemPanel?.isOpen || !!this.characterPanel?.isOpen || !!this.storyChoice?.isOpen,
+        || !!this.worldMap?.isOpen || !!this.itemPanel?.isOpen || !!this.characterPanel?.isOpen || !!this.storyChoice?.isOpen || !!this.quickSlotPanel?.isOpen,
         chapterPhase(this.quests) === 'raid' && this.mapId === 'village');
     }
+    this.setQuickButtonsVisible(!this.traveling && !!this.player?.alive && !this.dialogue.isOpen && !this.pauseMenu.isOpen
+      && !this.characterPanel?.isOpen && !this.itemPanel?.isOpen && !this.worldMap?.isOpen && !this.storyChoice?.isOpen && !this.quickSlotPanel?.isOpen);
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
     // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
     const step = Math.min(delta, 50);
@@ -485,6 +512,10 @@ export class GameScene extends Phaser.Scene {
     let escape = false;
     for (const key of this.pauseKeys) {
       if (Phaser.Input.Keyboard.JustDown(key)) escape = true;
+    }
+    if (this.quickSlotPanel?.isOpen) {
+      if (escape) this.quickSlotPanel.close();
+      return;
     }
     if (this.storyChoice?.isOpen) {
       if (escape) this.storyChoice.cancel();
@@ -774,12 +805,14 @@ export class GameScene extends Phaser.Scene {
     // 미니맵은 일시정지 버튼 왼쪽, 퀘스트 목록은 그 아래에 오른쪽으로 맞춘다.
     this.minimap?.layout(width - 172, 92);
     if (this.minimap) this.questTracker?.layout(width - 20, this.minimap.bottom + 4);
-    // 물약 버튼은 회피 버튼 바로 위
-    const potionY = VIEW_HEIGHT - 95 - this.dodgeButton.size - (this.potionButton?.size ?? 0) - 18;
-    this.potionButton?.setPosition(width - 330, potionY);
-    // 회전 베기 버튼은 물약 버튼 위
-    this.skillButton?.setPosition(width - 330, potionY - (this.potionButton?.size ?? 0) - (this.skillButton?.size ?? 0) - 14);
+    // 두 아이템과 전투 버튼의 실제 터치 반경(1.2배) 사이에 여유를 둔다.
+    const itemSize = this.potionButton?.size ?? 48;
+    const itemY = VIEW_HEIGHT - 105 - this.dodgeButton.size * 1.2 - itemSize * 1.2 - 20;
+    this.potionButton?.setPosition(width - 350, itemY);
+    this.lunchButton?.setPosition(width - 350 - itemSize * 2.4 - 16, itemY);
+    this.skillButton?.setPosition(width - 350, itemY - itemSize * 1.2 - (this.skillButton?.size ?? 50) * 1.2 - 16);
     this.itemPanel?.layout(width);
+    this.quickSlotPanel?.layout(width);
     this.worldMap?.layout(width);
     this.exitHint?.layout(width);
     this.dialogue.layout(width);
@@ -1210,6 +1243,7 @@ export class GameScene extends Phaser.Scene {
     this.blockButton?.setSizeScale(buttons);
     this.talkButton.setSizeScale(buttons);
     this.potionButton?.setSizeScale(buttons);
+    this.lunchButton?.setSizeScale(buttons);
     this.skillButton?.setSizeScale(buttons);
     this.joystick.setSizeScale(sizeScale(settings.joystickSize));
     this.justDodgeWindow = justDodgeWindowMs(settings.justDodgeTiming);
@@ -1218,16 +1252,18 @@ export class GameScene extends Phaser.Scene {
 
   /** 뒤로가기 버튼: 메뉴가 열려 있으면 한 단계 뒤로, 아니면 일시정지. */
   private onBackButton(): void {
+    if (this.quickSlotPanel?.isOpen) { this.quickSlotPanel.close(); return; }
     if (this.storyChoice?.isOpen) { this.storyChoice.cancel(); return; }
     if (this.pauseMenu.isOpen) this.pauseMenu.back();
     else this.openPause();
   }
 
   private openPause(): void {
-    if (this.storyChoice?.isOpen) return;
+    if (this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return;
     if (!this.pauseMenu || this.pauseMenu.isOpen) return;
     this.pauseButton.setVisible(false);
     this.characterButton?.setVisible(false);
+    this.setQuickButtonsVisible(false);
     this.pauseMenu.open();
   }
 
@@ -1240,7 +1276,8 @@ export class GameScene extends Phaser.Scene {
     this.dodgeButton.consumePress();
     this.talkButton.consumePress();
     this.pauseButton.consumePress();
-    for (const key of [...this.dodgeKeys, ...this.talkKeys, ...this.attackKeys]) Phaser.Input.Keyboard.JustDown(key);
+    this.clearQuickItemInput();
+    for (const key of [...this.dodgeKeys, ...this.talkKeys, ...this.attackKeys, ...this.mapKeys]) Phaser.Input.Keyboard.JustDown(key);
   }
 
   // ---------------------------------------------------------------- 대화
@@ -1371,6 +1408,7 @@ export class GameScene extends Phaser.Scene {
       // 대화를 넘기려고 누른 공격 키가 닫힌 뒤 공격으로 이어지지 않게 한다.
       this.clearAttackInput();
       this.dodgeButton.consumePress();
+      this.clearQuickItemInput();
       for (const key of this.dodgeKeys) Phaser.Input.Keyboard.JustDown(key);
       if (beforePhase !== chapterPhase(this.quests)) {
         const at = { x: 1180, y: 1130 };
@@ -1542,19 +1580,45 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** 물약 버튼(또는 Q): 모자란 체력에 알맞은 회복 아이템을 쓴다. */
+  /** 각 버튼은 해당 아이템만 사용한다. 두 슬롯은 20초 대기 시간을 공유한다. */
   private updatePotion(time: number): void {
-    const button = this.potionButton;
-    if (!button) return;
+    this.updateItemButton(time, 0, this.potionButton, this.potionKeys);
+    this.updateItemButton(time, 1, this.lunchButton, this.lunchKeys);
+  }
+
+  private updateItemButton(time: number, slot: 0 | 1, button: ActionButton | undefined, keys: Phaser.Input.Keyboard.Key[]): void {
+    if (!button || this.quickSlotPanel?.isOpen) return;
+    const id = this.quickSlots[slot];
     let pressed = button.consumePress();
-    for (const key of this.potionKeys) if (Phaser.Input.Keyboard.JustDown(key)) pressed = true;
+    for (const key of keys) if (Phaser.Input.Keyboard.JustDown(key)) pressed = true;
     const player = this.player;
-    const ready = time >= this.nextUseAt;
-    button.setEnabled(ready && player.alive && player.hp < player.maxHp && !!bestHealItem(this.inventory, player.maxHp - player.hp));
-    if (pressed && ready) {
-      const id = bestHealItem(this.inventory, player.maxHp - player.hp);
-      if (id) this.useHealItem(id);
-    }
+    const ready = time >= this.nextUseAt && player.alive && player.hp < player.maxHp && !!id && countOf(this.inventory, id) > 0;
+    button.setEnabled(!id || ready);
+    button.setCooldown(id ? Math.max(0, this.nextUseAt - time) : 0, USE_COOLDOWN_MS);
+    if (pressed && !id) this.openQuickSlot(slot);
+    else if (pressed && ready && id) this.useHealItem(id);
+  }
+
+  private openQuickSlot(slot: 0 | 1): void {
+    if (this.traveling || !this.player.alive || this.dialogue.isOpen || this.pauseMenu.isOpen
+      || this.itemPanel?.isOpen || this.worldMap?.isOpen || this.storyChoice?.isOpen || this.characterPanel?.isOpen) return;
+    this.clearQuickItemInput();
+    this.clearAttackInput();
+    this.joystick.vector.set(0, 0);
+    this.setQuickButtonsVisible(false);
+    this.quickSlotPanel?.show(slot, this.inventory, this.quickSlots);
+  }
+
+  private setQuickButtonsVisible(visible: boolean): void {
+    this.potionButton?.setVisible(visible);
+    this.lunchButton?.setVisible(visible);
+  }
+
+  private clearQuickItemInput(): void {
+    this.potionButton?.consumePress();
+    this.lunchButton?.consumePress();
+    for (const key of this.potionKeys) Phaser.Input.Keyboard.JustDown(key);
+    for (const key of this.lunchKeys) Phaser.Input.Keyboard.JustDown(key);
   }
 
   private useHealItem(id: ItemId): boolean {
@@ -1597,7 +1661,7 @@ export class GameScene extends Phaser.Scene {
 
   /** 전체 지도를 연다. 대화·메뉴·이동 중에는 열지 않는다. */
   private openWorldMap(): void {
-    if (!this.worldMap || this.storyChoice?.isOpen || this.worldMap.isOpen || this.dialogue.isOpen || this.pauseMenu.isOpen || this.itemPanel?.isOpen || this.characterPanel?.isOpen || this.traveling) return;
+    if (!this.worldMap || this.quickSlotPanel?.isOpen || this.storyChoice?.isOpen || this.worldMap.isOpen || this.dialogue.isOpen || this.pauseMenu.isOpen || this.itemPanel?.isOpen || this.characterPanel?.isOpen || this.traveling) return;
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
     this.talkButton.setVisible(false);
@@ -1606,6 +1670,7 @@ export class GameScene extends Phaser.Scene {
     this.characterButton?.setVisible(false);
     // 지도에는 퀘스트 표시(!/?)를 띄우지 않는다. 퀘스트는 머리 위·미니맵·추적창으로 안내한다.
     this.exitHint?.update(this.player, true, false);
+    this.setQuickButtonsVisible(false);
     this.worldMap.show(this.player, { npcs: this.npcs.map(n => ({ x: n.x, y: n.y })),
       enemies: this.enemies.filter(e => e.character.alive).map(e => ({ x: e.character.x, y: e.character.y })) },
       chapterPhase(this.quests) === 'raid' && this.mapId === 'village');
@@ -1710,13 +1775,14 @@ export class GameScene extends Phaser.Scene {
   /** 캐릭터 창을 연다. smithy면 도란의 대장간(장비 구매·판매). 대화·메뉴·이동 중에는 열지 않는다. */
   private openCharacterPanel(tab: CharacterTab, smithy = false): void {
     if (!this.characterPanel || this.characterPanel.isOpen || this.traveling || this.pauseMenu.isOpen || this.dialogue.isOpen
-      || this.itemPanel?.isOpen || this.worldMap?.isOpen || this.storyChoice?.isOpen) return;
+      || this.itemPanel?.isOpen || this.worldMap?.isOpen || this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return;
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
     this.talkButton.setVisible(false);
     this.talkMarker.setVisible(false);
     this.pauseButton.setVisible(false);
     this.characterButton?.setVisible(false);
+    this.setQuickButtonsVisible(false);
     if (smithy) this.characterPanel.showSmithy(this.characterView());
     else this.characterPanel.show(tab, this.characterView());
   }
@@ -1738,6 +1804,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private openItemPanel(mode: 'bag' | 'shop'): void {
+    this.setQuickButtonsVisible(false);
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
     this.talkButton.setVisible(false);
@@ -1750,8 +1817,12 @@ export class GameScene extends Phaser.Scene {
   private onItemAction(action: PanelAction): void {
     let next: Inventory | null = null;
     if (action.type === 'use') {
-      // 가방에서 쓸 때는 재사용 대기 시간을 따지지 않는다 (게임이 멈춰 있다).
-      this.nextUseAt = 0;
+      if (this.now < this.nextUseAt) {
+        const message = `재사용까지 ${Math.ceil((this.nextUseAt - this.now) / 1000)}초 · 창을 닫으면 시간이 흐릅니다.`;
+        this.itemPanel?.setStatus(message, true);
+        this.characterPanel?.setStatus(message, true);
+        return;
+      }
       const before = this.player.hp;
       const used = this.useHealItem(action.id);
       this.itemPanel?.setStatus(used ? `${ITEMS[action.id].name} 사용 · 체력 +${this.player.hp - before}`
@@ -1783,8 +1854,15 @@ export class GameScene extends Phaser.Scene {
   /** HUD의 골드와 물약 버튼 숫자를 맞춘다. */
   private refreshInventory(): void {
     this.hud.setGold(this.inventory.gold);
-    const heals = countOf(this.inventory, 'potion') + countOf(this.inventory, 'lunch');
-    this.potionButton?.setLabel(`물약\n${heals}`);
+    this.refreshQuickButton(0, this.potionButton);
+    this.refreshQuickButton(1, this.lunchButton);
+  }
+
+  private refreshQuickButton(slot: 0 | 1, button: ActionButton | undefined): void {
+    const id = this.quickSlots[slot];
+    button?.setIcon(ITEM_ICON_TEXTURE, id);
+    button?.setLabel(id ? `${ITEMS[id].name.replace('회복 ', '')} ${countOf(this.inventory, id)}` : `+ 등록\n${slot === 0 ? 'Q' : 'R'}`);
+    button?.setCooldown(id ? Math.max(0, this.nextUseAt - this.now) : 0, USE_COOLDOWN_MS);
   }
 
   private loadInventory(): Inventory {

@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
+import { itemIcon } from './itemIcons';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 import { ITEMS, ITEM_IDS, MAX_STACK, MAX_GOLD, countOf, type Inventory, type ItemId } from '../items/inventory';
 
 const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 interface ItemRow {
+  icon: Phaser.GameObjects.Image;
   name: Phaser.GameObjects.Text;
   note: Phaser.GameObjects.Text;
   stock: Phaser.GameObjects.Text;
@@ -34,7 +36,7 @@ export class ItemPanel {
   private visibleRows = 0;
   private width = 0;
 
-  constructor(scene: Phaser.Scene, onAction: (action: PanelAction) => void, onClose: () => void) {
+  constructor(scene: Phaser.Scene, onAction: (action: PanelAction) => void, onClose: () => void, private readonly onConfigureSlot?: (slot: 0 | 1) => void) {
     this.scene = scene;
     this.onAction = onAction;
     this.onClose = onClose;
@@ -46,10 +48,11 @@ export class ItemPanel {
     this.empty = this.text('', 25, '#c3d2c8').setOrigin(0.5).setAlign('center').setLineSpacing(16);
     this.status = this.text('', 20, '#bcd4c5').setOrigin(0, 0.5);
     this.closeButton = this.button('닫기', 170, () => this.close());
-    this.buyTab = this.button('구매', 190, () => this.switchTab('buy'));
-    this.sellTab = this.button('판매', 190, () => this.switchTab('sell'));
+    this.buyTab = this.button('구매', 190, () => this.mode === 'bag' ? this.onConfigureSlot?.(0) : this.switchTab('buy'));
+    this.sellTab = this.button('판매', 190, () => this.mode === 'bag' ? this.onConfigureSlot?.(1) : this.switchTab('sell'));
     for (let i = 0; i < ITEM_IDS.length; i++) {
       const row: ItemRow = {
+        icon: itemIcon(scene, 'potion').setDepth(DEPTH_UI + 42),
         name: this.text('', 26, '#f7ecd2').setOrigin(0, 0.5),
         note: this.text('', 20, '#c4d3c9').setOrigin(0, 0.5),
         stock: this.text('', 17, '#acbfb2').setOrigin(0, 0.5),
@@ -97,7 +100,7 @@ export class ItemPanel {
     this.visibleRows = ids.length;
     this.rows.forEach((row, i) => {
       const id = ids[i];
-      for (const object of [row.name, row.note, row.stock, row.button]) object.setVisible(!!id);
+      for (const object of [row.icon, row.name, row.note, row.stock, row.button]) object.setVisible(!!id);
       row.action = undefined;
       if (!id) { row.button.disableInteractive(); return; }
       const def = ITEMS[id], count = countOf(inventory, id);
@@ -107,6 +110,7 @@ export class ItemPanel {
       const capped = type === 'sell' && inventory.gold + def.sellPrice > MAX_GOLD;
       const usable = type !== 'use' || def.kind === 'consumable';
       const enabled = usable && !full && !short && !capped;
+      row.icon.setFrame(id);
       row.name.setText(def.name);
       row.note.setText(def.kind === 'consumable' ? `체력 ${def.heal} 회복` : '잡화점에 판매할 수 있는 재료');
       row.stock.setText(full ? `보유 ${count} / ${MAX_STACK}개 · 가방이 가득 찼어요`
@@ -124,10 +128,11 @@ export class ItemPanel {
     this.title.setText(this.mode === 'bag' ? '가방' : '메리나의 잡화점');
     this.gold.setText(`보유 골드  ${inventory.gold.toLocaleString()} G`);
     this.empty.setText(this.mode === 'shop' ? '판매할 물품이 없어요.\n모험에서 얻은 재료를 가져와 주세요.' : '가방이 비어 있어요.\n잡화점에서 필요한 물품을 준비해 보세요.').setVisible(ids.length === 0);
-    this.buyTab.setVisible(this.mode === 'shop');
-    this.sellTab.setVisible(this.mode === 'shop');
+    this.buyTab.setVisible(true).setText(this.mode === 'shop' ? '구매' : '슬롯 1 설정');
+    this.sellTab.setVisible(true).setText(this.mode === 'shop' ? '판매' : '슬롯 2 설정');
     for (const [button, selected] of [[this.buyTab, this.tab === 'buy'], [this.sellTab, this.tab === 'sell']] as const) {
-      button.setBackgroundColor(selected ? '#dfc18a' : '#294337').setColor(selected ? '#1a302a' : '#e4dfc8');
+      const active = this.mode === 'shop' && selected;
+      button.setBackgroundColor(active ? '#dfc18a' : '#294337').setColor(active ? '#1a302a' : '#e4dfc8');
     }
     this.place();
   }
@@ -152,10 +157,15 @@ export class ItemPanel {
     this.empty.setPosition(width / 2, top + 330);
     this.rows.forEach((row, i) => {
       const y = top + 232 + i * 116;
-      if (i < this.visibleRows) g.fillStyle(0x1c362b, 1).fillRoundedRect(left + 20, y - 52, panelWidth - 40, 108, 10);
-      row.name.setPosition(left + 40, y - 26);
-      row.note.setPosition(left + 40, y + 5);
-      row.stock.setPosition(left + 40, y + 33);
+      if (i < this.visibleRows) {
+        g.fillStyle(0x1c362b, 1).fillRoundedRect(left + 20, y - 52, panelWidth - 40, 108, 10);
+        g.fillStyle(0x0b2019, 1).fillRoundedRect(left + 36, y - 42, 88, 88, 8);
+        g.lineStyle(1, 0x887c50, 0.7).strokeRoundedRect(left + 36, y - 42, 88, 88, 8);
+      }
+      row.icon.setPosition(left + 80, y + 2);
+      row.name.setPosition(left + 144, y - 26);
+      row.note.setPosition(left + 144, y + 5);
+      row.stock.setPosition(left + 144, y + 33);
       row.button.setPosition(left + panelWidth - 137, y + 2);
     });
     g.lineStyle(1, 0x6b8064, 0.5).lineBetween(left + 32, top + 543, left + panelWidth - 32, top + 543);
@@ -169,7 +179,7 @@ export class ItemPanel {
       this.buyTab.setVisible(false);
       this.sellTab.setVisible(false);
       this.empty.setVisible(false);
-      for (const row of this.rows) for (const o of [row.name, row.note, row.stock, row.button]) o.setVisible(false);
+      for (const row of this.rows) for (const o of [row.icon, row.name, row.note, row.stock, row.button]) o.setVisible(false);
     }
   }
 
