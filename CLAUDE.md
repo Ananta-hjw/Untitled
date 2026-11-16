@@ -38,6 +38,8 @@ The Node tests import `.ts` sources directly through Node 24's type stripping. M
 
 ## Architecture
 
+**Title screen.** `scenes/TitleScene.ts` (`'title'`) is the first scene: a temporary background (`src/assets/title/background.webp`, a downscaled copy of the Rowen overview art), the title and two buttons. 설정 reuses `PauseMenu.openSettings()` (settings view only; 돌아가기 closes) and saves to the same settings key. 시작하기 fades the camera out over `TITLE_FADE_MS` and starts `'game'` with `{ fromTitle: true }`, which makes `GameScene.create()` fade in over the same time (the flag is cleared from the data after use). In dev builds a `?map=` URL skips the title (`main.ts`), which the browser tests rely on; the last browser test covers the title flow.
+
 **One scene, one clock.** `scenes/GameScene.ts` runs a whole session. All gameplay timing uses the scene's own `now` (ms), advanced in `update()` by `min(delta, 50)`. Attack timing, combos, dodge, invulnerability, respawns and effects all compare against it. Do not use `this.time.delayedCall` or `Date.now()` for gameplay; they drift from the game clock when frames drop. Per-run state is reset in `resetState()` from `init()`, because class field initialisers run only once and the scene must survive `scene.restart()`.
 
 **Frame-rate independent motion.** Lunges and dodges are not speed × dt. They move by the change in an integrated progress curve (`entities/movement.ts`), so the distance is identical at any frame rate. Tests assert this at 20/30/60/120 fps. Keep new displacements in that form.

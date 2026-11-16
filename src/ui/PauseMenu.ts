@@ -54,6 +54,8 @@ export class PauseMenu {
   private readonly rows: OptionRow[] = [];
   private settings: Settings;
   private view: 'closed' | 'main' | 'settings' = 'closed';
+  /** 처음 화면처럼 설정만 열었을 때: 돌아가기를 누르면 메뉴 대신 바로 닫힌다. */
+  private settingsOnly = false;
   private width = 0;
 
   constructor(scene: Phaser.Scene, options: PauseMenuOptions) {
@@ -75,7 +77,7 @@ export class PauseMenu {
       this.show('closed');
       options.onBag();
     });
-    this.backButton = this.button('돌아가기', () => this.show('main'));
+    this.backButton = this.button('돌아가기', () => this.back());
 
     const rowDefs: Array<{ key: keyof Settings; label: string }> = [
       { key: 'buttonSize', label: '버튼 크기' },
@@ -101,7 +103,15 @@ export class PauseMenu {
 
   open(): void {
     if (this.isOpen) return;
+    this.settingsOnly = false;
     this.show('main');
+  }
+
+  /** 설정 화면만 연다 (처음 화면). 돌아가기를 누르면 닫힌다. */
+  openSettings(): void {
+    if (this.isOpen) return;
+    this.settingsOnly = true;
+    this.show('settings');
   }
 
   /** 메뉴를 닫고 게임을 이어 간다. */
@@ -113,7 +123,7 @@ export class PauseMenu {
 
   /** 뒤로가기: 설정 화면이면 메뉴로, 메뉴면 게임으로 돌아간다. */
   back(): void {
-    if (this.view === 'settings') this.show('main');
+    if (this.view === 'settings' && !this.settingsOnly) this.show('main');
     else this.close();
   }
 

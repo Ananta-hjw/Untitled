@@ -41,6 +41,7 @@ import { Hud } from '../ui/Hud';
 import { DamageNumbers } from '../ui/DamageNumbers';
 import { DialogueBox, preloadDialogue } from '../ui/DialogueBox';
 import { PauseMenu } from '../ui/PauseMenu';
+import { TITLE_FADE_MS } from './TitleScene';
 import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings } from '../ui/settingsData';
 import { DIALOGUES, HERO_NAME } from '../story/dialogues';
 import { findInteractable, type Interactable } from '../world/interactables';
@@ -73,6 +74,8 @@ const TRAVEL_FADE_MS = 220;
 /** scene.restart()로 넘기는 값. 아무것도 넘기지 않으면 지금 맵에서 다시 시작한다. */
 interface SceneData {
   map?: MapId;
+  /** 처음 화면에서 시작하기를 눌러 들어왔다: 화면을 스르르 밝힌다. */
+  fromTitle?: boolean;
   /** 성능 테스트 인원 (0 = 끔) */
   stress?: number;
   /** 도착 지점. 없으면 맵의 시작 지점 */
@@ -144,6 +147,7 @@ export class GameScene extends Phaser.Scene {
   private progress: Progress = { level: 1, xp: 0 };
   private stats: LevelStats = statsForLevel(1);
   private storage?: SaveStorage;
+  private fromTitle = false;
   /** 지금 있는 맵. 재시작해도 유지되고, 맵을 옮길 때만 바뀐다. */
   private mapId: MapId = START_MAP;
   private map: GameMap = MAPS[START_MAP];
@@ -198,6 +202,9 @@ export class GameScene extends Phaser.Scene {
     this.map = MAPS[this.mapId];
     if (data.stress !== undefined) this.stressCount = data.stress;
     this.arrival = data.at;
+    this.fromTitle = !!data.fromTitle;
+    // 다음 재시작에 같은 data가 넘어와도 다시 페이드하지 않게 한 번만 쓴다.
+    data.fromTitle = undefined;
     this.carriedHp = data.hp;
     // 같은 data가 다음 재시작에도 다시 넘어오므로, 체력은 한 번만 이어 받는다.
     data.hp = undefined;
@@ -331,7 +338,8 @@ export class GameScene extends Phaser.Scene {
 
     this.setCameraBounds();
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 170);
-    if (this.arrival) this.cameras.main.fadeIn(TRAVEL_FADE_MS, 0, 0, 0);
+    if (this.fromTitle) this.cameras.main.fadeIn(TITLE_FADE_MS, 0, 0, 0);
+    else if (this.arrival) this.cameras.main.fadeIn(TRAVEL_FADE_MS, 0, 0, 0);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.game.events.on(Phaser.Core.Events.BLUR, this.clearAttackInput, this);

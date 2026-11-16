@@ -1281,3 +1281,37 @@ test('원화가 있는 실내 여덟 곳과 남쪽 들판은 해당 그림만 �
     }
   }
 });
+
+test('맵을 지정하지 않으면 처음 화면에서 시작하고, 시작하기를 누르면 화면이 스르르 바뀌어 시온의 집 앞에서 시작한다', async () => {
+  const search = '?test=' + ++navigation;
+  await send('Page.navigate', { url: appUrl + search });
+  await until(() => evaluate(`location.search === ${JSON.stringify(search)} && !!window.__game?.scene.isActive('title')`));
+  const before = await evaluate(`(() => {
+    const g = window.__game, t = g.scene.getScene('title');
+    return { game: g.scene.isActive('game'), start: t.startButton.text, settings: t.settingsButton.text };
+  })()`);
+  assert.deepEqual(before, { game: false, start: '시작하기', settings: '설정' });
+  // 설정은 일시정지 메뉴의 설정 화면을 열고, 돌아가기로 닫힌다.
+  const settings = await evaluate(`(() => {
+    const t = window.__game.scene.getScene('title');
+    t.menu.openSettings(); const open = t.menu.isOpen; t.menu.back();
+    return { open, closed: !t.menu.isOpen };
+  })()`);
+  assert.deepEqual(settings, { open: true, closed: true });
+  // 시작하기: 바로 넘어가지 않고 어두워진 뒤 게임이 시작된다.
+  const fading = await evaluate(`(() => {
+    const g = window.__game, t = g.scene.getScene('title');
+    t.start(); t.start();
+    return { fading: t.cameras.main.fadeEffect.isRunning, game: g.scene.isActive('game') };
+  })()`);
+  assert.deepEqual(fading, { fading: true, game: false });
+  await until(() => evaluate(`!!window.__game.scene.getScene('game')?.damageNumbers && window.__game.scene.isActive('game')`));
+  const after = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    return { title: g.scene.isActive('title'), map: s.mapId, fadeIn: s.cameras.main.fadeEffect.isRunning || s.cameras.main.fadeEffect.progress > 0 };
+  })()`);
+  assert.equal(after.title, false);
+  assert.equal(after.map, 'village-north');
+  assert.equal(after.fadeIn, true);
+  await evaluate('window.__game.loop.sleep()');
+});
