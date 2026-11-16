@@ -70,3 +70,8 @@ test('대장간의 짧은 검·긴 검은 살 수 있고 나무검 < 짧은 검 
   assert.equal(GEAR['iron-sword'].price, undefined);
   assert.equal(buyGear({ gold: 99999, items: {} }, startingGear(), 'iron-sword'), null);
 });
+
+test('무기 칸에 낄 수 있는 모든 검은 주인공 그림의 무기 모양이 있다', async () => {
+  const { weaponId } = await import('../src/entities/weaponPose.ts');
+  for (const id of GEAR_IDS.filter((id) => GEAR[id].kind === 'weapon')) assert.ok(weaponId(id), id);
+});
