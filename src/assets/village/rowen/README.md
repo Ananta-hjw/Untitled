@@ -15,3 +15,11 @@ NPC와 시설의 대응, 배치 의도는 `docs/rowen-village.md`에 정리했�
 ## 추가 건물·실내 원화
 
 `linea-house.png`에 리네아 집의 별도 외관을, `interiors/{linea,home,chief,clinic,hall,store,smithy,inn}.png`에 리네아 집·시온 집·촌장 집·치유소·수련소·잡화점·대장간·여관 내부 원화를 추가했습니다. 건물별 구조와 가구, 색감을 구분했습니다. 크기와 디자인, 게임 적용 전 필요한 사항은 `interiors/README.md`를 참고하세요. 리네아 집 외관은 건물 시트에 포함되어 있으며, 실내 8곳도 각 원화의 WebP 실행본을 적용했습니다. 조감도는 제작 참고용으로 유지합니다.
+
+치유소는 왼쪽 처마와 벽이 2×2 시트의 중앙선을 넘으므로 `CELL_OVERRIDES`에서 별도 영역을 지정한다. 단순 등분으로 되돌리면 왼쪽 외벽이 다시 잘린다. 건물 실행본만 재생성할 때는 `python3 tools/build_rowen_assets.py --buildings`를 실행한다.
+
+## 마을 외곽 돌담
+
+`perimeter.png`는 같은 화풍으로 생성한 가로 돌담·세로 돌담·등불 문기둥 원화다. `python3 tools/build_perimeter_assets.py`로 `perimeter.webp`와 프레임 JSON을 만든다. 세로 담은 끝면을 반복하면 기둥을 쌓은 모습이 되므로 상단 돌 덮개 구간만 반복한다. 게임에서는 압축 아틀라스 한 장만 읽는다.
+
+배치와 충돌은 `src/world/villagePerimeter.ts`에서 함께 정의한다. 두 마을 맵의 좌우 외곽을 맞추고, 북쪽 주거지는 북단까지, 광장은 남문까지 둘러싼다. 서문·동문은 실제 출구 범위에 두며 남문은 기존 초소·수레와 연결한다. 마을 내부를 잇는 남북 길에는 담을 세우지 않는다. 지도와 미니맵은 같은 배치를 공유한다.

@@ -24,6 +24,9 @@ SHEETS = {
     'residential.png': ['family-house', 'training-hall', 'chief-house', 'clinic'],
     'commerce.png': ['smithy', 'general-store', 'inn', 'south-gate'],
 }
+# 치유소의 왼쪽 처마와 벽은 시트 중앙선(x=768)을 넘어온다. 등분하면 원화가 잘린다.
+CELL_OVERRIDES = {'clinic': (700, 512, 1536, 1024)}
+
 # Buildings drawn alone on one image: name -> (file, width in the sheet)
 SINGLES = {'linea-house': ('linea-house.png', 420)}
 NPCS = ['ruan', 'serena', 'linea', 'sia', 'herman', 'eila', 'merina', 'doran', 'rosetta', 'vernel', 'teon']
@@ -76,6 +79,7 @@ def buildings():
                 col, row = i % 2, i // 2
                 cell = (round(col * sheet.width / 2), round(row * sheet.height / 2),
                         round((col + 1) * sheet.width / 2), round((row + 1) * sheet.height / 2))
+                cell = CELL_OVERRIDES.get(name, cell)
                 art = sheet.crop(cell)
                 x0, y0, x1, y1 = main_part(art)
                 art = art.crop((max(0, x0 - 2), max(0, y0 - 2), min(art.width, x1 + 2), min(art.height, y1 + 2)))
@@ -127,4 +131,5 @@ if __name__ == '__main__':
     import sys
     if '--characters' not in sys.argv:
         buildings()
-    characters()
+    if '--buildings' not in sys.argv:
+        characters()
