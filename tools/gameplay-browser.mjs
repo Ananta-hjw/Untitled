@@ -726,7 +726,10 @@ test('일시정지는 게임 시계를 멈추고, 뒤로가기·앱 전환으로
     const frozenAt = s.now; step(20);
     const frozen = s.now === frozenAt;
     // 설정 변경: 버튼 크게, 조이스틱 작게, 판정 여유
-    s.pauseMenu.change('buttonSize', 1); s.pauseMenu.change('joystickSize', -1); s.pauseMenu.change('justDodgeTiming', 1);
+    s.pauseMenu.settingsButton.emit('pointerup');
+    s.pauseMenu.rows[0].choices[2].button.emit('pointerup');
+    s.pauseMenu.rows[1].choices[0].button.emit('pointerup');
+    s.pauseMenu.rows[2].choices[2].button.emit('pointerup');
     const changed = { attack: s.attackButton.size, joystick: s.joystick.size, window: s.justDodgeWindow,
       saved: JSON.parse(localStorage.getItem('untitled-rpg.settings')) };
     // 메뉴를 누르던 공격 입력이 남아 있어도 닫은 뒤 공격하지 않는다.
@@ -1333,6 +1336,51 @@ test('맵을 지정하지 않으면 처음 화면에서 시작하고, 시작하�
   assert.equal(after.map, 'village-north');
   assert.equal(after.fadeIn, true);
   await evaluate('window.__game.loop.sleep()');
+});
+
+test('조작 설정은 선택 표시·미리보기·저장을 갱신하고, 화면 크기 변경·재진입·기본값 복원에도 일관된다', async () => {
+  await load('village-north');
+  const result = await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'), m=s.pauseMenu;
+    m.openSettings();
+    const count=s.children.list.length;
+    const expected={buttonSize:'small',joystickSize:'large',justDodgeTiming:'strict'};
+    for(const row of m.rows) row.choices.find(c=>c.value===expected[row.key]).button.emit('pointerup');
+    const selected=m.rows.every(r=>r.choices.filter(c=>c.button.text.startsWith('✓')).length===1 &&
+      r.choices.find(c=>c.value===expected[r.key]).button.text.startsWith('✓'));
+    const saved=JSON.parse(localStorage.getItem('untitled-rpg.settings'));
+    const preview=m.previewLabel.text;
+    const bounds=[];
+    for(const width of [960,1280,1728]) {
+      m.layout(width);
+      bounds.push(m.rows.every(r=>{
+        const d=r.description.getBounds(), choices=r.choices.map(c=>c.button.getBounds());
+        return d.right<choices[0].left && choices.every(b=>b.left>=0&&b.right<=width&&b.top>=0&&b.bottom<=720);
+      }));
+    }
+    m.layout(s.scale.gameSize.width);
+    for(let i=0;i<4;i++){m.back();m.openSettings();}
+    const reused=s.children.list.length===count;
+    const retained=m.rows.every(r=>r.choices.find(c=>c.value===expected[r.key]).button.text.startsWith('✓'));
+    m.resetButton.emit('pointerup');
+    const reset={...s.settings}, resetSaved=JSON.parse(localStorage.getItem('untitled-rpg.settings'));
+    const defaultSelected=m.rows.every(r=>r.choices[1].button.text.startsWith('✓'));
+    m.backButton.emit('pointerup');
+    const closed=!m.isOpen;
+    localStorage.removeItem('untitled-rpg.settings');
+    return {selected,saved,preview,bounds,reused,retained,reset,resetSaved,defaultSelected,closed};
+  })()`);
+  assert.equal(result.selected,true);
+  assert.deepEqual(result.saved,{buttonSize:'small',joystickSize:'large',justDodgeTiming:'strict'});
+  assert.match(result.preview,/85%.*118%/);
+  assert.match(result.preview,/엄격/);
+  assert.ok(result.bounds.every(Boolean));
+  assert.equal(result.reused,true);
+  assert.equal(result.retained,true);
+  assert.deepEqual(result.reset,{buttonSize:'normal',joystickSize:'normal',justDodgeTiming:'normal'});
+  assert.deepEqual(result.resetSaved,result.reset);
+  assert.equal(result.defaultSelected,true);
+  assert.equal(result.closed,true);
 });
 
 test('몬스터 원화는 8방향 이동과 공격 단계를 표시하며 맵별로 필요한 시트만 읽는다', async () => {

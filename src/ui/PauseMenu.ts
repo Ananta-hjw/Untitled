@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 import {
-  SIZES, SIZE_LABEL, TIMINGS, TIMING_LABEL, stepOption, type Settings,
+  DEFAULT_SETTINGS, SIZES, SIZE_LABEL, TIMINGS, TIMING_LABEL, sizeScale, justDodgeWindowMs, type Settings,
 } from './settingsData';
 
 /**
  * 일시정지 메뉴와 조작 설정 화면.
  *
  * 열려 있는 동안 씬은 게임 시계를 멈춘다(GameScene.update). 메뉴는 "계속하기 / 설정 / 게임 종료"이고,
- * 설정 화면에서는 버튼 크기, 조이스틱 크기, 저스트 회피 판정을 ◀ ▶로 바꾼다.
+ * 설정은 세 가지 선택지를 직접 누르고, 크기 미리보기와 판정 설명을 확인한다.
  * 모든 객체는 처음에 만들어 두고 보이기만 바꾼다.
  */
 
@@ -34,9 +34,8 @@ export interface PauseMenuOptions {
 interface OptionRow {
   key: keyof Settings;
   label: Phaser.GameObjects.Text;
-  value: Phaser.GameObjects.Text;
-  left: Phaser.GameObjects.Text;
-  right: Phaser.GameObjects.Text;
+  description: Phaser.GameObjects.Text;
+  choices: Array<{ value: string; button: Phaser.GameObjects.Text }>;
 }
 
 export class PauseMenu {
@@ -51,6 +50,10 @@ export class PauseMenu {
   private readonly stressButton: Phaser.GameObjects.Text;
   private readonly bagButton: Phaser.GameObjects.Text;
   private readonly backButton: Phaser.GameObjects.Text;
+  private readonly resetButton: Phaser.GameObjects.Text;
+  private readonly help: Phaser.GameObjects.Text;
+  private readonly preview: Phaser.GameObjects.Graphics;
+  private readonly previewLabel: Phaser.GameObjects.Text;
   private readonly rows: OptionRow[] = [];
   private settings: Settings;
   private view: 'closed' | 'main' | 'settings' = 'closed';
@@ -77,22 +80,32 @@ export class PauseMenu {
       this.show('closed');
       options.onBag();
     });
-    this.backButton = this.button('돌아가기', () => this.back());
+    this.backButton = this.button('완료', () => this.back());
+    this.resetButton = this.button('기본값 복원', () => {
+      this.settings = { ...DEFAULT_SETTINGS };
+      this.options.onSettingsChange({ ...this.settings });
+      this.refreshValues();
+    });
+    this.help = this.text('변경 즉시 적용 · 기기에 저장', 18, '#afc2ba').setOrigin(0.5);
+    this.preview = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH + 2);
+    this.previewLabel = this.text('', 17, '#d8e2d9').setOrigin(0, 0.5);
 
-    const rowDefs: Array<{ key: keyof Settings; label: string }> = [
-      { key: 'buttonSize', label: '버튼 크기' },
-      { key: 'joystickSize', label: '조이스틱 크기' },
-      { key: 'justDodgeTiming', label: '저스트 회피 판정' },
+    const rowDefs: Array<{ key: keyof Settings; label: string; description: string }> = [
+      { key: 'buttonSize', label: '동작 버튼', description: '공격 · 회피 · 대화 버튼의 크기' },
+      { key: 'joystickSize', label: '이동 조이스틱', description: '왼손으로 움직이는 조작 영역의 크기' },
+      { key: 'justDodgeTiming', label: '저스트 회피', description: '공격 직전 회피가 인정되는 시간의 여유' },
     ];
     for (const def of rowDefs) {
-      const row: OptionRow = {
+      const values = def.key === 'justDodgeTiming' ? TIMINGS : SIZES;
+      const labels = def.key === 'justDodgeTiming' ? TIMING_LABEL : SIZE_LABEL;
+      this.rows.push({
         key: def.key,
-        label: this.text(def.label, 24, '#e9d7b0').setOrigin(0, 0.5),
-        value: this.text('', 24, '#ffffff').setOrigin(0.5),
-        left: this.arrow('◀', () => this.change(def.key, -1)),
-        right: this.arrow('▶', () => this.change(def.key, 1)),
-      };
-      this.rows.push(row);
+        label: this.text(def.label, 25, '#f2e5c7').setOrigin(0, 0.5),
+        description: this.text(def.description, 17, '#b6c6bc').setOrigin(0, 0.5),
+        choices: values.map(value => ({ value, button: this.text((labels as Record<string, string>)[value], 22, '#e9dfc8')
+          .setOrigin(0.5).setFixedSize(116, 84).setAlign('center').setPadding(0, 28, 0, 0)
+          .setInteractive({ useHandCursor: true }).on('pointerup', () => this.select(def.key, value)) })),
+      });
     }
     this.show('closed');
   }
@@ -134,24 +147,25 @@ export class PauseMenu {
     if (this.isOpen) this.place();
   }
 
-  private change(key: keyof Settings, direction: 1 | -1): void {
-    const next = { ...this.settings };
-    if (key === 'justDodgeTiming') next.justDodgeTiming = stepOption(TIMINGS, next.justDodgeTiming, direction);
-    else next[key] = stepOption(SIZES, next[key], direction);
-    if (next[key] === this.settings[key]) return;
-    this.settings = next;
+  private select(key: keyof Settings, value: string): void {
+    const values: readonly string[] = key === 'justDodgeTiming' ? TIMINGS : SIZES;
+    if (!values.includes(value) || this.settings[key] === value) return;
+    this.settings = { ...this.settings, [key]: value };
+    this.options.onSettingsChange({ ...this.settings });
     this.refreshValues();
-    this.options.onSettingsChange({ ...next });
   }
 
   private refreshValues(): void {
     for (const row of this.rows) {
-      const value = this.settings[row.key];
-      row.value.setText(row.key === 'justDodgeTiming' ? TIMING_LABEL[value as keyof typeof TIMING_LABEL] : SIZE_LABEL[value as keyof typeof SIZE_LABEL]);
-      const options: readonly string[] = row.key === 'justDodgeTiming' ? TIMINGS : SIZES;
-      row.left.setAlpha(options.indexOf(value) > 0 ? 1 : 0.3);
-      row.right.setAlpha(options.indexOf(value) < options.length - 1 ? 1 : 0.3);
+      for (const choice of row.choices) {
+        const selected = choice.value === this.settings[row.key];
+        const labels = row.key === 'justDodgeTiming' ? TIMING_LABEL : SIZE_LABEL;
+        const label = (labels as Record<string, string>)[choice.value];
+        choice.button.setText((selected ? '✓ ' : '') + label)
+          .setColor(selected ? '#182d2c' : '#e1dfce').setBackgroundColor(selected ? '#ddc18a' : '#293e3c');
+      }
     }
+    if (this.view === 'settings') this.place();
   }
 
   private show(view: 'closed' | 'main' | 'settings'): void {
@@ -159,15 +173,19 @@ export class PauseMenu {
     const open = view !== 'closed';
     this.shade.setVisible(open);
     this.panel.setVisible(open);
-    this.title.setVisible(open).setText(view === 'settings' ? '설정' : '일시정지');
+    this.title.setVisible(open).setText(view === 'settings' ? '조작 설정' : '일시정지');
     this.resumeButton.setVisible(view === 'main');
     this.settingsButton.setVisible(view === 'main');
     this.bagButton.setVisible(view === 'main');
     this.stressButton.setVisible(view === 'main').setText(this.options.stressLabel());
     this.exitButton.setVisible(view === 'main' && this.options.canExit);
     this.backButton.setVisible(view === 'settings');
+    this.resetButton.setVisible(view === 'settings');
+    this.help.setVisible(view === 'settings');
+    this.preview.setVisible(view === 'settings');
+    this.previewLabel.setVisible(view === 'settings');
     for (const row of this.rows) {
-      for (const object of [row.label, row.value, row.left, row.right]) object.setVisible(view === 'settings');
+      for (const object of [row.label, row.description, ...row.choices.map(c => c.button)]) object.setVisible(view === 'settings');
     }
     if (view === 'settings') this.refreshValues();
     if (open) this.place();
@@ -177,29 +195,43 @@ export class PauseMenu {
     const width = this.width || this.scene.scale.gameSize.width;
     const cx = width / 2;
     const mainButtons = [this.resumeButton, this.bagButton, this.settingsButton, this.stressButton, ...(this.options.canExit ? [this.exitButton] : [])];
-    const height = this.view === 'settings' ? 400 : 150 + mainButtons.length * 78;
+    const settingsView = this.view === 'settings';
+    const panelWidth = settingsView ? Math.min(width - 64, 1000) : PANEL_WIDTH;
+    const height = settingsView ? 624 : 150 + mainButtons.length * 78;
     const top = (VIEW_HEIGHT - height) / 2;
-    const left = cx - PANEL_WIDTH / 2;
+    const left = cx - panelWidth / 2;
 
     const g = this.panel;
     g.clear();
-    g.fillStyle(0x140c06, 0.95);
-    g.fillRoundedRect(left, top, PANEL_WIDTH, height, 16);
-    g.lineStyle(3, 0xe8c37a, 0.85);
-    g.strokeRoundedRect(left, top, PANEL_WIDTH, height, 16);
+    g.fillStyle(0x102622, 0.98);
+    g.fillRoundedRect(left, top, panelWidth, height, 16);
+    g.lineStyle(1, 0xd2b77c, 0.85);
+    g.strokeRoundedRect(left, top, panelWidth, height, 16);
     this.title.setPosition(cx, top + 48);
 
     if (this.view === 'main') {
+      this.title.setOrigin(0.5);
       mainButtons.forEach((button, i) => button.setPosition(cx, top + 122 + i * 78));
     } else {
+      this.title.setPosition(left + 32, top + 45).setOrigin(0, 0.5);
+      this.help.setPosition(left + panelWidth - 32, top + 45).setOrigin(1, 0.5);
       this.rows.forEach((row, i) => {
-        const y = top + 120 + i * 72;
-        row.label.setPosition(left + 36, y);
-        row.left.setPosition(cx + 70, y);
-        row.value.setPosition(cx + 145, y);
-        row.right.setPosition(cx + 220, y);
+        const y = top + 138 + i * 114;
+        g.fillStyle(0x1c3530, 1).fillRoundedRect(left + 20, y - 44, panelWidth - 40, 100, 10);
+        row.label.setPosition(left + 40, y - 13);
+        row.description.setPosition(left + 40, y + 22);
+        row.choices.forEach((choice, j) => choice.button.setPosition(left + panelWidth - 336 + j * 124, y + 4));
       });
-      this.backButton.setPosition(cx, top + height - 52);
+      const previewY = top + 471;
+      const a = sizeScale(this.settings.buttonSize), j = sizeScale(this.settings.joystickSize);
+      const pg = this.preview;
+      pg.clear().lineStyle(2, 0xdcc18b, 0.9).strokeCircle(left + 64, previewY, 22 * a);
+      pg.lineStyle(2, 0x9cb8ab, 0.9).strokeCircle(left + 144, previewY, 27 * j);
+      pg.fillStyle(0x9cb8ab, 0.7).fillCircle(left + 144, previewY, 10 * j);
+      this.previewLabel.setPosition(left + 204, previewY).setText(
+        `크기 미리보기  ·  버튼 ${Math.round(a * 100)}% / 이동 ${Math.round(j * 100)}%\n회피 판정 ${justDodgeWindowMs(this.settings.justDodgeTiming)}ms  ·  ${this.settings.justDodgeTiming === 'lenient' ? '여유: 저스트 회피에 성공하기 쉬워집니다.' : this.settings.justDodgeTiming === 'strict' ? '엄격: 공격 직전에 정확히 회피해야 합니다.' : '보통: 기본 판정으로 플레이합니다.'}`);
+      this.resetButton.setPosition(left + 140, top + height - 56);
+      this.backButton.setPosition(left + panelWidth - 110, top + height - 56);
     }
   }
 
@@ -212,19 +244,13 @@ export class PauseMenu {
   }
 
   private button(label: string, onTap: () => void): Phaser.GameObjects.Text {
-    const button = this.text(label, 26, '#1a1008')
+    const button = this.text(label, 24, '#f2e3c2')
       .setOrigin(0.5)
-      .setBackgroundColor('#e8c37a')
-      .setPadding(56, 12, 56, 12)
+      .setBackgroundColor('#304c41')
+      .setPadding(32, 16, 32, 16)
       .setInteractive({ useHandCursor: true });
     button.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, onTap);
     return button;
   }
 
-  private arrow(label: string, onTap: () => void): Phaser.GameObjects.Text {
-    // 손가락으로 누르기 쉽게 글자보다 넓은 범위를 누를 수 있게 한다.
-    const arrow = this.text(label, 26, '#e8c37a').setOrigin(0.5).setPadding(18, 10, 18, 10).setInteractive({ useHandCursor: true });
-    arrow.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, onTap);
-    return arrow;
-  }
 }
