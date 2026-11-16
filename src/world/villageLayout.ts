@@ -70,9 +70,9 @@ export const BUILDINGS: Building[] = [
     footprint: [body(1180, 470, 380, WALK_BOUNDS.top)], door: { x: 1180, y: 510 } },
   { frame: 'clinic', area: 'village-north', x: 1950, y: 500, width: 540, label: '치유소',
     footprint: [body(1950, 500, 540, WALK_BOUNDS.top)], door: { x: 1912, y: 540 } },
-  // 리네아의 집: 시온의 집 아래쪽 꽃밭 옆 낮은 오두막 (1장의 창문 매듭 장면)
-  { frame: 'linea-house', area: 'village-north', x: 720, y: 1100, width: 380, label: '리네아의 집',
-    footprint: [body(720, 1100, 380, 985)], door: { x: 700, y: 1140 } },
+  // 시온의 집과 같은 폭. 큰 가로길 위쪽 풀밭에 두어 집과 충돌 영역 모두 길에서 벗어난다.
+  { frame: 'linea-house', area: 'village-north', x: 430, y: 890, width: 500, label: '리네아의 집',
+    footprint: [body(430, 890, 500, 740)], door: { x: 404, y: 930 } },
   { frame: 'training-hall', area: 'village', x: 450, y: 990, width: 520, label: '수련소',
     footprint: [body(450, 990, 520, 840)], door: { x: 450, y: 1030 } },
   { frame: 'general-store', area: 'village', x: 1960, y: 900, width: 420, label: '잡화점',
@@ -94,6 +94,9 @@ export function buildingsIn(area: VillageArea): Building[] {
 export const SOUTH_GATE_PASSAGE = { left: 1134, right: 1228 };
 
 export const HOME = BUILDINGS[0];
+export const LINEA_HOME = BUILDINGS.find((b) => b.frame === 'linea-house')!;
+/** 문 옆의 앞마당. 평상시 대화와 습격 뒤 간호 인물들이 같은 집 앞을 기준으로 선다. */
+export const LINEA_YARD = { x: LINEA_HOME.door.x + 220, y: LINEA_HOME.door.y };
 
 export interface VillageProp {
   frame: 'oak' | 'pine' | 'boulders' | 'shrub' | 'rock' | 'flowers' | 'sign' | 'stump';
@@ -154,10 +157,10 @@ export const NORTH_PROPS: VillageProp[] = [
   { frame: 'flowers', x: 2220, y: 560, width: 70 },
   { frame: 'flowers', x: 1250, y: 560, width: 60 },
   // 리네아의 집 앞 꽃밭
-  { frame: 'flowers', x: 470, y: 1170, width: 70 },
-  { frame: 'flowers', x: 930, y: 1150, width: 65 },
-  { frame: 'flowers', x: 560, y: 1230, width: 60 },
-  { frame: 'flowers', x: 860, y: 1240, width: 65 },
+  { frame: 'flowers', x: 210, y: 920, width: 70 },
+  { frame: 'flowers', x: 650, y: 920, width: 65 },
+  { frame: 'flowers', x: 250, y: 950, width: 60 },
+  { frame: 'flowers', x: 690, y: 950, width: 65 },
   { frame: 'flowers', x: 1700, y: 1250, width: 60 },
 ];
 

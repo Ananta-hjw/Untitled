@@ -3,6 +3,7 @@ import { currentObjective, questDef, type QuestState } from './quests.ts';
 import { NPCS, type NpcDef, type NpcId } from '../world/npcs.ts';
 import type { MapId } from '../world/maps.ts';
 import type { Interactable } from '../world/interactables.ts';
+import { LINEA_YARD } from '../world/villageLayout.ts';
 
 export type ChapterPhase = 'day' | 'raid' | 'aftermath';
 
@@ -22,9 +23,9 @@ export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: Ma
   return source.filter(n => n.id !== 'sia' && !(phase === 'raid' && n.id === 'linea')).map(n => {
     if (n.inside) return { ...n };
     if (n.id === 'ruan') return { ...n, x: 1080, y: 1150, wander: undefined };
-    if (n.id === 'serena') return { ...n, x: phase === 'raid' ? 1500 : 1080, y: phase === 'raid' ? 1100 : 1220, wander: undefined };
-    if (n.id === 'eila') return { ...n, x: phase === 'raid' ? 1540 : 1040, y: phase === 'raid' ? 1200 : 1140, wander: undefined };
-    if (n.id === 'linea') return { ...n, x: 980, y: 1200, wander: undefined };
+    if (n.id === 'serena') return { ...n, x: phase === 'raid' ? 1500 : LINEA_YARD.x + 140, y: phase === 'raid' ? 1100 : LINEA_YARD.y + 90, wander: undefined };
+    if (n.id === 'eila') return { ...n, x: phase === 'raid' ? 1540 : LINEA_YARD.x + 130, y: phase === 'raid' ? 1200 : LINEA_YARD.y, wander: undefined };
+    if (n.id === 'linea') return { ...n, ...LINEA_YARD, wander: undefined };
     return { ...n, wander: undefined };
   });
 }

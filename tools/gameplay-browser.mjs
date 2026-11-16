@@ -1084,41 +1084,51 @@ test('북쪽 건물 뒤의 틈으로는 들어갈 수 없고, 다른 건물 뒤�
   assert.equal(result.map, 'village');
   assert.equal(result.gap, false);
 });
-test('미니맵을 누르면 전체 지도가 열리고, 가 본 곳만 이름이 보이며, 여는 동안 게임이 멈춘다', async () => {
+test('미니맵을 누르면 현재 맵 원화와 실제 내 위치가 보이고, 열린 동안 멈추며 반복·회전에도 객체를 재사용한다', async () => {
+  for(const map of ['village','village-north','south-field','west-forest','east-stream','in-home','in-store']) {
+    await load(map);
+    const result=await evaluate(`(() => {
+      const g=window.__game,s=g.scene.getScene('game');
+      s.minimap.image.emit('pointerup');const m=s.worldMap;
+      const r=m.mapRect,b=m.preview.bounds;
+      const expected={x:r.x+(s.player.x-b.left)/(b.right-b.left)*r.w,y:r.y+(s.player.y-b.top)/(b.bottom-b.top)*r.h};
+      const first={open:m.isOpen,title:m.title.text,expected:s.map.name,key:m.image.texture.key,
+        aligned:Math.hypot(m.here.x-expected.x,m.here.y-expected.y)<.01,
+        npcs:m.dots.npcs.length,enemies:m.dots.enemies.length,labels:m.labels.map(l=>l.text.text),
+        inside:m.here.x>=r.x&&m.here.x<=r.x+r.w&&m.here.y>=r.y&&m.here.y<=r.y+r.h};
+      const now=s.now;s.update(0,50);const frozen=s.now===now;
+      m.image.emit('pointerup');const inspecting=m.isOpen;
+      const count=s.children.length,keys=Object.keys(s.textures.list).length;
+      for(let i=0;i<5;i++){m.close();s.openWorldMap();m.layout(i%2?960:1558);}
+      const stable=s.children.length===count&&Object.keys(s.textures.list).length===keys;
+      const labelsInside=m.labels.filter(l=>l.direction).every(l=>{const b=l.text.getBounds(),r=m.mapRect;return b.left>=r.x&&b.right<=r.x+r.w+1&&b.top>=r.y&&b.bottom<=r.y+r.h+1;});
+      m.closeButton.emit('pointerup');const closed=!m.isOpen;
+      s.openWorldMap();m.shade.emit('pointerup');
+      return {first,frozen,inspecting,stable,labelsInside,closed,outsideClosed:!m.isOpen};
+    })()`);
+    assert.equal(result.first.open,true,map);assert.equal(result.first.title,result.first.expected,map);
+    assert.equal(result.first.key,'current-area-preview');assert.equal(result.first.aligned,true,map);
+    assert.equal(result.first.inside,true,map);assert.ok(result.first.labels.length>0,map);
+    for(const name of ['frozen','inspecting','stable','labelsInside','closed','outsideClosed']) assert.equal(result[name],true,map+': '+name);
+  }
+});
+
+test('목적지 안내는 실제 출구 근처에만 나타나고 지도·일시정지 중에는 숨으며 습격 때 이동 제한을 알린다',async()=>{
   await load('village');
-  const result = await evaluate(`(async () => {
-    const g = window.__game;
-    let s = g.scene.getScene('game');
-    let t = performance.now();
-    const restart = async (map) => {
-      s.scene.restart({ map });
-      for (let i=0;i<300;i++) {
-        g.step(t += 16,16);
-        if(s.mapId===map && s.sys.isActive() && s.worldMap) return;
-        await new Promise(resolve=>setTimeout(resolve,10));
-      }
-      throw new Error('map load timeout: '+map);
-    };
-    localStorage.removeItem('untitled-rpg.visited');
-    await restart('village');
-    s.minimap.image.emit('pointerup');
-    const card = (id) => s.worldMap.cards.find(c => c.region === id);
-    const first = { open: s.worldMap.isOpen, village: card('village').name.visible, east: card('east-stream').name.visible,
-      eastUnknown: card('east-stream').unknown.visible, ruins: card('north-ruins').unknown.visible };
-    const frozen = s.now; g.step(t += 16, 16); const paused = s.now === frozen;
-    s.worldMap.shade.emit('pointerup');
-    const closed = !s.worldMap.isOpen;
-    await restart('east-stream');
-    s.openWorldMap();
-    const after = { east: card('east-stream').name.visible, south: card('south-field').unknown.visible,
-      saved: JSON.parse(localStorage.getItem('untitled-rpg.visited')) };
-    s.worldMap.close();
-    return { first, paused, closed, after };
+  const r=await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game');
+    const at=(x,y)=>{s.player.placeAt(x,y);s.update(0,16);return {visible:s.exitHint.title.visible,text:s.exitHint.title.text,detail:s.exitHint.detail.text};};
+    const far=at(1200,750),near=at(250,1050);
+    s.openWorldMap();const mapHidden=!s.exitHint.title.visible;s.worldMap.close();
+    at(250,1050);s.openPause();s.update(0,16);const pauseHidden=!s.exitHint.title.visible;s.pauseMenu.back();
+    s.quests={'festival-eve':{status:'done',count:1},'village-raid':{status:'active',count:0}};
+    const blocked=at(250,1050);s.player.placeAt(80,1050);s.update(0,16);
+    return {far,near,mapHidden,pauseHidden,blocked,stayed:s.mapId==='village'&&!s.traveling};
   })()`);
-  assert.deepEqual(result.first, { open: true, village: true, east: false, eastUnknown: true, ruins: true });
-  assert.equal(result.paused, true);
-  assert.equal(result.closed, true);
-  assert.deepEqual(result.after, { east: true, south: true, saved: ['village', 'east-stream'] });
+  assert.equal(r.far.visible,false);assert.equal(r.near.visible,true);
+  assert.ok(r.near.text.includes('서쪽')&&r.near.text.includes('서쪽 숲길'));
+  assert.equal(r.mapHidden,true);assert.equal(r.pauseHidden,true);
+  assert.ok(r.blocked.detail.includes('습격'));assert.equal(r.stayed,true);
 });
 test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 이어지며 마을에는 몬스터가 없다', async () => {
   await load('village');

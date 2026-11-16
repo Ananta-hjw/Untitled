@@ -1,163 +1,140 @@
 import Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
-import { REGIONS, ROUTES, type RegionId } from '../world/worldMap';
-
-/**
- * 전체 지도 화면. 미니맵을 누르거나 M 키로 연다.
- * 지역을 칸으로 놓고 길을 잇는다. 가 본 곳은 땅 그림과 이름, 안 가 본 곳은 "?"로 보여 준다.
- * 지금 있는 지역은 테두리와 점으로 알려 준다. 퀘스트 표시는 띄우지 않는다.
- * 열려 있는 동안 씬은 게임 시계를 멈춘다. 객체는 처음에 만들어 두고 다시 쓴다.
- */
+import { MAPS, type GameMap, type Point } from '../world/maps';
+import { CARDINAL, exitDirection, exitPoint, type Cardinal } from '../world/mapNavigation';
+import { mapPreview, type MapPreview } from './mapPreview';
 
 const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 const DEPTH = DEPTH_UI + 50;
-const CARD_W = 200;
-const CARD_H = 120;
-const GAP_X = 60;
-const GAP_Y = 46;
+interface Label { text: Phaser.GameObjects.Text; point: Point; direction?: Cardinal }
+interface Dots { npcs: Point[]; enemies: Point[] }
 
-interface Card {
-  region: RegionId;
-  ground: Phaser.GameObjects.Image;
-  details: Phaser.GameObjects.Graphics;
-  name: Phaser.GameObjects.Text;
-  unknown: Phaser.GameObjects.Text;
-}
-
+/** Actual current-map art, with current positions. Opening pauses gameplay; it never travels on click. */
 export class WorldMap {
   private readonly shade: Phaser.GameObjects.Rectangle;
   private readonly panel: Phaser.GameObjects.Graphics;
+  private readonly image: Phaser.GameObjects.Image;
+  private readonly marks: Phaser.GameObjects.Graphics;
   private readonly title: Phaser.GameObjects.Text;
-  private readonly hint: Phaser.GameObjects.Text;
+  private readonly subtitle: Phaser.GameObjects.Text;
+  private readonly closeButton: Phaser.GameObjects.Text;
+  private readonly compass: Phaser.GameObjects.Text;
   private readonly here: Phaser.GameObjects.Arc;
-  private readonly cards: Card[] = [];
+  private readonly legend: Phaser.GameObjects.Text[];
+  private readonly labels: Label[] = [];
+  private readonly preview: MapPreview;
   private open = false;
   private width = 0;
-  private current: RegionId = 'village';
-  private visited = new Set<RegionId>();
+  private player: Point = { x: 0, y: 0 };
+  private dots: Dots = { npcs: [], enemies: [] };
+  private blocked = false;
+  private mapRect = { x: 0, y: 0, w: 0, h: 0 };
 
-  constructor(private readonly scene: Phaser.Scene, private readonly onClose: () => void) {
-    this.shade = scene.add.rectangle(0, 0, 10, VIEW_HEIGHT, 0x000000, 0.65).setOrigin(0).setScrollFactor(0).setDepth(DEPTH);
-    // 화면 어디를 눌러도 닫힌다.
-    this.shade.setInteractive().on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => this.close());
+  constructor(private readonly scene: Phaser.Scene, private readonly map: GameMap, private readonly onClose: () => void) {
+    this.preview = mapPreview(scene, map);
+    this.shade = scene.add.rectangle(0, 0, 10, VIEW_HEIGHT, 0x030907, .84).setOrigin(0).setScrollFactor(0).setDepth(DEPTH);
+    this.shade.setInteractive().on('pointerup', () => this.close());
     this.panel = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH + 1);
-    this.title = this.text('지도', 30, '#f5ead2').setOrigin(0.5);
-    this.hint = this.text('화면을 누르면 닫힌다', 16, '#b9b2a4').setOrigin(0.5);
-    this.here = scene.add.circle(0, 0, 9, 0x5ec8ff).setStrokeStyle(3, 0xffffff).setScrollFactor(0).setDepth(DEPTH + 5);
-    for (const region of REGIONS) {
-      const ground = scene.add.image(0, 0, 'village-ground').setScrollFactor(0).setDepth(DEPTH + 2);
-      const details = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH + 3);
-      const name = this.text(region.name, 19, '#fff4d6').setOrigin(0.5).setStroke('#1a1008', 5).setDepth(DEPTH + 4);
-      const unknown = this.text('?', 64, '#8a7f6e').setOrigin(0.5).setDepth(DEPTH + 4);
-      this.cards.push({ region: region.id, ground, details, name, unknown });
+    this.image = scene.add.image(0, 0, this.preview.key, this.preview.frame).setOrigin(0).setScrollFactor(0).setDepth(DEPTH + 2);
+    // Inspecting the map should not accidentally dismiss it.
+    this.image.setInteractive();
+    this.marks = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH + 3);
+    this.title = this.text(map.name, 30, '#f6edd9');
+    this.subtitle = this.text('현재 지역 전체 · 파란 점이 내 위치입니다', 16, '#b8c6b3');
+    this.closeButton = this.text('닫기 ×', 20, '#f5deb0').setOrigin(.5).setPadding(16, 10).setBackgroundColor('#344337');
+    this.closeButton.setInteractive({ useHandCursor: true }).on('pointerup', () => this.close());
+    this.compass = this.text('북 ↑', 16, '#f5deb0').setPadding(8, 5).setBackgroundColor('#17241d');
+    this.here = scene.add.circle(0, 0, 7, 0x67d6ff).setStrokeStyle(2.5, 0xffffff).setScrollFactor(0).setDepth(DEPTH + 6);
+    this.legend = [this.text('● 내 위치', 16, '#67d6ff'), this.text('● 마을 사람', 16, '#f8edce'),
+      this.text('● 몬스터', 16, '#ff8a78'), this.text('◆ 연결 통로', 16, '#f3c568')];
+    for (const building of map.buildings) {
+      if (building.label) this.labels.push({ point: building,
+        text: this.text(building.label, 16, '#fff4dd').setOrigin(.5, 0).setStroke('#142019', 4) });
+    }
+    const passages = map.exits.map(exit => ({ point: exitPoint(map, exit), target: exit.to,
+      direction: exitDirection(map, exitPoint(map, exit)) }));
+    if (map.interior) {
+      for (const spot of map.interactables) if (spot.enter && spot.enter.to in MAPS) passages.push({
+        point: spot, target: spot.enter.to as keyof typeof MAPS, direction: 'south',
+      });
+    }
+    for (const passage of passages) {
+      const direction = CARDINAL[passage.direction];
+      this.labels.push({ point: passage.point, direction: passage.direction,
+        text: this.text(`${direction.arrow} ${MAPS[passage.target].name}`, 17, '#ffe2a0')
+          .setPadding(8, 5).setBackgroundColor('#17241d') });
     }
     this.setVisible(false);
   }
 
-  get isOpen(): boolean {
-    return this.open;
+  get isOpen(): boolean { return this.open; }
+  show(player: Point, dots: Dots, blocked = false): void {
+    this.player = { x: player.x, y: player.y };
+    this.dots = dots; this.blocked = blocked;
+    this.open = true; this.setVisible(true); this.draw();
   }
-
-  show(current: RegionId, visited: Set<RegionId>): void {
-    this.current = current;
-    this.visited = visited;
-    this.open = true;
-    this.setVisible(true);
-    this.draw();
-  }
-
   close(): void {
     if (!this.open) return;
-    this.open = false;
-    this.setVisible(false);
-    this.onClose();
+    this.open = false; this.setVisible(false); this.onClose();
   }
-
   layout(width: number): void {
     this.width = width;
     this.shade.setSize(width, VIEW_HEIGHT);
     if (this.shade.input) this.shade.input.hitArea.setSize(width, VIEW_HEIGHT);
     if (this.open) this.draw();
   }
+  update(realTime: number): void { if (this.open) this.here.setScale(1 + .18 * Math.abs(Math.sin(realTime / 350))); }
 
-  /** 지금 있는 곳 표시가 깜빡인다. 씬이 실제 시간으로 부른다. */
-  update(realTime: number): void {
-    if (this.open) this.here.setScale(1 + 0.25 * Math.abs(Math.sin(realTime / 300)));
+  private project(point: Point): Point {
+    const b = this.preview.bounds, r = this.mapRect;
+    return { x: r.x + (point.x - b.left) / (b.right - b.left) * r.w,
+      y: r.y + (point.y - b.top) / (b.bottom - b.top) * r.h };
   }
-
   private draw(): void {
     const width = this.width || this.scene.scale.gameSize.width;
-    const cx = width / 2, cy = VIEW_HEIGHT / 2 + 14;
-    const panelW = CARD_W * 3 + GAP_X * 2 + 90, panelH = CARD_H * 3 + GAP_Y * 2 + 130;
-    const center = (gx: number, gy: number) => ({ x: cx + gx * (CARD_W + GAP_X), y: cy + gy * (CARD_H + GAP_Y) });
-
-    const g = this.panel.clear();
-    g.fillStyle(0x140c06, 0.95).fillRoundedRect(cx - panelW / 2, cy - panelH / 2 - 14, panelW, panelH, 18);
-    g.lineStyle(3, 0xe8c37a, 0.85).strokeRoundedRect(cx - panelW / 2, cy - panelH / 2 - 14, panelW, panelH, 18);
-    this.title.setPosition(cx, cy - panelH / 2 + 18);
-    this.hint.setPosition(cx, cy + panelH / 2 - 34);
-
-    // 길: 둘 다 가 본 곳이면 실선, 아니면 점선
-    for (const [a, b] of ROUTES) {
-      const ra = REGIONS.find((r) => r.id === a)!, rb = REGIONS.find((r) => r.id === b)!;
-      const pa = center(ra.gx, ra.gy), pb = center(rb.gx, rb.gy);
-      const known = this.visited.has(a) && this.visited.has(b);
-      const steps = Math.ceil(Math.hypot(pb.x - pa.x, pb.y - pa.y) / 14);
-      g.lineStyle(6, known ? 0xc9a36a : 0x5a4e3e, 1);
-      for (let i = 0; i < steps; i++) {
-        if (!known && i % 2) continue;
-        const t0 = i / steps, t1 = (i + 1) / steps;
-        g.lineBetween(pa.x + (pb.x - pa.x) * t0, pa.y + (pb.y - pa.y) * t0, pa.x + (pb.x - pa.x) * t1, pa.y + (pb.y - pa.y) * t1);
-      }
+    const panelW = Math.min(width - 48, 1180), left = (width - panelW) / 2;
+    this.panel.clear().fillStyle(0x142019, .99).fillRoundedRect(left, 26, panelW, 668, 18)
+      .lineStyle(1.5, 0xc4aa72, .9).strokeRoundedRect(left, 26, panelW, 668, 18);
+    this.title.setPosition(left + 28, 48); this.subtitle.setPosition(left + 29, 91);
+    this.closeButton.setPosition(left + panelW - 75, 72);
+    const fit = Math.min((panelW - 60) / this.preview.width, 494 / this.preview.height);
+    const w = this.preview.width * fit, h = this.preview.height * fit;
+    this.mapRect = { x: (width - w) / 2, y: 134 + (494 - h) / 2, w, h };
+    const r = this.mapRect;
+    this.image.setPosition(r.x, r.y).setDisplaySize(w, h);
+    this.compass.setPosition(r.x + 10, r.y + 10);
+    const g = this.marks.clear().lineStyle(2, 0x8a986b, .8).strokeRect(r.x - 1, r.y - 1, w + 2, h + 2);
+    const dot = (point: Point, color: number, size: number) => {
+      const p = this.project(point);
+      g.fillStyle(0x10190f, .8).fillCircle(p.x, p.y, size + 2).fillStyle(color).fillCircle(p.x, p.y, size);
+    };
+    for (const point of this.dots.enemies) dot(point, 0xff8a78, 3.5);
+    for (const point of this.dots.npcs) dot(point, 0xf8edce, 3.5);
+    for (const label of this.labels) {
+      const p = this.project(label.point), t = label.text;
+      if (!label.direction) { t.setPosition(p.x, p.y + 5); continue; }
+      dot(label.point, this.blocked ? 0x9c9b8a : 0xf3c568, 5);
+      t.setColor(this.blocked ? '#b6b4a6' : '#ffe2a0');
+      const dir = label.direction;
+      t.setOrigin(dir === 'east' ? 1 : dir === 'west' ? 0 : .5, dir === 'north' ? 0 : dir === 'south' ? 1 : .5)
+        .setPosition(p.x + (dir === 'east' ? -14 : dir === 'west' ? 14 : 0), p.y + (dir === 'north' ? 14 : dir === 'south' ? -14 : 0));
+      // Keep destination text readable even for exits at the edge of an irregular room.
+      const box = t.getBounds();
+      t.x += Math.max(0, r.x + 5 - box.left) - Math.max(0, box.right - r.x - r.w + 5);
+      t.y += Math.max(0, r.y + 5 - box.top) - Math.max(0, box.bottom - r.y - r.h + 5);
     }
-
-    for (const card of this.cards) {
-      const region = REGIONS.find((r) => r.id === card.region)!;
-      const p = center(region.gx, region.gy);
-      const left = p.x - CARD_W / 2, top = p.y - CARD_H / 2;
-      const known = this.visited.has(region.id);
-      const isHere = region.id === this.current;
-      g.fillStyle(known ? 0x000000 : 0x2a2218, known ? 0.4 : 1).fillRoundedRect(left - 4, top - 4, CARD_W + 8, CARD_H + 8, 12);
-      g.lineStyle(isHere ? 5 : 3, isHere ? 0x5ec8ff : known ? 0xe8c37a : 0x6b5d48, 1).strokeRoundedRect(left - 4, top - 4, CARD_W + 8, CARD_H + 8, 12);
-
-      card.ground.setVisible(known).setPosition(p.x, p.y).setDisplaySize(CARD_W, CARD_H);
-      if (region.tint !== undefined) card.ground.setTint(region.tint); else card.ground.clearTint();
-      card.details.clear().setVisible(known);
-      if (known) this.drawDetails(card.details, region.id, left, top);
-      card.name.setVisible(known).setPosition(p.x, top + CARD_H - 16);
-      card.unknown.setVisible(!known).setPosition(p.x, p.y - 8);
-      if (isHere) this.here.setPosition(p.x, p.y - 12);
-    }
-    this.here.setVisible(true);
-  }
-
-  /** 가 본 지역의 작은 그림: 마을은 건물, 개울가는 물줄기, 숲길은 나무 */
-  private drawDetails(g: Phaser.GameObjects.Graphics, region: RegionId, left: number, top: number): void {
-    if (region === 'village') {
-      // 건물 아틀라스를 칸에 맞춰 작게 그리기 어렵기 때문에 지붕 색 블록으로 간단히 나타낸다.
-      const roofs = [[0.22, 0.32, 0xc0603a], [0.5, 0.26, 0x4a5a78], [0.78, 0.32, 0x7aa05a], [0.22, 0.62, 0x3b3b3b], [0.78, 0.6, 0xe0a83a]];
-      for (const [fx, fy, color] of roofs) {
-        g.fillStyle(color, 1).fillTriangle(left + fx * CARD_W - 16, top + fy * CARD_H + 8, left + fx * CARD_W, top + fy * CARD_H - 8, left + fx * CARD_W + 16, top + fy * CARD_H + 8);
-        g.fillStyle(0xe9dcc0, 1).fillRect(left + fx * CARD_W - 12, top + fy * CARD_H + 8, 24, 12);
-      }
-      g.fillStyle(0x4f8a4a, 1).fillCircle(left + CARD_W * 0.5, top + CARD_H * 0.55, 13);
-    } else if (region === 'east-stream') {
-      g.fillStyle(0x4f9fc4, 0.95).fillRect(left, top, CARD_W, CARD_H * 0.28);
-    } else if (region === 'west-forest') {
-      for (const [fx, fy] of [[0.15, 0.3], [0.35, 0.22], [0.6, 0.35], [0.82, 0.25], [0.25, 0.6], [0.7, 0.62]]) {
-        g.fillStyle(0x2f5e34, 1).fillTriangle(left + fx * CARD_W - 12, top + fy * CARD_H + 14, left + fx * CARD_W, top + fy * CARD_H - 14, left + fx * CARD_W + 12, top + fy * CARD_H + 14);
-      }
-    }
+    const p = this.project(this.player); this.here.setPosition(p.x, p.y);
+    const positions = [-220, -80, 65, 210];
+    this.legend.forEach((text, i) => text.setPosition(width / 2 + positions[i], 652).setOrigin(.5));
+    if (this.blocked) this.subtitle.setText('현재 지역 전체 · 습격 중에는 다른 지역으로 이동할 수 없습니다');
   }
 
   private setVisible(visible: boolean): void {
-    for (const o of [this.shade, this.panel, this.title, this.hint, this.here]) o.setVisible(visible);
-    for (const c of this.cards) for (const o of [c.ground, c.details, c.name, c.unknown]) o.setVisible(visible && o.visible);
-    if (!visible) for (const c of this.cards) for (const o of [c.ground, c.details, c.name, c.unknown]) o.setVisible(false);
+    for (const object of [this.shade, this.panel, this.image, this.marks, this.title, this.subtitle,
+      this.closeButton, this.compass, this.here, ...this.legend, ...this.labels.map(l => l.text)]) object.setVisible(visible);
   }
-
   private text(content: string, size: number, color: string): Phaser.GameObjects.Text {
     return this.scene.add.text(0, 0, content, { fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color })
-      .setScrollFactor(0).setDepth(DEPTH + 2).setResolution(2);
+      .setScrollFactor(0).setDepth(DEPTH + 5).setResolution(2);
   }
 }

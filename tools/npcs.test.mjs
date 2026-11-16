@@ -83,9 +83,10 @@ test('돌아다닐 곳은 반지름 안의 걸을 수 있는 곳이고, 없으�
   let seed = 7;
   const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   for (const npc of NPCS.filter((n) => n.wander)) {
+    const map = MAPS[npc.area ?? 'village'];
     for (let i = 0; i < 50; i++) {
-      const t = pickWanderTarget(npc, npc.wander, rand, (x, y) => walkable(village, x, y) && !findExit(village, x, y));
-      assert.equal(walkable(village, t.x, t.y), true, npc.id);
+      const t = pickWanderTarget(npc, npc.wander, rand, (x, y) => walkable(map, x, y) && !findExit(map, x, y));
+      assert.equal(walkable(map, t.x, t.y), true, npc.id);
       assert.ok(Math.hypot(t.x - npc.x, t.y - npc.y) <= npc.wander + 1, npc.id);
     }
   }

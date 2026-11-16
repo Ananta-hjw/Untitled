@@ -27,7 +27,6 @@ export function preloadVillage(scene: Phaser.Scene, map: GameMap): void {
 export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
   if (map.interior) {
     drawInterior(scene, map.interior);
-    drawExitLabels(scene, map);
     return new WalkArea(mapPolygon(map), mapObstacles(map));
   }
   for (const f of frames.frames) {
@@ -63,23 +62,10 @@ export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
     }
   }
 
-  drawExitLabels(scene, map);
 
   return new WalkArea(mapPolygon(map), mapObstacles(map));
 }
 
-
-function drawExitLabels(scene: Phaser.Scene, map: GameMap): void {
-  // 출구 표시: 바닥에 깔리는 글자라 캐릭터보다 아래에 그린다. 건물(입구 아치) 앞에 있으면 건물 위에 그린다.
-  for (const exit of map.exits) {
-    const covered = map.buildings.some((b) => Math.abs(b.x - exit.labelAt.x) < b.width / 2 && b.y > exit.labelAt.y);
-    scene.add.text(exit.labelAt.x, exit.labelAt.y, exit.label, {
-      fontFamily: FONT, fontSize: '22px', fontStyle: 'bold',
-      color: '#fff4d6', stroke: '#3a2614', strokeThickness: 5,
-    }).setOrigin(.5).setDepth(covered ? WORLD_HEIGHT + 10 : -50).setResolution(2).setAlpha(.9);
-  }
-
-}
 
 /** 개울: 걸을 수 있는 영역 위쪽에 물결 띠를 그린다. 그림이 생기면 바꾼다. */
 function drawWater(scene: Phaser.Scene, top: number, bottom: number): void {

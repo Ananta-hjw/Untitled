@@ -1,6 +1,6 @@
 import type { DialogueId } from '../story/dialogues.ts';
 import { interiorShop, type InteriorId } from './interiors.ts';
-import type { VillageArea } from './villageLayout.ts';
+import { LINEA_YARD, type VillageArea } from './villageLayout.ts';
 
 /**
  * 로웬 마을 사람들 (docs/story.md 마을 사람들, docs/rowen-village.md 배치).
@@ -44,7 +44,7 @@ export const NPCS: NpcDef[] = [
   // 북쪽 맵: 집들 앞
   { id: 'serena', name: '세레나', role: '시온의 어머니', area: 'village-north', x: 700, y: 600, height: 148, dialogue: 'npc-serena', wander: 110 },
   { id: 'sia', name: '시아', role: '시온의 여동생', area: 'village-north', x: 290, y: 680, height: 132, dialogue: 'npc-sia', wander: 150 },
-  { id: 'linea', name: '리네아', role: '시온의 친한 친구', area: 'village-north', x: 980, y: 1200, height: 142, dialogue: 'npc-linea', wander: 150 },
+  { id: 'linea', name: '리네아', role: '시온의 친한 친구', area: 'village-north', ...LINEA_YARD, height: 142, dialogue: 'npc-linea', wander: 100 },
   { id: 'herman', name: '헤르만', role: '촌장', area: 'village-north', x: 1290, y: 525, height: 150, dialogue: 'npc-herman', wander: 100 },
   { id: 'eila', name: '에일라', role: '치유사', area: 'village-north', x: 2070, y: 550, height: 146, dialogue: 'npc-eila', wander: 110 },
   // 광장

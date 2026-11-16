@@ -60,6 +60,7 @@ import {
 import type { NpcId } from '../world/npcs';
 import { ItemPanel, type PanelAction } from '../ui/ItemPanel';
 import { WorldMap } from '../ui/WorldMap';
+import { ExitHint } from '../ui/ExitHint';
 import { VISITED_SAVE_KEY, parseVisited, regionOf, serializeVisited, type RegionId } from '../world/worldMap';
 import {
   INVENTORY_SAVE_KEY, ITEMS, USE_COOLDOWN_MS, addGold, addItem, applyDrop, bestHealItem, buy, countOf, parseInventory,
@@ -182,6 +183,7 @@ export class GameScene extends Phaser.Scene {
   private itemPanel?: ItemPanel;
   /** 전체 지도 화면과 가 본 지역 (기기에 따로 저장) */
   private worldMap?: WorldMap;
+  private exitHint?: ExitHint;
   private visited = new Set<RegionId>();
   private mapKeys: Phaser.Input.Keyboard.Key[] = [];
   private potionButton?: ActionButton;
@@ -258,6 +260,7 @@ export class GameScene extends Phaser.Scene {
     this.inventory = { gold: 0, items: {} };
     this.itemPanel = undefined;
     this.worldMap = undefined;
+    this.exitHint = undefined;
     this.visited = new Set();
     this.mapKeys = [];
     this.potionButton = undefined;
@@ -343,7 +346,8 @@ export class GameScene extends Phaser.Scene {
     this.potionButton = new ActionButton(this, { x: 0, y: 0, radius: 44, label: '', color: 0x7a3b2a, fontSize: 18 });
     this.potionKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q)] : [];
     this.itemPanel = new ItemPanel(this, (action) => this.onItemAction(action), () => this.onResume());
-    this.worldMap = new WorldMap(this, () => this.onResume());
+    this.worldMap = new WorldMap(this, this.map, () => this.onResume());
+    this.exitHint = new ExitHint(this, this.map);
     this.minimap.onTap(() => this.openWorldMap());
     this.mapKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M)] : [];
     this.refreshInventory();
@@ -377,7 +381,12 @@ export class GameScene extends Phaser.Scene {
     this.perf?.update(delta);
     // 히트스톱이나 일시정지로 게임 시계가 멈추면 불꽃도 그 자리에 멈춘다.
     this.impacts?.update(this.now, delta);
-    if (this.player) this.minimap?.update(delta, this.player, this.collectMinimap);
+    if (this.player) {
+      this.minimap?.update(delta, this.player, this.collectMinimap);
+      this.exitHint?.update(this.player, this.traveling || !this.player.alive || this.dialogue.isOpen || this.pauseMenu.isOpen
+        || !!this.worldMap?.isOpen || !!this.itemPanel?.isOpen || !!this.storyChoice?.isOpen,
+        chapterPhase(this.quests) === 'raid' && this.mapId === 'village');
+    }
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
     // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
     const step = Math.min(delta, 50);
@@ -642,6 +651,7 @@ export class GameScene extends Phaser.Scene {
     this.potionButton?.setPosition(width - 330, VIEW_HEIGHT - 95 - this.dodgeButton.size - (this.potionButton?.size ?? 0) - 18);
     this.itemPanel?.layout(width);
     this.worldMap?.layout(width);
+    this.exitHint?.layout(width);
     this.dialogue.layout(width);
     this.storyChoice?.layout(width);
     this.chapterShade?.setSize(width, VIEW_HEIGHT);
@@ -1321,7 +1331,10 @@ export class GameScene extends Phaser.Scene {
     this.talkMarker.setVisible(false);
     this.pauseButton.setVisible(false);
     // 지도에는 퀘스트 표시(!/?)를 띄우지 않는다. 퀘스트는 머리 위·미니맵·추적창으로 안내한다.
-    this.worldMap.show(regionOf(this.mapId), this.visited);
+    this.exitHint?.update(this.player, true, false);
+    this.worldMap.show(this.player, { npcs: this.npcs.map(n => ({ x: n.x, y: n.y })),
+      enemies: this.enemies.filter(e => e.character.alive).map(e => ({ x: e.character.x, y: e.character.y })) },
+      chapterPhase(this.quests) === 'raid' && this.mapId === 'village');
   }
 
   private loadVisited(): Set<RegionId> {
