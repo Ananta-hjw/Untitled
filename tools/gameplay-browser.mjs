@@ -1411,3 +1411,46 @@ test('새 몬스터도 실제 검날에 맞아 쓰러지고 종류별 경험치�
   })()`);
   assert.equal(paused,true);
 });
+
+test('여관의 로제타에게 쉬어 가거나 집 침대에서 쉬면 체력이 차고, 처음 화면에서 시작하면 그곳에서 이어진다', async () => {
+  await load('in-inn');
+  const inn = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    localStorage.removeItem('untitled-rpg.rest');
+    localStorage.removeItem('untitled-rpg.quests');
+    s.quests = {};
+    s.player.hp = 10;
+    const rosetta = s.npcs.find(n => n.def.id === 'rosetta');
+    s.openDialogue(rosetta.spot);
+    while (s.dialogue.isOpen) s.dialogue.advance();
+    const asked = s.storyChoice.isOpen;
+    s.storyChoice.accept();
+    return { asked, hp: s.player.hp, max: s.player.maxHp, saved: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
+  })()`);
+  assert.equal(inn.asked, true, '평소 대화 뒤 쉬어 갈지 묻는다');
+  assert.equal(inn.hp, inn.max);
+  assert.equal(inn.saved, 'inn');
+
+  await load('in-home');
+  const home = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    const bed = s.interactables.find(i => i.id === 'rest-home');
+    s.player.placeAt(bed.x, bed.y + 30);
+    let t = performance.now();
+    for (let i = 0; i < 3; i++) g.step(t += 16, 16);
+    const label = s.talkButton.text.text;
+    s.openDialogue(bed);
+    return { label, saved: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
+  })()`);
+  assert.deepEqual(home, { label: '쉬기', saved: 'home' });
+
+  // 처음 화면에서 시작하면 마지막으로 쉰 시온의 집 안에서 시작한다.
+  const search = '?test=' + ++navigation;
+  await send('Page.navigate', { url: appUrl + search });
+  await until(() => evaluate(`location.search === ${JSON.stringify(search)} && !!window.__game?.scene.isActive('title')`));
+  await evaluate(`window.__game.scene.getScene('title').start()`);
+  await until(() => evaluate(`!!window.__game.scene.getScene('game')?.damageNumbers && window.__game.scene.isActive('game')`));
+  const resumed = await evaluate(`(() => { const s = window.__game.scene.getScene('game'); return { map: s.mapId, walkable: s.walkArea.contains(s.player.x, s.player.y) }; })()`);
+  assert.deepEqual(resumed, { map: 'in-home', walkable: true });
+  await evaluate(`localStorage.removeItem('untitled-rpg.rest'); window.__game.loop.sleep()`);
+});

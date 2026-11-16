@@ -1,7 +1,14 @@
 import Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 
-/** 축제를 시작하기 전에 탐색을 계속할지 선택한다. 열려 있는 동안 게임은 멈춘다. */
+/** 예/아니오 선택 (축제 전야 시작, 여관에서 쉬어 가기 등). 열려 있는 동안 게임은 멈춘다. */
+export interface ChoicePrompt { text: string; yes: string; no: string }
+
+const FESTIVAL: ChoicePrompt = {
+  text: '축제 전야를 시작할까요?\n잔치가 끝나면 밤으로 넘어갑니다.\n남은 마을 의뢰와 탐색은 먼저 마쳐도 좋습니다.',
+  yes: '잔치 시작 [Enter]', no: '조금 더 둘러보기 [Esc]',
+};
+
 export class StoryChoice {
   private readonly shade: Phaser.GameObjects.Rectangle;
   private readonly text: Phaser.GameObjects.Text;
@@ -19,8 +26,11 @@ export class StoryChoice {
   }
 
   get isOpen(): boolean { return this.callback !== undefined; }
-  open(callback: () => void): void {
+  open(callback: () => void, prompt: ChoicePrompt = FESTIVAL): void {
     this.callback = callback;
+    this.text.setText(prompt.text);
+    this.yes.setText(prompt.yes);
+    this.no.setText(prompt.no);
     for (const object of [this.shade, this.text, this.yes, this.no]) object.setVisible(true);
   }
   accept(): void {

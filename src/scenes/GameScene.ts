@@ -52,6 +52,7 @@ import { PerfOverlay } from '../ui/PerfOverlay';
 import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
 import { StoryChoice } from '../ui/StoryChoice';
+import { HOME_BED_SPOT, REST_POINTS, REST_SAVE_KEY, canRest, parseRestPoint, serializeRestPoint, type RestPointId } from '../story/restPoints';
 import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, isDusk, raidSpawns, INSPECTION_LINES } from '../story/chapterOne';
 import {
   currentObjective, MARKER_PRIORITY, QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestMarker, type QuestState,
@@ -200,6 +201,9 @@ export class GameScene extends Phaser.Scene {
     this.resetState();
     // 맵: 넘겨받은 값 → (개발 빌드) 주소의 ?map= → 지금 맵 순서로 정한다.
     const fromUrl = import.meta.env.DEV ? new URLSearchParams(location.search).get('map') : null;
+    // 처음 화면에서 시작할 때는 마지막으로 쉰 곳(여관·시온의 집)에서 시작한다. 쉰 적이 없으면 시온의 집 앞.
+    const rested = data.fromTitle && !data.map ? this.loadRestPoint() : undefined;
+    if (rested) { data.map = rested.map; data.at = { ...rested.at }; }
     if (isMapId(data.map)) this.mapId = data.map;
     else if (isMapId(fromUrl)) this.mapId = fromUrl;
     this.map = MAPS[this.mapId];
@@ -479,7 +483,9 @@ export class GameScene extends Phaser.Scene {
       defs = [...defs, ...stressNpcs(this.stressCount, defs, Math.random, b, (x, y) => area.contains(x, y) && !findExit(this.map, x, y))];
     }
     this.npcs = defs.map((def) => new Npc(this, def));
-    this.interactables = [...this.map.interactables, ...this.npcs.map((npc) => npc.spot)];
+    this.interactables = [...this.map.interactables, ...this.npcs.map((npc) => npc.spot),
+      // 시온의 집 침대 앞: 쉬기 (저장)
+      ...(this.mapId === 'in-home' ? [{ ...HOME_BED_SPOT }] : [])];
     for (const spot of this.map.interactables) {
       if (!spot.enter) continue;
       const inside = NPCS.filter((n) => n.inside && `in-${n.inside}` === spot.enter!.to).map((n) => n.id);
@@ -1099,7 +1105,7 @@ export class GameScene extends Phaser.Scene {
     const enter = target.enter;
     // 실내에서 바깥으로 나가는 문은 "나가기"
     const leaving = enter && !enter.to.startsWith('in-');
-    this.talkButton.setLabel(leaving ? '나가기' : enter ? '들어가기' : target.id.startsWith('story-') ? '살펴보기' : '대화');
+    this.talkButton.setLabel(leaving ? '나가기' : enter ? '들어가기' : target.id.startsWith('story-') ? '살펴보기' : target.id.startsWith('rest-') ? '쉬기' : '대화');
     marker.setText(leaving ? '▼ 나가기' : enter ? `▲ ${enter.label}` : '···');
 
     if (!this.talkPressed()) return;
@@ -1117,6 +1123,11 @@ export class GameScene extends Phaser.Scene {
     if (!confirmed && target.id === 'npc-rosetta' && festival?.status === 'active') {
       this.clearAttackInput();
       this.storyChoice?.open(() => this.openDialogue(target, true));
+      return;
+    }
+    if (target.id === HOME_BED_SPOT.id) {
+      this.clearAttackInput();
+      this.rest('home');
       return;
     }
     if (target.id.startsWith('story-')) {
@@ -1156,6 +1167,13 @@ export class GameScene extends Phaser.Scene {
       }
       // 메리나와의 평소 대화가 끝나면 잡화점을 연다.
       if (!quest && target.id === 'npc-merina') this.openItemPanel('shop');
+      // 로제타와의 평소 대화가 끝나면 쉬어 갈지 묻는다 (습격의 밤에는 묻지 않는다).
+      if (!quest && target.id === 'npc-rosetta' && canRest(this.quests)) {
+        this.storyChoice?.open(() => this.rest('inn'), {
+          text: '여관에서 쉬어 갈까요?\n체력이 모두 회복되고,\n다음에 시작할 때 여관에서 이어집니다.',
+          yes: '쉬어 가기 [Enter]', no: '괜찮아요 [Esc]',
+        });
+      }
       // 대화를 넘기려고 누른 공격 키가 닫힌 뒤 공격으로 이어지지 않게 한다.
       this.clearAttackInput();
       this.dodgeButton.consumePress();
@@ -1165,6 +1183,30 @@ export class GameScene extends Phaser.Scene {
         this.travel({ to: 'village', arrive: at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: at });
       }
     });
+  }
+
+  /** 쉬기: 체력을 채우고 다음 시작 자리로 저장한다. */
+  private rest(id: RestPointId): void {
+    if (!canRest(this.quests)) {
+      this.hud.showCallout('지금은 쉴 때가 아니야');
+      return;
+    }
+    this.player.setMaxHp(this.player.maxHp, true);
+    this.drawHud();
+    try {
+      this.storage?.setItem(REST_SAVE_KEY, serializeRestPoint(id));
+    } catch {
+      // 저장소를 쓸 수 없으면 쉬기만 한다.
+    }
+    this.hud.showCallout(`푹 쉬었다 · 다음에는 ${REST_POINTS[id].name}에서 시작한다`);
+  }
+
+  private loadRestPoint() {
+    try {
+      return parseRestPoint(browserStorage()?.getItem(REST_SAVE_KEY) ?? null);
+    } catch {
+      return undefined;
+    }
   }
 
   // ---------------------------------------------------------------- 퀘스트와 미니맵
