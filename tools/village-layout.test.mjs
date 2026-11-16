@@ -43,7 +43,7 @@ test('건물 벽은 서로 겹치지 않고, 건물 그림은 맵 안에 있다'
 });
 
 test('남쪽 입구는 아치 기둥 사이로만 지나간다', () => {
-  const y = 1540;
+  const y = BUILDINGS.find(b => b.frame === 'south-gate').y - 20;
   for (let x = 900; x <= 1460; x += 8) {
     const open = x >= SOUTH_GATE_PASSAGE.left && x <= SOUTH_GATE_PASSAGE.right;
     assert.equal(contains(x, y), open, `x=${x}`);

@@ -1,0 +1,25 @@
+{
+  "frames": [
+    {
+      "name": "wall-horizontal",
+      "x": 2,
+      "y": 2,
+      "w": 448,
+      "h": 141
+    },
+    {
+      "name": "wall-vertical",
+      "x": 454,
+      "y": 2,
+      "w": 96,
+      "h": 252
+    },
+    {
+      "name": "gatepost",
+      "x": 554,
+      "y": 2,
+      "w": 160,
+      "h": 294
+    }
+  ]
+}

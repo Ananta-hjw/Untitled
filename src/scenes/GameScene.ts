@@ -1273,8 +1273,11 @@ export class GameScene extends Phaser.Scene {
       }
       if (!quest && target.id === 'npc-rosetta' && canRest(this.quests)) {
         this.storyChoice?.open(() => this.rest('inn'), {
-          text: '여관에서 쉬어 갈까요?\n체력이 모두 회복되고,\n다음에 시작할 때 여관에서 이어집니다.',
-          yes: '쉬어 가기 [Enter]', no: '괜찮아요 [Esc]',
+          title: '여관에서 쉬어 가기',
+          text: '로제타가 준비한 방에서 잠시 쉬어 가세요.',
+          summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  로웬 마을 여관`,
+          hint: '휴식은 무료이며 퀘스트 진행과 시간대는 바뀌지 않습니다.',
+          yes: '쉬어 가기', no: '돌아가기',
         });
       }
       // 대화를 넘기려고 누른 공격 키가 닫힌 뒤 공격으로 이어지지 않게 한다.
@@ -1547,17 +1550,27 @@ export class GameScene extends Phaser.Scene {
     if (action.type === 'use') {
       // 가방에서 쓸 때는 재사용 대기 시간을 따지지 않는다 (게임이 멈춰 있다).
       this.nextUseAt = 0;
-      if (!this.useHealItem(action.id)) this.hud.showCallout(this.player.hp >= this.player.maxHp ? '체력이 가득하다' : '쓸 수 없다');
+      const before = this.player.hp;
+      const used = this.useHealItem(action.id);
+      this.itemPanel?.setStatus(used ? `${ITEMS[action.id].name} 사용 · 체력 +${this.player.hp - before}`
+        : this.player.hp >= this.player.maxHp ? '체력이 가득 차 있어요. 물품은 사용하지 않았습니다.' : '지금은 이 물품을 사용할 수 없어요.', !used);
       this.itemPanel?.refresh(this.inventory);
       return;
     }
     if (action.type === 'buy') next = buy(this.inventory, action.id);
     if (action.type === 'sell') next = sell(this.inventory, action.id);
-    if (!next) return;
+    if (!next) {
+      this.itemPanel?.setStatus('거래할 수 없어요. 골드와 보유 수량을 확인해 주세요.', true);
+      return;
+    }
     this.inventory = next;
     this.saveInventory();
     this.refreshInventory();
     this.itemPanel?.refresh(this.inventory);
+    const item = ITEMS[action.id];
+    this.itemPanel?.setStatus(action.type === 'buy'
+      ? `${item.name} 1개 구매 · −${item.price} G`
+      : `${item.name} 1개 판매 · +${item.sellPrice} G`);
   }
 
   /** HUD의 골드와 물약 버튼 숫자를 맞춘다. */

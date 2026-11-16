@@ -1,52 +1,118 @@
 import Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 
-/** 예/아니오 선택 (축제 전야 시작, 여관에서 쉬어 가기 등). 열려 있는 동안 게임은 멈춘다. */
-export interface ChoicePrompt { text: string; yes: string; no: string }
-
+/** 확인 대화창. 휴식 효과와 다음 시작 위치를 본 뒤 선택한다. 게임 시간은 멈춘다. */
+export interface ChoicePrompt { title?: string; text: string; yes: string; no: string; summary?: string; hint?: string }
 const FESTIVAL: ChoicePrompt = {
+  title: '축제 전야',
   text: '축제 전야를 시작할까요?\n잔치가 끝나면 밤으로 넘어갑니다.\n남은 마을 의뢰와 탐색은 먼저 마쳐도 좋습니다.',
-  yes: '잔치 시작 [Enter]', no: '조금 더 둘러보기 [Esc]',
+  yes: '잔치 시작', no: '더 둘러보기',
+  hint: '준비가 끝났다면 잔치에 참여하세요.',
 };
 
 export class StoryChoice {
   private readonly shade: Phaser.GameObjects.Rectangle;
+  private readonly panel: Phaser.GameObjects.Graphics;
+  private readonly title: Phaser.GameObjects.Text;
   private readonly text: Phaser.GameObjects.Text;
+  private readonly summary: Phaser.GameObjects.Text;
+  private readonly hint: Phaser.GameObjects.Text;
   private readonly yes: Phaser.GameObjects.Text;
   private readonly no: Phaser.GameObjects.Text;
+  private readonly scene: Phaser.Scene;
   private callback?: () => void;
+  private width = 0;
+  private hasSummary = false;
 
   constructor(scene: Phaser.Scene, private readonly onClose: () => void) {
-    const style = { fontFamily: 'system-ui, sans-serif', fontSize: '25px', color: '#fff2d4', align: 'center' as const };
-    this.shade = scene.add.rectangle(0, 0, 10, VIEW_HEIGHT, 0x080c12, 0.92).setOrigin(0).setScrollFactor(0).setDepth(DEPTH_UI + 60).setInteractive();
-    this.text = scene.add.text(0, 220, '축제 전야를 시작할까요?\n잔치가 끝나면 밤으로 넘어갑니다.\n남은 마을 의뢰와 탐색은 먼저 마쳐도 좋습니다.', { ...style, lineSpacing: 14 }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH_UI + 61);
-    this.yes = scene.add.text(0, 365, '잔치 시작 [Enter]', { ...style, backgroundColor: '#765321', padding: { x: 22, y: 16 } }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH_UI + 61).setInteractive({ useHandCursor: true }).on('pointerup', () => this.accept());
-    this.no = scene.add.text(0, 455, '조금 더 둘러보기 [Esc]', { ...style, backgroundColor: '#30443b', padding: { x: 22, y: 16 } }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH_UI + 61).setInteractive({ useHandCursor: true }).on('pointerup', () => this.cancel());
+    this.scene = scene;
+    this.shade = scene.add.rectangle(0, 0, 10, VIEW_HEIGHT, 0x050e0b, 0.72).setOrigin(0).setScrollFactor(0)
+      .setDepth(DEPTH_UI + 60).setInteractive();
+    this.panel = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH_UI + 61);
+    this.title = this.label('', 34, '#f7ebd0');
+    this.text = this.label('', 24, '#d3dfd5').setLineSpacing(14);
+    this.summary = this.label('', 25, '#f3e4be').setLineSpacing(24);
+    this.hint = this.label('', 19, '#b8cbbd');
+    this.yes = this.button(() => this.accept(), true);
+    this.no = this.button(() => this.cancel(), false);
     this.hide();
   }
 
   get isOpen(): boolean { return this.callback !== undefined; }
+
   open(callback: () => void, prompt: ChoicePrompt = FESTIVAL): void {
     this.callback = callback;
+    this.hasSummary = !!prompt.summary;
+    this.title.setText(prompt.title ?? '확인');
     this.text.setText(prompt.text);
+    this.summary.setText(prompt.summary ?? '');
+    this.hint.setText(prompt.hint ?? '선택 후 계속 진행합니다.');
     this.yes.setText(prompt.yes);
     this.no.setText(prompt.no);
-    for (const object of [this.shade, this.text, this.yes, this.no]) object.setVisible(true);
+    for (const object of this.objects()) object.setVisible(true);
+    this.summary.setVisible(this.hasSummary);
+    this.layout(this.width || this.scene.scale.gameSize.width);
   }
+
   accept(): void {
     const callback = this.callback;
     if (!callback) return;
-    this.hide(); this.onClose(); callback();
+    this.hide();
+    this.onClose();
+    callback();
   }
-  cancel(): void { this.hide(); this.onClose(); }
+
+  cancel(): void {
+    if (!this.isOpen) return;
+    this.hide();
+    this.onClose();
+  }
+
   layout(width: number): void {
+    this.width = width;
     this.shade.setSize(width, VIEW_HEIGHT);
     this.shade.input?.hitArea.setSize(width, VIEW_HEIGHT);
-    for (const object of [this.text, this.yes, this.no]) object.setX(width / 2);
-    this.text.setWordWrapWidth(width - 60);
+    const w = Math.min(860, width - 80), left = (width - w) / 2, top = 88, height = 544;
+    const g = this.panel.clear();
+    g.fillStyle(0x10271f, 0.99).fillRoundedRect(left, top, w, height, 18);
+    g.lineStyle(1, 0xcbb17c, 0.95).strokeRoundedRect(left, top, w, height, 18);
+    g.lineStyle(1, 0x6b8064, 0.5).lineBetween(left + 36, top + 100, left + w - 36, top + 100);
+    this.title.setPosition(left + 36, top + 35);
+    this.text.setPosition(left + 36, top + 128).setWordWrapWidth(w - 72);
+    if (this.hasSummary) {
+      g.fillStyle(0x203b2e, 1).fillRoundedRect(left + 28, top + 210, w - 56, 144, 10);
+      this.summary.setPosition(left + 48, top + 234).setWordWrapWidth(w - 96);
+    }
+    this.hint.setPosition(left + 36, top + 385).setWordWrapWidth(w - 72);
+    const buttonWidth = (w - 88) / 2;
+    for (const button of [this.no, this.yes]) {
+      button.setFixedSize(buttonWidth, 84);
+      // 화면 너비에 맞춰 버튼을 늘릴 때 터치 영역도 함께 바꾼다.
+      button.input?.hitArea.setSize(buttonWidth, 84);
+    }
+    this.no.setPosition(left + 36, top + 432);
+    this.yes.setPosition(left + 52 + buttonWidth, top + 432);
   }
+
+  private objects(): Phaser.GameObjects.Components.Visible[] {
+    return [this.shade, this.panel, this.title, this.text, this.summary, this.hint, this.yes, this.no];
+  }
+
   private hide(): void {
     this.callback = undefined;
-    for (const object of [this.shade, this.text, this.yes, this.no]) object.setVisible(false);
+    for (const object of this.objects()) object.setVisible(false);
+  }
+
+  private label(content: string, size: number, color: string): Phaser.GameObjects.Text {
+    return this.scene.add.text(0, 0, content, {
+      fontFamily: 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif', fontSize: `${size}px`, color,
+      fontStyle: 'bold',
+    }).setScrollFactor(0).setDepth(DEPTH_UI + 62).setResolution(2);
+  }
+
+  private button(onTap: () => void, primary: boolean): Phaser.GameObjects.Text {
+    return this.label('', 26, primary ? '#1a302a' : '#f1e2c5').setFixedSize(340, 84).setAlign('center')
+      .setPadding(0, 25, 0, 0).setBackgroundColor(primary ? '#dfc18a' : '#304c3d')
+      .setInteractive({ useHandCursor: true }).on('pointerup', onTap);
   }
 }

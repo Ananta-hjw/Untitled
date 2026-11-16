@@ -805,7 +805,7 @@ test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제
     const g = window.__game;
     let s = g.scene.getScene('game');
     let t = performance.now();
-    s.player.placeAt(1180, 1440);
+    s.player.placeAt(s.map.spawn.x, s.map.spawn.y);
     const start = Object.fromEntries(s.npcs.map(n => [n.def.id, { x: n.x, y: n.y }]));
     const names = Object.fromEntries(s.npcs.map(n => [n.def.id, n.list.find(o => o.text !== undefined)?.text]));
     const visible = s.npcs.every(n => n.list.some(o => o.texture && o.texture.key !== 'shadow' && o.texture.key !== '__MISSING' && o.displayHeight > 100));
@@ -1075,7 +1075,7 @@ test('잡화점 안의 메리나에게 카운터 앞에서 말을 걸면 대화 
     const counterFront = s.map.bounds.top + counter.y;
     s.player.placeAt(merina.spot.x, merina.spot.y + 20);
     for (let i = 0; i < 3; i++) g.step(t += 16, 16);
-    const ready = { button: s.talkButton.image.visible, label: s.talkButton.text.text, behind: merina.y < counterFront - counter.d, standing: s.player.y > counterFront };
+    const ready = { button: s.talkButton.image.visible, label: s.talkButton.text.text, behind: merina.y > counterFront - counter.d && merina.y < counterFront && s.children.list.some(o => o.name === 'map-art-foreground' && o.depth > merina.depth), standing: s.player.y > counterFront };
     s.openDialogue(merina.spot);
     const name = s.dialogue.nameText.text;
     while (s.dialogue.isOpen) s.dialogue.advance();
@@ -1173,7 +1173,7 @@ test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 �
     };
     const village = { enemies: s.enemies.length, map: s.mapId };
     s.player.hurt(25);
-    const south = await travel(1180, 1540);
+    const south = await travel(1180, s.map.exits.find(e => e.to === 'south-field').zone.top + 40);
     const backFromSouth = await travel(1298, 286);
     const west = await travel(80, 1050);
     const backFromWest = await travel(2330, 1050);
@@ -1190,7 +1190,7 @@ test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 �
   assert.equal(result.south.enemies, 10);
   assert.equal(result.south.traveling, false);
   assert.equal(result.backFromSouth.map, 'village');
-  assert.deepEqual([result.backFromSouth.x, result.backFromSouth.y], [1180, 1420]);
+  assert.deepEqual([result.backFromSouth.x, result.backFromSouth.y], [1180, 1520]);
   assert.equal(result.backFromSouth.enemies, 0);
   assert.equal(result.backFromSouth.hp, 75);
   assert.equal(result.west.map, 'west-forest');
@@ -1606,4 +1606,107 @@ test('여관의 로제타에게 쉬어 가거나 집 침대에서 쉬면 체력�
   const resumed = await evaluate(`(() => { const s = window.__game.scene.getScene('game'); return { map: s.mapId, walkable: s.walkArea.contains(s.player.x, s.player.y) }; })()`);
   assert.deepEqual(resumed, { map: 'in-home', walkable: true });
   await evaluate(`localStorage.removeItem('untitled-rpg.rest'); window.__game.loop.sleep()`);
+});
+
+
+test('잡화점 구매·판매 탭은 한 개씩 거래하고 부족·한도를 막으며 거래 결과와 빈 상태를 보여 준다', async () => {
+  await load('in-store');
+  const result=await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'),m=s.itemPanel;
+    const saved=localStorage.getItem('untitled-rpg.inventory');
+    s.inventory={gold:79,items:{potion:3,lunch:1,'slime-gel':6}};
+    s.openItemPanel('shop');
+    const objects=s.children.list.length, buyRows=m.visibleRows;
+    m.rows[0].button.emit('pointerup');
+    const bought={gold:s.inventory.gold,count:s.inventory.items.potion,status:m.status.text};
+    m.sellTab.emit('pointerup');const sellRows=m.visibleRows;
+    m.rows[2].button.emit('pointerup');
+    const sold={gold:s.inventory.gold,count:s.inventory.items['slime-gel'],status:m.status.text};
+    const bounds=[];
+    for(const width of [960,1280,1728]){
+      m.layout(width);
+      bounds.push(m.rows.every(r=>!r.name.visible||(r.stock.getBounds().right<r.button.getBounds().left&&r.button.getBounds().right<width&&r.button.getBounds().bottom<m.status.getBounds().top)));
+    }
+    m.layout(s.scale.gameSize.width);
+    s.inventory={gold:0,items:{}};m.refresh(s.inventory);m.buyTab.emit('pointerup');
+    const blocked={enabled:!!m.rows[0].button.input.enabled,reason:m.rows[0].stock.text};
+    m.rows[0].button.emit('pointerup');const noPurchase=s.inventory.gold===0&&!s.inventory.items.potion;
+    s.inventory={gold:100,items:{potion:99}};m.refresh(s.inventory);
+    const full={enabled:!!m.rows[0].button.input.enabled,reason:m.rows[0].stock.text};
+    m.rows[0].button.emit('pointerup');const noOverflow=s.inventory.gold===100&&s.inventory.items.potion===99;
+    s.inventory={gold:999999,items:{potion:1}};m.refresh(s.inventory);m.sellTab.emit('pointerup');
+    const goldCap=!m.rows[0].button.input.enabled;
+    s.inventory={gold:0,items:{}};m.refresh(s.inventory);
+    const empty=m.empty.visible&&m.visibleRows===0&&m.empty.text.includes('판매할');
+    for(let i=0;i<5;i++){m.buyTab.emit('pointerup');m.sellTab.emit('pointerup');}
+    const reused=s.children.list.length===objects;
+    const now=s.now;s.update(0,50);const frozen=s.now===now;
+    m.closeButton.emit('pointerup');
+    if(saved===null)localStorage.removeItem('untitled-rpg.inventory');else localStorage.setItem('untitled-rpg.inventory',saved);
+    return {buyRows,sellRows,bought,sold,bounds,blocked,noPurchase,full,noOverflow,goldCap,empty,reused,frozen,closed:!m.isOpen};
+  })()`);
+  assert.equal(result.buyRows,2);assert.equal(result.sellRows,3);
+  assert.deepEqual([result.bought.gold,result.bought.count],[59,4]);assert.match(result.bought.status,/구매/);
+  assert.deepEqual([result.sold.gold,result.sold.count],[63,5]);assert.match(result.sold.status,/판매/);
+  assert.ok(result.bounds.every(Boolean));assert.equal(result.blocked.enabled,false);assert.match(result.blocked.reason,/골드/);
+  assert.equal(result.full.enabled,false);assert.match(result.full.reason,/가득/);
+  for(const key of ['noPurchase','noOverflow','goldCap','empty','reused','frozen','closed'])assert.equal(result[key],true,key);
+});
+
+test('여관 휴식 창은 회복량·다음 위치를 보여 주고 취소 시 유지하며 확인 시 한 번만 회복·저장한다', async () => {
+  await load('in-inn');
+  const result=await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'),m=s.storyChoice;
+    localStorage.removeItem('untitled-rpg.rest');s.quests={};s.player.hp=10;
+    const n=s.npcs.find(n=>n.def.id==='rosetta');
+    const ask=()=>{s.openDialogue(n.spot);while(s.dialogue.isOpen)s.dialogue.advance();};
+    ask();const summary=m.summary.text, title=m.title.text;
+    const now=s.now;s.update(0,50);const frozen=s.now===now;
+    const bounds=[];
+    for(const width of [960,1280,1728]){
+      m.layout(width);const a=m.no.getBounds(),b=m.yes.getBounds();
+      bounds.push(a.left>=0&&a.right<b.left&&b.right<=width&&a.bottom<=720&&b.bottom<=720&&m.summary.getBounds().bottom<m.hint.y);
+    }
+    m.layout(s.scale.gameSize.width);m.no.emit('pointerup');
+    const cancelled=!m.isOpen&&s.player.hp===10&&localStorage.getItem('untitled-rpg.rest')===null;
+    ask();m.yes.emit('pointerup');
+    const accepted=!m.isOpen&&s.player.hp===s.player.maxHp&&JSON.parse(localStorage.getItem('untitled-rpg.rest')).point==='inn';
+    s.player.hp=10;m.accept();const once=s.player.hp===10;
+    localStorage.removeItem('untitled-rpg.rest');
+    return {summary,title,frozen,bounds,cancelled,accepted,once};
+  })()`);
+  assert.match(result.title,/여관/);assert.match(result.summary,/10 \/ /);assert.match(result.summary,/다음 시작 위치/);
+  assert.ok(result.bounds.every(Boolean));
+  for(const key of ['frozen','cancelled','accepted','once'])assert.equal(result[key],true,key);
+});
+
+test('마을 돌담은 긴 이동·회피 거리도 막고 세 문은 통과하며 지도와 미니맵에도 표시된다', async () => {
+  await load('village');
+  const plaza=await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game');
+    const out={x:0,y:0,set(x,y){this.x=x;this.y=y;return this;}};
+    const move=(x,y,dx,dy)=>{s.walkArea.move(x,y,dx,dy,out);return {x:out.x,y:out.y};};
+    const west=move(200,700,-400,0),east=move(2230,750,500,0),south=move(800,1580,0,400);
+    const gates=[move(200,1050,-100,0),move(2180,1050,120,0),move(1180,1520,0,100)];
+    const wallCount=s.children.list.filter(o=>o.name==='village-wall').length;
+    const posts=s.children.list.filter(o=>o.name==='village-gate-west'||o.name==='village-gate-east').length;
+    s.openWorldMap();
+    const shared=s.worldMap.preview.key===s.minimap.preview.key;
+    s.worldMap.close();
+    return {west,east,south,gates,wallCount,posts,shared};
+  })()`);
+  assert.ok(plaza.west.x>=136&&plaza.west.x<150);
+  assert.ok(plaza.east.x<=2266&&plaza.east.x>2250);
+  assert.ok(plaza.south.y<=1656&&plaza.south.y>1640);
+  for (const [i, expected] of [{x:100,y:1050},{x:2300,y:1050},{x:1180,y:1620}].entries()) {
+    assert.ok(Math.hypot(plaza.gates[i].x-expected.x,plaza.gates[i].y-expected.y)<1e-6);
+  }
+  assert.ok(plaza.wallCount>30&&plaza.wallCount<90);assert.equal(plaza.posts,4);assert.equal(plaza.shared,true);
+  await load('village-north');
+  const north=await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'),out={x:0,y:0,set(x,y){this.x=x;this.y=y;return this;}};
+    s.walkArea.move(850,350,0,-400,out);
+    return {y:out.y,walls:s.children.list.filter(o=>o.name==='village-wall').length};
+  })()`);
+  assert.ok(north.y>=254&&north.y<270);assert.ok(north.walls>30);
 });

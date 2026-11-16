@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config';
+import perimeter from '../assets/village/rowen/perimeter.webp?url';
+import perimeterFrames from '../assets/village/rowen/perimeter.json';
+import { PERIMETER_TEXTURE, perimeterPieces } from './villagePerimeter';
 import ground from '../assets/village/ground.png?url';
 import buildings from '../assets/village/rowen/buildings.webp?url';
 import buildingFrames from '../assets/village/rowen/buildings.json';
@@ -14,6 +17,7 @@ const FONT = 'system-ui, "Noto Sans KR", sans-serif';
 
 export function preloadVillage(scene: Phaser.Scene, map: GameMap): void {
   preloadMapArt(scene, map);
+  if (perimeterPieces(map.id).length && !scene.textures.exists(PERIMETER_TEXTURE)) scene.load.image(PERIMETER_TEXTURE, perimeter);
   for (const [key, url] of [['village-ground', ground], ['village-buildings', buildings], ['village-props', props]]) {
     if (!scene.textures.exists(key)) scene.load.image(key, url);
   }
@@ -47,6 +51,12 @@ export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
     if (map.water) drawWater(scene, map.water.top, map.water.bottom);
   }
 
+  if (perimeterPieces(map.id).length) {
+    const texture = scene.textures.get(PERIMETER_TEXTURE);
+    for (const f of perimeterFrames.frames) if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
+    for (const p of perimeterPieces(map.id)) scene.add.image(p.x, p.y, PERIMETER_TEXTURE, p.frame)
+      .setOrigin(.5, 1).setDisplaySize(p.width, p.height).setDepth(p.y).setName(p.name);
+  }
   for (const p of map.props) {
     const image = scene.add.image(p.x, p.y, 'village-props', p.frame).setOrigin(.5, 1).setDepth(p.y);
     image.setScale(p.width / image.width);

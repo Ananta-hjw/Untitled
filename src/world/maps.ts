@@ -1,3 +1,4 @@
+import { VILLAGE_GATES, perimeterObstacles } from './villagePerimeter.ts';
 import type { EnemyKey } from '../combat/monsterTypes.ts';
 import { FIELD_BOUNDS, FIELD_OBSTACLES, FIELD_POLYGON, insidePolygon } from './southFieldLayout.ts';
 import { MAP_SIZE_SCALE, WORLD_HEIGHT, WORLD_WIDTH } from '../config.ts';
@@ -116,8 +117,8 @@ const VILLAGE: GameMap = {
     { to: 'village-north', zone: { left: VILLAGE_LINK.left, top: 0, right: VILLAGE_LINK.right, bottom: 270 },
       arrive: { x: LINK_X, y: 1440 }, label: '▲ 마을 북쪽 (집)', labelAt: { x: LINK_X, y: 300 } },
     // 남쪽 입구 아치의 두 기둥 사이로 나간다.
-    { to: 'south-field', zone: { left: SOUTH_GATE_PASSAGE.left, top: 1500, right: SOUTH_GATE_PASSAGE.right, bottom: WORLD_HEIGHT },
-      arrive: fieldPoint(1180, 420), label: '▼ 남쪽 들판', labelAt: { x: 1181, y: 1478 } },
+    { to: 'south-field', zone: { left: SOUTH_GATE_PASSAGE.left, top: VILLAGE_GATES.south.y, right: SOUTH_GATE_PASSAGE.right, bottom: WORLD_HEIGHT },
+      arrive: fieldPoint(1180, 420), label: '▼ 남쪽 들판', labelAt: { x: 1181, y: VILLAGE_GATES.south.y - 22 } },
     { to: 'west-forest', zone: { left: 0, top: 940, right: 112, bottom: 1160 },
       arrive: { x: 2150, y: 1050 }, label: '◀ 서쪽 숲길', labelAt: { x: 150, y: 1000 } },
     { to: 'east-stream', zone: { left: 2290, top: 960, right: WORLD_WIDTH, bottom: 1140 },
@@ -146,7 +147,7 @@ const SOUTH_FIELD: GameMap = {
   ],
   exits: [
     { to: 'village', zone: { left: 1040 * MAP_SIZE_SCALE, top: 0, right: 1320 * MAP_SIZE_SCALE, bottom: 290 * MAP_SIZE_SCALE },
-      arrive: { x: 1180, y: 1420 }, label: '▲ 로웬 마을', labelAt: fieldPoint(1180, 262) },
+      arrive: { x: 1180, y: VILLAGE_GATES.south.y - 80 }, label: '▲ 로웬 마을', labelAt: fieldPoint(1180, 262) },
   ],
   interactables: [southSign.spot],
 };
@@ -287,7 +288,7 @@ export function isMapId(value: unknown): value is MapId {
 /** 맵의 장애물: 건물의 벽(마을만), 소품의 바닥 접점, 실내 가구 */
 export function mapObstacles(map: GameMap): Obstacle[] {
   return [
-    ...buildingObstacles(map.buildings), ...propObstacles(map.props), ...(map.obstacles ?? []),
+    ...buildingObstacles(map.buildings), ...propObstacles(map.props), ...perimeterObstacles(map.id), ...(map.obstacles ?? []),
     ...(map.interior ? furnitureObstacles(map.interior) : []),
   ];
 }
