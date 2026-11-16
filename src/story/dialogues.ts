@@ -22,10 +22,6 @@ export const HERO_NAME = '시온';
 const hero = (text: string): DialogueLine => ({ speaker: HERO_NAME, portrait: 'hero-neutral', text });
 
 export const DIALOGUES = {
-  'home-door': [
-    { speaker: HERO_NAME, portrait: 'hero-neutral', text: '우리 집이다. 문 앞 돌계단은 오늘도 반질반질하네.' },
-    { speaker: HERO_NAME, portrait: 'hero-neutral', text: '요즘 들판에 슬라임이 늘었다고 했지. 한 바퀴 둘러보고 오자.' },
-  ],
   'village-sign': [
     { speaker: '표지판', text: '로웬 마을 광장\n북쪽: 집들 · 남쪽: 들판 · 서쪽: 숲길 · 동쪽: 개울가' },
     { speaker: HERO_NAME, portrait: 'hero-neutral', text: '표지판에 누가 수확제 리본을 묶어 놨네. 리네아 솜씨다.' },

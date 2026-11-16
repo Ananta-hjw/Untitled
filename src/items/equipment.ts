@@ -23,7 +23,7 @@ export const SLOT_INFO: Record<SlotId, { name: string; kind: GearKind }> = {
 };
 
 export type GearId =
-  | 'wooden-sword' | 'iron-sword' | 'cloth-hood' | 'worn-tunic' | 'leather-armor'
+  | 'wooden-sword' | 'short-sword' | 'long-sword' | 'iron-sword' | 'cloth-hood' | 'worn-tunic' | 'leather-armor'
   | 'leather-gloves' | 'light-boots' | 'clover-charm' | 'blue-bead';
 
 export interface GearDef {
@@ -39,7 +39,11 @@ export interface GearDef {
 
 export const GEAR: Record<GearId, GearDef> = {
   'wooden-sword': { id: 'wooden-sword', name: '나무검', description: '수련소에서 쓰던 나무검. 손에 익었다.', kind: 'weapon', stats: { str: 1 }, sellPrice: 5 },
-  'iron-sword': { id: 'iron-sword', name: '철검', description: '도란이 두들긴 튼튼한 검.', kind: 'weapon', stats: { str: 4 }, price: 300, sellPrice: 120 },
+  // 대장간에서 살 수 있는 검. 나무검보다 낫고 철검보다는 약하다.
+  'short-sword': { id: 'short-sword', name: '짧은 검', description: '나무검보다 훨씬 나은 짧은 검.', kind: 'weapon', stats: { str: 2 }, price: 150, sellPrice: 60 },
+  'long-sword': { id: 'long-sword', name: '긴 검', description: '날이 길고 묵직한 검. 손에 익히기 어렵다.', kind: 'weapon', stats: { str: 4 }, price: 350, sellPrice: 140 },
+  // 철검은 팔지 않는다. 습격 뒤 도란이 "처음으로 제대로 된 검"으로 건넨다(메인 퀘스트 첫 진짜 검).
+  'iron-sword': { id: 'iron-sword', name: '철검', description: '도란이 밤새 두들겨 건넨 첫 진짜 검.', kind: 'weapon', stats: { str: 6 }, sellPrice: 200 },
   'cloth-hood': { id: 'cloth-hood', name: '천 두건', description: '햇볕과 먼지를 막아 준다.', kind: 'head', stats: { def: 1, vit: 1 }, price: 80, sellPrice: 30 },
   'worn-tunic': { id: 'worn-tunic', name: '낡은 수련복', description: '수련소에서 입던 옷.', kind: 'body', stats: { def: 1 }, sellPrice: 5 },
   'leather-armor': { id: 'leather-armor', name: '가죽 갑옷', description: '두꺼운 가죽을 덧댄 갑옷.', kind: 'body', stats: { def: 3, vit: 2 }, price: 260, sellPrice: 100 },
@@ -112,6 +116,11 @@ export function gearBonus(gear: Gear): Partial<StatBlock> {
     for (const [stat, value] of Object.entries(GEAR[id].stats) as [StatId, number][]) out[stat] = (out[stat] ?? 0) + value;
   }
   return out;
+}
+
+/** 받은 장비를 가방에 넣는다 (퀘스트 보상) */
+export function addGear(gear: Gear, id: GearId, count = 1): Gear {
+  return addBag(gear, id, count);
 }
 
 /** 산다. 골드가 모자라거나 팔지 않거나 가득하면 null */

@@ -68,10 +68,11 @@ export const INSPECTION_LINES: Record<string, DialogueLine[]> = {
   ],
   'story-north-alley': [
     { speaker: '시온', portrait: 'hero-neutral', text: '리네아의 등불이 깨진 채 떨어져 있어. 그 옆에… 시아의 머리끈.' },
-    { speaker: '시온', portrait: 'hero-neutral', text: '둘이 여기 있었던 거야. 에일라가 다친 사람들을 광장으로 옮기고 있다고 했지. 가 보자.' },
+    { speaker: '시온', portrait: 'hero-neutral', text: '둘이 여기 있었던 거야. 다친 사람들은 광장으로 모이고 있다고 했지. 에일라라면 알 거야.' },
   ],
   'story-home-search': [
-    { speaker: '시온', portrait: 'hero-neutral', text: '시아야? …대답이 없어. 집 안에도 돌아온 흔적이 없고. 리네아라면 마지막으로 시아를 봤을 텐데… 에일라에게 가 보자.' },
+    { speaker: '시온', portrait: 'hero-neutral', text: '시아야? …대답이 없어. 집 안이 엉망이야… 시아가 다녀갔는지도 모르겠어.' },
+    { speaker: '시온', portrait: 'hero-neutral', text: '리네아라면 마지막으로 시아를 봤을 텐데… 에일라에게 가 보자.' },
   ],
 };
 
@@ -123,9 +124,15 @@ export function chapterDialogue(npc: NpcId, state: QuestState): DialogueLine[] |
   if (phase === 'day') return undefined;
   if (isGuardId(npc)) {
     const guard = GUARDS.find(g => g.id === npc);
-    return guard ? [{ speaker: guard.name, portrait: 'soldier', text: phase === 'raid'
-      ? '주민들이 대피할 길을 확보하고 있습니다. 위험하니 마물 가까이에서는 조심하세요!'
-      : '다친 주민들을 살피고 경비를 다시 세우고 있습니다. 도움이 필요하면 말씀하세요.' }] : undefined;
+    if (!guard) return undefined;
+    // 남문은 테온이 맡던 자리다. 잔치 날 밤 남문 병사들은 테온의 지휘 아래 있었고, 입구는 뚫렸다.
+    const south = guard.gate === 'south';
+    const text = phase === 'raid'
+      ? south ? '테온 대장님과 막고 있었는데… 놈들이 너무 많습니다! 마을 안쪽을 부탁드립니다!'
+        : '주민들이 대피할 길을 확보하고 있습니다. 위험하니 마물 가까이에서는 조심하세요!'
+      : south ? '그날 밤 남문은 테온 대장님과 저희가 지켰습니다. …막아 내지 못했어요. 대장님은 혼자 다 짊어지려 하시고요.'
+        : '다친 주민들을 살피고 경비를 다시 세우고 있습니다. 도움이 필요하면 말씀하세요.';
+    return [{ speaker: guard.name, portrait: 'soldier', text }];
   }
   const texts: Partial<Record<NpcId, string>> = {
     ruan: '조금만 쉬면 괜찮아질 거다. 넌 네가 해야 할 일을 하렴. 다만 혼자 감당하려 들진 말고.',

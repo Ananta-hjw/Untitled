@@ -21,7 +21,7 @@ test('모든 대상의 대사가 있고, 대사는 비어 있지 않다', () => 
 });
 
 test('대상 근처에서만 찾고, 여러 개가 닿으면 가장 가까운 것을 고른다', () => {
-  const a = { id: 'a', x: 0, y: 0, radius: 100, markerHeight: 0, dialogue: 'home-door' };
+  const a = { id: 'a', x: 0, y: 0, radius: 100, markerHeight: 0, dialogue: 'npc-ruan' };
   const b = { id: 'b', x: 150, y: 0, radius: 100, markerHeight: 0, dialogue: 'village-sign' };
   assert.equal(findInteractable(0, 0, [a, b])?.id, 'a');
   assert.equal(findInteractable(90, 0, [a, b])?.id, 'b');

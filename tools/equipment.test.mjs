@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GEAR, GEAR_IDS, SLOT_IDS, buyGear, equip, gearBonus, sellGear, slotFor, startingGear, unequip } from '../src/items/equipment.ts';
+import { GEAR, GEAR_IDS, SLOT_IDS, addGear, buyGear, equip, gearBonus, sellGear, slotFor, startingGear, unequip } from '../src/items/equipment.ts';
 import { CHARACTER_SAVE_VERSION, newCharacter, parseCharacter, serializeCharacter } from '../src/entities/characterData.ts';
 import { allocate, zeroStats } from '../src/entities/attributes.ts';
 
@@ -12,8 +12,11 @@ test('장비 칸은 일곱 개이고, 처음에는 나무검과 낡은 수련복
 });
 
 test('사서 끼면 원래 장비는 가방으로 돌아가고, 벗을 수 있으며, 맞지 않는 칸에는 못 낀다', () => {
-  const bought = buyGear({ gold: 1000, items: {} }, startingGear(), 'iron-sword');
-  assert.equal(bought.inventory.gold, 1000 - GEAR['iron-sword'].price);
+  // 철검은 팔지 않고 도란이 건넨다(퀘스트 보상으로 가방에 들어온다).
+  assert.equal(buyGear({ gold: 1000, items: {} }, startingGear(), 'iron-sword'), null);
+  const bought = { gear: addGear(startingGear(), 'iron-sword') };
+  const armor = buyGear({ gold: 1000, items: {} }, startingGear(), 'leather-armor');
+  assert.equal(armor.inventory.gold, 1000 - GEAR['leather-armor'].price);
   const worn = equip(bought.gear, 'iron-sword');
   assert.equal(worn.equipped.weapon, 'iron-sword');
   assert.equal(worn.bag['wooden-sword'], 1);
@@ -23,7 +26,7 @@ test('사서 끼면 원래 장비는 가방으로 돌아가고, 벗을 수 있�
   assert.equal(bare.equipped.weapon, undefined);
   assert.equal(bare.bag['iron-sword'], 1);
   assert.equal(unequip(bare, 'weapon'), null);
-  assert.equal(buyGear({ gold: 10, items: {} }, startingGear(), 'iron-sword'), null);
+  assert.equal(buyGear({ gold: 10, items: {} }, startingGear(), 'leather-armor'), null);
   assert.equal(buyGear({ gold: 999, items: {} }, startingGear(), 'wooden-sword'), null, '나무검은 팔지 않는다');
   const sold = sellGear({ gold: 0, items: {} }, bare, 'iron-sword');
   assert.equal(sold.inventory.gold, GEAR['iron-sword'].sellPrice);
@@ -53,4 +56,17 @@ test('상태·장비 저장은 그대로 읽고, 깨진 값이나 받을 수 없
 test('예전 저장의 연습용 검은 나무검으로 읽는다', () => {
   const old = JSON.stringify({ version: CHARACTER_SAVE_VERSION, alloc: {}, gear: { bag: { 'practice-sword': 1 }, equipped: { weapon: 'practice-sword' } } });
   assert.deepEqual(parseCharacter(old, 1).gear, { bag: { 'wooden-sword': 1 }, equipped: { weapon: 'wooden-sword' } });
+});
+
+test('대장간의 짧은 검·긴 검은 살 수 있고 나무검 < 짧은 검 < 긴 검 < 철검 순으로 강하다. 철검은 살 수 없다', () => {
+  const bought = buyGear({ gold: 200, items: {} }, startingGear(), 'short-sword');
+  assert.equal(bought.inventory.gold, 200 - GEAR['short-sword'].price);
+  assert.ok(GEAR['wooden-sword'].stats.str < GEAR['short-sword'].stats.str);
+  assert.ok(GEAR['short-sword'].stats.str < GEAR['long-sword'].stats.str);
+  assert.ok(GEAR['long-sword'].stats.str < GEAR['iron-sword'].stats.str);
+  assert.equal(GEAR['long-sword'].stats.str, 4);
+  assert.equal(GEAR['iron-sword'].stats.str, 6);
+  assert.ok(buyGear({ gold: 1000, items: {} }, startingGear(), 'long-sword'));
+  assert.equal(GEAR['iron-sword'].price, undefined);
+  assert.equal(buyGear({ gold: 99999, items: {} }, startingGear(), 'iron-sword'), null);
 });

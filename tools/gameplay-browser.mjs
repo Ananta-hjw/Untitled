@@ -1295,12 +1295,15 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     const searchRestored = s.interactables.some(p => p.id === 'story-home-search');
     inspect('story-home-search'); talk('eila'); talk('herman');
     await restart('village'); talk('vernel');
+    // 첫 진짜 검: 도란이 철검을 건넨다(가방에 들어온다).
+    await restart('in-smithy'); talk('doran'); s.characterPanel.close();
+    const sword = s.character.gear.bag['iron-sword'] ?? 0;
     await restart('village');
     const complete = QUESTS.filter(q => q.main).every(q => s.quests[q.id]?.status === 'done');
     const tracker = s.questTracker.text.text;
     localStorage.removeItem('untitled-rpg.quests');
     await restart('village');
-    return { migrated, harvest, moths, patrolMarker, choice, frozen, cancelled, raid, battle, noRespawn, wave2, wave3, aftermath, searchMarker, searchRestored, complete, tracker };
+    return { sword, migrated, harvest, moths, patrolMarker, choice, frozen, cancelled, raid, battle, noRespawn, wave2, wave3, aftermath, searchMarker, searchRestored, complete, tracker };
   })()`);
   assert.equal(result.migrated, 'active');
   assert.equal(result.harvest, 'done');
@@ -1318,6 +1321,7 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
   assert.equal(result.searchMarker, 1);
   assert.equal(result.searchRestored, true);
   assert.equal(result.complete, true);
+  assert.equal(result.sword, 1);
   assert.equal(result.tracker, '');
 });
 
@@ -1559,31 +1563,35 @@ test('캐릭터 창: 포인트로 능력치를 올리고, 도란에게 장비를
       while (s.dialogue.isOpen) s.dialogue.advance();
     }
     const smithy = s.characterPanel.isOpen && s.characterPanel.mode === 'smithy';
-    s.tradeGear('iron-sword', 'buy');
+    // 철검은 팔지 않는다(습격 뒤 도란이 건넨다). 가죽 장갑을 사서 장갑 칸에 낀다.
+    const noSword = !s.characterPanel.entries.some(e => e.id === 'iron-sword');
+    s.tradeGear('leather-gloves', 'buy');
     const gold = s.inventory.gold;
     s.characterPanel.close();
     s.openCharacterPanel('equip');
+    s.characterPanel.selectSlot('hands');
     s.characterPanel.selectCell(0);
     s.characterPanel.primary();
-    const equipped = s.character.gear.equipped.weapon;
+    const equipped = s.character.gear.equipped.hands;
     s.characterPanel.close();
-    return { before, opened, frozen, vit, smithy, gold, equipped, damage: s.stats.damageMax };
+    return { before, opened, frozen, vit, smithy, noSword, gold, equipped, damage: s.stats.damageMax };
   })()`);
   assert.equal(result.opened, true);
   assert.equal(result.frozen, true);
   assert.equal(result.before.points, 6);
   assert.deepEqual(result.vit, { maxHp: result.before.maxHp + 20, points: 4 });
   assert.equal(result.smithy, true, JSON.stringify(result));
-  assert.equal(result.gold, 200);
-  assert.equal(result.equipped, 'iron-sword');
+  assert.equal(result.noSword, true);
+  assert.equal(result.gold, 410);
+  assert.equal(result.equipped, 'leather-gloves');
   assert.ok(result.damage > result.before.damage, JSON.stringify(result));
   // 다시 불러와도 분배와 장비가 남는다.
   await load('in-smithy');
   const reloaded = await evaluate(`(() => { const s = window.__game.scene.getScene('game');
-    const r = { weapon: s.character.gear.equipped.weapon, vit: s.character.alloc.vit, bag: s.character.gear.bag['wooden-sword'] };
+    const r = { hands: s.character.gear.equipped.hands, vit: s.character.alloc.vit };
     localStorage.removeItem('untitled-rpg.character'); localStorage.removeItem('untitled-rpg.save'); localStorage.removeItem('untitled-rpg.inventory'); localStorage.removeItem('untitled-rpg.quests');
     return r; })()`);
-  assert.deepEqual(reloaded, { weapon: 'iron-sword', vit: 2, bag: 1 });
+  assert.deepEqual(reloaded, { hands: 'leather-gloves', vit: 2 });
 });
 
 test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공격은 피해가 없고 적이 휘청이며 반격이 열리고, 늦거나 뒤에서 오면 그대로 맞으며, 민첩이 높으면 피하기도 한다', async () => {
@@ -2060,8 +2068,9 @@ test('캐릭터 창·장비창·대장간은 기존 아이템과 새 철검·가
   }
   assert.equal(result.cells['wooden-sword'].key,'icon:items/wooden-sword');
   assert.equal(result.cells['wooden-sword'].image,true);assert.equal(result.cells['cloth-hood'].image,false);
-  for(const [cell,id] of [[result.weapon,'iron-sword'],[result.body,'leather-armor'],[result.shop['iron-sword'],'iron-sword'],[result.shop['leather-armor'],'leather-armor']]){
+  for(const [cell,id] of [[result.weapon,'iron-sword'],[result.body,'leather-armor'],[result.shop['leather-armor'],'leather-armor']]){
     assert.equal(cell.key,'item-icons');assert.equal(cell.frame,id);assert.equal(cell.image,true);assert.equal(cell.fits,true);
   }
+  assert.equal(result.shop['iron-sword'],undefined,'철검은 대장간에서 팔지 않는다');
   assert.equal(result.reused,true);
 });

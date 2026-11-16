@@ -35,7 +35,7 @@ test('숲 이후 보고부터 서신까지 모든 메인 목표가 순서대로 
     if (result.completed) completed.push(result.completed.id);
     state = parseQuests(serializeQuests(result.state));
   }
-  assert.deepEqual(completed, ['watch-report', 'festival-supplies', 'sia-knot', 'harvest-help', 'evening-patrol', 'moth-trail', 'festival-eve', 'village-raid', 'missing-sia', 'sealed-letter']);
+  assert.deepEqual(completed, ['watch-report', 'festival-supplies', 'sia-knot', 'harvest-help', 'evening-patrol', 'moth-trail', 'festival-eve', 'village-raid', 'missing-sia', 'sealed-letter', 'first-sword']);
   assert.equal(chapterPhase(state), 'aftermath');
   assert.equal(talkTo('vernel', state), undefined, '완료 보상을 다시 받을 수 없다');
 });

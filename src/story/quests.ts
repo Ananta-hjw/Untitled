@@ -3,6 +3,7 @@ import { HERO_NAME, type DialogueLine } from './dialogues.ts';
 import type { NpcId, NamedNpcId } from '../world/npcs.ts';
 import type { MapId } from '../world/maps.ts';
 import type { ItemId } from '../items/inventory.ts';
+import type { GearId } from '../items/equipment.ts';
 
 /**
  * 퀘스트 (docs/story-chapter1.md).
@@ -15,7 +16,7 @@ import type { ItemId } from '../items/inventory.ts';
 
 export type QuestId = 'ruan-training' | 'ruan-field' | 'ruan-forest' | 'doran-gel' | 'teon-lunch'
   | 'watch-report' | 'festival-supplies' | 'sia-knot' | 'harvest-help' | 'evening-patrol' | 'moth-trail'
-  | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter';
+  | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter' | 'first-sword';
 
 /** 게임에서 일어나서 퀘스트 목표를 채우는 일 */
 export type QuestEvent =
@@ -62,6 +63,8 @@ export interface QuestDef {
   rewardXp: number;
   rewardGold?: number;
   rewardItems?: Array<{ id: ItemId; count: number }>;
+  /** 보상 장비 (가방에 들어간다) */
+  rewardGear?: GearId[];
   offer: DialogueLine[];
   /** 진행 중에 퀘스트를 준 사람에게 말을 걸면 */
   reminder: DialogueLine[];
@@ -257,7 +260,24 @@ export const QUESTS: QuestDef[] = [
     rewardXp: 25,
     offer: [line('eila', '에일라', '우선 촌장님께 가 보렴. 서신은 베르넬이 알아볼 수 있을지도 몰라.')],
     reminder: [line('eila', '에일라', '헤르만 촌장님과 베르넬에게 서신을 확인해 봐.')],
-    done: [line('vernel', '베르넬', '가능성은 있어. 다만 무너진 길부터 조사해야 해. 내가 유적에 들어갈 준비를 알아볼게.'), hero('기다릴게요. 그동안 리네아와 마을 사람들을 돌봐야겠어요.')],
+    done: [line('vernel', '베르넬', '가능성은 있어. 다만 무너진 길부터 조사해야 해. 내가 유적에 들어갈 준비를 알아볼게.'), hero('기다릴게요. 그동안 리네아와 마을 사람들을 돌봐야겠어요.'),
+      line('vernel', '베르넬', '그러고 보니 도란이 너를 찾더군. 대장간 불이 밤새 꺼지지 않았어.')],
+  },
+  {
+    id: 'first-sword', title: '첫 진짜 검', giver: 'vernel', main: true, requires: 'sealed-letter',
+    turnIn: 'doran', completeOnTarget: true,
+    objective: { label: '대장간의 도란 찾아가기', need: 1, event: 'talk', npc: 'doran' },
+    rewardXp: 20, rewardGear: ['iron-sword'],
+    offer: [line('vernel', '베르넬', '대장간에 들러 보게. 도란은 말보다 망치가 먼저인 사람이니까.')],
+    reminder: [line('vernel', '베르넬', '도란이 대장간에서 기다리고 있을 걸세.')],
+    target: [
+      line('doran', '도란', '왔냐. …앉아라, 아니 서 있어도 되고.'),
+      line('doran', '도란', '그 나무검으로는 권속을 못 벤다. 밤새 두들겼다. 받아라.'),
+      hero('이걸… 저한테요?'),
+      line('doran', '도란', '언젠가 진짜 검 한 자루 두들겨 주겠다고 했잖냐. 생각보다 일찍 오긴 했다만.'),
+      line('doran', '도란', '시아 데려와라. 리네아도 고칠 방법 찾고. 날이 무뎌지면 언제든 돌아와서 맡겨.'),
+    ],
+    done: [line('doran', '도란', '장비 창에서 무기 칸에 끼워라. 손에 익을 때까지 휘둘러 보고.')],
   },
   {
     id: 'doran-gel', title: '담금질 재료', giver: 'doran',

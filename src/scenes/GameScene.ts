@@ -32,7 +32,7 @@ import { addMana, inSpinRadius, regenMana } from '../combat/mana';
 import { DUSK_MOTH_LEVEL, levelHint, spawnLevel, xpForKill } from '../combat/monsterLevel';
 import { allocate, deriveStats, mitigate, pointsLeft, totalStats, type DerivedStats, type StatId } from '../entities/attributes';
 import { CHARACTER_SAVE_KEY, newCharacter, parseCharacter, serializeCharacter, type CharacterData } from '../entities/characterData';
-import { GEAR, SLOT_INFO, buyGear, equip, gearBonus, sellGear, unequip, type GearId } from '../items/equipment';
+import { GEAR, SLOT_INFO, addGear, buyGear, equip, gearBonus, sellGear, unequip, type GearId } from '../items/equipment';
 import { CharacterPanel, type CharacterTab, type CharacterView } from '../ui/CharacterPanel';
 import { preloadIcons } from '../ui/icons';
 import { dodgeDistanceRatio, lungeProgress, locomotionRate } from '../entities/movement';
@@ -1383,7 +1383,7 @@ export class GameScene extends Phaser.Scene {
       if (quest?.completed) {
         this.hud.showCallout(`퀘스트 완료: ${quest.completed.title}${quest.next ? ` → ${quest.next.title}` : ''}`);
         this.gainXp(quest.completed.rewardXp, player.x, player.y - 185);
-        this.giveRewards(quest.completed.rewardGold ?? 0, quest.completed.rewardItems ?? []);
+        this.giveRewards(quest.completed.rewardGold ?? 0, quest.completed.rewardItems ?? [], quest.completed.rewardGear ?? []);
       } else if (quest?.accepted) {
         this.hud.showCallout(`새 퀘스트: ${quest.accepted.title}`);
       } else if (quest?.progressed) {
@@ -1399,8 +1399,10 @@ export class GameScene extends Phaser.Scene {
       // 치유소의 에일라와 평소 대화가 끝나면 치료해 줄지 묻는다.
       if (!quest && target.id === 'npc-eila' && this.mapId === 'in-clinic') {
         this.storyChoice?.open(() => this.healAtClinic(), {
-          text: '다친 데가 있으면 봐 줄게.\n체력과 마나가 모두 차고,\n약초 기운이 처음 맞을 때까지 남아.',
-          yes: '치료받기 [Enter]', no: '괜찮아요 [Esc]',
+          title: '에일라의 치료',
+          text: '다친 데가 있으면 봐 줄게.',
+          summary: '체력·마나 모두 회복 · 잿빛 둔화 해제\n약초 기운: 처음 맞을 때까지 최대 체력 +10%',
+          yes: '치료받기', no: '괜찮아요',
         });
       }
       if (!quest && target.id === 'npc-rosetta' && canRest(this.quests)) {
@@ -1489,7 +1491,7 @@ export class GameScene extends Phaser.Scene {
       this.enemies.push(enemy);
       this.raidEnemies.add(enemy);
     }
-    if (announce) this.hud.showCallout(spawns.some((s) => s.key === 'corrosion-executioner') ? '부식의 집행자가 길을 막아선다!' : '권속이 몰려온다!');
+    if (announce) this.hud.showCallout(spawns.some((s) => s.key === 'corrosion-executioner') ? '커다란 권속이 길을 막아선다!' : '권속이 몰려온다!');
   }
 
   private refreshQuests(): void {
@@ -1681,12 +1683,17 @@ export class GameScene extends Phaser.Scene {
     this.refreshInventory();
   }
 
-  private giveRewards(gold: number, items: Array<{ id: ItemId; count: number }>): void {
-    if (gold === 0 && items.length === 0) return;
+  private giveRewards(gold: number, items: Array<{ id: ItemId; count: number }>, gear: GearId[] = []): void {
+    if (gold === 0 && items.length === 0 && gear.length === 0) return;
     this.inventory = addGold(this.inventory, gold);
     for (const item of items) this.inventory = addItem(this.inventory, item.id, item.count);
+    if (gear.length) {
+      // 보상 장비는 가방에 들어간다. 장비 창에서 낀다.
+      for (const id of gear) this.character = { ...this.character, gear: addGear(this.character.gear, id) };
+      this.saveCharacter();
+    }
     const player = this.player;
-    const labels = [gold ? `+${gold} G` : '', ...items.map((i) => `${ITEMS[i.id].name} +${i.count}`)].filter(Boolean);
+    const labels = [gold ? `+${gold} G` : '', ...items.map((i) => `${ITEMS[i.id].name} +${i.count}`), ...gear.map((id) => `${GEAR[id].name} 획득`)].filter(Boolean);
     labels.forEach((label, i) => this.progressEffects.showPopup(player.x, player.y - 150 + i * 28, label, i === 0 && gold ? '#ffd23f' : '#a8f0ff'));
     this.saveInventory();
     this.refreshInventory();
