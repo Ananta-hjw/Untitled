@@ -53,6 +53,8 @@ import { DamageNumbers } from '../ui/DamageNumbers';
 import { DialogueBox, preloadDialogue } from '../ui/DialogueBox';
 import { PauseMenu } from '../ui/PauseMenu';
 import { TITLE_FADE_MS } from './TitleScene';
+import { OpeningDirector } from './OpeningDirector';
+import { OPENING, OPENING_HINT, OPENING_SAVE_KEY, OPENING_WALK_SCALE, shouldPlayOpening } from '../story/opening';
 import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings } from '../ui/settingsData';
 import { DIALOGUES, HERO_NAME } from '../story/dialogues';
 import { findInteractable, type Interactable } from '../world/interactables';
@@ -187,6 +189,13 @@ export class GameScene extends Phaser.Scene {
   private characterKeys: Phaser.Input.Keyboard.Key[] = [];
   private storage?: SaveStorage;
   private fromTitle = false;
+  /** 새 게임 첫 시작에 보여 주는 오프닝 연출. 끝나면 undefined */
+  private opening?: OpeningDirector;
+  /** 오프닝 동안 조이스틱 대신 쓰는 시온의 이동 방향 */
+  private readonly openingInput = new Phaser.Math.Vector2();
+  /** 오프닝 동안 숨겨 둔 화면 고정 UI (끝나면 다시 보인다) */
+  private openingHidden: Array<Phaser.GameObjects.GameObject & { setVisible(v: boolean): unknown }> = [];
+  private playOpening = false;
   /** 잿빛 나방의 가루에 닿아 느려진 상태가 끝나는 게임 시각 */
   private slowedUntil = 0;
   /** 지금 있는 맵. 재시작해도 유지되고, 맵을 옮길 때만 바뀐다. */
@@ -295,6 +304,13 @@ export class GameScene extends Phaser.Scene {
     }
     this.character = this.loadCharacter();
     this.recomputeStats();
+    // 새 게임을 처음 시작하면 오프닝을 보여 준다. 개발 빌드에서는 ?opening으로 언제든 볼 수 있다.
+    const forced = import.meta.env.DEV && new URLSearchParams(location.search).has('opening');
+    let seen = false;
+    try { seen = this.storage?.getItem(OPENING_SAVE_KEY) === 'seen'; } catch { seen = false; }
+    this.playOpening = this.mapId === 'village-north' && (forced || shouldPlayOpening({
+      fromTitle: this.fromTitle, hasProgress: !!saved, quests: this.quests, seen,
+    }));
   }
 
   /** 해 질 무렵(chapterOne.isDusk)에는 남쪽 들판에 잿빛 나방이 더 나온다. */
@@ -377,6 +393,10 @@ export class GameScene extends Phaser.Scene {
     this.carriedHp = undefined;
     this.carriedHerb = undefined;
     this.herb = 0;
+    this.opening = undefined;
+    this.openingInput.set(0, 0);
+    this.openingHidden = [];
+    this.playOpening = false;
     this.mp = 0;
     this.maxMp = 0;
     this.shownMp = -1;
@@ -474,6 +494,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 170);
     if (this.fromTitle) this.cameras.main.fadeIn(TITLE_FADE_MS, 0, 0, 0);
     else if (this.arrival) this.cameras.main.fadeIn(TRAVEL_FADE_MS, 0, 0, 0);
+    if (this.playOpening) this.startOpening();
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.game.events.on(Phaser.Core.Events.BLUR, this.clearAttackInput, this);
@@ -500,7 +521,7 @@ export class GameScene extends Phaser.Scene {
     if (this.player) {
       this.minimap?.update(delta, this.player, this.collectMinimap);
       this.exitHint?.update(this.player, this.traveling || !this.player.alive || this.dialogue.isOpen || this.pauseMenu.isOpen
-        || !!this.worldMap?.isOpen || !!this.itemPanel?.isOpen || !!this.characterPanel?.isOpen || !!this.storyChoice?.isOpen || !!this.quickSlotPanel?.isOpen,
+        || !!this.worldMap?.isOpen || !!this.itemPanel?.isOpen || !!this.characterPanel?.isOpen || !!this.storyChoice?.isOpen || !!this.quickSlotPanel?.isOpen || !!this.opening,
         chapterPhase(this.quests) === 'raid' && this.mapId === 'village');
     }
     this.setQuickButtonsVisible(!this.traveling && !!this.player?.alive && !this.dialogue.isOpen && !this.pauseMenu.isOpen
@@ -515,6 +536,11 @@ export class GameScene extends Phaser.Scene {
     let escape = false;
     for (const key of this.pauseKeys) {
       if (Phaser.Input.Keyboard.JustDown(key)) escape = true;
+    }
+    // 오프닝 중 Esc는 건너뛰기다.
+    if (this.opening && escape) {
+      this.opening.skip();
+      escape = false;
     }
     if (this.quickSlotPanel?.isOpen) {
       if (escape) this.quickSlotPanel.close();
@@ -589,6 +615,7 @@ export class GameScene extends Phaser.Scene {
     const dt = gameStep / 1000;
 
     this.effects.update(time);
+    this.opening?.update(time);
     this.updateRespawns(time);
     this.updateAttackLunge(time);
     this.updatePlayer(time, dt);
@@ -609,6 +636,48 @@ export class GameScene extends Phaser.Scene {
     this.updatePotion(time);
     this.updateSkill(time, gameStep);
     this.updateCombatCooldowns(time);
+  }
+
+  // ---------------------------------------------------------------- 오프닝
+
+  /** 새 게임 첫 시작: 화면 고정 UI를 숨기고 오프닝 연출을 시작한다. */
+  private startOpening(): void {
+    this.clearAttackInput();
+    this.joystick.vector.set(0, 0);
+    // 화면에 고정된 UI(체력 막대·버튼·미니맵 등)를 잠시 숨긴다. 대화창은 열릴 때 스스로 나타난다.
+    this.openingHidden = this.children.list.filter((o): o is Phaser.GameObjects.GameObject & { setVisible(v: boolean): unknown; visible: boolean; scrollFactorX: number } =>
+      'scrollFactorX' in o && (o as { scrollFactorX: number }).scrollFactorX === 0 && 'visible' in o && (o as { visible: boolean }).visible);
+    for (const o of this.openingHidden) o.setVisible(false);
+    this.opening = new OpeningDirector({
+      scene: this,
+      hero: () => ({ x: this.player.x, y: this.player.y }),
+      setHeroInput: (x, y) => this.openingInput.set(x, y),
+      placeHero: (x, y) => this.player.placeAt(x, y),
+      npc: (id) => this.npcs.find((n) => n.def.id === id),
+      say: (lines, done) => {
+        this.clearAttackInput();
+        this.dialogue.open(lines, () => { done(); this.clearAttackInput(); });
+      },
+      closeDialogue: () => { if (this.dialogue.isOpen) this.dialogue.close(); },
+      finish: (skipped) => this.finishOpening(skipped),
+    }, OPENING);
+  }
+
+  /** 오프닝이 끝나거나 건너뛰었을 때: UI를 되돌리고, 마을 사람을 풀어 주고, 다시 보지 않게 저장한다. */
+  private finishOpening(skipped: boolean): void {
+    this.opening = undefined;
+    this.openingInput.set(0, 0);
+    for (const o of this.openingHidden) if (o.active) o.setVisible(true);
+    this.openingHidden = [];
+    for (const npc of this.npcs) npc.release();
+    try {
+      this.storage?.setItem(OPENING_SAVE_KEY, 'seen');
+    } catch {
+      // 저장소가 막혀 있으면 다음에 다시 볼 수 있다.
+    }
+    this.clearAttackInput();
+    this.cameras.main.fadeIn(skipped ? 400 : 900, 0, 0, 0);
+    this.hud.setHint(OPENING_HINT);
   }
 
   // ---------------------------------------------------------------- 월드
@@ -809,6 +878,7 @@ export class GameScene extends Phaser.Scene {
     this.pauseButton.setPosition(width - 46, 74);
     this.characterButton?.setPosition(width - 46, 148);
     this.characterPanel?.layout(width);
+    this.opening?.layout(width);
     // 미니맵은 일시정지 버튼 왼쪽, 퀘스트 목록은 그 아래에 오른쪽으로 맞춘다.
     this.minimap?.layout(width - 172, 92);
     if (this.minimap) this.questTracker?.layout(width - 20, this.minimap.bottom + 4);
@@ -831,6 +901,8 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 이동
 
   private readInput(): Phaser.Math.Vector2 {
+    // 오프닝 동안에는 감독이 정한 방향으로만 천천히 걷는다.
+    if (this.opening) return this.input2.copy(this.openingInput).scale(OPENING_WALK_SCALE);
     const v = this.input2.copy(this.joystick.vector);
     if (v.lengthSq() === 0 && this.keys) {
       const k = this.keys;
@@ -854,6 +926,12 @@ export class GameScene extends Phaser.Scene {
     let parryPressed = this.blockButton?.consumePress() ?? false;
     for (const key of this.blockKeys) if (Phaser.Input.Keyboard.JustDown(key)) parryPressed = true;
     this.blocking = false;
+    // 오프닝 동안에는 공격·회피·막기를 받지 않는다.
+    if (this.opening) {
+      dodgePressed = false;
+      parryPressed = false;
+      this.attackBufferedUntil = undefined;
+    }
     if (!player.alive) {
       this.attackBufferedUntil = undefined;
       return;
@@ -882,7 +960,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // 초 단위 애니메이션과 밀리초 시계의 부동소수점 오차로 한 프레임 쉬지 않게 한다.
-    if (this.wantsAttack(time) && time + 1e-6 >= this.nextAttackAt) {
+    if (!this.opening && this.wantsAttack(time) && time + 1e-6 >= this.nextAttackAt) {
       this.startAttack(time, v.x, v.y);
       this.attackBufferedUntil = undefined;
     }
@@ -1260,6 +1338,7 @@ export class GameScene extends Phaser.Scene {
 
   /** 뒤로가기 버튼: 메뉴가 열려 있으면 한 단계 뒤로, 아니면 일시정지. */
   private onBackButton(): void {
+    if (this.opening) { this.opening.skip(); return; }
     if (this.quickSlotPanel?.isOpen) { this.quickSlotPanel.close(); return; }
     if (this.storyChoice?.isOpen) { this.storyChoice.cancel(); return; }
     if (this.pauseMenu.isOpen) this.pauseMenu.back();
@@ -1267,6 +1346,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private openPause(): void {
+    if (this.opening) return;
     if (this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return;
     if (!this.pauseMenu || this.pauseMenu.isOpen) return;
     this.pauseButton.setVisible(false);
@@ -1311,6 +1391,12 @@ export class GameScene extends Phaser.Scene {
   /** 가까이 있는 대상을 찾아 말풍선과 대화 버튼을 보여 주고, 누르면 대화를 연다. */
   private updateInteraction(time: number): void {
     const player = this.player;
+    if (this.opening) {
+      this.talkButton.setVisible(false);
+      this.talkMarker.setVisible(false);
+      this.talkPressed();
+      return;
+    }
     const free = player.alive && !player.isAttacking && this.dodgeProgress >= 1 && !this.inCombat();
     const target = free ? findInteractable(player.x, player.y, this.interactables) : undefined;
     this.talkButton.setVisible(!!target);
@@ -1556,6 +1642,7 @@ export class GameScene extends Phaser.Scene {
     const button = this.skillButton;
     let pressed = button?.consumePress() ?? false;
     for (const key of this.skillKeys) if (Phaser.Input.Keyboard.JustDown(key)) pressed = true;
+    if (this.opening) pressed = false;
     const ready = player.alive && time >= this.nextSpinAt && !player.isAttacking && time >= this.dodgeUntil
       && this.spinHitAt === undefined;
     const enough = this.mp >= SPIN_SLASH.cost;
@@ -1627,6 +1714,7 @@ export class GameScene extends Phaser.Scene {
     const id = this.quickSlots[slot];
     let pressed = button.consumePress();
     for (const key of keys) if (Phaser.Input.Keyboard.JustDown(key)) pressed = true;
+    if (this.opening) pressed = false;
     const player = this.player;
     const ready = time >= this.nextUseAt && player.alive && player.hp < player.maxHp && !!id && countOf(this.inventory, id) > 0;
     button.setEnabled(!id || ready);
@@ -1646,6 +1734,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setQuickButtonsVisible(visible: boolean): void {
+    if (this.opening) visible = false;
     this.potionButton?.setVisible(visible);
     this.lunchButton?.setVisible(visible);
   }
@@ -1702,6 +1791,7 @@ export class GameScene extends Phaser.Scene {
 
   /** 전체 지도를 연다. 대화·메뉴·이동 중에는 열지 않는다. */
   private openWorldMap(): void {
+    if (this.opening) return;
     if (!this.worldMap || this.quickSlotPanel?.isOpen || this.storyChoice?.isOpen || this.worldMap.isOpen || this.dialogue.isOpen || this.pauseMenu.isOpen || this.itemPanel?.isOpen || this.characterPanel?.isOpen || this.traveling) return;
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
@@ -1816,6 +1906,7 @@ export class GameScene extends Phaser.Scene {
 
   /** 캐릭터 창을 연다. smithy면 도란의 대장간(장비 구매·판매). 대화·메뉴·이동 중에는 열지 않는다. */
   private openCharacterPanel(tab: CharacterTab, smithy = false): void {
+    if (this.opening) return;
     if (!this.characterPanel || this.characterPanel.isOpen || this.traveling || this.pauseMenu.isOpen || this.dialogue.isOpen
       || this.itemPanel?.isOpen || this.worldMap?.isOpen || this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return;
     this.clearAttackInput();

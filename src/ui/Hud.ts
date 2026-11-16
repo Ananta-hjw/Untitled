@@ -254,6 +254,15 @@ export class Hud {
     this.slowTint.setSize(width, VIEW_HEIGHT);
   }
 
+  /** 안내 문구를 바꿔 다시 띄운다(오프닝이 끝난 뒤 첫 목적지 안내). */
+  setHint(text: string): void {
+    if (this.hint) this.scene.tweens.killTweensOf(this.hint);
+    this.hint ??= this.scene.add.text(0, 122, '', {
+      fontFamily: FONT, fontSize: '24px', fontStyle: 'bold', color: '#f5ead2', stroke: '#1a1008', strokeThickness: 5,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH_UI).setResolution(2);
+    this.hint.setText(text).setAlpha(1).setVisible(true).setX(this.scene.scale.gameSize.width / 2);
+  }
+
   /** 플레이어가 처음 조작하면 안내 문구를 지운다. */
   dismissHint(): void {
     const hint = this.hint;

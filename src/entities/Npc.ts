@@ -79,6 +79,9 @@ export class Npc extends Phaser.GameObjects.Container {
   private readonly marker: Phaser.GameObjects.Text;
   /** 지금 띄운 퀘스트 표시 (미니맵도 이 값을 쓴다) */
   questMarker?: QuestMarker;
+  /** 연출(오프닝) 중: 정해진 경로만 걷고, 돌아다니거나 플레이어를 돌아보지 않는다. */
+  private scripted = false;
+  private scriptPath: { x: number; y: number }[] = [];
 
   constructor(scene: Phaser.Scene, def: NpcDef, rand: () => number = Math.random) {
     super(scene, def.x, def.y);
@@ -125,10 +128,70 @@ export class Npc extends Phaser.GameObjects.Container {
     this.marker.setText(style.text).setColor(style.color).setVisible(true);
   }
 
+  /** 연출: 그 자리로 옮겨 세운다. */
+  placeAt(x: number, y: number): void {
+    this.scripted = true;
+    this.scriptPath = [];
+    this.target = undefined;
+    this.setPosition(x, y).setDepth(y);
+    this.spot.x = x;
+    this.spot.y = y + (this.def.talkOffset ?? 0);
+    this.showFrame(this.walk.idlePose);
+  }
+
+  /** 연출: 경로를 따라 걷는다. 다 걸으면 그 자리에 선다(release 전까지). */
+  walkTo(path: { x: number; y: number }[]): void {
+    this.scripted = true;
+    this.scriptPath = path.map((p) => ({ ...p }));
+    this.target = undefined;
+    this.walked = 0;
+  }
+
+  /** 연출: (x, y) 쪽을 본다. */
+  faceTowards(x: number, y: number): void {
+    this.direction = direction8(x - this.x, y - this.y, this.direction);
+    this.showFrame(this.walk.idlePose);
+  }
+
+  /** 연출에서 정한 경로를 아직 걷는 중인지 */
+  get walking(): boolean {
+    return this.scriptPath.length > 0;
+  }
+
+  /** 연출을 마치고 평소처럼 돌아다니게 한다. */
+  release(): void {
+    this.scripted = false;
+    this.scriptPath = [];
+    this.target = undefined;
+  }
+
   update(now: number, dt: number, player: { x: number; y: number }, area: WalkArea): void {
     // 퀘스트 표시는 위아래로 천천히 흔들려 눈에 띈다.
     if (this.questMarker) this.marker.setY(-this.def.height - 36 - Math.abs(Math.sin(now / 320)) * 8);
     const idle = this.walk.idlePose;
+    if (this.scripted) {
+      const next = this.scriptPath[0];
+      if (!next) return;
+      const dx = next.x - this.x, dy = next.y - this.y;
+      const distance = Math.hypot(dx, dy);
+      const travel = NPC_WALK_SPEED * dt;
+      if (distance <= travel) {
+        this.setPosition(next.x, next.y).setDepth(next.y);
+        this.scriptPath.shift();
+        if (this.scriptPath.length === 0) this.showFrame(idle);
+      } else {
+        area.move(this.x, this.y, (dx / distance) * travel, (dy / distance) * travel, this.step);
+        // 벽에 막혀 거의 못 움직이면 그 지점을 건너뛴다(연출이 멈추지 않게).
+        if (Math.hypot(this.step.x - this.x, this.step.y - this.y) < travel * 0.2) this.scriptPath.shift();
+        this.direction = direction8(dx, dy, this.direction);
+        this.walked += Math.hypot(this.step.x - this.x, this.step.y - this.y);
+        this.setPosition(this.step.x, this.step.y).setDepth(this.step.y);
+        this.showFrame(walkPose(this.walked, this.def.height, this.walk.walkPoses));
+      }
+      this.spot.x = this.x;
+      this.spot.y = this.y + (this.def.talkOffset ?? 0);
+      return;
+    }
     if (Math.hypot(player.x - this.x, player.y - this.y) < NPC_NOTICE_RADIUS) {
       // 말을 걸 수 있게 멈추고 플레이어 쪽을 본다.
       this.direction = direction8(player.x - this.x, player.y - this.y, this.direction);

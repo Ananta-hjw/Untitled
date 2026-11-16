@@ -1637,6 +1637,46 @@ test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공�
   assert.equal(result.evaded, 0);
 });
 
+test('새 게임 오프닝: 시온이 스스로 걸으며 마을 사람과 이야기하고, 조작·버튼은 막히며, 건너뛰면 화면 UI가 돌아오고 다시 나오지 않는다', async () => {
+  await load('village-north');
+  await evaluate(`localStorage.removeItem('untitled-rpg.opening'); true`);
+  const search = '?test=' + ++navigation + '&map=village-north&opening';
+  await send('Page.navigate', { url: appUrl + search });
+  await until(() => evaluate(`location.search === ${JSON.stringify(search)} && !!window.__game?.scene.getScene('game')?.damageNumbers`));
+  await evaluate('window.__game.loop.sleep()');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    let t = performance.now();
+    const playing = !!s.opening;
+    const hudHidden = !s.hud.hpText.visible && !s.attackButton.text.visible;
+    const start = { x: s.player.x, y: s.player.y };
+    // 첫 자막과 첫 걸음까지 진행한다. 대화가 열리면 넘긴다.
+    let talked = 0;
+    for (let i = 0; i < 1200 && s.opening && s.opening.step < 15; i++) {
+      if (s.dialogue.isOpen) { s.dialogue.advance(); s.dialogue.advance(); talked++; }
+      // 플레이어 입력은 무시된다.
+      s.joystick.vector.set(-1, 0); s.attackButton.pressed = true;
+      g.step(t += 16, 16);
+    }
+    s.joystick.vector.set(0, 0);
+    const walked = Math.hypot(s.player.x - start.x, s.player.y - start.y) > 300;
+    const noAttack = !s.player.isAttacking;
+    const serena = s.npcs.find(n => n.def.id === 'serena');
+    // 건너뛰기
+    s.opening.skip();
+    for (let i = 0; i < 5; i++) g.step(t += 16, 16);
+    return { playing, hudHidden, talked: talked > 3, walked, noAttack,
+      ended: !s.opening, hudBack: s.hud.hpText.visible && s.attackButton.text.visible,
+      seen: localStorage.getItem('untitled-rpg.opening'), released: !serena.scripted, dialogue: s.dialogue.isOpen };
+  })()`);
+  assert.deepEqual(result, { playing: true, hudHidden: true, talked: true, walked: true, noAttack: true,
+    ended: true, hudBack: true, seen: 'seen', released: true, dialogue: false });
+  // 다시 열어도(같은 새 게임이라도) 한 번 본 오프닝은 나오지 않는다.
+  await load('village-north');
+  const again = await evaluate(`(() => { const s = window.__game.scene.getScene('game'); const r = !s.opening; localStorage.removeItem('untitled-rpg.opening'); return r; })()`);
+  assert.equal(again, true);
+});
+
 test('회전 베기는 마나를 써서 둘레의 적을 한꺼번에 베고, 마나가 모자라면 쓸 수 없으며, 마나는 다시 찬다', async () => {
   await load('south-field');
   await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.length >= 3; })()`));
