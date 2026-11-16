@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MAPS, findExit, walkable } from '../src/world/maps.ts';
 import { findInteractable } from '../src/world/interactables.ts';
-import { HOME_BED_SPOT, REST_POINTS, canRest, parseRestPoint, serializeRestPoint } from '../src/story/restPoints.ts';
+import { CLINIC_BED_SPOT, HOME_BED_SPOT, REST_POINTS, canRest, parseRestPoint, serializeRestPoint } from '../src/story/restPoints.ts';
 
 test('쉬는 곳(여관·시온의 집)에서 다시 시작하는 자리는 그 실내의 걸을 수 있는 곳이고, 나가기 버튼 바로 앞이 아니다', () => {
   for (const point of Object.values(REST_POINTS)) {
@@ -19,6 +19,16 @@ test('시온의 집 침대 앞 쉬기 자리는 걸어서 닿을 수 있다', ()
   const at = { x: HOME_BED_SPOT.x, y: HOME_BED_SPOT.y + 30 };
   assert.equal(walkable(map, at.x, at.y), true);
   assert.equal(findInteractable(at.x, at.y, [...map.interactables, HOME_BED_SPOT])?.id, 'rest-home');
+});
+
+test('치유소 침대 옆 치료받기 자리는 걸어서 닿을 수 있고, 나가기 문과 겹치지 않는다', () => {
+  const map = MAPS['in-clinic'];
+  const at = { x: CLINIC_BED_SPOT.x, y: CLINIC_BED_SPOT.y + 30 };
+  assert.equal(walkable(map, at.x, at.y), true);
+  assert.equal(findInteractable(at.x, at.y, [...map.interactables, CLINIC_BED_SPOT])?.id, 'heal-clinic');
+  const door = map.interactables.find((i) => i.enter?.label === '나가기');
+  assert.ok(door);
+  assert.equal(findInteractable(door.x, door.y, [...map.interactables, CLINIC_BED_SPOT])?.id, door.id);
 });
 
 test('쉰 곳을 저장했다가 읽고, 모르는 값이나 깨진 값은 버린다', () => {

@@ -1502,6 +1502,22 @@ test('여관의 로제타에게 쉬어 가거나 집 침대에서 쉬면 체력�
   })()`);
   assert.deepEqual(home, { label: '쉬기', saved: 'home' });
 
+  // 치유소 침대: 체력과 둔화를 회복하지만 다시 시작할 자리는 바꾸지 않는다.
+  await load('in-clinic');
+  const clinic = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    const bed = s.interactables.find(i => i.id === 'heal-clinic');
+    s.player.placeAt(bed.x, bed.y + 30);
+    s.player.hp = 5;
+    s.slowedUntil = s.now + 99999;
+    let t = performance.now();
+    for (let i = 0; i < 3; i++) g.step(t += 16, 16);
+    const label = s.talkButton.text.text;
+    s.openDialogue(bed);
+    return { label, full: s.player.hp === s.player.maxHp, slowed: s.now < s.slowedUntil, saved: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
+  })()`);
+  assert.deepEqual(clinic, { label: '치료받기', full: true, slowed: false, saved: 'home' });
+
   // 처음 화면에서 시작하면 마지막으로 쉰 시온의 집 안에서 시작한다.
   const search = '?test=' + ++navigation;
   await send('Page.navigate', { url: appUrl + search });

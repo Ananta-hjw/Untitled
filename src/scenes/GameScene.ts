@@ -52,7 +52,7 @@ import { PerfOverlay } from '../ui/PerfOverlay';
 import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
 import { StoryChoice } from '../ui/StoryChoice';
-import { HOME_BED_SPOT, REST_POINTS, REST_SAVE_KEY, canRest, parseRestPoint, serializeRestPoint, type RestPointId } from '../story/restPoints';
+import { CLINIC_BED_SPOT, HOME_BED_SPOT, REST_POINTS, REST_SAVE_KEY, canRest, parseRestPoint, serializeRestPoint, type RestPointId } from '../story/restPoints';
 import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, isDusk, raidSpawns, INSPECTION_LINES } from '../story/chapterOne';
 import {
   currentObjective, MARKER_PRIORITY, QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestMarker, type QuestState,
@@ -494,7 +494,9 @@ export class GameScene extends Phaser.Scene {
     this.npcs = defs.map((def) => new Npc(this, def));
     this.interactables = [...this.map.interactables, ...this.npcs.map((npc) => npc.spot),
       // 시온의 집 침대 앞: 쉬기 (저장)
-      ...(this.mapId === 'in-home' ? [{ ...HOME_BED_SPOT }] : [])];
+      ...(this.mapId === 'in-home' ? [{ ...HOME_BED_SPOT }] : []),
+      // 치유소 침대 옆: 치료받기 (저장하지 않음)
+      ...(this.mapId === 'in-clinic' ? [{ ...CLINIC_BED_SPOT }] : [])];
     for (const spot of this.map.interactables) {
       if (!spot.enter) continue;
       const inside = NPCS.filter((n) => n.inside && `in-${n.inside}` === spot.enter!.to).map((n) => n.id);
@@ -1115,7 +1117,7 @@ export class GameScene extends Phaser.Scene {
     const enter = target.enter;
     // 실내에서 바깥으로 나가는 문은 "나가기"
     const leaving = enter && !enter.to.startsWith('in-');
-    this.talkButton.setLabel(leaving ? '나가기' : enter ? '들어가기' : target.id.startsWith('story-') ? '살펴보기' : target.id.startsWith('rest-') ? '쉬기' : '대화');
+    this.talkButton.setLabel(leaving ? '나가기' : enter ? '들어가기' : target.id.startsWith('story-') ? '살펴보기' : target.id.startsWith('rest-') ? '쉬기' : target.id.startsWith('heal-') ? '치료받기' : '대화');
     marker.setText(leaving ? '▼ 나가기' : enter ? `▲ ${enter.label}` : '···');
 
     if (!this.talkPressed()) return;
@@ -1138,6 +1140,11 @@ export class GameScene extends Phaser.Scene {
     if (target.id === HOME_BED_SPOT.id) {
       this.clearAttackInput();
       this.rest('home');
+      return;
+    }
+    if (target.id === CLINIC_BED_SPOT.id) {
+      this.clearAttackInput();
+      this.healAtClinic();
       return;
     }
     if (target.id.startsWith('story-')) {
@@ -1209,6 +1216,14 @@ export class GameScene extends Phaser.Scene {
       // 저장소를 쓸 수 없으면 쉬기만 한다.
     }
     this.hud.showCallout(`푹 쉬었다 · 다음에는 ${REST_POINTS[id].name}에서 시작한다`);
+  }
+
+  /** 치유소 침대: 체력을 채우고 둔화를 푼다. 다시 시작할 자리는 저장하지 않는다. */
+  private healAtClinic(): void {
+    this.player.setMaxHp(this.player.maxHp, true);
+    this.slowedUntil = 0;
+    this.drawHud();
+    this.hud.showCallout('치료를 받았다 · 체력이 다 찼다');
   }
 
   private loadRestPoint() {

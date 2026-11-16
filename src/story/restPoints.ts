@@ -37,6 +37,15 @@ export const REST_POINTS: Record<RestPointId, RestPoint> = {
 /** 시온의 집 침대 앞의 "쉬기" 자리 */
 export const HOME_BED_SPOT = { id: 'rest-home', ...interiorArtPoint(home, 1000, 480), radius: 95, markerHeight: 150 };
 
+const clinic = INTERIORS.find((i) => i.id === 'clinic')!;
+
+/**
+ * 치유소 침대 옆의 "치료받기" 자리 (두 침대 오른쪽 사이, 원화 좌표).
+ * 체력을 다 채우고 잿빛 나방의 둔화를 풀지만, 다시 시작할 자리는 저장하지 않는다(저장은 집과 여관).
+ * 습격의 밤에도 치료는 받을 수 있다.
+ */
+export const CLINIC_BED_SPOT = { id: 'heal-clinic', ...interiorArtPoint(clinic, 530, 545), radius: 110, markerHeight: 150 };
+
 /** 지금 쉴 수 있는지. 습격의 밤에는 쉴 수 없다. */
 export function canRest(state: QuestState): boolean {
   return chapterPhase(state) !== 'raid';
