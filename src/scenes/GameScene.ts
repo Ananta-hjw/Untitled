@@ -652,6 +652,7 @@ export class GameScene extends Phaser.Scene {
       shadowWidth: 110,
       maxHp: this.stats.maxHp,
     });
+    if (this.player.sprite instanceof HeroSprite) this.player.sprite.setWeapon(this.character.gear.equipped.weapon);
     if (this.carriedHerb) {
       // 맵을 옮겨도 약초 기운은 이어진다.
       this.herb = herbBonus(this.stats.maxHp);
@@ -1741,6 +1742,7 @@ export class GameScene extends Phaser.Scene {
     const beforeHp = player?.maxHp ?? 0, beforeMp = this.maxMp;
     this.recomputeStats();
     if (player) {
+      if (player.sprite instanceof HeroSprite) player.sprite.setWeapon(this.character.gear.equipped.weapon);
       const max = this.stats.maxHp + this.herb;
       player.setMaxHp(max, false);
       if (max > beforeHp && player.alive) player.hp = Math.min(max, player.hp + (max - beforeHp));
