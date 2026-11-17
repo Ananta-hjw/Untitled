@@ -11,6 +11,8 @@ HEIGHT = 304
 # Rear diagonal source looks left, so mirror the entire pose before registration.
 VIEWS = ['side', 'down', 'up-back', 'front', 'back']
 # Measured fist positions and support height in trimmed, 304px-high local space.
+# Keep the planted stance origin fixed when the rear foot changes position.
+FOOT_X = [95, 96.5, 84, 88, 74.5]
 ANCHORS = [(141, 200, 160), (116, 201, 164), (108, 201, 164), (88, 201, 165), (90, 201, 165)]
 
 
@@ -31,9 +33,7 @@ def main():
             command += ['-flop']
         command += ['-resize', f'{w}x{HEIGHT}!', str(tile)]
         subprocess.run(command, check=True)
-        alpha = Image.open(tile).getchannel('A')
-        soles = alpha.crop((0, HEIGHT - 10, w, HEIGHT)).point(lambda a: 255 if a >= 128 else 0).getbbox()
-        foot = (soles[0] + soles[2]) / 2
+        foot = FOOT_X[i]
         gx, gy, py = ANCHORS[i]
         grip = {'x': gx, 'y': gy}
         palm = {'x': gx + (py - gy) * ux / uy, 'y': py}

@@ -31,11 +31,11 @@ export const REST_POINTS: Record<RestPointId, RestPoint> = {
   // 로제타의 카운터 바로 앞
   inn: { id: 'inn', name: '여관', map: 'in-inn', at: { x: rosetta.x, y: rosetta.y + rosetta.talkOffset + 40 } },
   // 시온의 집 침대 앞 (원화 좌표)
-  home: { id: 'home', name: '시온의 집', map: 'in-home', at: interiorArtPoint(home, 1000, 500) },
+  home: { id: 'home', name: '시온의 집', map: 'in-home', at: interiorArtPoint(home, 1000, 530) },
 };
 
 /** 시온의 집 침대 앞의 "쉬기" 자리 */
-export const HOME_BED_SPOT = { id: 'rest-home', ...interiorArtPoint(home, 1000, 480), radius: 95, markerHeight: 150 };
+export const HOME_BED_SPOT = { id: 'rest-home', ...interiorArtPoint(home, 1000, 520), radius: 95, markerHeight: 150 };
 
 const clinic = INTERIORS.find((i) => i.id === 'clinic')!;
 

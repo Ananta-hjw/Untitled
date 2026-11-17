@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { HERO_BLADE_WIDTH_SCALE } from '../config';
+import { guardMotion } from './guardMotion';
 import type { Blade } from '../combat/blade';
 import data from '../assets/hero/academy/frames.json';
 import guardData from '../assets/hero/academy/guard/frames.json';
@@ -194,6 +196,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     const mirrored = this.guarding ? this.facing.includes('left')
       : attacking ? this.attackFacing.includes('left') : this.animation === 'dodge' && this.flipX;
     this.frame = frame;
+    this.setRotation(this.guarding ? guardMotion(this.guardTime, this.facing).bodyAngle : 0);
     this.image.setTexture(frame.texture, frame.name).setOrigin(frame.originX, frame.originY)
       .setScale(frame.scale * (mirrored ? -1 : 1), frame.scale);
     this.applyWeapon();
@@ -210,7 +213,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     let { base, tip } = pose.blade;
     if (this.guarding && f.grip) {
       // A small settling motion keeps the blade and hilt rigid around the actual fist.
-      const angle = 0.02 * Math.max(0, 1 - this.guardTime / 70);
+      const angle = guardMotion(this.guardTime, this.facing).swordAngle;
       const grip = f.grip;
       const rotate = (p: { x: number; y: number }) => ({
         x: grip.x + (p.x - grip.x) * Math.cos(angle) - (p.y - grip.y) * Math.sin(angle),
@@ -228,6 +231,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
         .setPosition(x, y).setRotation(Math.atan2(dy, dx)).setScale(scale);
     };
     apply(this.weaponFront, pose.sheathed ? 'hilt' : 'blade');
+    if (!pose.sheathed) this.weaponFront.setScale(scale, scale * HERO_BLADE_WIDTH_SCALE);
     apply(this.weaponBack, 'grip');
     if (this.guarding) this.weaponBack.setScale(30 / weaponAtlas.guardX, scale);
     if (this.guarding && f.supportCover) {
