@@ -5,9 +5,9 @@
       "texture": "hero-academy-guard",
       "x": 4,
       "y": 4,
-      "w": 172,
+      "w": 171,
       "h": 304,
-      "originX": 0.5523255813953488,
+      "originX": 0.5555555555555556,
       "originY": 1,
       "scale": 1,
       "grip": {
@@ -43,7 +43,7 @@
     {
       "name": "guard-down",
       "texture": "hero-academy-guard",
-      "x": 180,
+      "x": 179,
       "y": 4,
       "w": 168,
       "h": 304,
@@ -83,11 +83,11 @@
     {
       "name": "guard-up-back",
       "texture": "hero-academy-guard",
-      "x": 352,
+      "x": 351,
       "y": 4,
-      "w": 157,
+      "w": 158,
       "h": 304,
-      "originX": 0.535031847133758,
+      "originX": 0.5316455696202531,
       "originY": 1,
       "scale": 1,
       "grip": {
@@ -119,9 +119,9 @@
       "texture": "hero-academy-guard",
       "x": 513,
       "y": 4,
-      "w": 157,
+      "w": 156,
       "h": 304,
-      "originX": 0.5605095541401274,
+      "originX": 0.5641025641025641,
       "originY": 1,
       "scale": 1,
       "grip": {
@@ -157,7 +157,7 @@
     {
       "name": "guard-back",
       "texture": "hero-academy-guard",
-      "x": 674,
+      "x": 673,
       "y": 4,
       "w": 142,
       "h": 304,
@@ -201,7 +201,7 @@
     {
       "name": "guard-down-support",
       "texture": "hero-academy-guard",
-      "x": 289,
+      "x": 288,
       "y": 148,
       "w": 30,
       "h": 40

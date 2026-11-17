@@ -19,6 +19,14 @@ export const PLAYER_SPEED = 300;
  * 걷기 그림은 실제 이동 속도 ÷ 이 값의 배율로 넘긴다. 전속력(300)에서 약 1.4배(초당 11장)로, 팔다리가 너무 바쁘게 움직이지 않게 보폭을 넉넉히 잡았다.
  */
 export const HERO_WALK_NATURAL_SPEED = 220;
+/** 검을 뽑았을 때 길이·손 위치는 유지하고 칼날 폭만 넓힌다. */
+export const HERO_BLADE_WIDTH_SCALE = 1.35;
+/** 막기 시작 시 발을 축으로 버티고 검을 세운 뒤 작은 호흡으로 안정된다. 각도는 라디안. */
+export const HERO_GUARD_MOTION = {
+  readyMs: 55, braceMs: 180, breathMs: 1100,
+  braceLean: 0.018, restLean: 0.006, breathLean: 0.003,
+  swordLift: 0.13, liftMs: 110,
+};
 export const VERTICAL_SPEED_RATIO = 0.7;
 
 /** UI는 월드 오브젝트(깊이 = y좌표)보다 항상 위에 그린다. */
