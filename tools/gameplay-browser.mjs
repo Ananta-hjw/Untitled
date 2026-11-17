@@ -103,25 +103,34 @@ test('순찰 조사 전 테온과 대화하면 테온의 이름과 일러스트�
   assert.deepEqual(result.progress, { status: 'active', count: 0 });
 });
 
-test('들판 전경 텍스처는 풀밭을 투명하게 두고 나무만 캐릭터 앞에 그린다', async () => {
+test('들판 나무와 바위 객체는 같은 위치에 충돌이 있고 앞뒤 표시 순서가 바뀐다', async () => {
   await load('south-field');
   const result = await evaluate(`(() => {
     const s = window.__game.scene.getScene('game');
-    const tree = s.children.list.find(o => o.name === 'map-art-foreground' && o.texture.key === 'map-art-south-field-foreground-0');
-    const canvas = tree.texture.getSourceImage(), ctx = canvas.getContext('2d');
-    const scale = s.children.list.find(o => o.name === 'map-art-background').displayWidth / 1536;
-    const alpha = (x, y) => ctx.getImageData(Math.round(x - tree.x / scale), Math.round(y - tree.y / scale), 1, 1).data[3];
-    const ground = [[745, 730], [800, 715], [690, 780], [780, 850], [898, 852]].map(p => alpha(...p));
-    const solid = [[820, 790], [940, 820], [836, 909]].map(p => alpha(...p));
-    s.player.placeAt(745 * scale, 790 * scale);
-    const behind = s.player.depth < tree.depth;
-    s.player.placeAt(835 * scale, 980 * scale);
-    return { ground, solid, behind, inFront: s.player.depth > tree.depth };
+    const props = s.map.props.filter(p => p.frame !== 'sign');
+    const objects = props.map(p => {
+      const sprite = s.children.list.find(o => o.texture?.key === 'village-props' && o.frame.name === p.frame && o.x === p.x && o.y === p.y);
+      const obstacle = s.walkArea.obstacles.find(o => o.x === p.x && Math.abs(o.y - (p.y - p.footprint.ry * .45)) < .001);
+      return !!sprite && sprite.depth === p.y && !!obstacle && !s.walkArea.contains(obstacle.x, obstacle.y);
+    });
+    const tree = props.find(p => p.frame === 'oak' && p.x > 1500 && p.y > 2000);
+    s.player.placeAt(tree.x, tree.y - 120);
+    const behind = s.player.depth < tree.y;
+    s.player.placeAt(tree.x, tree.y + 120);
+    const inFront = s.player.depth > tree.y;
+    const rock = props.find(p => p.frame === 'boulders' && p.y > 1000 && p.y < 1300);
+    const o = s.walkArea.obstacles.find(o => o.x === rock.x);
+    const from = { x: o.x - o.rx - 30, y: o.y };
+    const point = { set(x, y) { this.x = x; this.y = y; return this; } };
+    s.walkArea.move(from.x, from.y, o.rx * 2 + 60, 0, point);
+    return { objects, behind, inFront, rockStops: point.x < o.x && s.walkArea.contains(point.x, point.y),
+      noBakedForeground: !s.children.list.some(o => o.name === 'map-art-foreground') };
   })()`);
-  assert.ok(result.ground.every(a => a === 0), JSON.stringify(result));
-  assert.ok(result.solid.every(a => a === 255), JSON.stringify(result));
+  assert.ok(result.objects.length >= 25 && result.objects.every(Boolean));
   assert.equal(result.behind, true);
   assert.equal(result.inFront, true);
+  assert.equal(result.rockStops, true);
+  assert.equal(result.noBakedForeground, true);
 });
 
 test('장면을 다섯 번 재시작해도 적·포인터·텍스처 수와 초기 상태가 유지된다', async () => {
@@ -1472,9 +1481,10 @@ test('원화가 있는 실내 여덟 곳과 남쪽 들판은 해당 그림만 �
     assert.ok(art.textures.every(k => k === art.key || k.startsWith(art.key + '-foreground-')), id + ': 다른 맵 원화를 미리 읽지 않는다');
     assert.equal(art.walkable, true, id);
     assert.equal(art.blocked, true, id);
-    assert.ok(art.width > 0 && art.height > 0 && art.foreground.length >= 2, id);
-    if (id === 'south-field') assert.ok(art.foreground.every(c => c.width < 1000), '전경이 배경 전체를 덮지 않는다');
+    assert.ok(art.width > 0 && art.height > 0, id);
+    if (id === 'south-field') assert.equal(art.foreground.length, 0, '나무·바위는 배경 복사 대신 독립 소품으로 그린다');
     else {
+      assert.ok(art.foreground.length >= 2, id);
       const back = await evaluate(`(async () => {
         const g = window.__game, s = g.scene.getScene('game'), spot = s.interactables.find(i => i.enter), exit = spot.enter;
         let t = performance.now();

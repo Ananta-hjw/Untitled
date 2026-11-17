@@ -21,7 +21,7 @@ test('마을 외곽 돌담은 닫혀 있고 실제 세 출입구와 마을 안�
     if (x > mapLength(840) && x < mapLength(1510)) continue; // 초소·수레와 기존 아치가 있는 구간
     assert.equal(walkable(MAPS.village, x, e.south), false, '남쪽 외곽');
   }
-  for (const [x, y, to] of [[mapLength(100), mapLength(1050), 'west-forest'], [mapLength(2291), mapLength(1050), 'east-stream'], [mapLength(1180), VILLAGE_GATES.south.y + 10, 'south-field']]) {
+  for (const [x, y, to] of [[mapLength(100), mapLength(1050), 'west-forest'], [VILLAGE_GATES.east.x + 1, mapLength(1050), 'east-stream'], [mapLength(1180), VILLAGE_GATES.south.y + 10, 'south-field']]) {
     assert.equal(walkable(MAPS.village, x, y), true, to);
     assert.equal(findExit(MAPS.village, x, y)?.to, to);
   }
@@ -78,9 +78,17 @@ test('발뿐 아니라 캐릭터 몸·그림자 폭을 확보하고 담 바깥�
       assert.equal(walkable(map,WALL_INNER_LEFT-1,y),false,`${id} 왼쪽 몸 여유`);
       assert.equal(walkable(map,WALL_INNER_RIGHT+1,y),false,`${id} 오른쪽 몸 여유`);
       assert.equal(walkable(map,mapLength(70),y),false,`${id} 왼쪽 담 바깥`);
-      assert.equal(walkable(map,mapLength(2500),y),false,`${id} 오른쪽 담 바깥`);
+      assert.equal(walkable(map,VILLAGE_EDGE.right + mapLength(60),y),false,`${id} 오른쪽 담 바깥`);
     }
   }
   assert.equal(walkable(MAPS.village,mapLength(1800),mapLength(1710)),false,'남쪽 담 바깥');
-  for(const [x,y] of [[100,1050],[2291,1050],[1180,1610]])assert.equal(walkable(MAPS.village,mapLength(x),mapLength(y)),true,'실제 문 통행');
+  for(const [x,y] of [[100,1050],[2529,1050],[1180,1610]])assert.equal(walkable(MAPS.village,mapLength(x),mapLength(y)),true,'실제 문 통행');
+});
+
+test('동쪽 담은 오른쪽 월드 경계 가까이에 있고 출구와 병사가 같은 문을 쓴다', () => {
+  const village = MAPS.village, gate = VILLAGE_GATES.east;
+  assert.ok(village.bounds.right - gate.x < mapLength(120));
+  assert.equal(village.exits.find(e => e.to === 'east-stream').zone.left, gate.x);
+  const back = MAPS['east-stream'].exits.find(e => e.to === 'village');
+  assert.ok(back.arrive.x > gate.x - mapLength(150));
 });

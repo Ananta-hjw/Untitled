@@ -1,20 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FIELD_FOREGROUND, FIELD_SCALE, insidePolygon } from '../src/world/southFieldLayout.ts';
+import { FIELD_PROPS, FIELD_SCALE } from '../src/world/southFieldLayout.ts';
 import { DIALOGUES } from '../src/story/dialogues.ts';
 import { findInteractable } from '../src/world/interactables.ts';
 import { MAPS, START_MAP, findExit, insideRect, isMapId, mapObstacles, walkable } from '../src/world/maps.ts';
 
 const maps = Object.values(MAPS);
 
-test('들판 전경은 나무 위 풀밭과 가지 사이 틈을 가리지 않고 잎·줄기는 가린다', () => {
-  const tree = FIELD_FOREGROUND[0];
-  const covers = (x, y) => insidePolygon(tree.polygon, x, y) && !tree.holes.some(h => insidePolygon(h, x, y));
-  for (const [x, y] of [[745, 730], [800, 715], [690, 780], [780, 850], [898, 852]]) {
-    assert.equal(covers(x, y), false, `풀밭 ${x},${y}`);
-  }
-  for (const [x, y] of [[820, 790], [940, 820], [836, 909]]) {
-    assert.equal(covers(x, y), true, `나무 ${x},${y}`);
+test('들판 나무·바위는 개별 객체이고 모든 바닥 접점에 충돌이 있다', () => {
+  const field = MAPS['south-field'];
+  assert.ok(FIELD_PROPS.length >= 25);
+  assert.equal(field.obstacles, undefined, '그림과 별개인 수동 장애물 목록을 두지 않는다');
+  const obstacles = mapObstacles(field);
+  for (const prop of FIELD_PROPS) {
+    assert.ok(field.props.includes(prop));
+    const obstacle = obstacles.find(o => o.x === prop.x && o.y === prop.y - prop.footprint.ry * .45);
+    assert.ok(obstacle, `${prop.frame} ${prop.x},${prop.y}`);
+    assert.equal(walkable(field, obstacle.x, obstacle.y), false);
   }
 });
 

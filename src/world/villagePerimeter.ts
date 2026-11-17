@@ -5,10 +5,10 @@ import type { Obstacle } from './obstacles.ts';
 const WORLD_WIDTH = 2640, WORLD_HEIGHT = 1760;
 
 /** 두 마을 맵의 좌우 외곽은 같은 선을 따른다. 마을 내부의 남북 연결 길은 열어 둔다. */
-const BASE_EDGE = { left: 112, right: 2290, north: 248, south: 1680 };
+const BASE_EDGE = { left: 112, right: WORLD_WIDTH - 112, north: 248, south: 1680 };
 const BASE_GATES = {
   west: { x: 112, top: 940, bottom: 1160 },
-  east: { x: 2290, top: 960, bottom: 1140 },
+  east: { x: WORLD_WIDTH - 112, top: 960, bottom: 1140 },
   south: { left: 1134, right: 1228, y: 1600 },
 };
 // 대각선 걷기 그림(발에서 최대65.25px)과 그림자(반폭55px)가 담 안쪽에 남을 여유를 둔다.
