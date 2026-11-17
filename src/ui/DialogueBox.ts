@@ -39,8 +39,8 @@ const PORTRAITS: Record<Portrait, { key: string; url: string }> = {
   teon: { key: 'portrait-teon', url: teonPortrait },
   soldier: { key: 'portrait-soldier', url: soldierPortrait },
 };
-/** 초당 나오는 글자 수 */
-const CHARS_PER_SECOND = 38;
+/** 초당 나오는 글자 수 (38자는 읽기 전에 지나가서 조금 늦췄다) */
+const CHARS_PER_SECOND = 28;
 const PANEL_HEIGHT = 168;
 const MARGIN = 22;
 const PORTRAIT_HEIGHT = 360;
