@@ -14,3 +14,19 @@
 프레임 재측정: `python3 tools/build_npc_frames.py --characters soldier`
 
 런타임 압축은 `tools/build_rowen_assets.py`의 NPC 압축 규칙과 동일하다.
+
+## 쓰러진 병사 이미지
+
+기존 `sd_idle.png`를 기준으로 투구·녹색 제복·누비옷·둥근 방패를 유지한 정적 자세 4종입니다. 피나 노출된 상처 없이 눈을 감고 바닥에 쓰러진 모습입니다.
+
+- `fallen-source.png`: 이미지 생성 도구로 만든 투명 배경 2×2 원화.
+- `fallen-back.webp`: 등을 대고 누워 한쪽 무릎을 굽힌 모습.
+- `fallen-side.webp`: 옆으로 누운 모습.
+- `fallen-prone.webp`: 엎드려 방패와 등이 보이는 모습.
+- `fallen-curled.webp`: 옆으로 몸을 웅크린 모습.
+- 개별 파일은 512×384이며, `fallen.webp`는 네 자세를 모은 1024×768 아틀라스입니다.
+- `fallen-frames.json`: 각 영역과 몸 중심 원점(0.5, 0.5), 권장 월드 표시 너비 180을 담습니다.
+
+재생성: `python3 tools/build_fallen_soldiers.py` (Pillow로 영역 측정, ImageMagick으로 분리·압축).
+
+현재 병사 NPC의 보행·대화 상태와 사건 배치는 유지하며, 쓰러진 병사를 표시할 장면에서 사용할 이미지 에셋으로 준비했습니다.
