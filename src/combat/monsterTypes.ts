@@ -19,7 +19,8 @@ export const MONSTERS = {
   // 습격의 권속 (소멸·네이룬 계열 중급). 추적자는 낮게 달려들어 할퀴고, 집행자는 길게 준비한 뒤 무겁게 돌진한다.
   'corrosion-tracker': { name: '부식의 추적자', hp: 30, damage: 7, xp: 12, height: 100, speed: 150,
     windupMs: 420, strikeMs: 120, returnMs: 200, recoverMs: 850, color: 0x6d6278 },
-  'corrosion-executioner': { name: '부식의 집행자', hp: 60, damage: 10, xp: 25, height: 150, speed: 95,
+  // 1장 보스. 레벨 7에서 체력 500·공격력 34 (combat/bossPattern.ts의 패턴을 쓴다)
+  'corrosion-executioner': { name: '부식의 집행자', hp: 200, damage: 18, xp: 80, height: 150, speed: 95,
     windupMs: 950, strikeMs: 340, returnMs: 260, recoverMs: 1300, color: 0x5e5468 },
 } as const;
 
@@ -38,7 +39,8 @@ export interface MonsterStats {
 export const ASH_SLOW = { durationMs: 2000, speedScale: 0.55 };
 
 export const WATER_SHOT = { speed: 360, lifetimeMs: 1800, radiusX: 24, radiusY: 30 };
-export interface EnemyHit { fromX: number; fromY: number; toX: number; toY: number; radiusX: number; radiusY: number; dx: number; dy: number }
+/** damageScale: 몬스터 공격력에 곱하는 배율 (보스의 부식 산탄 등). 없으면 1 */
+export interface EnemyHit { fromX: number; fromY: number; toX: number; toY: number; radiusX: number; radiusY: number; dx: number; dy: number; damageScale?: number }
 /** Swept ellipse: prevents fast projectiles and charges tunnelling between game steps. */
 export function enemyHitReaches(hit: EnemyHit, x: number, y: number): boolean {
   const ax = (x - hit.fromX) / hit.radiusX, ay = (y - hit.fromY) / hit.radiusY;

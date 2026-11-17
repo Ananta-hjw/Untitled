@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { QUESTS, currentObjective, continueMainQuest, markerFor, parseQuests, questDef, recordEvent, serializeQuests, talkTo, trackedQuests } from '../src/story/quests.ts';
-import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, isDusk, raidSpawns } from '../src/story/chapterOne.ts';
+import { DUSK_MOTH_POINTS, RAID_WAVES, chapterPhase, chapterNpcs, chapterSpots, isDusk, raidSpawns, raidSpawnsAnyStep, raidWaveSize } from '../src/story/chapterOne.ts';
 import { NPCS } from '../src/world/npcs.ts';
 import { MAPS, fieldPoint, findExit, walkable } from '../src/world/maps.ts';
 
@@ -70,14 +70,14 @@ test('재료 전달과 매듭은 선행 대화를 생략할 수 없고 서브 �
 test('습격은 필드 슬라임으로 진행되지 않으며 남은 권속만 복원하고 시아를 숨긴다', () => {
   let state = through('festival-eve');
   assert.equal(chapterPhase(state), 'raid');
-  assert.equal(raidSpawns(state, 'village').length, 3);
+  assert.equal(raidSpawns(state, 'village').length, 6);
   assert.equal(raidSpawns(state, 'south-field').length, 0);
   for (const event of [{ type: 'kill', map: 'village' }, { type: 'kill', map: 'south-field', encounter: 'village-raid' }]) {
     assert.equal(recordEvent(state, event).updates.length, 0);
   }
   state = recordEvent(state, { type: 'kill', map: 'village', encounter: 'village-raid' }).state;
   state = parseQuests(serializeQuests(state));
-  assert.equal(raidSpawns(state, 'village').length, 2);
+  assert.equal(raidSpawns(state, 'village').length, 5);
   assert.equal(chapterNpcs(NPCS, state).some(n => n.id === 'sia'), false);
   assert.equal(chapterNpcs(NPCS, state).some(n => n.id === 'linea'), false);
   const after = through('village-raid');
@@ -109,7 +109,7 @@ test('추가 조사 지점·습격 배치·이동한 NPC는 장애물 안에 놓
   states.push({ ...through('evening-patrol'), 'moth-trail': { status: 'active', count: 0, step: 1 } });
   for (const state of states) {
     for (const map of ['village', 'village-north', 'south-field']) {
-      for (const point of [...chapterSpots(state, map), ...raidSpawns(state, map), ...chapterNpcs(MAPS[map].npcs, state, map)]) {
+      for (const point of [...chapterSpots(state, map), ...raidSpawnsAnyStep(state, map), ...chapterNpcs(MAPS[map].npcs, state, map)]) {
         assert.ok(walkable(MAPS[map], point.x, point.y), `${map}: ${JSON.stringify(point)}`);
       }
     }
@@ -143,15 +143,22 @@ test('에일라는 낮에는 치유소 안, 습격 때는 광장, 습격 뒤에�
   assert.equal(walkable(MAPS['village-north'], outside.x, outside.y), true);
 });
 
-test('습격은 입구 → 여관 앞 → 북쪽 길의 세 무리이고, 마지막 무리에는 집행자가 있으며 남은 수만 복원한다', () => {
+test('습격은 입구(추적자 6) → 여관 앞(3) → 북쪽 길(추적자 4·나방 4 뒤에 보스 집행자)이고, 남은 수만 복원한다', () => {
   const at = (step, count = 0) => ({ ...through('festival-eve'), 'village-raid': { status: 'active', count, step } });
-  assert.equal(raidSpawns(at(0), 'village').length, 3);
+  assert.equal(raidSpawns(at(0), 'village').length, 6);
+  assert.ok(raidSpawns(at(0), 'village').every(s => s.key === 'corrosion-tracker'));
   assert.equal(raidSpawns(at(0), 'village-north').length, 0);
   assert.equal(raidSpawns(at(1), 'village').length, 0, '테온과 이야기하는 동안은 적이 없다');
   assert.equal(raidSpawns(at(2, 1), 'village').length, 2);
   const north = raidSpawns(at(4), 'village-north');
-  assert.equal(north.length, 3);
-  assert.ok(north.some(s => s.key === 'corrosion-executioner'));
+  assert.deepEqual(north.map(s => s.key).sort(), [...Array(4).fill('ashen-moth'), ...Array(4).fill('corrosion-tracker')]);
+  assert.equal(raidSpawns(at(4, 5), 'village-north').length, 3, '첫 떼에서 남은 수만');
+  const boss = raidSpawns(at(4, 8), 'village-north');
+  assert.deepEqual(boss.map(s => [s.key, s.boss]), [['corrosion-executioner', true]], '첫 떼를 다 잡으면 보스');
+  assert.equal(raidSpawns(at(4, 9), 'village-north').length, 0);
   assert.equal(raidSpawns(at(4), 'village').length, 0);
   assert.equal(chapterSpots(at(5), 'village-north').some(s => s.id === 'story-north-alley'), true);
+  // 퀘스트의 처치 목표 수는 무리의 크기와 같다.
+  const raid = questDef('village-raid');
+  for (const wave of RAID_WAVES) assert.equal(raid.steps[wave.step].need, raidWaveSize(wave.step), `step ${wave.step}`);
 });

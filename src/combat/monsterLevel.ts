@@ -19,7 +19,7 @@ export const AREA_LEVELS: Partial<Record<MapId, LevelRange>> = {
 
 /** 해 질 무렵 남쪽 들판의 잿빛 나방, 습격의 권속 */
 export const DUSK_MOTH_LEVEL = 4;
-export const RAID_LEVELS = { tracker: 5, executioner: 7 };
+export const RAID_LEVELS = { tracker: 5, moth: 5, executioner: 7 };
 
 export const LEVEL_SCALE = { hp: 0.25, damage: 0.15, xp: 0.25 };
 export const XP_PENALTY = { freeGap: 2, perLevel: 0.2, minScale: 0.1 };

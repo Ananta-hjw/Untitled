@@ -87,7 +87,8 @@ export const ENEMY = {
   recoverMs: 900,
   staggerMs: 420,
   knockback: 260,
-  respawnMs: 6000,
+  /** 쓰러진 몬스터가 다시 나타나기까지 (게임 시계 ms) */
+  respawnMs: 30000,
   /** 적끼리 이 거리(가로/세로) 안으로 겹치면 separationSpeed(px/초)로 서로 밀어낸다 */
   separationX: 64,
   separationY: 24,

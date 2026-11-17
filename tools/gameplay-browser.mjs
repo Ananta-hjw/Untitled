@@ -223,14 +223,14 @@ test('적 명중은 저프레임에서도 게임 시간 590ms 이후 한 번만 
   }
 });
 
-test('부활은 시각 효과의 완료와 무관하게 공통 게임 시계의 기한에 실행된다', async () => {
+test('쓰러진 뒤의 창과 적의 부활은 시각 효과의 완료와 무관하게 공통 게임 시계의 기한에 실행된다', async () => {
   await load();
   const result = await evaluate(`(() => {
     const s = window.__game.scene.getScene('game'), p = s.player, e = s.enemies[0];
     p.hurt(p.maxHp); s.onPlayerDeath(); const playerAt = s.playerRespawnAt;
     const getDelta = s.tweens.getDelta; s.tweens.getDelta = () => 10000; s.tweens.update(); s.tweens.getDelta = getDelta;
     const cosmeticOnly = p.alive; s.updateRespawns(playerAt - 1); const before = p.alive;
-    s.now = playerAt; s.updateRespawns(playerAt); const after = p.alive, invulnerableUntil = p.invulnerableUntil;
+    s.now = playerAt; s.updateRespawns(playerAt); const after = s.deathPanel.isOpen && !p.alive;
     p.revive(1000, 650); e.character.revive(1110, 650); e.character.hp = 1;
     s.enemies = [e]; s.now = 0; s.comboStage = 2; s.comboExpiresAt = 10000; s.startAttack(0, 1);
     for (let t = 50; t <= 250; t += 50) {
@@ -239,12 +239,11 @@ test('부활은 시각 효과의 완료와 무관하게 공통 게임 시계의 
     const pending = s.enemyRespawns[0]; if (!pending) throw new Error('적 사망 후 부활 예약 누락');
     s.updateRespawns(pending.at - 1); const enemyBefore = e.character.alive;
     s.now = pending.at; s.updateRespawns(pending.at);
-    return { cosmeticOnly, before, after, invulnerableUntil, playerAt, enemyBefore, enemyAfter: e.character.alive, pending: s.enemyRespawns.length };
+    return { cosmeticOnly, before, after, enemyBefore, enemyAfter: e.character.alive, pending: s.enemyRespawns.length };
   })()`);
   assert.equal(result.cosmeticOnly, false);
-  assert.equal(result.before, false);
-  assert.equal(result.after, true);
-  assert.equal(result.invulnerableUntil, result.playerAt + 1500);
+  assert.equal(result.before, false, '기한 전에는 창이 뜨지 않는다');
+  assert.equal(result.after, true, '기한에 창이 뜨고, 시온은 확인을 누를 때까지 쓰러져 있다');
   assert.equal(result.enemyBefore, false);
   assert.equal(result.enemyAfter, true);
   assert.equal(result.pending, 0);
@@ -1460,9 +1459,13 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     talk('teon');
     const wave2 = s.enemies.filter(e => e.character.alive).length;
     clear(); talk('serena');
-    // 북쪽 길에는 집행자가 낀 마지막 무리
+    // 북쪽 길: 추적자 넷·나방 넷을 막으면 경고 뒤에 보스 집행자
     await restart('village-north');
     const wave3 = s.enemies.map(e => e.kind);
+    clear();
+    const warned = s.bossHud.warning && !s.boss;
+    for (let i = 0; i < 400 && !s.boss; i++) g.step(t += 16, 16);
+    const boss = s.boss?.kind;
     clear(); inspect('story-north-alley');
     await restart('village'); talk('eila'); talk('ruan'); settle();
     await restart('village-north');
@@ -1482,7 +1485,7 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     localStorage.removeItem('untitled-rpg.quests');
     await restart('village');
     localStorage.removeItem('untitled-rpg.festival');
-    return { sword, migrated, harvest, moths, patrolMarker, choice, frozen, cancelled, festival, raid, battle, noRespawn, wave2, wave3, aftermath, searchMarker, searchRestored, complete, tracker };
+    return { sword, migrated, harvest, moths, patrolMarker, choice, frozen, cancelled, festival, raid, battle, noRespawn, wave2, wave3, warned, boss, aftermath, searchMarker, searchRestored, complete, tracker };
   })()`);
   assert.equal(result.migrated, 'active');
   assert.equal(result.harvest, 'done');
@@ -1492,11 +1495,13 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
   assert.equal(result.frozen, true);
   assert.equal(result.cancelled, true);
   assert.deepEqual(result.festival, { playing: true, sia: true, enemies: 0 });
-  assert.deepEqual(result.raid, { map: 'village', enemies: 3, sia: false, shade: true, festival: 'seen' });
+  assert.deepEqual(result.raid, { map: 'village', enemies: 6, sia: false, shade: true, festival: 'seen' });
   assert.deepEqual(result.battle, { alive: 0, pending: 0, step: 1 });
   assert.equal(result.noRespawn, true);
   assert.equal(result.wave2, 3);
-  assert.deepEqual([...result.wave3].sort(), ['corrosion-executioner', 'corrosion-tracker', 'corrosion-tracker']);
+  assert.deepEqual([...result.wave3].sort(), [...Array(4).fill('ashen-moth'), ...Array(4).fill('corrosion-tracker')]);
+  assert.equal(result.warned, true, '첫 떼를 다 잡으면 보스 등장 경고');
+  assert.equal(result.boss, 'corrosion-executioner');
   assert.deepEqual(result.aftermath, { sia: false, linea: true, shade: false });
   assert.equal(result.searchMarker, 1);
   assert.equal(result.searchRestored, true);
@@ -1912,6 +1917,186 @@ test('새 게임 오프닝: 시온이 스스로 걸으며 마을 사람과 이�
   assert.equal(again, true);
 });
 
+test('시온이 쓰러지면 누구에게 몇 번 얼마나 맞았는지 보여 주고, 확인하면 마지막으로 쉰 곳에서 체력을 채워 다시 시작한다', async () => {
+  await load('south-field');
+  await evaluate(`localStorage.setItem('untitled-rpg.rest', JSON.stringify({ version: 1, point: 'inn' })); true`);
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+    let t = performance.now();
+    const e = s.enemies[0], c = e.character;
+    s.derived.evadeChance = 0; s.blocking = false; s.mp = 1;
+    let hits = 0;
+    while (p.alive && hits < 200) {
+      c.placeAt(p.x - 60, p.y); c.facing = 1; p.invulnerableUntil = 0;
+      if (s.onEnemyStrike(e)) hits++;
+    }
+    const dead = !p.alive;
+    let opened = false;
+    for (let i = 0; i < 400 && !opened; i++) { g.step(t += 16, 16); opened = s.deathPanel.isOpen; }
+    const panel = s.deathPanel;
+    const killer = panel.killer.text, row = panel.rows[0].map(x => x.text), total = panel.total[2].text, dest = panel.destination.text;
+    // 창이 열려 있는 동안 게임은 멈춘다.
+    const frozenAt = s.now; for (let i = 0; i < 10; i++) g.step(t += 16, 16);
+    const frozen = s.now === frozenAt && !p.alive;
+    window.__deathT = t;
+    return { dead, opened, hits, killer, row, total, dest, frozen, name: e.stats.name, level: e.level, logTotal: s.damageLog.entries.reduce((n, x) => n + x.damage, 0) };
+  })()`);
+  assert.equal(result.dead, true);
+  assert.equal(result.opened, true);
+  assert.ok(result.killer.includes(result.name) && result.killer.includes('Lv. ' + result.level), result.killer);
+  assert.deepEqual(result.row, [result.name + '  Lv. ' + result.level, result.hits + '회', String(result.logTotal)]);
+  assert.equal(result.total, String(result.logTotal));
+  assert.ok(result.dest.includes('여관'), result.dest);
+  assert.equal(result.frozen, true);
+  // 확인(Enter와 같은 동작)을 누르면 여관에서 체력·마나를 다 채워 다시 시작한다.
+  const after = await evaluate(`(async () => {
+    const g = window.__game; let t = window.__deathT;
+    g.scene.getScene('game').deathPanel.confirm();
+    for (let i = 0; i < 400; i++) {
+      g.step(t += 16, 16); const s = g.scene.getScene('game');
+      if (s.mapId === 'in-inn' && s.sys.isActive() && s.minimap && !s.traveling) break;
+      await new Promise(r => setTimeout(r, 5));
+    }
+    const s = g.scene.getScene('game');
+    const r = { map: s.mapId, alive: s.player.alive, full: s.player.hp === s.player.maxHp, mana: s.mp === s.maxMp, open: !!s.deathPanel?.isOpen, log: s.damageLog.entries.length };
+    localStorage.removeItem('untitled-rpg.rest');
+    return r;
+  })()`);
+  assert.deepEqual(after, { map: 'in-inn', alive: true, full: true, mana: true, open: false, log: 0 });
+});
+
+test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 번 돌진하며, 보통 공격에 움찔하지 않고, 절반에서 모두 멈춘 채 포효한 뒤 물러나 2페이즈', async () => {
+  await load('village-north');
+  await evaluate(`(() => { const s = window.__game.scene.getScene('game');
+    s.quests = { 'festival-eve': { status: 'done', count: 1 }, 'village-raid': { status: 'active', count: 8, step: 4 } }; s.saveQuests(); return true; })()`);
+  await load('village-north');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+    let t = performance.now();
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    const warning = s.bossHud.warning && !s.boss && s.enemies.length === 0;
+    const warnStart = s.now;
+    step(1);
+    for (let i = 0; i < 400 && !s.boss; i++) step();
+    const boss = s.boss, c = boss.character;
+    const appearedAfter = s.now - warnStart;
+    const spawned = { kind: boss.kind, isBoss: boss.boss, hp: c.hp, bar: s.bossHud.barVisible };
+    // 연속 돌진: 주인공을 가까이 두고 준비 동작이 시작되는 시각을 잰다.
+    p.invulnerableUntil = Infinity; s.derived.evadeChance = 0;
+    p.placeAt(c.x - 180, c.y);
+    const windups = [], recovers = [];
+    let last = boss.state;
+    for (let i = 0; i < 600 && windups.length < 3; i++) {
+      step();
+      if (boss.state !== last) {
+        if (boss.state === 'windup') windups.push(s.now);
+        if (boss.state === 'recover') recovers.push(s.now);
+        last = boss.state;
+      }
+    }
+    // 첫 돌진이 끝나고(recover) 다음 준비 동작까지 약 1초, 두 번째 돌진 뒤에는 원래의 긴 숨 고르기
+    const gap1 = windups[1] - recovers[0], gap2 = windups[2] - recovers[1];
+    // 슈퍼아머: 준비 동작 중에 맞아도 끊기지 않는다.
+    for (let i = 0; i < 300 && boss.state !== 'windup'; i++) step();
+    c.hurt(1); s.resolveEnemyHit(boss, false, 1, 0, 300);
+    const armored = boss.state === 'windup';
+    // 절반 아래로: 포효, 주인공도 멈춘다.
+    c.hp = Math.floor(c.maxHp / 2) + 3; c.hurt(5); s.resolveEnemyHit(boss, false, 1, 0, 300);
+    const roar = { state: boss.state, untouchable: boss.untouchable, until: s.bossRoarUntil > s.now };
+    const before = { x: p.x, y: p.y };
+    s.joystick.vector.set(1, 0);
+    step(20);
+    const frozen = Math.hypot(p.x - before.x, p.y - before.y) < 1;
+    const startDist = Math.hypot(c.x - p.x, c.y - p.y);
+    s.joystick.vector.set(0, 0);
+    let retreated = false;
+    for (let i = 0; i < 300 && boss.phase === 1; i++) { step(); if (boss.state === 'retreat') retreated = true; }
+    const endDist = Math.hypot(c.x - p.x, c.y - p.y);
+    const phase = boss.phase;
+    // 쓰러뜨리면 막대가 사라지고 다음 단계(북쪽 골목 살피기)로
+    c.hp = 0; s.resolveEnemyHit(boss, true, 1, 0, 0);
+    const after = { bar: s.bossHud.barVisible, boss: !!s.boss, step: s.quests['village-raid'].step };
+    localStorage.removeItem('untitled-rpg.quests');
+    return { warning, appearedAfter, spawned, gap1, gap2, armored, roar, frozen, retreated, farther: endDist > startDist + 150, phase, after };
+  })()`);
+  assert.equal(result.warning, true, '보스 등장 경고가 먼저 뜬다');
+  assert.ok(result.appearedAfter >= 2700 && result.appearedAfter <= 3000, String(result.appearedAfter));
+  assert.deepEqual(result.spawned, { kind: 'corrosion-executioner', isBoss: true, hp: 500, bar: true });
+  assert.ok(Math.abs(result.gap1 - 1000) <= 40, `연속 돌진 사이 ${result.gap1}ms`);
+  assert.ok(result.gap2 >= 1250, `두 번째 돌진 뒤에는 길게 쉰다 ${result.gap2}ms`);
+  assert.equal(result.armored, true);
+  assert.deepEqual(result.roar, { state: 'roar', untouchable: true, until: true });
+  assert.equal(result.frozen, true, '포효하는 동안 주인공도 움직이지 못한다');
+  assert.equal(result.retreated, true);
+  assert.equal(result.farther, true, '물러나 거리를 벌린다');
+  assert.equal(result.phase, 2);
+  assert.deepEqual(result.after, { bar: false, boss: false, step: 5 });
+});
+
+test('보스 2페이즈: 멀면 부식 산탄 3발(빗나가면 웅덩이), 돌진 자리에 웅덩이, 웅덩이는 작은 피해·둔화, 체력 1/4에서 부식의 장막 한 번', async () => {
+  await load('village-north');
+  await evaluate(`(() => { const s = window.__game.scene.getScene('game');
+    s.quests = { 'festival-eve': { status: 'done', count: 1 }, 'village-raid': { status: 'active', count: 8, step: 4 } }; s.saveQuests(); return true; })()`);
+  await load('village-north');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+    let t = performance.now();
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    for (let i = 0; i < 400 && !s.boss; i++) step();
+    const boss = s.boss, c = boss.character, hz = boss.hazards;
+    boss.phase = 2; s.derived.evadeChance = 0;
+    p.invulnerableUntil = Infinity;
+    // 부식 산탄: 멀리 서 있으면 겨눈 뒤 세 발. 쏜 뒤 비켜서면 떨어진 자리에 웅덩이가 남는다.
+    p.placeAt(c.x - 460, c.y);
+    let volley = false, fired = 0;
+    for (let i = 0; i < 200 && !fired; i++) { step(); if (boss.state === 'volley') volley = true; fired = hz.shotCount; }
+    p.placeAt(c.x - 120, c.y - 320);
+    for (let i = 0; i < 150 && hz.shotCount; i++) step();
+    const shotPools = hz.poolCount;
+    // 웅덩이 위: 작은 피해와 둔화, 무적 시간은 주지 않는다.
+    const pool = hz.pools[0];
+    p.invulnerableUntil = 0; boss.state = 'recover'; boss.timer = s.now + 99999;
+    const hp0 = p.hp; p.placeAt(pool.x, pool.y);
+    step(45);
+    const poolHurt = hp0 - p.hp, slowed = s.slowedUntil > s.now, noInvuln = p.invulnerableUntil <= s.now + 1;
+    // 돌진이 끝난 자리에도 웅덩이
+    p.hp = p.maxHp; p.invulnerableUntil = Infinity; hz.clear();
+    boss.state = 'chase'; boss.shotReadyAt = s.now + 99999;
+    p.placeAt(c.x - 200, c.y);
+    for (let i = 0; i < 400 && hz.poolCount === 0; i++) step();
+    const chargePool = hz.poolCount > 0;
+    // 부식의 장막: 체력 1/4 아래에서 한 번. 범위 안에 있으면 큰 피해.
+    hz.clear(); boss.state = 'chase';
+    c.hp = Math.floor(c.maxHp * 0.24);
+    p.placeAt(c.x - 120, c.y); p.invulnerableUntil = 0; p.hp = p.maxHp;
+    let veil = false;
+    for (let i = 0; i < 30 && !veil; i++) { step(); veil = boss.state === 'veil'; }
+    // 장막이 터지기 전까지는 웅덩이·산탄 없이 기다린다(주인공은 범위 안).
+    const hp1 = p.hp;
+    for (let i = 0; i < 200 && boss.state === 'veil'; i++) { p.placeAt(c.x - 120, c.y); step(); }
+    const veilHurt = hp1 - p.hp;
+    boss.state = 'chase'; step(5);
+    const once = boss.state !== 'veil';
+    const log = s.damageLog.entries.map(e => e.name);
+    c.hp = 0; s.resolveEnemyHit(boss, true, 1, 0, 0);
+    const cleared = hz.poolCount === 0 && hz.shotCount === 0;
+    localStorage.removeItem('untitled-rpg.quests');
+    return { volley, fired, shotPools, poolHurt, slowed, noInvuln, chargePool, veil, veilHurt, once, log, cleared };
+  })()`);
+  assert.equal(result.volley, true);
+  assert.equal(result.fired, 3);
+  assert.ok(result.shotPools >= 3, `빗나간 산탄 웅덩이 ${result.shotPools}`);
+  assert.ok(result.poolHurt > 0 && result.poolHurt < 30, `웅덩이 피해 ${result.poolHurt}`);
+  assert.equal(result.slowed, true);
+  assert.equal(result.noInvuln, true, '웅덩이 틱은 무적 시간을 주지 않는다');
+  assert.equal(result.chargePool, true, '2페이즈 돌진 자리에 웅덩이');
+  assert.equal(result.veil, true);
+  assert.ok(result.veilHurt >= 30, `장막 피해 ${result.veilHurt}`);
+  assert.equal(result.once, true, '장막은 한 번만');
+  assert.ok(result.log.includes('부식의 집행자(부식 웅덩이)') && result.log.includes('부식의 집행자(부식의 장막)'), result.log.join(','));
+  assert.equal(result.cleared, true, '보스가 쓰러지면 부식 효과도 사라진다');
+});
+
 test('1장 수확제 연출: 잔치에 모두 모이고 하늘 등불·경보·권속 입장까지 스스로 흘러가며, 끝나면 광장이 습격 상태로 다시 열린다', async () => {
   await load('village');
   await evaluate(`(() => { const s = window.__game.scene.getScene('game');
@@ -1967,7 +2152,7 @@ test('1장 수확제 연출: 잔치에 모두 모이고 하늘 등불·경보·�
     localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.festival');
     return r;
   })()`);
-  assert.deepEqual(after, { map: 'village', festival: false, enemies: 3, sia: false, hud: true });
+  assert.deepEqual(after, { map: 'village', festival: false, enemies: 6, sia: false, hud: true });
 });
 
 test('회전 베기는 마나를 써서 둘레의 적을 한꺼번에 베고, 마나가 모자라면 쓸 수 없으며, 마나는 다시 찬다', async () => {

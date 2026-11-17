@@ -88,36 +88,65 @@ export function isDusk(state: QuestState): boolean {
   return !!state['evening-patrol'] && chapterPhase(state) === 'day';
 }
 
-export interface RaidSpawn { x: number; y: number; key: 'corrosion-tracker' | 'corrosion-executioner'; level: number }
+export interface RaidSpawn {
+  x: number; y: number;
+  key: 'corrosion-tracker' | 'corrosion-executioner' | 'ashen-moth';
+  level: number;
+  /** 1장 보스: 경고를 띄운 뒤 나타나고, 화면 위에 체력 막대가 따로 보인다 */
+  boss?: true;
+}
 
 const inn = BUILDINGS.find((b) => b.frame === 'inn')!.door;
 const tracker = (x: number, y: number): RaidSpawn => ({ x, y, key: 'corrosion-tracker', level: RAID_LEVELS.tracker });
-const executioner = (x: number, y: number): RaidSpawn => ({ x, y, key: 'corrosion-executioner', level: RAID_LEVELS.executioner });
+const moth = (x: number, y: number): RaidSpawn => ({ x, y, key: 'ashen-moth', level: RAID_LEVELS.moth });
+const executioner = (x: number, y: number): RaidSpawn => ({ x, y, key: 'corrosion-executioner', level: RAID_LEVELS.executioner, boss: true });
+const yard = (dx: number, dy: number) => ({ x: LINEA_YARD.x + mapLength(dx), y: LINEA_YARD.y + mapLength(dy) });
 
 /**
  * 습격의 세 무리 (꺼져 가는 등불의 전투 단계): 남쪽 입구 → 여관 앞 골목 → 마을 북쪽 길.
- * 마지막 무리에는 부식의 집행자가 길을 막는다.
+ * 한 무리는 차례로 나오는 몇 개의 떼(groups)로 이루어진다. 앞 떼를 다 쓰러뜨려야 다음 떼가 나온다.
+ * 북쪽 길은 추적자 넷과 잿빛 나방 넷을 먼저 막고, 그다음 1장 보스 부식의 집행자가 경고와 함께 나타난다.
  */
-export const RAID_WAVES: Array<{ step: number; map: MapId; spawns: RaidSpawn[] }> = [
-  { step: 0, map: 'village', spawns: [tracker(mapLength(1180), mapLength(1320)), tracker(mapLength(1310), mapLength(1220)), tracker(mapLength(1460), mapLength(1130))] },
-  { step: 2, map: 'village', spawns: [tracker(inn.x - mapLength(260), inn.y + mapLength(30)), tracker(inn.x + mapLength(180), inn.y + mapLength(40)), tracker(inn.x - mapLength(90), inn.y + mapLength(45))] },
-  { step: 4, map: 'village-north', spawns: [tracker(LINEA_YARD.x + mapLength(260), LINEA_YARD.y + mapLength(90)), executioner(LINEA_YARD.x + mapLength(380), LINEA_YARD.y - mapLength(20)),
-    tracker(LINEA_YARD.x + mapLength(120), LINEA_YARD.y + mapLength(170))] },
+export const RAID_WAVES: Array<{ step: number; map: MapId; groups: RaidSpawn[][] }> = [
+  { step: 0, map: 'village', groups: [[
+    tracker(mapLength(1180), mapLength(1320)), tracker(mapLength(1310), mapLength(1220)), tracker(mapLength(1460), mapLength(1130)),
+    tracker(mapLength(980), mapLength(1380)), tracker(mapLength(1390), mapLength(1360)), tracker(mapLength(1600), mapLength(1280)),
+  ]] },
+  { step: 2, map: 'village', groups: [[tracker(inn.x - mapLength(260), inn.y + mapLength(30)), tracker(inn.x + mapLength(180), inn.y + mapLength(40)), tracker(inn.x - mapLength(90), inn.y + mapLength(45))]] },
+  { step: 4, map: 'village-north', groups: [
+    [tracker(yard(260, 90).x, yard(260, 90).y), tracker(yard(120, 170).x, yard(120, 170).y), tracker(yard(400, 150).x, yard(400, 150).y), tracker(yard(520, 40).x, yard(520, 40).y),
+      moth(yard(200, -40).x, yard(200, -40).y), moth(yard(380, -30).x, yard(380, -30).y), moth(yard(60, 110).x, yard(60, 110).y), moth(yard(560, 170).x, yard(560, 170).y)],
+    [executioner(yard(380, -20).x, yard(380, -20).y)],
+  ] },
 ];
+
+/** 그 무리에서 쓰러뜨려야 하는 수 (퀘스트 목표 수와 같다) */
+export function raidWaveSize(step: number): number {
+  return RAID_WAVES.find((w) => w.step === step)?.groups.reduce((n, g) => n + g.length, 0) ?? 0;
+}
 
 /** 습격 중 이 맵에 나올 수 있는 모든 권속 (그림을 미리 읽어 두려고 쓴다). */
 export function raidSpawnsAnyStep(state: QuestState, map: MapId): RaidSpawn[] {
   if (chapterPhase(state) !== 'raid') return [];
-  return RAID_WAVES.filter((w) => w.map === map).flatMap((w) => w.spawns);
+  return RAID_WAVES.filter((w) => w.map === map).flatMap((w) => w.groups.flat());
 }
 
-/** 재접속해도 남은 수만 다시 배치한다. 일반 필드 처치와 구분한다. */
+/**
+ * 지금 나와 있어야 할 떼에서 아직 쓰러뜨리지 않은 권속. 쓰러뜨린 수(count)로 어느 떼인지 정하므로
+ * 재접속해도 남은 수만 다시 배치하고, 앞 떼를 다 잡았으면 다음 떼(보스)가 나온다.
+ */
 export function raidSpawns(state: QuestState, map: MapId): RaidSpawn[] {
   if (chapterPhase(state) !== 'raid') return [];
   const progress = state['village-raid'];
   if (progress?.status !== 'active') return [];
   const wave = RAID_WAVES.find((w) => w.step === (progress.step ?? 0) && w.map === map);
-  return wave ? wave.spawns.slice(progress.count) : [];
+  if (!wave) return [];
+  let left = progress.count;
+  for (const group of wave.groups) {
+    if (left < group.length) return group.slice(left);
+    left -= group.length;
+  }
+  return [];
 }
 
 export function chapterDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined {

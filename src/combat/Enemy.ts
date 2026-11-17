@@ -8,8 +8,13 @@ import type { WalkArea } from '../world/walkArea';
 import { MonsterSprite } from './MonsterSprite';
 import { MONSTERS, WATER_SHOT, isCharger, monsterKind, enemyHitReaches, type EnemyHit, type EnemyKey, type MonsterKind, type MonsterStats } from './monsterTypes';
 import { scaleMonster } from './monsterLevel';
+import { BOSS, fanDirections, insideEllipse, retreatDone, shouldVeil, wantsVolley, type BossPhase } from './bossPattern';
+import { BossHazards } from './BossHazards';
 
-type State = 'wander' | 'chase' | 'windup' | 'recover' | 'dead';
+type State = 'wander' | 'chase' | 'windup' | 'recover' | 'roar' | 'retreat' | 'volley' | 'veil' | 'dead';
+
+/** 보스의 부식 효과가 주인공에게 닿았는지 알린다 (웅덩이 틱, 장막이 터질 때). hit: 장막 범위 안이었는지 */
+export type HazardHandler = (enemy: Enemy, kind: 'pool' | 'veil', hit: boolean, dirX: number, dirY: number) => void;
 
 /**
  * 슬라임 근접·버섯 원거리·도마뱀 돌진과 습격 임시 권속의 AI.
@@ -44,9 +49,24 @@ export class Enemy {
 
   /** 쓰러질 때 흩어지는 파편의 색 */
   readonly color: number;
+  /** 1장 보스인지 (combat/bossPattern.ts): 돌진을 잇달아 하고, 보통 공격에 움찔하지 않으며, 절반에서 포효한다 */
+  readonly boss: boolean;
+  phase: BossPhase = 1;
+  /** 이번 연속 공격에서 남은 돌진 수 */
+  private chainLeft = 0;
+  /** 다음 돌진을 기다리는 중 (recover가 끝나면 바로 준비 동작) */
+  private chainPending = false;
+  private retreatStartedAt = 0;
+  /** 2페이즈의 부식 웅덩이·산탄·장막 (보스만) */
+  readonly hazards?: BossHazards;
+  private veilUsed = false;
+  private shotReadyAt = 0;
+  private volleyDirs: Array<{ x: number; y: number }> = [];
 
-  constructor(scene: Phaser.Scene, key: EnemyKey, x: number, y: number, level = 1) {
+  constructor(scene: Phaser.Scene, key: EnemyKey, x: number, y: number, level = 1, boss = false) {
     this.scene = scene;
+    this.boss = boss;
+    if (boss) this.hazards = new BossHazards(scene);
     this.kind = monsterKind(key);
     this.level = level;
     this.stats = scaleMonster<MonsterStats>(MONSTERS[this.kind ?? 'slime'], level);
@@ -73,16 +93,22 @@ export class Enemy {
     area: WalkArea,
     nav: NavGrid,
     onStrike: (enemy: Enemy, hit?: EnemyHit) => boolean | void,
+    onHazard?: HazardHandler,
   ): void {
     const c = this.character;
     if (this.state === 'dead') return;
+    this.hazards?.update(time, dt, player, area, {
+      strike: (hit) => onStrike(this, hit) === true,
+      pool: () => onHazard?.(this, 'pool', true, 0, 0),
+    });
     this.updateHitSquash(time);
     this.updateProjectile(time, dt, player, area, onStrike);
     if (c.sprite instanceof MonsterSprite) c.sprite.advance(dt * 1000);
 
     const dx = player.x - c.x;
     const dy = player.y - c.y;
-    const playerNear = player.alive && Math.abs(dx) < ENEMY.aggroX && Math.abs(dy) < ENEMY.aggroY;
+    // 보스는 나타나면 주인공이 어디 있든 쫓는다.
+    const playerNear = player.alive && (this.boss || (Math.abs(dx) < ENEMY.aggroX && Math.abs(dy) < ENEMY.aggroY));
 
     switch (this.state) {
       case 'wander': {
@@ -102,9 +128,18 @@ export class Enemy {
       }
 
       case 'chase': {
-        if (!player.alive || Math.abs(dx) > ENEMY.aggroX * 1.5) {
+        if (!player.alive || (!this.boss && Math.abs(dx) > ENEMY.aggroX * 1.5)) {
           this.state = 'wander';
           this.target.set(c.x, c.y);
+          break;
+        }
+        // 2페이즈: 체력이 1/4 아래로 처음 떨어지면 부식의 장막, 멀리 있으면 부식 산탄
+        if (this.boss && shouldVeil(this.phase, c.hp, c.maxHp, this.veilUsed)) {
+          this.startVeil(time);
+          break;
+        }
+        if (this.boss && wantsVolley(this.phase, Math.hypot(dx, dy), time, this.shotReadyAt)) {
+          this.startVolley(time, dx, dy);
           break;
         }
         const ranged = this.kind === 'waterdrop-mushroom';
@@ -113,6 +148,8 @@ export class Enemy {
           : charge ? Math.hypot(dx, dy) <= 250 && area.hasClearPath(c.x, c.y, player.x, player.y)
           : Math.abs(dx) < ENEMY.attackRangeX && Math.abs(dy) < ENEMY.attackRangeY;
         if (inRange) {
+          // 보스는 돌진을 BOSS.chain번 잇달아 한다.
+          this.chainLeft = this.boss ? BOSS.chain - 1 : 0;
           this.beginWindup(time, dx, ranged || charge ? dy : 0);
           break;
         }
@@ -136,15 +173,89 @@ export class Enemy {
 
       case 'recover':
         c.setMotion(false);
-        if (time >= this.timer) this.state = 'chase';
+        if (time < this.timer) break;
+        if (this.chainPending && player.alive) {
+          // 연속 공격의 다음 돌진: 쉬는 동안 움직인 주인공 쪽을 다시 겨눈다.
+          this.chainPending = false;
+          this.beginWindup(time, dx, dy);
+        } else {
+          this.chainPending = false;
+          this.state = 'chase';
+        }
         break;
+
+      case 'volley': {
+        // 웅크렸다가 겨눈 방향으로 부채꼴 산탄
+        c.setMotion(false, this.aim.x);
+        const t = 1 - Math.max(0, this.timer - time) / BOSS.shot.windupMs;
+        c.sprite.setScale(1 + 0.12 * t, 1 - 0.14 * t);
+        if (time >= this.timer) {
+          c.sprite.setScale(1);
+          this.hazards?.fire(c.x, c.y, this.volleyDirs);
+          this.shotReadyAt = time + BOSS.shot.cooldownMs;
+          this.state = 'recover';
+          this.timer = time + BOSS.shot.recoverMs;
+        }
+        break;
+      }
+
+      case 'veil': {
+        // 범위를 그리며 몸을 떨다가 터뜨린다. 그때 범위 안에 있으면 큰 피해.
+        c.setMotion(false, dx);
+        const shake = Math.sin(time / 30) * 3;
+        c.sprite.setPosition(shake, 0);
+        if (time >= this.timer) {
+          c.sprite.setPosition(0, 0);
+          this.hazards?.burstVeil(time);
+          const distance = Math.hypot(dx, dy) || 1;
+          onHazard?.(this, 'veil', insideEllipse(dx, dy, BOSS.veil.rx, BOSS.veil.ry), dx / distance, dy / distance);
+          if (this.state !== 'veil') break;
+          this.state = 'recover';
+          this.timer = time + BOSS.veil.recoverMs;
+        }
+        break;
+      }
+
+      case 'roar': {
+        // 포효: 제자리에서 몸을 크게 부풀렸다 줄인다.
+        c.setMotion(false, dx);
+        const pulse = Math.abs(Math.sin((time - (this.timer - BOSS.roarMs)) / 90));
+        c.sprite.setScale(1 + 0.12 * pulse, 1 + 0.08 * pulse);
+        if (time >= this.timer) {
+          c.sprite.setScale(1);
+          this.state = 'retreat';
+          this.retreatStartedAt = time;
+        }
+        break;
+      }
+
+      case 'retreat': {
+        // 주인공을 바라본 채 뒤로 물러나 거리를 벌린 뒤 2페이즈를 시작한다.
+        const distance = Math.hypot(dx, dy) || 1;
+        const step = BOSS.retreatSpeed * dt;
+        const next = area.move(c.x, c.y, (-dx / distance) * step, (-dy / distance) * step, this.scratch);
+        const blocked = Math.hypot(next.x - c.x, next.y - c.y) < step * 0.2;
+        if (!blocked) c.placeAt(next.x, next.y);
+        c.setMotion(!blocked, dx);
+        if (c.sprite instanceof MonsterSprite) c.sprite.setMovement(dx, dy);
+        if (retreatDone(distance, time - this.retreatStartedAt, blocked)) {
+          c.setMotion(false, dx);
+          this.phase = 2;
+          this.state = 'chase';
+        }
+        break;
+      }
     }
   }
 
   /** 맞으면 준비 동작이 끊기고 잠깐 멈칫한다. 저스트 회피를 당하면 더 오래 멈춘다. */
   interrupt(time: number, durationMs: number = ENEMY.staggerMs): void {
-    if (this.state === 'dead') return;
+    if (this.state === 'dead' || this.state === 'roar' || this.state === 'retreat' || this.state === 'veil') return;
+    this.hazards?.clearAim();
     this.cancelStrike();
+    // 패링·저스트 회피로 멈칫하면 이어 하려던 돌진도 끊긴다.
+    this.chainLeft = 0;
+    this.chainPending = false;
     this.character.sprite.setScale(1).setPosition(0, 0);
     this.state = 'recover';
     this.timer = time + durationMs;
@@ -152,19 +263,64 @@ export class Enemy {
 
   /** 칼에 맞았을 때: 그 자리에서 납작해졌다가 출렁이며 돌아온다 (게임 시계 기준). */
   onHit(time: number): void {
+    if (this.state === 'roar') return;
     this.hitAt = time;
     const { scaleX, scaleY } = hitSquash(0);
     this.character.sprite.setScale(scaleX, scaleY);
   }
 
   private updateHitSquash(time: number): void {
-    if (this.hitAt === undefined || this.state === 'windup') return;
+    if (this.hitAt === undefined || this.state === 'windup' || this.state === 'volley') return;
     const { scaleX, scaleY } = hitSquash(time - this.hitAt);
     this.character.sprite.setScale(scaleX, scaleY);
     if (scaleX === 1 && scaleY === 1) this.hitAt = undefined;
   }
 
+  /** 포효해서 칼에 맞지 않는 중 (보스의 페이즈 전환) */
+  get untouchable(): boolean {
+    return this.state === 'roar';
+  }
+
+  private startVolley(time: number, dx: number, dy: number): void {
+    const c = this.character;
+    const distance = Math.hypot(dx, dy) || 1;
+    this.aim.x = dx / distance;
+    this.aim.y = dy / distance;
+    this.volleyDirs = fanDirections(this.aim.x, this.aim.y, BOSS.shot.count, BOSS.shot.spreadDeg);
+    this.state = 'volley';
+    this.timer = time + BOSS.shot.windupMs;
+    this.hazards?.showAim(c.x, c.y, this.volleyDirs, time, this.timer);
+    c.setMotion(false, dx);
+    if (c.sprite instanceof MonsterSprite) c.sprite.setMovement(dx, dy);
+  }
+
+  private startVeil(time: number): void {
+    const c = this.character;
+    this.veilUsed = true;
+    this.chainLeft = 0;
+    this.chainPending = false;
+    this.state = 'veil';
+    this.timer = time + BOSS.veil.telegraphMs;
+    this.hazards?.startVeil(c.x, c.y, time);
+    c.setMotion(false);
+  }
+
+  /** 보스 2페이즈 전환: 하던 공격을 멈추고 포효한 뒤 물러난다. */
+  startRoar(time: number): void {
+    if (this.state === 'dead') return;
+    this.cancelStrike();
+    this.clearProjectile();
+    this.chainLeft = 0;
+    this.chainPending = false;
+    this.hitAt = undefined;
+    this.character.sprite.setPosition(0, 0).setScale(1);
+    this.character.knockback.set(0, 0);
+    this.state = 'roar';
+    this.timer = time + BOSS.roarMs;
+  }
+
   kill(): void {
+    this.hazards?.clear();
     this.hitAt = undefined;
     this.state = 'dead';
     this.cancelStrike();
@@ -254,8 +410,13 @@ export class Enemy {
       if (this.state !== 'windup') return;
     }
     if (elapsed >= endAt) {
+      // 2페이즈: 돌진이 끝난 자리에 부식 웅덩이가 남는다.
+      if (this.boss && this.phase === 2 && isCharger(this.kind)) this.hazards?.addPool(this.character.x, this.character.y, 1, time);
       this.state = 'recover';
-      this.timer = this.attackStartedAt + endAt + recoverMs;
+      const chained = this.chainLeft > 0;
+      if (chained) this.chainLeft--;
+      this.chainPending = chained;
+      this.timer = this.attackStartedAt + endAt + (chained ? BOSS.chainGapMs : recoverMs);
       this.attackStartedAt = undefined;
       sprite.setPosition(0, 0).setScale(1);
       if (sprite instanceof MonsterSprite) sprite.endStrike();

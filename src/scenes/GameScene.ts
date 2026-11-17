@@ -7,7 +7,7 @@ import { bladeHitsEllipse, clipBladeSweep, type Blade } from '../combat/blade';
 import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
 import { preloadMonsters } from '../combat/MonsterSprite';
-import { ASH_SLOW, enemyHitReaches, type EnemyHit } from '../combat/monsterTypes';
+import { ASH_SLOW, MONSTERS, enemyHitReaches, type EnemyHit } from '../combat/monsterTypes';
 import { isJustDodge, slowMotionScale, strikeReaches } from '../combat/justDodge';
 import { critMultiplier, gameTimeScale, heavierKind, hitStopMs, strikeKind, type HitKind } from '../combat/hitFeel';
 import { ImpactEffects } from '../combat/ImpactEffects';
@@ -63,6 +63,8 @@ import { OpeningDirector } from './OpeningDirector';
 import { OPENING, OPENING_HINT, OPENING_SAVE_KEY, OPENING_WALK_SCALE, shouldPlayOpening, type OpeningStep } from '../story/opening';
 import { FESTIVAL, FESTIVAL_RAIDERS, FESTIVAL_SAVE_KEY, FESTIVAL_WALK_SCALE, RAIDER_ENTRY_MS, festivalNpcs, shouldPlayFestival } from '../story/festival';
 import { FestivalStage } from './FestivalStage';
+import { DeathPanel } from '../ui/DeathPanel';
+import { deathReport, emptyDamageLog, recordDamage, type DamageLog } from '../combat/damageLog';
 import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings } from '../ui/settingsData';
 import { DIALOGUES, HERO_NAME } from '../story/dialogues';
 import { findInteractable, type Interactable } from '../world/interactables';
@@ -73,7 +75,9 @@ import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
 import { StoryChoice } from '../ui/StoryChoice';
 import { CLINIC_BED_SPOT, HOME_BED_SPOT, REST_POINTS, herbBonus, REST_SAVE_KEY, canRest, parseRestPoint, serializeRestPoint, type RestPointId } from '../story/restPoints';
-import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, isDusk, raidSpawns, raidSpawnsAnyStep, INSPECTION_LINES } from '../story/chapterOne';
+import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, isDusk, raidSpawns, raidSpawnsAnyStep, INSPECTION_LINES, type RaidSpawn } from '../story/chapterOne';
+import { BOSS, entersPhaseTwo } from '../combat/bossPattern';
+import { BossHud } from '../ui/BossHud';
 import {
   currentObjective, MARKER_PRIORITY, QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestMarker, type QuestState,
   type InspectSpot,
@@ -136,6 +140,16 @@ export class GameScene extends Phaser.Scene {
   private enemyRespawns: Array<{ at: number; enemy: Enemy }> = [];
   private playerRespawnAt?: number;
   private deathMessage?: Phaser.GameObjects.Text;
+  /** 이 맵에 들어오거나 다시 일어난 뒤 받은 피해 (쓰러지면 보여 준다) */
+  private damageLog: DamageLog = emptyDamageLog();
+  /** 쓰러졌을 때의 창: 누구에게 얼마나 맞았는지, 확인하면 마지막으로 쉰 곳으로 */
+  private deathPanel?: DeathPanel;
+  /** 1장 보스: 경고·체력 막대, 싸우는 보스, 경고가 끝나는 시각과 그때 나올 무리, 포효가 끝나는 시각 (게임 시계) */
+  private bossHud?: BossHud;
+  private boss?: Enemy;
+  private bossWarningEnd?: number;
+  private pendingBoss?: RaidSpawn[];
+  private bossRoarUntil = 0;
   private attackTrace?: { startedAt: number; stage: number; direction: { x: number; y: number }; previous: Blade; elapsed: number; hit: Set<Enemy>; effect?: AttackEffect; counter: boolean };
   private nextAttackAt = 0;
   private attackBufferedUntil?: number;
@@ -432,6 +446,13 @@ export class GameScene extends Phaser.Scene {
     this.shield = undefined;
     this.playerRespawnAt = undefined;
     this.deathMessage = undefined;
+    this.damageLog = emptyDamageLog();
+    this.deathPanel = undefined;
+    this.bossHud = undefined;
+    this.boss = undefined;
+    this.bossWarningEnd = undefined;
+    this.pendingBoss = undefined;
+    this.bossRoarUntil = 0;
     this.traveling = false;
     this.arrival = undefined;
     this.carriedHp = undefined;
@@ -479,6 +500,7 @@ export class GameScene extends Phaser.Scene {
     const bounds = this.walkArea.bounds;
     this.nav = new NavGrid(bounds.left, bounds.top, bounds.right, bounds.bottom, NAV_CELL,
       (x, y) => this.walkArea.contains(x, y));
+    this.bossHud = new BossHud(this);
     this.buildCharacters();
     this.effects = new CombatEffects(this);
     this.impacts = new ImpactEffects(this);
@@ -487,6 +509,7 @@ export class GameScene extends Phaser.Scene {
     this.progressEffects = new ProgressEffects(this);
     this.dialogue = new DialogueBox(this);
     this.storyChoice = new StoryChoice(this, () => this.onResume());
+    this.deathPanel = new DeathPanel(this);
     if (chapterPhase(this.quests) === 'raid') {
       this.chapterShade = this.add.graphics().setScrollFactor(0).setDepth(DEPTH_LIGHTING);
       this.drawChapterShade(this.scale.gameSize.width);
@@ -594,7 +617,8 @@ export class GameScene extends Phaser.Scene {
         chapterPhase(this.quests) === 'raid' && this.mapId === 'village');
     }
     this.setQuickButtonsVisible(!this.traveling && !!this.player?.alive && !this.dialogue.isOpen && !this.pauseMenu.isOpen
-      && !this.characterPanel?.isOpen && !this.itemPanel?.isOpen && !this.worldMap?.isOpen && !this.storyChoice?.isOpen && !this.quickSlotPanel?.isOpen);
+      && !this.characterPanel?.isOpen && !this.itemPanel?.isOpen && !this.worldMap?.isOpen && !this.storyChoice?.isOpen && !this.quickSlotPanel?.isOpen
+      && !this.deathPanel?.isOpen);
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
     // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
     const step = Math.min(delta, 50);
@@ -612,6 +636,13 @@ export class GameScene extends Phaser.Scene {
     if (this.opening && escape) {
       this.opening.skip();
       escape = false;
+    }
+    // 쓰러진 뒤의 창: 확인(Enter·Space·E·J·Esc)을 누를 때까지 게임은 멈춰 있다.
+    if (this.deathPanel?.isOpen) {
+      let confirm = escape || this.talkPressed();
+      for (const key of this.attackKeys) if (Phaser.Input.Keyboard.JustDown(key)) confirm = true;
+      if (confirm) this.deathPanel.confirm();
+      return;
     }
     if (this.quickSlotPanel?.isOpen) {
       if (escape) this.quickSlotPanel.close();
@@ -690,16 +721,23 @@ export class GameScene extends Phaser.Scene {
     this.festivalStage?.update(time);
     this.updateFestivalRaiders(time);
     this.updateRespawns(time);
+    this.updateBoss(time);
     this.updateAttackLunge(time);
     this.updateInteraction(time);
     if (this.traveling || this.menuOpen()) return;
-    this.updatePlayer(time, dt);
-    this.drawShield(time);
-    if (this.checkExit()) return;
-    this.updateAttackTrace(time);
+    // 보스가 포효하는 동안에는 주인공도 멈춰 선다.
+    if (time < this.bossRoarUntil) {
+      this.player.setMotion(false);
+      this.clearAttackInput();
+    } else {
+      this.updatePlayer(time, dt);
+      this.drawShield(time);
+      if (this.checkExit()) return;
+      this.updateAttackTrace(time);
+    }
     this.nav.setTarget(this.player.x, this.player.y);
     for (const enemy of this.enemies) {
-      enemy.update(time, dt, this.player, this.walkArea, this.nav, this.onEnemyStrike);
+      enemy.update(time, dt, this.player, this.walkArea, this.nav, this.onEnemyStrike, this.onBossHazard);
       this.applyKnockback(enemy.character, dt);
     }
     this.separateEnemies(dt);
@@ -886,14 +924,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 화면을 어둡게 한 뒤 장면을 새 맵으로 다시 시작한다. 레벨·경험치는 저장되어 있어 그대로 이어진다. */
-  private travel(exit: MapExit): void {
+  /** revive: 쓰러진 뒤 다시 시작하는 이동. 체력·마나를 다 채워 도착한다. */
+  private travel(exit: MapExit, revive = false): void {
     this.traveling = true;
     this.clearAttackInput();
     this.player.setMotion(false);
     this.attackButton.setVisible(false);
     this.talkMarker.setVisible(false);
-    const data: SceneData = { map: exit.to, at: exit.arrive, hp: this.player.hp, herb: this.herb, mp: this.mp,
-      resonance: Math.max(0, this.resonanceUntil - this.now) };
+    const data: SceneData = revive
+      ? { map: exit.to, at: exit.arrive }
+      : { map: exit.to, at: exit.arrive, hp: this.player.hp, herb: this.herb, mp: this.mp, resonance: Math.max(0, this.resonanceUntil - this.now) };
     const camera = this.cameras.main;
     camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart(data));
     camera.fadeOut(TRAVEL_FADE_MS, 0, 0, 0);
@@ -1007,7 +1047,7 @@ export class GameScene extends Phaser.Scene {
   /** 게임을 멈추는 메뉴·창·대화가 열려 있는지 */
   private menuOpen(): boolean {
     return !!(this.quickSlotPanel?.isOpen || this.storyChoice?.isOpen || this.pauseMenu?.isOpen || this.itemPanel?.isOpen
-      || this.characterPanel?.isOpen || this.worldMap?.isOpen || this.dialogue?.isOpen);
+      || this.characterPanel?.isOpen || this.worldMap?.isOpen || this.dialogue?.isOpen || this.deathPanel?.isOpen);
   }
 
   private layout(): void {
@@ -1037,6 +1077,8 @@ export class GameScene extends Phaser.Scene {
     this.exitHint?.layout(width);
     this.dialogue.layout(width);
     this.storyChoice?.layout(width);
+    this.deathPanel?.layout(width);
+    this.bossHud?.layout(width);
     this.drawChapterShade(width);
     this.festivalStage?.layout(width);
     this.pauseMenu.layout(width);
@@ -1375,7 +1417,7 @@ export class GameScene extends Phaser.Scene {
     let heaviest: Exclude<HitKind, 'hurt'> | undefined;
     for (const enemy of this.enemies) {
       const c = enemy.character;
-      if (!c.alive || trace.hit.has(enemy)) continue;
+      if (!c.alive || enemy.untouchable || trace.hit.has(enemy)) continue;
       // Use a corridor around the locked attack direction, then test the visible blade.
       if (!insideAttackLane(c.x - player.x, c.y - player.y, trace.direction,
         PLAYER.attackLane, VERTICAL_SPEED_RATIO)) continue;
@@ -1422,6 +1464,12 @@ export class GameScene extends Phaser.Scene {
       this.gainXp(xpForKill(enemy.stats.xp, enemy.level, this.progress.level), c.x, c.y - 185);
       this.questEvent({ type: 'kill', map: this.mapId, monster: enemy.kind, ...(raid ? { encounter: 'village-raid' as const } : {}) });
       if (!raid) this.collectDrop(c.x, c.y, enemy);
+      if (enemy === this.boss) this.onBossDefeated(enemy);
+    } else if (enemy.boss) {
+      // 보스는 보통 공격에 움찔하지 않고 조금만 밀린다. 체력이 절반 아래로 떨어지면 포효하며 2페이즈.
+      c.knockback.set(dirX * push * BOSS.knockbackScale, dirY * push * BOSS.knockbackScale * VERTICAL_SPEED_RATIO);
+      enemy.onHit(this.now);
+      if (entersPhaseTwo(enemy.phase, c.hp, c.maxHp)) this.startBossRoar(enemy);
     } else {
       c.knockback.set(dirX * push, dirY * push * VERTICAL_SPEED_RATIO);
       enemy.interrupt(this.now);
@@ -1503,6 +1551,7 @@ export class GameScene extends Phaser.Scene {
   /** 뒤로가기 버튼: 메뉴가 열려 있으면 한 단계 뒤로, 아니면 일시정지. */
   private onBackButton(): void {
     if (this.opening) { this.opening.skip(); return; }
+    if (this.deathPanel?.isOpen) { this.deathPanel.confirm(); return; }
     if (this.quickSlotPanel?.isOpen) { this.quickSlotPanel.close(); return; }
     if (this.storyChoice?.isOpen) { this.storyChoice.cancel(); return; }
     if (this.pauseMenu.isOpen) this.pauseMenu.back();
@@ -1510,7 +1559,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private openPause(): void {
-    if (this.opening) return;
+    if (this.opening || this.deathPanel?.isOpen) return;
     if (this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return;
     if (!this.pauseMenu || this.pauseMenu.isOpen) return;
     this.pauseButton.setVisible(false);
@@ -1550,7 +1599,7 @@ export class GameScene extends Phaser.Scene {
 
   /** 싸우는 중에는 말을 걸 수 없다. 대화 중에는 게임이 멈추므로 공격받는 도중에 열리지 않게 한다. */
   private inCombat(): boolean {
-    return this.enemies.some((e) => e.state === 'chase' || e.state === 'windup' || e.state === 'recover');
+    return this.enemies.some((e) => e.state === 'chase' || e.state === 'windup' || e.state === 'recover' || e.state === 'roar' || e.state === 'retreat' || e.state === 'volley' || e.state === 'veil');
   }
 
   private setPrimaryAction(action: ActionIcon, label: string): void {
@@ -1757,15 +1806,23 @@ export class GameScene extends Phaser.Scene {
   private syncRaidEnemies(announce = true): void {
     // 축제 연출 동안에는 싸울 무리를 내지 않는다(연출이 끝나면 광장을 다시 열면서 나온다).
     if (this.playFestival) return;
-    if ([...this.raidEnemies].some((e) => e.character.alive)) return;
+    if ([...this.raidEnemies].some((e) => e.character.alive && e.state !== 'dead') || this.bossWarningEnd !== undefined) return;
     const spawns = raidSpawns(this.quests, this.mapId);
     if (spawns.length === 0) return;
+    // 보스는 "보스 등장" 경고를 띄운 뒤 나타난다(updateBoss).
+    if (spawns.some((s) => s.boss)) {
+      this.pendingBoss = spawns;
+      this.bossWarningEnd = this.now + BOSS.warningMs;
+      this.bossHud?.showWarning(MONSTERS[spawns.find((s) => s.boss)!.key].name, this.now);
+      this.cameras.main.shake(BOSS.warningMs * 0.3, 0.003);
+      return;
+    }
     for (const point of spawns) {
       const enemy = new Enemy(this, point.key, point.x, point.y, point.level);
       this.enemies.push(enemy);
       this.raidEnemies.add(enemy);
     }
-    if (announce) this.hud.showCallout(spawns.some((s) => s.key === 'corrosion-executioner') ? '커다란 권속이 길을 막아선다!' : '권속이 몰려온다!');
+    if (announce) this.hud.showCallout('권속이 몰려온다!');
   }
 
   private refreshQuests(): void {
@@ -1937,7 +1994,7 @@ export class GameScene extends Phaser.Scene {
     let hits = 0;
     for (const enemy of this.enemies) {
       const c = enemy.character;
-      if (!c.alive) continue;
+      if (!c.alive || enemy.untouchable) continue;
       const dx = c.x - player.x, dy = c.y - player.y;
       if (!inSpinRadius(dx, dy, SPIN_SLASH.radius, VERTICAL_SPEED_RATIO)) continue;
       hits++;
@@ -2329,14 +2386,8 @@ export class GameScene extends Phaser.Scene {
     }
     // 방어력(DEF)만큼 받는 피해가 줄어든다.
     // 공명 중에는 받는 피해가 더 준다(최소 1).
-    const taken = resonanceTaken(mitigate(enemy.stats.damage, this.derived), this.resonating, RESONANCE);
-    const died = player.hurt(taken, 0xff5a4a);
-    if (this.herb) {
-      // 약초 기운은 처음 맞을 때 사라진다. 남은 체력이 기본 최대보다 많으면 기본 최대로 맞춘다.
-      this.herb = 0;
-      player.setMaxHp(this.stats.maxHp, false);
-      if (!died) this.hud.showCallout('약초 기운이 사라졌다');
-    }
+    // 보스의 부식 산탄처럼 공격마다 배율(damageScale)이 다를 수 있다.
+    const { taken, died } = this.hurtPlayer(enemy, enemy.stats.damage * (hit?.damageScale ?? 1), enemy.stats.name);
     player.knockback.set((hit?.dx ?? c.facing) * ENEMY.knockback, (hit?.dy ?? 0) * ENEMY.knockback * VERTICAL_SPEED_RATIO);
     this.showDamage(player.x, player.y - 190, taken, '#ff8a7a');
     if (enemy.kind === 'ashen-moth') {
@@ -2353,6 +2404,52 @@ export class GameScene extends Phaser.Scene {
     this.drawHud();
     if (died) this.onPlayerDeath();
     return true;
+  };
+
+  /**
+   * 주인공이 피해를 받는다: 방어력(DEF)과 공명을 반영하고(최소 1), 받은 피해를 기록하고, 약초 기운을 지운다.
+   * source: 쓰러졌을 때의 창에 보일 이름
+   */
+  private hurtPlayer(enemy: Enemy, damage: number, source: string): { taken: number; died: boolean } {
+    const player = this.player;
+    const taken = resonanceTaken(mitigate(Math.round(damage), this.derived), this.resonating, RESONANCE);
+    const died = player.hurt(taken, 0xff5a4a);
+    this.damageLog = recordDamage(this.damageLog, { name: source, level: enemy.level }, taken);
+    if (this.herb) {
+      // 약초 기운은 처음 맞을 때 사라진다. 남은 체력이 기본 최대보다 많으면 기본 최대로 맞춘다.
+      this.herb = 0;
+      player.setMaxHp(this.stats.maxHp, false);
+      if (!died) this.hud.showCallout('약초 기운이 사라졌다');
+    }
+    return { taken, died };
+  }
+
+  /**
+   * 보스 2페이즈의 부식: 웅덩이 틱(작은 피해와 짧은 둔화, 무적 시간을 주지 않는다)과
+   * 부식의 장막(터질 때 범위 안이면 큰 피해와 넉백). 회피 무적 중에는 받지 않고, 패링으로는 막지 못한다.
+   */
+  private readonly onBossHazard = (enemy: Enemy, kind: 'pool' | 'veil', hit: boolean, dirX: number, dirY: number): void => {
+    const player = this.player, now = this.now;
+    if (kind === 'veil') {
+      this.cameras.main.shake(320, 0.012);
+      this.impacts.screenFlash(0x8a2bd0, 0.18, 260);
+    }
+    if (!hit || !player.alive || now < player.invulnerableUntil || this.dialogue.isOpen) return;
+    const veil = kind === 'veil';
+    const scale = veil ? BOSS.veil.damageScale : BOSS.pool.damageScale;
+    const { taken, died } = this.hurtPlayer(enemy, enemy.stats.damage * scale, `${enemy.stats.name}(${veil ? '부식의 장막' : '부식 웅덩이'})`);
+    this.showDamage(player.x, player.y - 190, taken, veil ? '#ff8a7a' : '#c9a3e6');
+    if (veil) {
+      player.invulnerableUntil = now + PLAYER.invulnerableMs;
+      player.knockback.set(dirX * ENEMY.knockback * 1.6, dirY * ENEMY.knockback * 1.6 * VERTICAL_SPEED_RATIO);
+      this.impacts.screenFlash(0xff3b2f, 0.18, 200);
+      this.hitStop('hurt');
+    } else {
+      if (now >= this.slowedUntil) this.hud.showCallout('부식 웅덩이에 발이 무거워졌다');
+      this.slowedUntil = Math.max(this.slowedUntil, now + BOSS.pool.slowMs);
+    }
+    this.drawHud();
+    if (died) this.onPlayerDeath();
   };
 
   /** 전용 검 막기 자세와 검날을 따라가는 얇은 반사광을 표시한다. */
@@ -2416,16 +2513,12 @@ export class GameScene extends Phaser.Scene {
 
   /** 부활은 시각 효과의 재생 시간과 무관하게 게임 시계로만 결정한다. */
   private updateRespawns(time: number): void {
+    // 쓰러지는 모습을 보여 준 뒤 받은 피해를 정리한 창을 띄운다. 확인하면 마지막으로 쉰 곳에서 다시 시작한다.
     if (this.playerRespawnAt !== undefined && time >= this.playerRespawnAt) {
       this.playerRespawnAt = undefined;
       this.deathMessage?.destroy();
       this.deathMessage = undefined;
-      if (!this.player.alive) {
-        this.clearAttackInput();
-        this.player.revive(this.map.spawn.x, this.map.spawn.y);
-        this.player.invulnerableUntil = time + 1500;
-        this.drawHud();
-      }
+      if (!this.player.alive) this.openDeathPanel();
     }
     for (let i = this.enemyRespawns.length - 1; i >= 0; i--) {
       const pending = this.enemyRespawns[i];
@@ -2433,6 +2526,81 @@ export class GameScene extends Phaser.Scene {
       this.enemyRespawns.splice(i, 1);
       if (pending.enemy.state === 'dead') this.respawnEnemy(pending.enemy);
     }
+  }
+
+  /** 보스: 경고가 끝나면 나타나게 하고, 체력 막대를 맞춘다. */
+  private updateBoss(time: number): void {
+    if (this.bossWarningEnd !== undefined) {
+      this.bossHud?.updateWarning(time);
+      if (time >= this.bossWarningEnd) this.spawnBoss(time);
+    }
+    const boss = this.boss;
+    if (boss) this.bossHud?.setHp(boss.character.hp, boss.character.maxHp, boss.phase);
+  }
+
+  private spawnBoss(time: number): void {
+    const spawns = this.pendingBoss ?? [];
+    this.bossWarningEnd = undefined;
+    this.pendingBoss = undefined;
+    this.bossHud?.hideWarning();
+    for (const point of spawns) {
+      const enemy = new Enemy(this, point.key, point.x, point.y, point.level, !!point.boss);
+      this.enemies.push(enemy);
+      this.raidEnemies.add(enemy);
+      if (!point.boss) continue;
+      this.boss = enemy;
+      const c = enemy.character;
+      this.bossHud?.showBar(enemy.stats.name, enemy.level, c.hp, c.maxHp);
+      // 검은 먼지와 충격파 속에서 나타난다.
+      this.impacts.impact(c.x, c.y - 80, 0, -1, 'finisher', time, c.y);
+      this.impacts.dust(c.x, c.y, 12, time, 90);
+      this.impacts.screenFlash(0x2a0010, 0.3, 260);
+      this.cameras.main.shake(380, 0.009);
+      this.hud.showCallout(`${enemy.stats.name}가 길을 막아선다!`);
+    }
+  }
+
+  /** 체력이 절반 아래: 보스와 주인공이 함께 멈추고, 보스가 포효한 뒤 물러나 2페이즈를 시작한다. */
+  private startBossRoar(enemy: Enemy): void {
+    const now = this.now;
+    enemy.startRoar(now);
+    this.bossRoarUntil = now + BOSS.roarMs;
+    this.player.invulnerableUntil = Math.max(this.player.invulnerableUntil, this.bossRoarUntil);
+    this.player.knockback.set(0, 0);
+    this.attackBufferedUntil = undefined;
+    this.attackTrace = undefined;
+    const c = enemy.character;
+    this.cameras.main.shake(BOSS.roarMs * 0.85, 0.011);
+    this.impacts.screenFlash(0x8c1010, 0.22, 420);
+    this.impacts.impact(c.x, c.y - 90, 0, -1, 'finisher', now, c.y);
+    this.impacts.dust(c.x, c.y, 14, now, 120);
+    this.hud.showCallout(`${enemy.stats.name}가 포효한다!`);
+  }
+
+  private onBossDefeated(enemy: Enemy): void {
+    this.boss = undefined;
+    this.bossHud?.hideBar();
+    this.bossRoarUntil = 0;
+    this.impacts.screenFlash(0xffffff, 0.2, 300);
+    this.cameras.main.shake(420, 0.01);
+    this.hud.showCallout(`${enemy.stats.name}를 쓰러뜨렸다!`);
+  }
+
+  /** 다시 시작할 곳: 마지막으로 쉰 곳(여관·시온의 집), 쉰 적이 없으면 시온의 집 앞 */
+  private restartPoint(): { name: string; map: MapId; at: Point } {
+    const rested = this.loadRestPoint();
+    return rested ? { name: `마지막으로 쉰 곳(${rested.name})`, map: rested.map, at: { ...rested.at } }
+      : { name: '처음 시작한 곳(시온의 집 앞)', map: START_MAP, at: { ...MAPS[START_MAP].spawn } };
+  }
+
+  private openDeathPanel(): void {
+    this.clearAttackInput();
+    this.attackButton.setVisible(false);
+    this.talkMarker.setVisible(false);
+    const point = this.restartPoint();
+    this.deathPanel?.open(deathReport(this.damageLog), point.name, () => {
+      this.travel({ to: point.map, arrive: point.at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: point.at }, true);
+    });
   }
 
   private respawnEnemy(enemy: Enemy): void {
