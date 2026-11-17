@@ -5,6 +5,11 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
+// 맵 크기·좌표는 게임 코드에서 그대로 가져온다(맵을 넓히거나 줄여도 기대값이 따라간다).
+import { WORLD_HEIGHT, WORLD_WIDTH } from '../src/config.ts';
+import { mapLength } from '../src/world/mapScale.ts';
+import { PLAYER_SPAWN } from '../src/world/villageLayout.ts';
+import { VILLAGE_EDGE, VILLAGE_GATES, WALL_HALF_WIDTH, WALL_INNER_LEFT, WALL_INNER_RIGHT } from '../src/world/villagePerimeter.ts';
 
 let vite;
 let chrome;
@@ -664,10 +669,10 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
     const home = s.children.list.find(o => o.texture?.key === 'village-buildings' && o.frame.name === 'family-house');
     const initial = { x: p.x, y: p.y, walkable: s.walkArea.contains(p.x, p.y),
       safe: s.enemies.every(e => Math.hypot(e.character.x - p.x, e.character.y - p.y) > 600) };
-    s.enemies = []; p.placeAt(1180, 1500); camera.centerOn(p.x, p.y - 170);
+    s.enemies = []; p.placeAt(${mapLength(1180)}, ${mapLength(1500)}); camera.centerOn(p.x, p.y - 170);
     g.step(performance.now(), 0);
     const south = { scroll: camera.scrollY, bottom: camera.scrollY + camera.height / camera.zoom };
-    p.placeAt(1180, s.walkArea.bounds.top); camera.centerOn(p.x, p.y - 170);
+    p.placeAt(${mapLength(1180)}, s.walkArea.bounds.top); camera.centerOn(p.x, p.y - 170);
     g.step(performance.now(), 0);
     const nameTop = p.list.find(o => o.text === '시온').getBounds().top;
     return { initial, home: !!home, ground: { width: ground.displayWidth, height: ground.displayHeight },
@@ -681,9 +686,9 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
           labels: s.skillButtons.every(b => b.text.text === ''), noSpin: s.spinHitAt === undefined && s.mp >= mp }; })(),
       boundsHeight: camera.getBounds().height };
   })()`);
-  assert.deepEqual(result.initial, { x: 430, y: 640, walkable: true, safe: true });
+  assert.deepEqual(result.initial, { x: PLAYER_SPAWN.x, y: PLAYER_SPAWN.y, walkable: true, safe: true });
   assert.equal(result.home, true);
-  assert.deepEqual(result.ground, { width: 2640, height: 1760 });
+  assert.deepEqual(result.ground, { width: WORLD_WIDTH, height: WORLD_HEIGHT });
   assert.equal(result.oldRoom, false);
   assert.equal(result.ui.attack, result.ui.width - 170);
   // 막기는 공격 버튼 왼쪽 아래, 회피는 오른쪽 아래 모서리이며 터치 범위가 겹치지 않는다.
@@ -692,8 +697,8 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
   // 기술 칸 다섯은 비어 있고, 눌러도 아무 기술도 나가지 않는다.
   assert.deepEqual(result.skills, { count: 5, empty: true, labels: true, noSpin: true });
   assert.equal(result.ui.hp, 'HP 100 / 100');
-  assert.equal(result.boundsHeight, 1760);
-  assert.ok(result.scroll > 400 && result.bottom <= 1760);
+  assert.equal(result.boundsHeight, WORLD_HEIGHT);
+  assert.ok(result.scroll > 400 && result.bottom <= WORLD_HEIGHT);
   assert.ok(result.nameTop >= 0);
 });
 
@@ -780,7 +785,7 @@ test('대화 대상 근처에서만 대화가 열리고, 대화 중에는 게임
   const result = await evaluate(`(() => {
     const g = window.__game, s = g.scene.getScene('game'), p = s.player;
     const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(performance.now(), 16); };
-    for (const e of s.enemies) { e.character.placeAt(300, 1500); e.state = 'wander'; e.timer = 1e12; }
+    for (const e of s.enemies) { e.character.placeAt(${mapLength(300)}, ${mapLength(1500)}); e.state = 'wander'; e.timer = 1e12; }
     const sign = s.map.interactables[0];
     step();
     const atSpawn = s.talkButton.shown;
@@ -802,7 +807,8 @@ test('대화 대상 근처에서만 대화가 열리고, 대화 중에는 게임
     step(3);
     const attackedAfterClose = p.isAttacking || !reopened;
     // 전투 중에는 대화 버튼이 사라진다
-    s.enemies[0].state = 'chase'; s.enemies[0].character.placeAt(1300, 1500); step();
+    // 쫓아오는 적은 플레이어 가까이에 둔다(맵이 넓어져 예전 고정 좌표는 추격 거리 밖이었다).
+    s.enemies[0].state = 'chase'; s.enemies[0].character.placeAt(p.x + 250, p.y); step();
     const inCombat = s.talkButton.shown;
     return { atSpawn, nearSign, opened, frozen, closed: !s.dialogue.isOpen, taps, attackedAfterClose, inCombat };
   })()`);
@@ -1647,7 +1653,8 @@ test('버섯 물방울은 준비 뒤 발사하고 경로에서 한 번만 맞으
     const damage=hp-p.hp, consumed=!e.projectile;
     e.beginWindup(2000,250,0);e.interrupt(2100);e.update(2800,.05,p,s.walkArea,s.nav,s.onEnemyStrike);const interrupted=!e.projectile;
     e.fireProjectile(3000);e.kill();const dead=!e.projectile;
-    e.respawn(1100,1020);e.aim={x:1,y:0};e.fireProjectile(4000);p.revive(1450,1020);
+    // 벽(돌) 너머의 플레이어를 향해 쏜다. 맵이 넓어져도 같은 돌을 사이에 두도록 좌표를 맵 배율로 옮긴다.
+    e.respawn(${mapLength(1100)},${mapLength(1020)});e.aim={x:1,y:0};e.fireProjectile(4000);p.revive(${mapLength(1450)},${mapLength(1020)});
     const hpWall=p.hp;for(let time=4050;time<=4800;time+=50){s.now=time;e.updateProjectile(time,.05,p,s.walkArea,s.onEnemyStrike);}
     // 맞은 피해는 몬스터 레벨에 맞춘 공격력에 방어력을 적용한 값이다.
     const expected=Math.max(1,Math.round(e.stats.damage*s.derived.damageTaken));
@@ -2095,12 +2102,16 @@ test('여관 휴식 창은 회복량·다음 위치를 보여 주고 취소 시 
 
 test('마을 돌담은 긴 이동·회피 거리도 막고 세 문은 통과하며 지도와 미니맵에도 표시된다', async () => {
   await load('village');
+  // 담과 문의 자리는 게임의 담 상수에서 계산한다(맵 배율·담 위치가 바뀌어도 따라간다).
+  const L = mapLength, E = VILLAGE_EDGE, G = VILLAGE_GATES;
+  const westStart = { x: WALL_INNER_LEFT + L(48), y: L(700) }, eastStart = { x: WALL_INNER_RIGHT - L(48), y: L(750) };
+  const eastGate = { x: G.east.x - L(108), y: (G.east.top + G.east.bottom) / 2 };
   const plaza=await evaluate(`(() => {
     const s=window.__game.scene.getScene('game');
     const out={x:0,y:0,set(x,y){this.x=x;this.y=y;return this;}};
     const move=(x,y,dx,dy)=>{s.walkArea.move(x,y,dx,dy,out);return {x:out.x,y:out.y};};
-    const west=move(260,700,-400,0),east=move(2160,750,500,0),south=move(800,1580,0,400);
-    const gates=[move(200,1050,-100,0),move(2180,1050,120,0),move(1180,1520,0,100)];
+    const west=move(${westStart.x},${westStart.y},${-L(400)},0),east=move(${eastStart.x},${eastStart.y},${L(500)},0),south=move(${L(800)},${L(1580)},0,${L(400)});
+    const gates=[move(${L(200)},${L(1050)},${-L(100)},0),move(${eastGate.x},${eastGate.y},${L(120)},0),move(${L(1180)},${L(1520)},0,${L(100)})];
     const bodyBounds=[];
     const bodyInside=[west,east].every((point,i)=>{
       s.player.placeAt(point.x,point.y);
@@ -2109,11 +2120,12 @@ test('마을 돌담은 긴 이동·회피 거리도 막고 세 문은 통과하�
         s.player.sprite.play('hero-walk');
         const body=s.player.sprite.getBounds(),shadow=s.player.shadow.getBounds();
         bodyBounds.push({i,dx,dy,body,shadow,image:s.player.sprite.image.getBounds()});
-        return i===0?Math.min(body.left,shadow.left)>=144:Math.max(body.right,shadow.right)<=2258;
+        // 몸과 그림자가 담의 안쪽 면을 넘지 않는다.
+        return i===0?Math.min(body.left,shadow.left)>=${E.left + WALL_HALF_WIDTH}:Math.max(body.right,shadow.right)<=${E.right - WALL_HALF_WIDTH + 2};
       });
     });
     const treesInside=s.children.list.filter(o=>o.name==='village-prop-oak'||o.name==='village-prop-pine')
-      .every(o=>{const b=o.getBounds();return b.left>=164&&b.right<=2238;});
+      .every(o=>{const b=o.getBounds();return b.left>=${E.left + L(52)}&&b.right<=${E.right - L(50)};});
     const wallCount=s.children.list.filter(o=>o.name==='village-wall').length;
     const posts=s.children.list.filter(o=>o.name==='village-gate-west'||o.name==='village-gate-east').length;
     s.openWorldMap();
@@ -2122,20 +2134,22 @@ test('마을 돌담은 긴 이동·회피 거리도 막고 세 문은 통과하�
     return {west,east,south,gates,wallCount,posts,shared,bodyInside,treesInside,bodyBounds};
   })()`);
   assert.equal(plaza.bodyInside,true,JSON.stringify(plaza.bodyBounds));assert.equal(plaza.treesInside,true);
-  assert.ok(plaza.west.x>=212&&plaza.west.x<226);
-  assert.ok(plaza.east.x<=2190&&plaza.east.x>2176);
-  assert.ok(plaza.south.y<=1656&&plaza.south.y>1640);
-  for (const [i, expected] of [{x:100,y:1050},{x:2300,y:1050},{x:1180,y:1620}].entries()) {
-    assert.ok(Math.hypot(plaza.gates[i].x-expected.x,plaza.gates[i].y-expected.y)<1e-6);
+  // 담 안쪽 경계(담 반폭 + 캐릭터 여유)에서 멈춘다.
+  assert.ok(plaza.west.x>=WALL_INNER_LEFT&&plaza.west.x<WALL_INNER_LEFT+L(14),JSON.stringify(plaza.west));
+  assert.ok(plaza.east.x<=WALL_INNER_RIGHT&&plaza.east.x>WALL_INNER_RIGHT-L(14),JSON.stringify(plaza.east));
+  assert.ok(plaza.south.y<=L(1656)&&plaza.south.y>L(1640),JSON.stringify(plaza.south));
+  // 세 문은 막지 않는다.
+  for (const [i, expected] of [{x:L(100),y:L(1050)},{x:eastGate.x+L(120),y:eastGate.y},{x:L(1180),y:L(1620)}].entries()) {
+    assert.ok(Math.hypot(plaza.gates[i].x-expected.x,plaza.gates[i].y-expected.y)<1e-6,JSON.stringify([plaza.gates[i],expected]));
   }
   assert.ok(plaza.wallCount>30&&plaza.wallCount<90);assert.equal(plaza.posts,4);assert.equal(plaza.shared,true);
   await load('village-north');
   const north=await evaluate(`(() => {
     const s=window.__game.scene.getScene('game'),out={x:0,y:0,set(x,y){this.x=x;this.y=y;return this;}};
-    s.walkArea.move(850,350,0,-400,out);
+    s.walkArea.move(${L(850)},${L(350)},0,${-L(400)},out);
     return {y:out.y,walls:s.children.list.filter(o=>o.name==='village-wall').length};
   })()`);
-  assert.ok(north.y>=254&&north.y<270);assert.ok(north.walls>30);
+  assert.ok(north.y>=E.north+L(6)&&north.y<E.north+L(22),JSON.stringify(north));assert.ok(north.walls>30);
 });
 
 test('일반 병사들은 그림을 공유하고 세 문에 두 명씩 서며 순찰·8방향 모션·대화가 동작한다', async () => {
