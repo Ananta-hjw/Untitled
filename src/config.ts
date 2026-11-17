@@ -5,6 +5,8 @@ export const MAX_ASPECT = 2.4;
 
 /** 직전 배치에서 가로·세로를 각각 30% 확장한다. 캐릭터 크기와 이동 속도는 유지한다. */
 export const MAP_EXPANSION_SCALE = 1.3;
+/** Interior furnishing scale is independent of the expanded outdoor world. */
+export const INTERIOR_SIZE_SCALE = 1;
 export const MAP_SIZE_SCALE = Math.round(1.1 * MAP_EXPANSION_SCALE * 100) / 100;
 export const WORLD_WIDTH = Math.round(2400 * MAP_SIZE_SCALE);
 export const WORLD_HEIGHT = Math.round(1600 * MAP_SIZE_SCALE);

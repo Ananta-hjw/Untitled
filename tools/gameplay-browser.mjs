@@ -2647,3 +2647,34 @@ test('공격 버튼 하나가 가까운 대상에 따라 대화·입장으로 �
   assert.equal(result.far.safe,true,JSON.stringify(result));
   assert.deepEqual(result.icons,['action-icon-dodge','action-icon-block']);
 });
+
+test('여덟 실내의 가구는 개별 객체이며 회피처럼 큰 이동으로도 가구·벽 위에 올라가지 않는다', async()=>{
+  for(const id of ['home','linea','chief','clinic','hall','store','smithy','inn']){
+    await load(`in-${id}`);
+    const result=await evaluate(`(()=>{
+      const s=window.__game.scene.getScene('game'),area=s.walkArea,room=s.map.bounds;
+      const objects=s.children.list.filter(o=>o.name.startsWith('interior-furniture-'));
+      let attempts=0,solid=true,stopped=true;
+      for(const object of objects){
+        const f=object.getData('footprint'),o=area.obstacles.find(o=>Math.abs(o.x-f.x)<.01&&Math.abs(o.y-f.y)<.01);
+        solid&&=!!o&&!area.contains(f.x,f.y);
+        if(!o)continue;
+        for(const [x,y,dx,dy] of [[o.x,o.y+o.ry+2,0,-600],[o.x+o.rx+2,o.y,-600,0],[o.x-o.rx-2,o.y,600,0]]){
+          if(!area.contains(x,y))continue;
+          const end=area.move(x,y,dx,dy,s.joystick.vector.clone());
+          stopped&&=area.contains(end.x,end.y)&&!((Math.abs(end.x-o.x)<o.rx)&&(Math.abs(end.y-o.y)<o.ry));
+          // A large move must stop on the same side, rather than teleport across the footprint.
+          if(dy<0)stopped&&=end.y>=o.y+o.ry-.01;
+          if(dx<0)stopped&&=end.x>=o.x+o.rx-.01;
+          if(dx>0)stopped&&=end.x<=o.x-o.rx+.01;
+          attempts++;
+        }
+      }
+      return {count:objects.length,expected:s.map.interior.furniture.length,solid,stopped,attempts,
+        spawn:area.contains(s.player.x,s.player.y),wall:!area.contains((room.left+room.right)/2,room.top-30)};
+    })()`);
+    assert.equal(result.count,result.expected,id);
+    for(const key of ['solid','stopped','spawn','wall'])assert.equal(result[key],true,JSON.stringify({id,key,...result}));
+    assert.ok(result.attempts>=3,JSON.stringify({id,...result}));
+  }
+});

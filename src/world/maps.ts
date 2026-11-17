@@ -8,7 +8,7 @@ import { INTERACTABLES, type Interactable } from './interactables.ts';
 import { insideObstacle, type Obstacle } from './obstacles.ts';
 import { NPCS, type NpcDef } from './npcs.ts';
 import {
-  INTERIORS, arrivalOf, doorOf, furnitureObstacles, interiorFor, interiorWalkPolygon, roomRect, type Interior, type InteriorId,
+  INTERIORS, arrivalOf, doorOf, furnitureObstacles, interiorRestrictedObstacles, interiorFor, interiorWalkPolygon, roomRect, type Interior, type InteriorId,
 } from './interiors.ts';
 import {
   BUILDINGS, NORTH_PROPS, PLAYER_SPAWN, PROPS as VILLAGE_PROPS, SOUTH_GATE_PASSAGE, VILLAGE_LINK, WALK_BOUNDS as VILLAGE_BOUNDS,
@@ -287,7 +287,7 @@ export function isMapId(value: unknown): value is MapId {
 export function mapObstacles(map: GameMap): Obstacle[] {
   return [
     ...buildingObstacles(map.buildings), ...propObstacles(map.props), ...perimeterObstacles(map.id), ...(map.obstacles ?? []),
-    ...(map.interior ? furnitureObstacles(map.interior) : []),
+    ...(map.interior ? [...furnitureObstacles(map.interior), ...interiorRestrictedObstacles(map.interior)] : []),
   ];
 }
 
