@@ -251,6 +251,7 @@ export const RESONANCE = {
  * 그 사이 앞쪽(바라보는 쪽)에서 온 공격을 막으면 패링: 피해가 전혀 없고 밀리지도 않으며,
  * 그 적은 stunMs 동안 휘청이고, 다음 공격은 저스트 회피처럼 반격(JUST_DODGE.counterMs 안)이 된다.
  * 헛막으면 cooldownMs 동안 다시 막을 수 없다(패링에 성공하면 바로 다시 막을 수 있다).
+ * 패링에 성공하면 회피의 남은 재사용 대기 시간도 dodgeRefundMs만큼 줄어든다(0 아래로는 안 내려간다).
  * 막는 동안에는 moveScale배로 천천히 움직인다.
  */
 export const BLOCK = {
@@ -258,4 +259,5 @@ export const BLOCK = {
   cooldownMs: 1000,
   stunMs: 1200,
   moveScale: 0.4,
+  dodgeRefundMs: 1000,
 };

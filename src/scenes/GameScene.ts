@@ -2379,6 +2379,8 @@ export class GameScene extends Phaser.Scene {
       this.counterUntil = now + JUST_DODGE.counterMs;
       this.parryUntil = 0;
       this.parryReadyAt = now;
+      // 패링에 성공하면 회피 대기 시간도 줄어든다.
+      this.dodgeReadyAt = Math.max(now, this.dodgeReadyAt - BLOCK.dodgeRefundMs);
       this.cameras.main.shake(70, 0.002);
       this.cameras.main.flash(90, 190, 215, 255);
       this.hitStop('counter');

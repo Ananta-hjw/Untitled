@@ -1799,8 +1799,16 @@ test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공�
     const parry = () => { s.parryReadyAt = 0; s.blockButton.pressed = true; g.step(t += 16, 16); };
     parry();
     const blocking = s.blocking, shield = s.shield.visible;
+    // 회피 대기 시간이 3초 남은 상태에서 패링하면 1초 줄어든다.
+    s.dodgeReadyAt = s.now + 3000;
     const front = strike(1);
     const stunned = e.state, counter = s.counterUntil > s.now, again = s.now >= s.parryReadyAt;
+    const dodgeLeft = s.dodgeReadyAt - s.now;
+    settle(); parry();
+    s.dodgeReadyAt = s.now + 400;
+    const floorDamage = strike(1);
+    const dodgeFloor = floorDamage === 0 ? s.dodgeReadyAt - s.now : NaN;
+    s.dodgeReadyAt = 0;
     settle();
     const open = strike(1);
     settle(); parry();
@@ -1811,7 +1819,7 @@ test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공�
     settle(); s.derived.evadeChance = 1;
     const evaded = strike(1);
     s.derived.evadeChance = 0;
-    return { blocking, shield, front, stunned, counter, again, open, back, late, evaded };
+    return { blocking, shield, front, stunned, counter, again, open, back, late, evaded, dodgeLeft, dodgeFloor };
   })()`);
   assert.equal(result.blocking, true);
   assert.equal(result.shield, true);
@@ -1819,6 +1827,8 @@ test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공�
   assert.ok(result.open > 0, JSON.stringify(result));
   assert.equal(result.counter, true);
   assert.equal(result.again, true, '패링에 성공하면 바로 다시 막을 수 있다');
+  assert.ok(Math.abs(result.dodgeLeft - 2000) < 1, `패링하면 회피 대기 시간 1초 감소: ${result.dodgeLeft}`);
+  assert.ok(result.dodgeFloor <= 0 && result.dodgeFloor > -1, `남은 시간이 1초보다 적으면 바로 회피할 수 있다: ${result.dodgeFloor}`);
   assert.equal(result.back, result.open, '뒤에서 온 공격은 막지 못한다');
   assert.equal(result.late, result.open, '판정 시간이 지나면 막지 못한다');
   assert.equal(result.evaded, 0);
