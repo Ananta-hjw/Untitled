@@ -2756,7 +2756,7 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
       const lengths=[];for(let i=0;i<5;i++){h.advance(20);s.now+=20;s.drawShield(s.now);const b=h.getBlade();lengths.push(Math.hypot(b.tip.x-b.base.x,b.tip.y-b.base.y));}
       const blade=h.getBlade(),raised=blade.tip.y<blade.base.y&&(blade.tip.x-blade.base.x)*dx>0;
       const tilt=Math.atan2(Math.abs(blade.tip.x-blade.base.x),Math.abs(blade.tip.y-blade.base.y))*180/Math.PI;
-      const upright=tilt>=11&&tilt<=14;
+      const slanted=tilt>=48&&tilt<=53;
       const f=h.frame,m=h.image.getWorldTransformMatrix();
       const palm=m.transformPoint(f.supportGrip.x-f.originX*f.w,f.supportGrip.y-f.h);
       const vx=blade.tip.x-blade.base.x,vy=blade.tip.y-blade.base.y;
@@ -2770,7 +2770,7 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
       e.character.revive(p.x+80*p.facing,p.y);e.character.face(-p.facing);p.invulnerableUntil=0;const hp=p.hp;s.onEnemyStrike(e);
       const contact=contacts.at(-1),error=Math.hypot(contact.x-blade.base.x-(blade.tip.x-blade.base.x)*.55,contact.y-blade.base.y-(blade.tip.y-blade.base.y)*.55);
       s.now+=5;s.updatePlayer(s.now,0);s.drawShield(s.now);const restored=!h.isGuarding&&h.image.texture.key!=='hero-academy-guard';
-      runs.push({facing,name,texture,mirror,raised,upright,palmDistance,palmVisible,held,wood,lengths,error,restored,protected:p.hp===hp&&s.counterUntil>s.now});
+      runs.push({facing,name,texture,mirror,raised,slanted,palmDistance,palmVisible,held,wood,lengths,error,restored,protected:p.hp===hp&&s.counterUntil>s.now});
     }
     const verticalPoses=[];
     for(const dy of [-1,1]){
@@ -2790,7 +2790,7 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
     assert.equal(run.texture, 'hero-academy-guard');
     assert.equal(run.name, `guard-${run.facing.startsWith('up')?'up-back':run.facing.startsWith('down')?'down':'side'}`);
     assert.equal(run.mirror, run.facing.includes('left'));
-    for (const key of ['raised','upright','palmVisible','held','wood','restored','protected']) assert.equal(run[key],true,JSON.stringify({key,...run}));
+    for (const key of ['raised','slanted','palmVisible','held','wood','restored','protected']) assert.equal(run[key],true,JSON.stringify({key,...run}));
     assert.ok(run.error<.001,JSON.stringify(run));
     assert.ok(run.palmDistance<.75,JSON.stringify(run));
     assert.ok(run.lengths.every(n=>Math.abs(n-75)<.001),JSON.stringify(run));
@@ -2864,4 +2864,22 @@ test('여덟 실내의 가구는 개별 객체이며 회피처럼 큰 이동으�
     for(const key of ['solid','stopped','spawn','wall'])assert.equal(result[key],true,JSON.stringify({id,key,...result}));
     assert.ok(result.attempts>=3,JSON.stringify({id,...result}));
   }
+});
+
+test('정면 막기에서 철검·나무검 손잡이 중심이 실제 오른손 주먹 안에 유지된다',async()=>{
+  await load();
+  const result=await evaluate(`(()=>{
+    const s=window.__game.scene.getScene('game'),h=s.player.sprite,results=[];
+    h.play('hero-idle');h.setMovement(0,1);
+    for(const weapon of ['iron-sword','wooden-sword'])for(const time of [0,40,110,200]){
+      h.setGuarding(false);h.setWeapon(weapon);h.setGuarding(true);h.guardTime=time;h.applyFrame();
+      const f=h.frame,hand=f.gripHandCenter,body=h.image.getWorldTransformMatrix();
+      const target=body.transformPoint(hand.x-f.originX*f.w,hand.y-f.h);
+      const part=h.weaponBack,frame=part.frame;
+      const actual=part.getWorldTransformMatrix().transformPoint(frame.width/2-part.displayOriginX,frame.height/2-part.displayOriginY);
+      results.push({weapon,time,error:Math.hypot(actual.x-target.x,actual.y-target.y),frame:f.name});
+    }
+    h.setGuarding(false);return results;
+  })()`);
+  for(const r of result){assert.equal(r.frame,'guard-front');assert.ok(r.error<1.5,JSON.stringify(r));}
 });

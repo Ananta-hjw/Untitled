@@ -125,7 +125,7 @@ test('각 타격 뒤 여섯 방향의 자세를 잠깐 유지하고 명중 구�
   }
 });
 
-test('검 막기는 낮춘 손잡이 위에 손바닥을 대고 수직에 가까운 곧은 검날을 가진다', () => {
+test('검 막기는 50도 기울인 칼날 중간을 왼손으로 받치고 오른손으로 손잡이를 잡는다', () => {
   const guard = JSON.parse(readFileSync(new URL('guard/frames.json', root)));
   assert.equal(guard.frames.length, 5);
   assert.equal(guardFrame('down'), 'guard-front');
@@ -138,8 +138,11 @@ test('검 막기는 낮춘 손잡이 위에 손바닥을 대고 수직에 가까
   for (const f of guard.frames) {
     assert.equal(f.originY, 1);
     const { base, tip } = f.blade;
-    assert.ok(tip.x > base.x && tip.y < base.y);
-    assert.ok(Math.abs(tip.x-base.x)<Math.abs(tip.y-base.y)*.4);
+    assert.ok(tip.y < base.y);
+    assert.equal(tip.x > base.x, f.name !== 'guard-back');
+    assert.ok(Math.abs(f.supportGrip.x - f.grip.x) > 60, 'hands are separated in front of the body');
+    assert.ok(Math.abs(f.supportGrip.x - (base.x + tip.x) / 2) < 1e-6);
+    assert.ok(Math.abs(f.supportGrip.y - (base.y + tip.y) / 2) < 1e-6, 'left palm supports blade midpoint');
     assert.ok(f.grip.y>165, 'hilt hand stays below the chest');
     assert.ok(f.supportGrip.y<f.grip.y-30, 'support palm is above the hilt hand');
     const vx=tip.x-base.x,vy=tip.y-base.y;
@@ -149,7 +152,7 @@ test('검 막기는 낮춘 손잡이 위에 손바닥을 대고 수직에 가까
     assert.equal(!!f.weaponBehind, rear, 'rear weapons stay behind the body');
     assert.equal(!!f.supportCover, !rear, 'rear hands are hidden in the body art');
     const tilt=Math.atan2(Math.abs(vx),Math.abs(vy))*180/Math.PI;
-    assert.ok(Math.abs(tilt-12)<1e-6, 'slight natural tilt');
+    assert.ok(Math.abs(tilt-50)<1e-6, '50 degrees from vertical');
     assert.ok(Math.abs(f.supportGrip.x-f.supportPalm.x)<14, 'contact stays within the palm');
 
     assert.ok(Math.abs(Math.hypot(tip.x-base.x,tip.y-base.y)-150)<1e-6);
