@@ -127,7 +127,11 @@ test('각 타격 뒤 여섯 방향의 자세를 잠깐 유지하고 명중 구�
 
 test('검 막기는 낮춘 손잡이 위에 손바닥을 대고 수직에 가까운 곧은 검날을 가진다', () => {
   const guard = JSON.parse(readFileSync(new URL('guard/frames.json', root)));
-  assert.equal(guard.frames.length, 4);
+  assert.equal(guard.frames.length, 5);
+  assert.equal(guardFrame('down'), 'guard-front');
+  assert.equal(guardFrame('up'), 'guard-back');
+  assert.notEqual(guardFrame('down'), guardFrame('down-right'));
+  assert.notEqual(guardFrame('up'), guardFrame('up-right'));
   for (const facing of ['left','right','down','up','down-left','down-right','up-left','up-right']) {
     assert.ok(guard.frames.some(f => f.name === guardFrame(facing)));
   }
@@ -141,11 +145,9 @@ test('검 막기는 낮춘 손잡이 위에 손바닥을 대고 수직에 가까
     const vx=tip.x-base.x,vy=tip.y-base.y;
     const distance=Math.abs((f.supportGrip.x-base.x)*vy-(f.supportGrip.y-base.y)*vx)/Math.hypot(vx,vy);
     assert.ok(distance<1e-6,'blade runs through the support palm');
-    assert.ok(f.supportCover, 'support hand layer is available');
-    assert.equal(!!f.supportBackCover, f.name==='guard-up-back', 'only rear camera has a dorsal hand override');
-    if (f.name === 'guard-up-back') {
-      assert.ok(f.gripElbow.y > f.grip.y + 5, 'gripping elbow stays below the hilt');
-    }
+    const rear = f.name === 'guard-back' || f.name === 'guard-up-back';
+    assert.equal(!!f.weaponBehind, rear, 'rear weapons stay behind the body');
+    assert.equal(!!f.supportCover, !rear, 'rear hands are hidden in the body art');
     const tilt=Math.atan2(Math.abs(vx),Math.abs(vy))*180/Math.PI;
     assert.ok(Math.abs(tilt-12)<1e-6, 'slight natural tilt');
     assert.ok(Math.abs(f.supportGrip.x-f.supportPalm.x)<14, 'contact stays within the palm');

@@ -13,6 +13,8 @@ const COMPASS: Facing[] = ['right', 'down-right', 'down', 'down-left', 'left', '
 export const ACTION_DURATION = { attack1: 420 + PLAYER.combo[0].followPauseMs, attack2: 320 + PLAYER.combo[1].followPauseMs, attack3: 400 + PLAYER.combo[2].followPauseMs, dodge: 300 };
 
 export function guardFrame(facing: Facing): string {
+  if (facing === 'down') return 'guard-front';
+  if (facing === 'up') return 'guard-back';
   if (facing === 'up-left' || facing === 'up-right') return 'guard-up-back';
   return `guard-${facing.startsWith('up') ? 'up' : facing.startsWith('down') ? 'down' : 'side'}`;
 }

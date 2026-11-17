@@ -2258,7 +2258,7 @@ export class GameScene extends Phaser.Scene {
     const { base, tip } = hero.getBlade();
     if (Math.hypot(tip.x - base.x, tip.y - base.y) < 1) return;
     const pulse = 0.75 + 0.25 * Math.sin(time / 90);
-    shield.setDepth(player.y + 1);
+    shield.setDepth(player.y + (hero.guardWeaponBehind ? -0.1 : 1));
     const palm = hero.getGuardSupportPoint();
     const dx = tip.x - base.x, dy = tip.y - base.y, length = Math.hypot(dx, dy);
     const at = palm ? ((palm.x - base.x) * dx + (palm.y - base.y) * dy) / (length * length) : 0;

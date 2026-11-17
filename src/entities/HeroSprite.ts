@@ -23,6 +23,7 @@ interface SpriteFrame {
   supportGrip?: { x: number; y: number };
   supportCover?: { name: string; x: number; y: number; w: number; h: number };
   supportBackCover?: { name: string; x: number; y: number; w: number; h: number };
+  weaponBehind?: boolean;
 }
 const FRAMES = new Map<string, SpriteFrame>([...data.frames, ...guardData.frames].map((f) => [f.name, f]));
 
@@ -132,9 +133,12 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     return this.guarding && (this.facing === 'up-left' || this.facing === 'up-right');
   }
   private get parts(): Phaser.GameObjects.Image[] {
+    if (this.guardWeaponBehind) return [this.weaponBack, this.weaponFront, this.image, this.supportHand];
     return this.supportHandInFront ? [this.weaponBack, this.image, this.weaponFront, this.supportHand]
       : [this.weaponBack, this.image, this.supportHand, this.weaponFront];
   }
+
+  get guardWeaponBehind(): boolean { return this.guarding && !!this.frame?.weaponBehind; }
 
   get isInFollowPause(): boolean {
     return this.animation.startsWith('attack') && isAttackFollowPause(Number(this.animation.at(-1)) - 1, this.time);
@@ -187,7 +191,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     const attacking = this.animation.startsWith('attack');
     const frame = FRAMES.get(this.guarding ? guardFrame(this.facing)
       : heroFrame(this.animation, attacking ? this.attackFacing : this.facing, this.time))!;
-    const mirrored = this.guarding ? this.facing.includes('left') || ((this.facing === 'up' || this.facing === 'down') && this.flipX)
+    const mirrored = this.guarding ? this.facing.includes('left')
       : attacking ? this.attackFacing.includes('left') : this.animation === 'dodge' && this.flipX;
     this.frame = frame;
     this.image.setTexture(frame.texture, frame.name).setOrigin(frame.originX, frame.originY)
@@ -196,8 +200,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   }
 
   private applyWeapon(): void {
-    const front = this.supportHandInFront ? this.supportHand : this.weaponFront;
-    if (this.getAt(this.length - 1) !== front) this.bringToTop(front);
+    for (const part of this.parts) this.bringToTop(part);
     this.supportHand.setVisible(false);
     this.weaponFront.setVisible(!!this.weapon);
     const pose = weaponPose(this.frame);
