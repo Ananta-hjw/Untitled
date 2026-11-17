@@ -219,6 +219,21 @@ export const ATTRIBUTES = {
 };
 
 /**
+ * 공명: 패링에 성공할 때마다 체력 옆의 구슬이 1/3씩 찬다(orbs개, 칸 하나는 parts조각).
+ * 구슬 cost조각(=다섯 개 전부)을 쓰면 durationMs(게임 시간) 동안 주는 피해가 damageScale배, 받는 피해가 takenScale배가 된다.
+ * 이야기를 진행하며 perParry·durationMs·damageScale·takenScale을 하나씩 늘려 줄 예정이다.
+ */
+export const RESONANCE = {
+  orbs: 5,
+  parts: 3,
+  perParry: 1,
+  cost: 15,
+  durationMs: 10000,
+  damageScale: 1.2,
+  takenScale: 0.8,
+};
+
+/**
  * 막기(패링, 막기 버튼·키 L): 누르는 순간부터 windowMs 동안만 막는다(누르고 있어도 길어지지 않는다).
  * 그 사이 앞쪽(바라보는 쪽)에서 온 공격을 막으면 패링: 피해가 전혀 없고 밀리지도 않으며,
  * 그 적은 stunMs 동안 휘청이고, 다음 공격은 저스트 회피처럼 반격(JUST_DODGE.counterMs 안)이 된다.

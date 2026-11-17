@@ -26,6 +26,7 @@ import {
   HERO_WALK_NATURAL_SPEED,
   MANA,
   SPIN_SLASH,
+  RESONANCE,
   BLOCK,
 } from '../config';
 import { addMana, inSpinRadius, regenMana } from '../combat/mana';
@@ -48,12 +49,13 @@ import type { WalkArea } from '../world/walkArea';
 import { NavGrid } from '../world/navGrid';
 import { buildMap, preloadVillage } from '../world/village';
 import { MAPS, START_MAP, fieldPoint, findExit, isMapId, type GameMap, type MapExit, type MapId, type Point } from '../world/maps';
-import { Hud } from '../ui/Hud';
+import { Hud, ORBS } from '../ui/Hud';
 import { DamageNumbers } from '../ui/DamageNumbers';
 import { DialogueBox, preloadDialogue } from '../ui/DialogueBox';
 import { PauseMenu } from '../ui/PauseMenu';
 import { TITLE_FADE_MS } from './TitleScene';
 import { IDLE_FPS, PLAY_FPS, frameRate } from '../core/frameRate';
+import { RESONANCE_SAVE_KEY, resonanceTaken, canResonate, chargeOnParry, orbFill, parseCharge } from '../combat/resonance';
 import { BUTTON_RADIUS, JOYSTICK_REST, SKILL_SLOT_COUNT, combatButtonLayout, joystickZone } from '../ui/buttonLayout';
 import { OpeningDirector } from './OpeningDirector';
 import { OPENING, OPENING_HINT, OPENING_SAVE_KEY, OPENING_WALK_SCALE, shouldPlayOpening } from '../story/opening';
@@ -111,6 +113,8 @@ interface SceneData {
   herb?: number;
   /** 맵을 옮길 때 이어지는 마나. 한 번 쓰고 지운다. */
   mp?: number;
+  /** 맵을 옮길 때 이어지는 공명 남은 시간(ms). 한 번 쓰고 지운다. */
+  resonance?: number;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -220,6 +224,14 @@ export class GameScene extends Phaser.Scene {
   /** 회전 베기가 맞히는 시각 (게임 시계). 없으면 쓰는 중이 아님 */
   private spinHitAt?: number;
   private nextSpinAt = 0;
+  /** 공명 게이지(구슬 조각 수, combat/resonance.ts)와 공명이 끝나는 시각(게임 시계) */
+  private resonanceCharge = 0;
+  private resonanceUntil = 0;
+  private carriedResonance?: number;
+  private resonanceButton?: ActionButton;
+  private resonanceKeys: Phaser.Input.Keyboard.Key[] = [];
+  /** 공명 중 발밑의 금빛 고리 (한 번 그려 두고 옮기기만 한다) */
+  private resonanceAura?: Phaser.GameObjects.Graphics;
   /** 공격 버튼 둘레의 기술 칸 다섯. 기술은 배우면 칸에 넣는다(지금은 모두 비어 있다). 키 1~5. */
   private skillButtons: ActionButton[] = [];
   private skillSlots: (SkillId | null)[] = [];
@@ -291,6 +303,8 @@ export class GameScene extends Phaser.Scene {
     data.herb = undefined;
     this.carriedMp = data.mp;
     data.mp = undefined;
+    this.carriedResonance = data.resonance;
+    data.resonance = undefined;
     // 저장된 진행 상황이 있으면 그 레벨로 시작한다 (재시작 포함).
     this.storage = browserStorage();
     this.quests = this.loadQuests();
@@ -408,8 +422,14 @@ export class GameScene extends Phaser.Scene {
     this.maxMp = 0;
     this.shownMp = -1;
     this.carriedMp = undefined;
+    this.carriedResonance = undefined;
     this.spinHitAt = undefined;
     this.nextSpinAt = 0;
+    this.resonanceCharge = 0;
+    this.resonanceUntil = 0;
+    this.resonanceButton = undefined;
+    this.resonanceKeys = [];
+    this.resonanceAura = undefined;
     this.skillButtons = [];
     this.skillSlots = Array<SkillId | null>(SKILL_SLOT_COUNT).fill(null);
     this.skillKeys = [];
@@ -488,6 +508,15 @@ export class GameScene extends Phaser.Scene {
       sell: (id) => this.tradeGear(id, 'sell'),
       close: () => this.onResume(),
     });
+    // 공명 버튼: 물약 칸 위(자리는 layout). 키 F.
+    this.resonanceButton = new ActionButton(this, {
+      x: 0, y: 0, radius: BUTTON_RADIUS.resonance, label: '공명', color: 0x6a4a12, fontSize: 22, cooldown: true,
+    });
+    this.resonanceButton.setSizeScale(sizeScale(this.settings.buttonSize));
+    this.resonanceKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F)] : [];
+    this.resonanceAura = this.add.graphics().setVisible(false);
+    this.resonanceAura.lineStyle(5, 0xffd76a, 0.9).strokeEllipse(0, 0, 150, 150 * VERTICAL_SPEED_RATIO);
+    this.resonanceAura.lineStyle(12, 0xffd76a, 0.25).strokeEllipse(0, 0, 166, 166 * VERTICAL_SPEED_RATIO);
     // 캐릭터 창 버튼(일시정지 버튼 아래). I: 아이템, C: 상태
     this.characterButton = new ActionButton(this, { x: 0, y: 0, radius: 30, label: '정보', color: 0x2a2018, fontSize: 17 });
     this.characterKeys = this.input.keyboard
@@ -648,6 +677,7 @@ export class GameScene extends Phaser.Scene {
     this.updateInteraction(time);
     this.updatePotion(time);
     this.updateSkill(time, gameStep);
+    this.updateResonance(time);
     this.updateCombatCooldowns(time);
   }
 
@@ -743,6 +773,9 @@ export class GameScene extends Phaser.Scene {
     // 마나: 처음에는 가득, 맵을 옮길 때는 이어 받는다.
     this.maxMp = this.derived.maxMp;
     this.mp = this.carriedMp !== undefined ? Phaser.Math.Clamp(this.carriedMp, 0, this.maxMp) : this.maxMp;
+    // 공명 게이지는 저장해 두고, 공명 중에 맵을 옮기면 남은 시간을 이어 받는다.
+    this.resonanceCharge = parseCharge(this.readResonanceSave(), RESONANCE);
+    this.resonanceUntil = this.carriedResonance !== undefined ? this.now + Math.max(0, this.carriedResonance) : 0;
     if (this.carriedHp !== undefined) this.player.hp = Phaser.Math.Clamp(Math.round(this.carriedHp), 1, this.player.maxHp);
   }
 
@@ -767,7 +800,8 @@ export class GameScene extends Phaser.Scene {
     this.player.setMotion(false);
     this.talkButton.setVisible(false);
     this.talkMarker.setVisible(false);
-    const data: SceneData = { map: exit.to, at: exit.arrive, hp: this.player.hp, herb: this.herb, mp: this.mp };
+    const data: SceneData = { map: exit.to, at: exit.arrive, hp: this.player.hp, herb: this.herb, mp: this.mp,
+      resonance: Math.max(0, this.resonanceUntil - this.now) };
     const camera = this.cameras.main;
     camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart(data));
     camera.fadeOut(TRAVEL_FADE_MS, 0, 0, 0);
@@ -852,6 +886,7 @@ export class GameScene extends Phaser.Scene {
   private drawHud(): void {
     this.hud.setHp(this.player.hp, this.player.maxHp, this.herb);
     this.drawMp(true);
+    this.drawOrbs();
     this.hud.setXp(this.progress.level, this.progress.xp, xpToNext(this.progress.level));
   }
 
@@ -901,6 +936,7 @@ export class GameScene extends Phaser.Scene {
     this.talkButton.setPosition(buttons.talk.x, buttons.talk.y);
     this.potionButton?.setPosition(buttons.items[0].x, buttons.items[0].y);
     this.lunchButton?.setPosition(buttons.items[1].x, buttons.items[1].y);
+    this.resonanceButton?.setPosition(buttons.resonance.x, buttons.resonance.y);
     this.skillButtons.forEach((button, i) => button.setPosition(buttons.skills[i].x, buttons.skills[i].y));
     this.pauseButton.setPosition(width - 46, 74);
     this.characterButton?.setPosition(width - 46, 148);
@@ -1246,7 +1282,7 @@ export class GameScene extends Phaser.Scene {
       const strike = strikeKind(trace.counter, finisher, Math.random() - (this.derived.critChance - HIT_FEEL.critChance));
       heaviest = heavierKind(heaviest, strike.kind);
       const bonus = trace.counter ? JUST_DODGE.counterDamage : 1;
-      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * combo.damage * bonus * critMultiplier(strike.crit));
+      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * combo.damage * bonus * critMultiplier(strike.crit) * this.resonanceDamage());
       const died = c.hurt(damage);
       if (trace.counter) this.showDamage(c.x, c.y - 100, damage, '#9fdcff', 50);
       else if (strike.crit) this.showDamage(c.x, c.y - 100, damage, '#ffd23f', finisher ? 58 : 52);
@@ -1352,6 +1388,7 @@ export class GameScene extends Phaser.Scene {
     this.talkButton.setSizeScale(buttons);
     this.potionButton?.setSizeScale(buttons);
     this.lunchButton?.setSizeScale(buttons);
+    this.resonanceButton?.setSizeScale(buttons);
     for (const button of this.skillButtons) button.setSizeScale(buttons);
     this.joystick.setSizeScale(sizeScale(settings.joystickSize));
     this.justDodgeWindow = justDodgeWindowMs(settings.justDodgeTiming);
@@ -1681,6 +1718,62 @@ export class GameScene extends Phaser.Scene {
     this.drawMp();
   }
 
+  // ---------------------------------------------------------------- 공명
+
+  private get resonating(): boolean {
+    return this.now < this.resonanceUntil;
+  }
+
+  /** 공명 중 주는 피해 배율 */
+  private resonanceDamage(): number {
+    return this.resonating ? RESONANCE.damageScale : 1;
+  }
+
+  private setResonanceCharge(charge: number): void {
+    if (charge === this.resonanceCharge) return;
+    this.resonanceCharge = charge;
+    try { this.storage?.setItem(RESONANCE_SAVE_KEY, String(charge)); } catch { /* 저장이 막혀도 게임은 계속한다 */ }
+    this.drawOrbs();
+  }
+
+  private readResonanceSave(): string | null {
+    try { return this.storage?.getItem(RESONANCE_SAVE_KEY) ?? null; } catch { return null; }
+  }
+
+  private drawOrbs(): void {
+    this.hud.setOrbs(orbFill(this.resonanceCharge, RESONANCE), this.resonating);
+  }
+
+  /** 공명 버튼(또는 F): 구슬 하나를 쓰고 durationMs 동안 강해진다. 남은 시간은 버튼의 원형 대기로 보인다. */
+  private updateResonance(time: number): void {
+    const button = this.resonanceButton;
+    if (!button) return;
+    let pressed = button.consumePress();
+    for (const key of this.resonanceKeys) if (Phaser.Input.Keyboard.JustDown(key)) pressed = true;
+    const wasActive = this.resonanceAura?.visible ?? false;
+    const active = this.resonating;
+    const ready = this.player.alive && !this.opening && canResonate(this.resonanceCharge, RESONANCE, active);
+    if (pressed && ready) {
+      this.resonanceUntil = time + RESONANCE.durationMs;
+      this.setResonanceCharge(this.resonanceCharge - RESONANCE.cost);
+      this.hud.showCallout('공명!');
+      this.cameras.main.flash(160, 255, 215, 120);
+      this.impacts.dust(this.player.x, this.player.y, 8, time, 60);
+    } else if (pressed && !active) {
+      this.hud.showCallout('공명 구슬이 모자라다');
+    }
+    const on = this.resonating;
+    button.setEnabled(on || ready);
+    button.setCooldown(on ? this.resonanceUntil - time : 0, RESONANCE.durationMs);
+    const aura = this.resonanceAura;
+    if (aura) {
+      aura.setVisible(on);
+      if (on) aura.setPosition(this.player.x, this.player.y).setDepth(this.player.depth - 1)
+        .setAlpha(0.65 + 0.35 * Math.sin(time / 120));
+    }
+    if (on !== wasActive) this.drawOrbs();
+  }
+
   /** 기술 칸의 글자: 빈 칸은 비워 두고 흐리게, 기술이 든 칸은 이름 한 줄(작은 칸이라 대기 초와 겹치지 않게). */
   private refreshSkillButtons(): void {
     this.skillButtons.forEach((button, i) => {
@@ -1722,7 +1815,7 @@ export class GameScene extends Phaser.Scene {
       hits++;
       const length = Math.hypot(dx, dy / VERTICAL_SPEED_RATIO) || 1;
       const dirX = dx / length, dirY = dy / VERTICAL_SPEED_RATIO / length;
-      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * SPIN_SLASH.damage * this.derived.skillDamage);
+      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * SPIN_SLASH.damage * this.derived.skillDamage * this.resonanceDamage());
       const died = c.hurt(damage);
       this.showDamage(c.x, c.y - 100, damage, '#8fc8ff', 46);
       const bounds = c.sprite.getBounds(this.boundsScratch);
@@ -2092,6 +2185,8 @@ export class GameScene extends Phaser.Scene {
       // 방패 앞에서 불꽃이 튀고, 공격한 적은 휘청이며, 다음 공격은 반격이 된다. 바로 다시 막을 수 있다.
       this.impacts.impact(player.x + player.facing * 60, player.y - 95, -player.facing, 0, 'counter', now, player.y);
       this.hud.showCallout('패링!');
+      // 패링마다 공명 구슬이 1/3씩 찬다.
+      this.setResonanceCharge(chargeOnParry(this.resonanceCharge, RESONANCE));
       enemy.interrupt(now, BLOCK.stunMs);
       this.counterUntil = now + JUST_DODGE.counterMs;
       this.parryUntil = 0;
@@ -2102,7 +2197,8 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
     // 방어력(DEF)만큼 받는 피해가 줄어든다.
-    const taken = mitigate(enemy.stats.damage, this.derived);
+    // 공명 중에는 받는 피해가 더 준다(최소 1).
+    const taken = resonanceTaken(mitigate(enemy.stats.damage, this.derived), this.resonating, RESONANCE);
     const died = player.hurt(taken, 0xff5a4a);
     if (this.herb) {
       // 약초 기운은 처음 맞을 때 사라진다. 남은 체력이 기본 최대보다 많으면 기본 최대로 맞춘다.

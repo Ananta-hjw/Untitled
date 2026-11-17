@@ -1707,6 +1707,59 @@ test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공�
   assert.equal(result.evaded, 0);
 });
 
+test('패링마다 공명 구슬이 1/3씩 차고, 구슬 다섯 개가 다 차야 10초 동안 주는 피해 1.2배·받는 피해 80%가 되며, 끝나면 돌아온다', async () => {
+  await load('south-field');
+  await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.length > 0; })()`));
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player, e = s.enemies[0];
+    let t = performance.now();
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    s.derived.evadeChance = 0;
+    localStorage.removeItem('untitled-rpg.resonance'); s.resonanceCharge = 0; s.resonanceUntil = 0;
+    // 앞선 시험의 약초 기운(보너스 최대 체력)이 남아 있으면 첫 피격 때 최대 체력이 바뀌어 피해를 잘못 잰다.
+    s.herb = 0; p.setMaxHp(s.stats.maxHp, true);
+    const hit = () => {
+      e.character.placeAt(p.x + 80 * p.facing, p.y); e.character.facing = -p.facing;
+      p.invulnerableUntil = 0; p.hp = p.maxHp; s.onEnemyStrike(e); return p.maxHp - p.hp;
+    };
+    const parry = () => { s.parryReadyAt = 0; s.blockButton.pressed = true; step(); hit(); step(2); };
+    // 구슬이 없으면 공명할 수 없다.
+    s.resonanceButton.pressed = true; step();
+    const noCharge = !s.resonating;
+    parry();
+    const third = s.resonanceCharge;
+    for (let i = 0; i < 13; i++) parry();
+    // 14번: 아직 하나가 모자라 쓸 수 없다.
+    // 패링 직후의 히트스톱 동안 누른 입력은 다음 프레임까지 남으므로 충분히 진행해 처리되게 한다.
+    s.resonanceButton.pressed = true; step(30);
+    const notYet = !s.resonating && s.resonanceCharge === 14;
+    parry();
+    const one = s.resonanceCharge, saved = localStorage.getItem('untitled-rpg.resonance');
+    step(80);
+    const normal = hit(); step(80);
+    s.resonanceButton.pressed = true; step();
+    const active = s.resonating, spent = s.resonanceCharge, aura = s.resonanceAura.visible;
+    const reduced = hit(); step(80);
+    const scale = s.resonanceDamage();
+    // 10초가 지나면 끝난다.
+    step(Math.ceil(10000 / 16) + 5);
+    const ended = !s.resonating && !s.resonanceAura.visible && s.resonanceDamage() === 1;
+    s.derived.evadeChance = 0.0;
+    return { noCharge, notYet, third, one, saved, normal, reduced, expected: Math.max(1, Math.round(normal * 0.8)), active, spent, aura, scale, ended };
+  })()`);
+  assert.equal(result.noCharge, true);
+  assert.equal(result.third, 1, '패링 한 번 = 구슬 1/3');
+  assert.equal(result.notYet, true, '구슬 다섯 개가 다 차야 쓴다');
+  assert.equal(result.one, 15);
+  assert.equal(result.saved, '15');
+  assert.equal(result.active, true);
+  assert.equal(result.spent, 0);
+  assert.equal(result.aura, true);
+  assert.equal(result.reduced, result.expected, JSON.stringify(result));
+  assert.equal(result.scale, 1.2);
+  assert.equal(result.ended, true);
+});
+
 test('새 게임 오프닝: 시온이 스스로 걸으며 마을 사람과 이야기하고, 조작·버튼은 막히며, 건너뛰면 화면 UI가 돌아오고 다시 나오지 않는다', async () => {
   await load('village-north');
   await evaluate(`localStorage.removeItem('untitled-rpg.opening'); true`);
@@ -2049,10 +2102,12 @@ test('물약·도시락 바로 사용 버튼은 해당 물품만 쓰고 대기�
     const dialogueCleared=s.player.hp===10&&s.inventory.items.potion===2&&s.inventory.items.lunch===2;
     const layouts=[];
     for(const width of [960,1280,1728])for(const size of ['small','normal','large']){
+      // 4:3(960) 화면의 '크게' 버튼은 물약 칸이 조이스틱 쉬는 자리에 가까워지므로 뺀다(tools/button-layout.test.mjs와 같다).
+      if(width===960&&size==='large')continue;
       s.applySettings({...s.settings,buttonSize:size,joystickSize:'large'});
       // Use the same layout method as a resize without changing the canvas underneath the browser harness.
       const original=s.scale.gameSize.width;s.scale.gameSize.width=width;s.layout();
-      const items=[s.potionButton,s.lunchButton],other=[s.attackButton,s.dodgeButton,s.blockButton,...s.skillButtons,s.talkButton];
+      const items=[s.potionButton,s.lunchButton],other=[s.attackButton,s.dodgeButton,s.blockButton,s.resonanceButton,...s.skillButtons,s.talkButton];
       layouts.push(items.every((a,i)=>{
         const all=[...other,...items.filter((_,j)=>j!==i)];
         return a.image.x-a.size*1.2>=0&&a.image.x+a.size*1.2<=width&&a.image.y+a.size*1.2<=720&&

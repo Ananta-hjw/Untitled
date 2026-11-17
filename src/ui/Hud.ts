@@ -7,6 +7,8 @@ const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 const BAR = { x: 44, y: 26, width: 300, height: 26 };
 const MP_BAR = { x: BAR.x, y: BAR.y + BAR.height + 8, width: BAR.width, height: 14 };
 const XP_BAR = { x: BAR.x, y: MP_BAR.y + MP_BAR.height + 8, width: BAR.width, height: 10 };
+/** 공명 구슬: 체력 막대 오른쪽에 한 줄 */
+export const ORBS = { x: BAR.x + BAR.width + 22, y: BAR.y + BAR.height / 2, radius: 10, gap: 26 };
 
 export class Hud {
   private readonly scene: Phaser.Scene;
@@ -22,6 +24,7 @@ export class Hud {
   private readonly callout: Phaser.GameObjects.Text;
   private readonly slowTint: Phaser.GameObjects.Rectangle;
   private hint?: Phaser.GameObjects.Text;
+  private readonly orbs: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene, hintText: string) {
     this.scene = scene;
@@ -64,6 +67,7 @@ export class Hud {
       .setDepth(DEPTH_UI + 1)
       .setResolution(2);
 
+    this.orbs = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH_UI);
     this.mpBar = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH_UI);
     this.mpText = scene.add
       .text(MP_BAR.x + MP_BAR.width + 12, MP_BAR.y + MP_BAR.height / 2, '', {
@@ -164,6 +168,28 @@ export class Hud {
     const visible = amount > 0.01;
     this.slowTint.setVisible(visible);
     if (visible) this.slowTint.setAlpha(0.16 * amount);
+  }
+
+  /**
+   * 공명 구슬. fill은 구슬마다 찬 정도(0~1)이고, 찬 만큼 위에서부터 시계 방향으로 금빛이 채워진다.
+   * 공명 중(active)에는 테두리가 밝게 빛난다. 값이 바뀔 때만 부른다.
+   */
+  setOrbs(fill: number[], active: boolean): void {
+    const g = this.orbs.clear();
+    const { x, y, radius, gap } = ORBS;
+    fill.forEach((amount, i) => {
+      const cx = x + i * gap;
+      g.fillStyle(0x1a1008, 0.85).fillCircle(cx, y, radius + 3);
+      g.fillStyle(0x2c2416).fillCircle(cx, y, radius);
+      if (amount >= 1) {
+        g.fillStyle(active ? 0xfff0a8 : 0xf2c14e).fillCircle(cx, y, radius);
+      } else if (amount > 0) {
+        g.fillStyle(0xf2c14e).beginPath().moveTo(cx, y);
+        g.arc(cx, y, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * amount, false);
+        g.closePath().fillPath();
+      }
+      g.lineStyle(2, active ? 0xffffff : 0x8a6a2a, 1).strokeCircle(cx, y, radius);
+    });
   }
 
   /** 마나 막대. 보이는 값(내림한 정수)이 바뀔 때만 부른다. */

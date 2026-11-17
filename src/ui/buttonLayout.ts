@@ -1,8 +1,9 @@
 /**
  * 오른쪽 아래 전투 버튼 배치. 공격 버튼을 중심으로
  * - 회피: 오른쪽 아래 모서리
- * - 막기: 공격 버튼 왼쪽 아래, 그 왼쪽에 아이템 바로가기(첫 칸), 둘째 칸은 첫 칸 위
-   (옆으로 늘어놓으면 4:3 화면에서 조이스틱에 닿는다)
+ * - 막기: 공격 버튼 왼쪽 아래
+ * - 아이템 바로가기 두 칸: 막기 왼쪽, 화면 맨 아래에 가로로
+ * - 공명: 아이템 칸 위, 막기 쪽으로 붙여서
  * - 기술 칸 다섯: 공격 버튼 둘레의 호(왼쪽에서 위를 지나 오른쪽 위까지)
  * - 대화: 기술 칸 호의 왼쪽 위 바깥 (NPC 근처에서만 보인다)
  * 모든 거리는 화면 오른쪽 아래 모서리에서 잰 값에 버튼 크기 설정(scale)을 곱하므로,
@@ -10,14 +11,14 @@
  * Phaser를 쓰지 않아 tools/button-layout.test.mjs가 직접 불러 검사한다.
  */
 
-export const BUTTON_RADIUS = { attack: 78, dodge: 52, block: 54, item: 48, skill: 34, talk: 56 } as const;
+export const BUTTON_RADIUS = { attack: 78, dodge: 52, block: 54, item: 42, skill: 34, talk: 56, resonance: 40 } as const;
 /** ActionButton의 실제 터치 반경은 그린 원의 1.2배다. */
 export const TOUCH_RATIO = 1.2;
 export const SKILL_SLOT_COUNT = 5;
 
 export interface Point { x: number; y: number }
 export interface CombatButtonLayout {
-  attack: Point; dodge: Point; block: Point; items: [Point, Point]; skills: Point[]; talk: Point;
+  attack: Point; dodge: Point; block: Point; items: [Point, Point]; resonance: Point; skills: Point[]; talk: Point;
 }
 
 /** 공격 버튼 중심(모서리에서 잰 거리)과 기술 칸 호의 반지름·각도(도, 화면 기준: 0=오른쪽, 270=위) */
@@ -36,7 +37,8 @@ export function combatButtonLayout(width: number, height: number, scale: number)
     attack,
     dodge: at(corner, corner),
     block: at(330, 105),
-    items: [at(465, 105), at(465, 233)],
+    items: [at(446, 58), at(558, 58)],
+    resonance: at(435, 170),
     skills,
     talk: at(420, 380),
   };
@@ -59,7 +61,7 @@ export function joystickZone(width: number, height: number, buttonScale: number)
   const edges = [
     layout.attack.x - r(BUTTON_RADIUS.attack), layout.dodge.x - r(BUTTON_RADIUS.dodge),
     layout.block.x - r(BUTTON_RADIUS.block), layout.talk.x - r(BUTTON_RADIUS.talk),
-    ...layout.items.map(p => p.x - r(BUTTON_RADIUS.item)), ...layout.skills.map(p => p.x - r(BUTTON_RADIUS.skill)),
+    ...layout.items.map(p => p.x - r(BUTTON_RADIUS.item)), layout.resonance.x - r(BUTTON_RADIUS.resonance), ...layout.skills.map(p => p.x - r(BUTTON_RADIUS.skill)),
   ];
   return { left: 0, top: JOYSTICK_ZONE_TOP, right: Math.min(width / 2, Math.min(...edges) - 24), bottom: height };
 }
