@@ -2511,9 +2511,9 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
       const vx=blade.tip.x-blade.base.x,vy=blade.tip.y-blade.base.y;
       const palmDistance=Math.abs((palm.x-blade.base.x)*vy-(palm.y-blade.base.y)*vx)/Math.hypot(vx,vy);
       const rear=facing==='up-left'||facing==='up-right';
-      const palmVisible=h.supportHand.visible&&(rear
-        ? h.list.indexOf(h.supportHand)>h.list.indexOf(h.weaponFront)&&h.supportHand.frame.name==='guard-up-support-back'
-        : h.list.indexOf(h.weaponFront)>h.list.indexOf(h.supportHand)&&h.supportHand.frame.name!=='guard-up-support-back');
+      const palmVisible=rear
+        ? !h.supportHand.visible&&h.list.indexOf(h.weaponFront)<h.list.indexOf(h.image)&&s.shield.depth<p.depth
+        : h.supportHand.visible&&h.list.indexOf(h.weaponFront)>h.list.indexOf(h.supportHand);
       const held=h.isGuarding&&s.shield.visible&&!p.isAttacking&&h.weaponFront.frame.name==='iron-sword-blade';
       h.setWeapon('wooden-sword');const wood=h.weaponFront.frame.name==='wooden-sword-blade';h.setWeapon('iron-sword');
       e.character.revive(p.x+80*p.facing,p.y);e.character.face(-p.facing);p.invulnerableUntil=0;const hp=p.hp;s.onEnemyStrike(e);
@@ -2521,10 +2521,11 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
       s.now+=5;s.updatePlayer(s.now,0);s.drawShield(s.now);const restored=!h.isGuarding&&h.image.texture.key!=='hero-academy-guard';
       runs.push({facing,name,texture,mirror,raised,upright,palmDistance,palmVisible,held,wood,lengths,error,restored,protected:p.hp===hp&&s.counterUntil>s.now});
     }
-    const verticalUnchanged=[];
+    const verticalPoses=[];
     for(const dy of [-1,1]){
       h.play('hero-idle');h.setMovement(0,dy);h.setGuarding(true);
-      verticalUnchanged.push(h.supportHand.frame.name!=='guard-up-support-back'&&h.list.indexOf(h.weaponFront)>h.list.indexOf(h.supportHand));
+      verticalPoses.push(h.image.frame.name===(dy<0?'guard-back':'guard-front')
+        &&(dy<0?!h.supportHand.visible&&h.list.indexOf(h.weaponFront)<h.list.indexOf(h.image):h.supportHand.visible));
       h.setGuarding(false);
     }
     s.parryReadyAt=0;s.blockButton.pressed=true;s.updatePlayer(s.now,0);s.drawShield(s.now);
@@ -2532,7 +2533,7 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
     const unequipped=!h.weaponFront.visible&&!h.weaponBack.visible&&!h.supportHand.visible&&Math.hypot(empty.tip.x-empty.base.x,empty.tip.y-empty.base.y)===0;
     s.dodgeButton.pressed=true;s.updatePlayer(s.now,0);s.drawShield(s.now);
     const dodged=p.dodging&&!h.isGuarding&&h.image.texture.key!=='hero-academy-guard';
-    s.impacts.impact=impact;return {runs,unequipped,dodged,verticalUnchanged};
+    s.impacts.impact=impact;return {runs,unequipped,dodged,verticalPoses};
   })()`);
   for (const run of result.runs) {
     assert.equal(run.texture, 'hero-academy-guard');
@@ -2544,5 +2545,5 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
     assert.ok(run.lengths.every(n=>Math.abs(n-75)<.001),JSON.stringify(run));
   }
   assert.equal(result.unequipped,true);assert.equal(result.dodged,true);
-  assert.ok(result.verticalUnchanged.every(Boolean),JSON.stringify(result));
+  assert.ok(result.verticalPoses.every(Boolean),JSON.stringify(result));
 });
