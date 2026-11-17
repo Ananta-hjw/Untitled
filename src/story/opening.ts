@@ -15,6 +15,13 @@ import type { QuestState } from './quests.ts';
 
 export interface Point { x: number; y: number }
 
+/** 연출에서 바라보거나 다가갈 대상: 마을 사람, 시온, 또는 맵의 한 지점 */
+export type CutsceneTarget = NamedNpcId | 'hero' | Point;
+
+/**
+ * 연출 대본의 한 단계. 오프닝과 1장 수확제 연출(story/festival.ts)이 함께 쓴다.
+ * 실행은 scenes/OpeningDirector.ts가 한다.
+ */
 export type OpeningStep =
   /** 화면을 검게 덮고 가운데에 글을 띄운다. 끝나면 화면이 밝아진다. */
   | { type: 'caption'; text: string; ms: number }
@@ -23,12 +30,20 @@ export type OpeningStep =
   | { type: 'wait'; ms: number }
   /** 시온이 경로를 따라 걷는다. 끝까지 걸어야 다음으로 넘어간다. */
   | { type: 'hero'; path: Point[] }
+  /** 시온을 그 자리로 옮겨 세운다(화면이 가려져 있을 때). */
+  | { type: 'placeHero'; at: Point }
   /** 마을 사람을 그 자리로 옮겨 세운다(화면 밖에서 미리 자리 잡기). */
   | { type: 'place'; id: NamedNpcId; at: Point }
-  /** 마을 사람이 경로를 따라 걷는다. wait이면 도착할 때까지 기다린다. */
-  | { type: 'npc'; id: NamedNpcId; path: Point[]; wait?: boolean }
-  /** 마을 사람이 시온 쪽을 본다. */
-  | { type: 'face'; id: NamedNpcId }
+  /** 마을 사람이 경로를 따라 걷는다(speed: 평소 걷는 빠르기에 대한 배율, 뛰기는 1.6 정도). wait이면 도착할 때까지 기다린다. */
+  | { type: 'npc'; id: NamedNpcId; path: Point[]; wait?: boolean; speed?: number }
+  /** 마을 사람이 대상(없으면 시온) 쪽을 본다. */
+  | { type: 'face'; id: NamedNpcId; to?: CutsceneTarget }
+  /** 카메라가 ms 동안 그 지점(또는 시온)으로 옮겨 간다. 시온으로 돌아오면 다시 시온을 따라간다. */
+  | { type: 'camera'; to: Point | 'hero'; ms: number }
+  /** 머리 위에 잠깐 떠오르는 짧은 표시(♪, !, … 등). 기다리지 않는다. */
+  | { type: 'emote'; who: NamedNpcId | 'hero'; text: string }
+  /** 장면이 맡는 효과 신호(예: 등불 띄우기, 경보). 기다리지 않는다. */
+  | { type: 'cue'; cue: string }
   | { type: 'say'; lines: DialogueLine[] };
 
 const hero = (text: string): DialogueLine => ({ speaker: HERO_NAME, portrait: 'hero-neutral', text });

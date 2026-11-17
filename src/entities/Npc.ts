@@ -83,6 +83,8 @@ export class Npc extends Phaser.GameObjects.Container {
   private talkUntil = 0;
   /** 연출(오프닝) 중: 정해진 경로만 걷고, 돌아다니거나 플레이어를 돌아보지 않는다. */
   private scripted = false;
+  /** 연출에서 걷는 빠르기 배율 (뛰기 등) */
+  private scriptSpeed = 1;
   private scriptPath: { x: number; y: number }[] = [];
 
   constructor(scene: Phaser.Scene, def: NpcDef, rand: () => number = Math.random) {
@@ -142,8 +144,9 @@ export class Npc extends Phaser.GameObjects.Container {
   }
 
   /** 연출: 경로를 따라 걷는다. 다 걸으면 그 자리에 선다(release 전까지). */
-  walkTo(path: { x: number; y: number }[]): void {
+  walkTo(path: { x: number; y: number }[], speed = 1): void {
     this.scripted = true;
+    this.scriptSpeed = speed;
     this.scriptPath = path.map((p) => ({ ...p }));
     this.target = undefined;
     this.walked = 0;
@@ -187,7 +190,7 @@ export class Npc extends Phaser.GameObjects.Container {
       if (!next) return;
       const dx = next.x - this.x, dy = next.y - this.y;
       const distance = Math.hypot(dx, dy);
-      const travel = NPC_WALK_SPEED * dt;
+      const travel = NPC_WALK_SPEED * this.scriptSpeed * dt;
       if (distance <= travel) {
         this.setPosition(next.x, next.y).setDepth(next.y);
         this.scriptPath.shift();

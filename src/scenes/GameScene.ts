@@ -60,7 +60,9 @@ import { IDLE_FPS, PLAY_FPS, frameRate } from '../core/frameRate';
 import { RESONANCE_SAVE_KEY, resonanceTaken, canResonate, chargeOnParry, orbFill, parseCharge } from '../combat/resonance';
 import { BUTTON_RADIUS, JOYSTICK_REST, SKILL_SLOT_COUNT, combatButtonLayout, joystickZone } from '../ui/buttonLayout';
 import { OpeningDirector } from './OpeningDirector';
-import { OPENING, OPENING_HINT, OPENING_SAVE_KEY, OPENING_WALK_SCALE, shouldPlayOpening } from '../story/opening';
+import { OPENING, OPENING_HINT, OPENING_SAVE_KEY, OPENING_WALK_SCALE, shouldPlayOpening, type OpeningStep } from '../story/opening';
+import { FESTIVAL, FESTIVAL_RAIDERS, FESTIVAL_SAVE_KEY, FESTIVAL_WALK_SCALE, RAIDER_ENTRY_MS, festivalNpcs, shouldPlayFestival } from '../story/festival';
+import { FestivalStage } from './FestivalStage';
 import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings } from '../ui/settingsData';
 import { DIALOGUES, HERO_NAME } from '../story/dialogues';
 import { findInteractable, type Interactable } from '../world/interactables';
@@ -97,6 +99,8 @@ type SkillId = 'spin';
 
 const HERO_SCALE = 0.5;
 const NAV_CELL = 32;
+/** 카메라가 시온을 따라갈 때 시온을 화면 가운데보다 이만큼 아래에 둔다 */
+const CAMERA_FOLLOW_OFFSET_Y = 170;
 /** 맵을 옮길 때 화면이 어두워졌다 밝아지는 시간(ms). 연출만 담당하고 게임 시계와는 무관하다. */
 const TRAVEL_FADE_MS = 220;
 
@@ -208,6 +212,13 @@ export class GameScene extends Phaser.Scene {
   /** 오프닝 동안 숨겨 둔 화면 고정 UI (끝나면 다시 보인다) */
   private openingHidden: Array<Phaser.GameObjects.GameObject & { setVisible(v: boolean): unknown }> = [];
   private playOpening = false;
+  /** 1장 수확제 연출(story/festival.ts)을 이번에 광장에서 보여 주는지. 연출 동안 마을 사람 배치와 권속이 다르다. */
+  private playFestival = false;
+  /** 지금 연출의 걷는 빠르기 (오프닝·축제가 다르다) */
+  private cutsceneWalkScale = OPENING_WALK_SCALE;
+  private festivalStage?: FestivalStage;
+  /** 축제 연출 끝에 남문으로 걸어 들어오는 권속 (싸우지 않는 그림뿐. 연출이 끝나면 광장을 다시 열어 진짜 무리가 나온다) */
+  private festivalRaiders: Array<{ enemy: Enemy; path: readonly Point[]; startedAt: number }> = [];
   /** 잿빛 나방의 가루에 닿아 느려진 상태가 끝나는 게임 시각 */
   private slowedUntil = 0;
   /** 지금 있는 맵. 재시작해도 유지되고, 맵을 옮길 때만 바뀐다. */
@@ -256,7 +267,8 @@ export class GameScene extends Phaser.Scene {
   private storyChoice?: StoryChoice;
   private storyMarkers: Phaser.GameObjects.Text[] = [];
   private raidEnemies = new Set<Enemy>();
-  private chapterShade?: Phaser.GameObjects.Rectangle;
+  /** 습격의 밤 그늘. Rectangle의 반투명 채우기는 Phaser 4에서 훨씬 옅게 그려져 Graphics로 그린다. */
+  private chapterShade?: Phaser.GameObjects.Graphics;
   /** 마을의 가게 문 위 퀘스트 표시: 안에 있는 사람의 표시를 문 위에 보여 준다. */
   private doorMarkers: Array<{ spot: Interactable; text: Phaser.GameObjects.Text; npcs: NpcId[]; marker?: QuestMarker }> = [];
   private minimap?: Minimap;
@@ -337,6 +349,12 @@ export class GameScene extends Phaser.Scene {
     this.playOpening = this.mapId === 'village-north' && (forced || shouldPlayOpening({
       fromTitle: this.fromTitle, hasProgress: !!saved, quests: this.quests, seen,
     }));
+    // 로제타에게 잔치 준비가 됐다고 하면 광장에서 수확제 연출을 본다(아직 보지 않았으면 앱을 다시 켜도).
+    // 개발 빌드에서는 습격이 막 시작된 저장으로 ?festival을 붙이면 다시 볼 수 있다.
+    let festival: string | null = null;
+    try { festival = this.storage?.getItem(FESTIVAL_SAVE_KEY) ?? null; } catch { festival = null; }
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has('festival')) festival = 'pending';
+    this.playFestival = !this.playOpening && shouldPlayFestival({ map: this.mapId, quests: this.quests, saved: festival });
   }
 
   /** 해 질 무렵(chapterOne.isDusk)에는 남쪽 들판에 잿빛 나방이 더 나온다. */
@@ -423,6 +441,10 @@ export class GameScene extends Phaser.Scene {
     this.openingInput.set(0, 0);
     this.openingHidden = [];
     this.playOpening = false;
+    this.playFestival = false;
+    this.cutsceneWalkScale = OPENING_WALK_SCALE;
+    this.festivalStage = undefined;
+    this.festivalRaiders = [];
     this.mp = 0;
     this.maxMp = 0;
     this.shownMp = -1;
@@ -466,7 +488,8 @@ export class GameScene extends Phaser.Scene {
     this.dialogue = new DialogueBox(this);
     this.storyChoice = new StoryChoice(this, () => this.onResume());
     if (chapterPhase(this.quests) === 'raid') {
-      this.chapterShade = this.add.rectangle(0, 0, this.scale.gameSize.width, VIEW_HEIGHT, 0x122137, 0.42).setOrigin(0).setScrollFactor(0).setDepth(DEPTH_LIGHTING);
+      this.chapterShade = this.add.graphics().setScrollFactor(0).setDepth(DEPTH_LIGHTING);
+      this.drawChapterShade(this.scale.gameSize.width);
       this.player.invulnerableUntil = 1500;
     }
     this.talkMarker = this.add
@@ -536,10 +559,11 @@ export class GameScene extends Phaser.Scene {
     if (this.stressCount > 0) this.perf = new PerfOverlay(this, () => this.npcs.length);
 
     this.setCameraBounds();
-    this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 170);
+    this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, CAMERA_FOLLOW_OFFSET_Y);
     if (this.fromTitle) this.cameras.main.fadeIn(TITLE_FADE_MS, 0, 0, 0);
     else if (this.arrival) this.cameras.main.fadeIn(TRAVEL_FADE_MS, 0, 0, 0);
     if (this.playOpening) this.startOpening();
+    else if (this.playFestival) this.startFestival();
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.game.events.on(Phaser.Core.Events.BLUR, this.clearAttackInput, this);
@@ -663,6 +687,8 @@ export class GameScene extends Phaser.Scene {
 
     this.effects.update(time);
     this.opening?.update(time);
+    this.festivalStage?.update(time);
+    this.updateFestivalRaiders(time);
     this.updateRespawns(time);
     this.updateAttackLunge(time);
     this.updateInteraction(time);
@@ -691,11 +717,17 @@ export class GameScene extends Phaser.Scene {
 
   /** 새 게임 첫 시작: 화면 고정 UI를 숨기고 오프닝 연출을 시작한다. */
   private startOpening(): void {
+    this.startCutscene(OPENING, OPENING_WALK_SCALE, (skipped) => this.finishOpening(skipped));
+  }
+
+  /** 화면 고정 UI를 숨기고 연출 대본을 실행한다(오프닝·수확제 공통). 습격의 밤 그늘은 그대로 둔다. */
+  private startCutscene(steps: OpeningStep[], walkScale: number, finish: (skipped: boolean) => void, cue?: (name: string) => void): void {
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
+    this.cutsceneWalkScale = walkScale;
     // 화면에 고정된 UI(체력 막대·버튼·미니맵 등)를 잠시 숨긴다. 대화창은 열릴 때 스스로 나타난다.
     this.openingHidden = this.children.list.filter((o): o is Phaser.GameObjects.GameObject & { setVisible(v: boolean): unknown; visible: boolean; scrollFactorX: number } =>
-      'scrollFactorX' in o && (o as { scrollFactorX: number }).scrollFactorX === 0 && 'visible' in o && (o as { visible: boolean }).visible);
+      o !== this.chapterShade && 'scrollFactorX' in o && (o as { scrollFactorX: number }).scrollFactorX === 0 && 'visible' in o && (o as { visible: boolean }).visible);
     for (const o of this.openingHidden) o.setVisible(false);
     this.opening = new OpeningDirector({
       scene: this,
@@ -708,8 +740,61 @@ export class GameScene extends Phaser.Scene {
         this.dialogue.open(lines, () => { done(); this.clearAttackInput(); });
       },
       closeDialogue: () => { if (this.dialogue.isOpen) this.dialogue.close(); },
-      finish: (skipped) => this.finishOpening(skipped),
-    }, OPENING);
+      heroCamera: () => ({ x: this.player.x, y: this.player.y - CAMERA_FOLLOW_OFFSET_Y }),
+      followHero: () => this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, CAMERA_FOLLOW_OFFSET_Y),
+      cue,
+      finish,
+    }, steps);
+  }
+
+  /** 1장 수확제 연출: 마을 사람을 잔치 자리에 세우고, 모닥불·등불을 그리고 대본을 시작한다. */
+  private startFestival(): void {
+    for (const npc of this.npcs) if (!npc.def.id.startsWith('guard-')) npc.placeAt(npc.x, npc.y);
+    this.startCutscene(FESTIVAL, FESTIVAL_WALK_SCALE, (skipped) => this.finishFestival(skipped), (name) => {
+      if (name === 'raiders') this.spawnFestivalRaiders();
+      else this.festivalStage?.cue(name);
+    });
+    this.festivalStage = new FestivalStage(this);
+  }
+
+  /** 연출 속 권속: 남문 밖에서 걸어 들어와 선다. 싸우지 않는다(장면의 적 목록에 넣지 않는다). */
+  private spawnFestivalRaiders(): void {
+    for (const raider of FESTIVAL_RAIDERS) {
+      const start = raider.path[0];
+      const enemy = new Enemy(this, raider.key, start.x, start.y, raider.level);
+      this.festivalRaiders.push({ enemy, path: raider.path, startedAt: this.now });
+    }
+  }
+
+  /** 길을 따라 RAIDER_ENTRY_MS 동안 같은 빠르기로 걷는다(게임 시계). */
+  private updateFestivalRaiders(time: number): void {
+    for (const raider of this.festivalRaiders) {
+      const t = Math.min(1, (time - raider.startedAt) / RAIDER_ENTRY_MS);
+      const p = raider.path;
+      const lengths = p.slice(1).map((q, i) => Math.hypot(q.x - p[i].x, q.y - p[i].y));
+      let left = t * lengths.reduce((a, b) => a + b, 0);
+      let i = 0;
+      while (i < lengths.length - 1 && left > lengths[i]) left -= lengths[i++];
+      const f = lengths[i] > 0 ? Math.min(1, left / lengths[i]) : 1;
+      const c = raider.enemy.character;
+      c.placeAt(p[i].x + (p[i + 1].x - p[i].x) * f, p[i].y + (p[i + 1].y - p[i].y) * f);
+      c.setMotion(t < 1, t < 1 ? p[i + 1].x - p[i].x : 0);
+    }
+  }
+
+  /** 수확제 연출이 끝나거나 건너뛰면 다시 보지 않게 적고, 광장을 습격 상태로 다시 연다(첫 무리와 싸운다). */
+  private finishFestival(_skipped: boolean): void {
+    try {
+      this.storage?.setItem(FESTIVAL_SAVE_KEY, 'seen');
+    } catch {
+      // 저장소가 막혀 있으면 다음에 광장에 들어올 때 다시 볼 수 있다.
+    }
+    this.openingInput.set(0, 0);
+    this.clearAttackInput();
+    // 연출은 끝났지만 화면 UI는 숨긴 채 어두워졌다가, 다시 열린 광장에서 돌아온다.
+    this.opening = undefined;
+    const at = { x: this.player.x, y: this.player.y };
+    this.travel({ to: 'village', arrive: at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: at });
   }
 
   /** 오프닝이 끝나거나 건너뛰었을 때: UI를 되돌리고, 마을 사람을 풀어 주고, 다시 보지 않게 저장한다. */
@@ -736,7 +821,8 @@ export class GameScene extends Phaser.Scene {
     this.map.enemies.forEach((spawn, i) => this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, spawnLevel(this.mapId, i))));
     for (const spawn of this.duskSpawns()) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, DUSK_MOTH_LEVEL));
     this.syncRaidEnemies(false);
-    let defs = chapterNpcs([...this.map.npcs, ...guardsForMap(this.mapId)], this.quests, this.mapId);
+    // 축제 연출 동안에는 마을 사람 모두가 광장의 잔치 자리에 있다.
+    let defs = this.playFestival ? festivalNpcs() : chapterNpcs([...this.map.npcs, ...guardsForMap(this.mapId)], this.quests, this.mapId);
     if (this.stressCount > 0 && this.mapId === 'village' && chapterPhase(this.quests) === 'day') {
       const area = this.walkArea, b = this.map.bounds;
       defs = [...defs, ...stressNpcs(this.stressCount, defs, Math.random, b, (x, y) => area.contains(x, y) && !findExit(this.map, x, y))];
@@ -951,15 +1037,20 @@ export class GameScene extends Phaser.Scene {
     this.exitHint?.layout(width);
     this.dialogue.layout(width);
     this.storyChoice?.layout(width);
-    this.chapterShade?.setSize(width, VIEW_HEIGHT);
+    this.drawChapterShade(width);
+    this.festivalStage?.layout(width);
     this.pauseMenu.layout(width);
+  }
+
+  private drawChapterShade(width: number): void {
+    this.chapterShade?.clear().fillStyle(0x122137, 0.42).fillRect(0, 0, width, VIEW_HEIGHT);
   }
 
   // ---------------------------------------------------------------- 이동
 
   private readInput(): Phaser.Math.Vector2 {
     // 오프닝 동안에는 감독이 정한 방향으로만 천천히 걷는다.
-    if (this.opening) return this.input2.copy(this.openingInput).scale(OPENING_WALK_SCALE);
+    if (this.opening) return this.input2.copy(this.openingInput).scale(this.cutsceneWalkScale);
     const v = this.input2.copy(this.joystick.vector);
     if (v.lengthSq() === 0 && this.keys) {
       const k = this.keys;
@@ -1597,6 +1688,10 @@ export class GameScene extends Phaser.Scene {
       this.clearQuickItemInput();
       for (const key of this.dodgeKeys) Phaser.Input.Keyboard.JustDown(key);
       if (beforePhase !== chapterPhase(this.quests)) {
+        // 잔치가 시작되면 광장에서 수확제 연출을 본다.
+        if (chapterPhase(this.quests) === 'raid') {
+          try { this.storage?.setItem(FESTIVAL_SAVE_KEY, 'pending'); } catch { /* 저장소가 막혀 있으면 연출 없이 습격으로 */ }
+        }
         const at = mapPoint({ x: 1180, y: 1130 });
         this.travel({ to: 'village', arrive: at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: at });
       }
@@ -1660,6 +1755,8 @@ export class GameScene extends Phaser.Scene {
    * 장면을 만들 때와, 대화·처치로 퀘스트 단계가 바뀔 때마다 부른다.
    */
   private syncRaidEnemies(announce = true): void {
+    // 축제 연출 동안에는 싸울 무리를 내지 않는다(연출이 끝나면 광장을 다시 열면서 나온다).
+    if (this.playFestival) return;
     if ([...this.raidEnemies].some((e) => e.character.alive)) return;
     const spawns = raidSpawns(this.quests, this.mapId);
     if (spawns.length === 0) return;
@@ -1682,7 +1779,7 @@ export class GameScene extends Phaser.Scene {
         fontFamily: 'system-ui, sans-serif', fontSize: '22px', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 5,
       }).setOrigin(0.5, 1).setDepth(spot.y + 400).setResolution(2));
     }
-    for (const npc of this.npcs) npc.setQuestMarker(markerFor(npc.def.id, this.quests));
+    for (const npc of this.npcs) npc.setQuestMarker(this.playFestival ? undefined : markerFor(npc.def.id, this.quests));
     for (const door of this.doorMarkers) {
       const markers = door.npcs.map((id) => markerFor(id, this.quests)).filter((m): m is QuestMarker => !!m);
       door.marker = MARKER_PRIORITY.find((m) => markers.includes(m));

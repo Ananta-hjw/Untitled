@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 import type { DialogueLine } from '../story/dialogues';
-import type { OpeningStep } from '../story/opening';
+import type { CutsceneTarget, OpeningStep, Point } from '../story/opening';
 import type { Npc } from '../entities/Npc';
 import type { NamedNpcId } from '../world/npcs';
 
@@ -17,7 +17,16 @@ export interface OpeningHost {
   say(lines: DialogueLine[], done: () => void): void;
   closeDialogue(): void;
   finish(skipped: boolean): void;
+  /** 카메라가 시온을 따라갈 때 화면 가운데에 오는 지점 */
+  heroCamera(): { x: number; y: number };
+  /** 카메라가 다시 시온을 따라가게 한다. */
+  followHero(): void;
+  /** 대본의 효과 신호(cue 단계). 장면마다 다르다. */
+  cue?(name: string): void;
 }
+
+/** 머리 위 짧은 표시가 떠 있는 시간(게임 시계 ms) */
+const EMOTE_MS = 1600;
 
 const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 const BAR = 54;
@@ -27,7 +36,8 @@ const ARRIVE = 14;
 const STUCK_MS = 1500;
 
 /**
- * 오프닝 대본(story/opening.ts)을 차례로 실행한다: 자막, 시온과 마을 사람의 이동, 대화.
+ * 연출 대본(오프닝 story/opening.ts, 수확제 story/festival.ts)을 차례로 실행한다:
+ * 자막, 시온과 마을 사람의 이동, 카메라 이동, 머리 위 표시, 대화, 장면의 효과 신호(cue).
  * 시간은 장면의 게임 시계를 따르고(대화 중에는 장면이 멈추므로 같이 멈춘다), 화면 효과만 실제 시간 tween을 쓴다.
  * 위아래 검은 띠와 오른쪽 위 건너뛰기 버튼을 그린다.
  */
@@ -47,6 +57,8 @@ export class OpeningDirector {
   private lastPos = { x: 0, y: 0 };
   /** 마지막으로 받은 게임 시각 (대화가 닫힐 때 다음 단계를 이 시각에 시작한다) */
   private clock = 0;
+  private cameraFrom = { x: 0, y: 0 };
+  private emotes: Array<{ text: Phaser.GameObjects.Text; who: NamedNpcId | 'hero'; until: number }> = [];
 
   constructor(host: OpeningHost, steps: OpeningStep[]) {
     this.host = host;
@@ -68,6 +80,8 @@ export class OpeningDirector {
   get active(): boolean { return !this.ended; }
   /** 지금 몇 번째 단계인지 (테스트용) */
   get step(): number { return this.index; }
+  /** 지금 단계 (테스트용) */
+  get current(): OpeningStep | undefined { return this.steps[this.index]; }
 
   layout(width: number): void {
     this.shade.setSize(width, VIEW_HEIGHT);
@@ -81,6 +95,7 @@ export class OpeningDirector {
   update(now: number): void {
     if (this.ended) return;
     this.clock = now;
+    this.updateEmotes(now);
     if (this.index < 0) this.next(now);
     if (this.waiting || this.ended) return;
     const step = this.steps[this.index];
@@ -106,6 +121,17 @@ export class OpeningDirector {
       case 'npc':
         if (!this.host.npc(step.id)?.walking) this.next(now);
         break;
+      case 'camera': {
+        const t = Math.min(1, elapsed / step.ms);
+        const to = step.to === 'hero' ? this.host.heroCamera() : step.to;
+        const e = t * t * (3 - 2 * t);
+        this.host.scene.cameras.main.centerOn(this.cameraFrom.x + (to.x - this.cameraFrom.x) * e, this.cameraFrom.y + (to.y - this.cameraFrom.y) * e);
+        if (t >= 1) {
+          if (step.to === 'hero') this.host.followHero();
+          this.next(now);
+        }
+        break;
+      }
       default:
         this.next(now);
     }
@@ -128,10 +154,25 @@ export class OpeningDirector {
         case 'place':
           this.host.npc(step.id)?.placeAt(step.at.x, step.at.y);
           continue;
-        case 'face': {
-          const hero = this.host.hero();
-          this.host.npc(step.id)?.faceTowards(hero.x, hero.y);
+        case 'placeHero':
+          this.host.placeHero(step.at.x, step.at.y);
           continue;
+        case 'face': {
+          const to = this.where(step.to ?? 'hero');
+          if (to) this.host.npc(step.id)?.faceTowards(to.x, to.y);
+          continue;
+        }
+        case 'emote':
+          this.showEmote(step.who, step.text, now);
+          continue;
+        case 'cue':
+          this.host.cue?.(step.cue);
+          continue;
+        case 'camera': {
+          const camera = this.host.scene.cameras.main;
+          camera.stopFollow();
+          this.cameraFrom = { x: camera.midPoint.x, y: camera.midPoint.y };
+          return;
         }
         case 'caption':
           this.shade.setAlpha(1);
@@ -150,7 +191,7 @@ export class OpeningDirector {
           this.lastPos = { ...this.host.hero() };
           return;
         case 'npc':
-          this.host.npc(step.id)?.walkTo(step.path);
+          this.host.npc(step.id)?.walkTo(step.path, step.speed);
           if (step.wait) return;
           continue;
         case 'say':
@@ -203,7 +244,55 @@ export class OpeningDirector {
     const scene = this.host.scene;
     for (const object of this.objects) scene.tweens.killTweensOf(object);
     for (const object of this.objects) object.destroy();
+    for (const emote of this.emotes) emote.text.destroy();
+    this.emotes = [];
+    this.host.followHero();
     this.host.finish(skipped);
+  }
+
+  /** 대상의 지금 위치 */
+  private where(target: CutsceneTarget): Point | undefined {
+    if (target === 'hero') return this.host.hero();
+    if (typeof target === 'string') {
+      const npc = this.host.npc(target);
+      return npc ? { x: npc.x, y: npc.y } : undefined;
+    }
+    return target;
+  }
+
+  /** 머리 위 높이(발에서) */
+  private headOf(who: NamedNpcId | 'hero'): Point | undefined {
+    if (who === 'hero') {
+      const hero = this.host.hero();
+      return { x: hero.x, y: hero.y - 200 };
+    }
+    const npc = this.host.npc(who);
+    return npc ? { x: npc.x, y: npc.y - npc.def.height - 34 } : undefined;
+  }
+
+  private showEmote(who: NamedNpcId | 'hero', text: string, now: number): void {
+    const head = this.headOf(who);
+    if (!head) return;
+    const label = this.host.scene.add.text(head.x, head.y, text, {
+      fontFamily: FONT, fontSize: '30px', fontStyle: 'bold', color: '#1a1008', backgroundColor: '#fff6e0', padding: { x: 10, y: 4 },
+    }).setOrigin(0.5, 1).setDepth(DEPTH_UI - 10).setResolution(2);
+    this.emotes.push({ text: label, who, until: now + EMOTE_MS });
+  }
+
+  /** 표시는 머리를 따라다니며 살짝 떠오르고, 시간이 지나면 사라진다. */
+  private updateEmotes(now: number): void {
+    this.emotes = this.emotes.filter((emote) => {
+      const left = emote.until - now;
+      if (left <= 0) {
+        emote.text.destroy();
+        return false;
+      }
+      const head = this.headOf(emote.who);
+      const rise = (1 - left / EMOTE_MS) * 18;
+      if (head) emote.text.setPosition(head.x, head.y - rise);
+      emote.text.setAlpha(Math.min(1, left / 300));
+      return true;
+    });
   }
 
   private fade(target: Phaser.GameObjects.GameObject, alpha: number, duration: number): void {

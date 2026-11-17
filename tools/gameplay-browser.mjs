@@ -1441,7 +1441,11 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     const cancelled = s.quests['festival-eve'].status === 'active' && !s.quests['village-raid'];
     s.openDialogue(s.npcs.find(n => n.def.id === 'rosetta').spot);
     s.storyChoice.accept(); flush(); await ready('village');
-    const raid = { map: s.mapId, enemies: s.enemies.length, sia: s.npcs.some(n => n.def.id === 'sia'), shade: !!s.chapterShade };
+    // 잔치를 시작하면 광장에서 수확제 연출이 나온다. 건너뛰면 광장이 습격 상태로 다시 열린다.
+    const festival = { playing: !!s.opening && s.playFestival, sia: s.npcs.some(n => n.def.id === 'sia'), enemies: s.enemies.length };
+    s.opening.skip(); await ready('village');
+    const raid = { map: s.mapId, enemies: s.enemies.length, sia: s.npcs.some(n => n.def.id === 'sia'), shade: !!s.chapterShade,
+      festival: localStorage.getItem('untitled-rpg.festival') };
     s.player.placeAt(1180, 1130); s.player.invulnerableUntil = Infinity;
     s.stats.damageMin = 1000; s.stats.damageMax = 1000;
     for (const e of s.enemies) { e.character.placeAt(1250, 1130); e.character.hp = 1; }
@@ -1477,7 +1481,8 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     const tracker = s.questTracker.text.text;
     localStorage.removeItem('untitled-rpg.quests');
     await restart('village');
-    return { sword, migrated, harvest, moths, patrolMarker, choice, frozen, cancelled, raid, battle, noRespawn, wave2, wave3, aftermath, searchMarker, searchRestored, complete, tracker };
+    localStorage.removeItem('untitled-rpg.festival');
+    return { sword, migrated, harvest, moths, patrolMarker, choice, frozen, cancelled, festival, raid, battle, noRespawn, wave2, wave3, aftermath, searchMarker, searchRestored, complete, tracker };
   })()`);
   assert.equal(result.migrated, 'active');
   assert.equal(result.harvest, 'done');
@@ -1486,7 +1491,8 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
   assert.equal(result.choice, true);
   assert.equal(result.frozen, true);
   assert.equal(result.cancelled, true);
-  assert.deepEqual(result.raid, { map: 'village', enemies: 3, sia: false, shade: true });
+  assert.deepEqual(result.festival, { playing: true, sia: true, enemies: 0 });
+  assert.deepEqual(result.raid, { map: 'village', enemies: 3, sia: false, shade: true, festival: 'seen' });
   assert.deepEqual(result.battle, { alive: 0, pending: 0, step: 1 });
   assert.equal(result.noRespawn, true);
   assert.equal(result.wave2, 3);
@@ -1904,6 +1910,64 @@ test('새 게임 오프닝: 시온이 스스로 걸으며 마을 사람과 이�
   await load('village-north');
   const again = await evaluate(`(() => { const s = window.__game.scene.getScene('game'); const r = !s.opening; localStorage.removeItem('untitled-rpg.opening'); return r; })()`);
   assert.equal(again, true);
+});
+
+test('1장 수확제 연출: 잔치에 모두 모이고 하늘 등불·경보·권속 입장까지 스스로 흘러가며, 끝나면 광장이 습격 상태로 다시 열린다', async () => {
+  await load('village');
+  await evaluate(`(() => { const s = window.__game.scene.getScene('game');
+    s.quests = { 'festival-eve': { status: 'done', count: 1 }, 'village-raid': { status: 'active', count: 0 } }; s.saveQuests();
+    localStorage.setItem('untitled-rpg.festival', 'pending'); return true; })()`);
+  await load('village');
+  // 연출 전체(게임 시간 1분 남짓)를 여러 번에 나눠 진행한다(한 번의 evaluate는 30초 제한).
+  await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    window.__fest = { t: performance.now(), playing: !!s.opening && s.playFestival,
+      named: s.npcs.filter(n => !n.def.id.startsWith('guard-')).map(n => n.def.id).sort(),
+      hudHidden: !s.hud.hpText.visible && !s.attackButton.text.visible, noEnemies: s.enemies.length === 0,
+      lanterns: 0, raiders: 0, fought: false, talked: 0, attacked: false };
+    return true;
+  })()`);
+  for (let chunk = 0; chunk < 60; chunk++) {
+    const running = await evaluate(`(() => {
+      const g = window.__game, s = g.scene.getScene('game'), f = window.__fest;
+      for (let i = 0; i < 300 && s.opening; i++) {
+        if (s.dialogue.isOpen) { s.dialogue.advance(); s.dialogue.advance(); f.talked++; }
+        // 플레이어 입력은 무시된다.
+        s.joystick.vector.set(1, 0); s.attackButton.pressed = true;
+        g.step(f.t += 16, 16);
+        if (s.player.isAttacking) f.attacked = true;
+        f.lanterns = Math.max(f.lanterns, s.festivalStage?.lanternCount ?? 0);
+        f.raiders = Math.max(f.raiders, s.festivalRaiders.length);
+        // 연출 속 권속은 싸우는 적이 아니다
+        if (s.festivalRaiders.length && s.enemies.length) f.fought = true;
+      }
+      s.joystick.vector.set(0, 0);
+      return !!s.opening;
+    })()`);
+    if (!running) break;
+  }
+  const result = await evaluate(`(() => {
+    const f = window.__fest;
+    return { playing: f.playing, named: f.named, hudHidden: f.hudHidden, noEnemies: f.noEnemies, lanterns: f.lanterns > 10, raiders: f.raiders,
+      notEnemies: !f.fought, talked: f.talked > 30, attacked: f.attacked, ended: !window.__game.scene.getScene('game').opening,
+      seen: localStorage.getItem('untitled-rpg.festival') };
+  })()`);
+  assert.deepEqual(result, { playing: true, named: ['doran', 'eila', 'herman', 'linea', 'merina', 'rosetta', 'ruan', 'serena', 'sia', 'teon', 'vernel'],
+    hudHidden: true, noEnemies: true, lanterns: true, raiders: 3, notEnemies: true, talked: true, attacked: false, ended: true, seen: 'seen' });
+  // 끝나면 광장이 다시 열리며 첫 무리와 싸운다.
+  const after = await evaluate(`(async () => {
+    const g = window.__game; let t = window.__fest.t;
+    for (let i = 0; i < 400; i++) {
+      g.step(t += 16, 16); const s = g.scene.getScene('game');
+      if (s.sys.isActive() && s.minimap && !s.traveling && !s.opening) break;
+      await new Promise(r => setTimeout(r, 5));
+    }
+    const s = g.scene.getScene('game');
+    const r = { map: s.mapId, festival: s.playFestival, enemies: s.enemies.filter(e => e.character.alive).length, sia: s.npcs.some(n => n.def.id === 'sia'), hud: s.hud.hpText.visible };
+    localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.festival');
+    return r;
+  })()`);
+  assert.deepEqual(after, { map: 'village', festival: false, enemies: 3, sia: false, hud: true });
 });
 
 test('회전 베기는 마나를 써서 둘레의 적을 한꺼번에 베고, 마나가 모자라면 쓸 수 없으며, 마나는 다시 찬다', async () => {
