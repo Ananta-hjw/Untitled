@@ -2423,7 +2423,7 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
   })()`);
   for (const run of result.runs) {
     assert.equal(run.texture, 'hero-academy-guard');
-    assert.equal(run.name, `guard-${run.facing.startsWith('up')?'up':run.facing.startsWith('down')?'down':'side'}`);
+    assert.equal(run.name, `guard-${run.facing.startsWith('up')?'up-back':run.facing.startsWith('down')?'down':'side'}`);
     assert.equal(run.mirror, run.facing.includes('left'));
     for (const key of ['raised','upright','palmVisible','held','wood','restored','protected']) assert.equal(run[key],true,JSON.stringify({key,...run}));
     assert.ok(run.error<.001,JSON.stringify(run));
