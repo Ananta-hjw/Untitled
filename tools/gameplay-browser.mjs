@@ -2883,3 +2883,57 @@ test('정면 막기에서 철검·나무검 손잡이 중심이 실제 오른손
   })()`);
   for(const r of result){assert.equal(r.frame,'guard-front');assert.ok(r.error<1.5,JSON.stringify(r));}
 });
+
+test('글자와 함께 그린 8방향 막기 검날은 실제 화면에서도 중간이 투명하게 잘리지 않는다', async () => {
+  await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 850, deviceScaleFactor: 1, mobile: false });
+  await load('village');
+  const results = await evaluate(`(() => {
+    const g=window.__game,s=g.scene.getScene('game'),camera=s.cameras.main;
+    s.sys.sceneUpdate=()=>{};
+    s.children.list.forEach(o=>o.setVisible(false));
+    camera.setScroll(0,0).setZoom(1);
+    const width=g.renderer.width,height=g.renderer.height;
+    const directions=[[0,1],[1,1],[1,0],[1,-1],[0,-1],[-1,-1],[-1,0],[-1,1]];
+    const heroes=[];
+    directions.forEach(([dx,dy],i)=>{
+      const x=(i%4)*256,y=Math.floor(i/4)*325;
+      // Separate text textures put weapons in different texture slots in the same GPU batch.
+      s.add.text(x+35,y+30,'Direction '+i,{fontSize:'17px'}).setScrollFactor(0).setDepth(99999);
+      s.add.text(x+30,y+70,'Idle          Guard',{fontSize:'14px'}).setScrollFactor(0).setDepth(99999);
+      for(let j=0;j<2;j++){
+        const h=new s.player.sprite.constructor(s);s.add.existing(h);
+        h.setPosition(x+65+j*125,y+300).setScale(.55).setScrollFactor(0).setDepth(99999);
+        h.setMovement(dx,dy);h.setWeapon('iron-sword');h.setGuarding(!!j);
+        if(j)heroes.push(h);
+      }
+    });
+    const results=[];
+    for(const weapon of ['iron-sword','wooden-sword'])for(const time of [0,160]){
+      for(const h of heroes){
+        h.setWeapon(weapon);h.guardTime=time;h.applyFrame();
+        // Keep body textures in the batch, but expose the full blade even in rear views.
+        h.image.setAlpha(.001);h.supportHand.setAlpha(.001);h.weaponBack.setAlpha(.001);
+      }
+      g.step(performance.now(),16);
+      const gl=g.renderer.gl,pixels=new Uint8Array(width*height*4);
+      gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+      heroes.forEach((h,direction)=>{
+        const blade=h.getBlade(),missing=[];
+        for(let sample=1;sample<=18;sample++){
+          const t=sample/20,x=Math.round(blade.base.x+(blade.tip.x-blade.base.x)*t);
+          const y=Math.round(blade.base.y+(blade.tip.y-blade.base.y)*t);
+          let brightest=0;
+          for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){
+            const offset=((height-1-y-oy)*width+x+ox)*4;
+            brightest=Math.max(brightest,pixels[offset]+pixels[offset+1]+pixels[offset+2]);
+          }
+          if(brightest<100)missing.push(sample);
+        }
+        results.push({weapon,time,direction,missing});
+      });
+    }
+    return results;
+  })()`);
+  await send('Emulation.clearDeviceMetricsOverride');
+  for (const result of results) assert.deepEqual(result.missing, [], JSON.stringify(result));
+});

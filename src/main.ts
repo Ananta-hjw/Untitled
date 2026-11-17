@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { MAX_ASPECT, MIN_ASPECT, VIEW_HEIGHT } from './config';
 import { frameRate, shouldRunFrame } from './core/frameRate';
+import { stabilizeTextureSampling } from './core/textureSampling';
 import { GameScene } from './scenes/GameScene';
 import { TitleScene } from './scenes/TitleScene';
 
@@ -17,6 +18,7 @@ const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   backgroundColor: '#0d0907',
+  callbacks: { postBoot: stabilizeTextureSampling },
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
