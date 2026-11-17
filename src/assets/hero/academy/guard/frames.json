@@ -1,0 +1,165 @@
+{
+  "frames": [
+    {
+      "name": "guard-side",
+      "texture": "hero-academy-guard",
+      "x": 4,
+      "y": 4,
+      "w": 190,
+      "h": 304,
+      "originX": 0.5606796116504854,
+      "originY": 1,
+      "scale": 1,
+      "grip": {
+        "x": 170.47822468793345,
+        "y": 188.10172989377844
+      },
+      "supportGrip": {
+        "x": 180.58670240420486,
+        "y": 140.54508126881598
+      },
+      "supportPalm": {
+        "x": 175.7334769741966,
+        "y": 140.54508126881598
+      },
+      "blade": {
+        "base": {
+          "x": 172.97316497774656,
+          "y": 176.36395868497277
+        },
+        "tip": {
+          "x": 204.15991860041046,
+          "y": 29.64181857490192
+        }
+      },
+      "supportCover": {
+        "name": "guard-side-support",
+        "x": 160,
+        "y": 117,
+        "w": 30,
+        "h": 48
+      }
+    },
+    {
+      "name": "guard-down",
+      "texture": "hero-academy-guard",
+      "x": 198,
+      "y": 4,
+      "w": 183,
+      "h": 304,
+      "originX": 0.5478589420654911,
+      "originY": 1,
+      "scale": 1,
+      "grip": {
+        "x": 163.8549118387909,
+        "y": 188.0499151881905
+      },
+      "supportGrip": {
+        "x": 173.8772132687154,
+        "y": 140.89869411469886
+      },
+      "supportPalm": {
+        "x": 165.17820772357098,
+        "y": 140.89869411469886
+      },
+      "blade": {
+        "base": {
+          "x": 166.34985212860403,
+          "y": 176.31214397938484
+        },
+        "tip": {
+          "x": 197.53660575126793,
+          "y": 29.59000386931399
+        }
+      },
+      "supportCover": {
+        "name": "guard-down-support",
+        "x": 150,
+        "y": 117,
+        "w": 30,
+        "h": 48
+      }
+    },
+    {
+      "name": "guard-up",
+      "texture": "hero-academy-guard",
+      "x": 385,
+      "y": 4,
+      "w": 185,
+      "h": 304,
+      "originX": 0.56375,
+      "originY": 1,
+      "scale": 1,
+      "grip": {
+        "x": 168.31035714285716,
+        "y": 187.1559581881533
+      },
+      "supportGrip": {
+        "x": 178.49606951012427,
+        "y": 139.23594909862143
+      },
+      "supportPalm": {
+        "x": 168.72201086956525,
+        "y": 139.23594909862143
+      },
+      "blade": {
+        "base": {
+          "x": 170.80529743267027,
+          "y": 175.41818697934764
+        },
+        "tip": {
+          "x": 201.99205105533417,
+          "y": 28.696046869276785
+        }
+      },
+      "supportCover": {
+        "name": "guard-up-support",
+        "x": 154,
+        "y": 115,
+        "w": 30,
+        "h": 48
+      },
+      "supportBackCover": {
+        "name": "guard-up-support-back",
+        "x": 154,
+        "y": 115,
+        "w": 30,
+        "h": 48
+      }
+    }
+  ],
+  "covers": [
+    {
+      "name": "guard-side-support",
+      "texture": "hero-academy-guard",
+      "x": 164,
+      "y": 121,
+      "w": 30,
+      "h": 48
+    },
+    {
+      "name": "guard-down-support",
+      "texture": "hero-academy-guard",
+      "x": 348,
+      "y": 121,
+      "w": 30,
+      "h": 48
+    },
+    {
+      "name": "guard-up-support",
+      "texture": "hero-academy-guard",
+      "x": 539,
+      "y": 119,
+      "w": 30,
+      "h": 48
+    },
+    {
+      "name": "guard-up-support-back",
+      "texture": "hero-academy-guard",
+      "x": 574,
+      "y": 4,
+      "w": 30,
+      "h": 48
+    }
+  ]
+}

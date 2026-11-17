@@ -997,7 +997,12 @@ export class GameScene extends Phaser.Scene {
     if (this.attackBufferedUntil !== undefined && time > this.attackBufferedUntil) {
       this.attackBufferedUntil = undefined;
     }
-    if (attackPressed) this.attackBufferedUntil = time + PLAYER.attackBufferMs;
+    if (attackPressed && !this.opening) {
+      this.attackBufferedUntil = time + PLAYER.attackBufferMs;
+      if (player.sprite instanceof HeroSprite && player.sprite.isInFollowPause) {
+        this.attackBufferedUntil = Math.max(this.attackBufferedUntil, this.nextAttackAt + 1);
+      }
+    }
 
     const v = this.readInput();
     const force = v.length();
@@ -1016,19 +1021,28 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // 초 단위 애니메이션과 밀리초 시계의 부동소수점 오차로 한 프레임 쉬지 않게 한다.
-    if (!this.opening && this.wantsAttack(time) && time + 1e-6 >= this.nextAttackAt) {
-      this.startAttack(time, v.x, v.y);
-      this.attackBufferedUntil = undefined;
-    }
-    // 막기(패링): 누르는 순간부터 짧게만 막는다. 공격·회전 베기 중에는 시작하지 않는다.
+    // 막기는 공격보다 우선한다. 공격·후딜·회전 베기의 남은 판정을 취소한다.
     this.blockButton?.setEnabled(time >= this.parryReadyAt);
-    if (parryPressed && time >= this.parryReadyAt && !player.isAttacking && this.spinHitAt === undefined) {
+    if (parryPressed && time >= this.parryReadyAt) {
+      this.clearAttackInput();
+      player.endAttack();
+      this.attackTrace = undefined;
+      this.attackLunge = undefined;
+      this.spinHitAt = undefined;
+      this.comboStage = 0;
+      this.comboExpiresAt = 0;
       this.parryUntil = time + BLOCK.windowMs;
       this.parryReadyAt = time + BLOCK.cooldownMs;
+      this.nextAttackAt = Math.max(this.nextAttackAt, this.parryUntil);
       this.dismissHint();
     }
     this.blocking = time < this.parryUntil && !player.isAttacking;
+
+    // 초 단위 애니메이션과 밀리초 시계의 부동소수점 오차로 한 프레임 쉬지 않게 한다.
+    if (!this.opening && !this.blocking && this.wantsAttack(time) && time + 1e-6 >= this.nextAttackAt) {
+      this.startAttack(time, v.x, v.y);
+      this.attackBufferedUntil = undefined;
+    }
 
     const fromX = player.x;
     const fromY = player.y;
@@ -1700,7 +1714,7 @@ export class GameScene extends Phaser.Scene {
       this.spinHitAt = undefined;
       if (player.alive) this.spinHit();
     }
-    const ready = player.alive && time >= this.nextSpinAt && !player.isAttacking && time >= this.dodgeUntil
+    const ready = player.alive && time >= this.nextSpinAt && !player.isAttacking && !this.blocking && time >= this.dodgeUntil
       && this.spinHitAt === undefined;
     const enough = this.mp >= SPIN_SLASH.cost;
     this.skillButtons.forEach((button, i) => {
@@ -2182,8 +2196,11 @@ export class GameScene extends Phaser.Scene {
     // 패링: 판정 시간 안에 앞쪽(바라보는 쪽)에서 온 공격은 피해 없이 막는다.
     const sourceX = hit ? player.x - hit.dx : c.x;
     if (this.blocking && (sourceX - player.x) * player.facing >= 0) {
-      // 방패 앞에서 불꽃이 튀고, 공격한 적은 휘청이며, 다음 공격은 반격이 된다. 바로 다시 막을 수 있다.
-      this.impacts.impact(player.x + player.facing * 60, player.y - 95, -player.facing, 0, 'counter', now, player.y);
+      // 들어 올린 검날에서 불꽃이 튀고 다음 공격은 반격이 된다.
+      const blade = player.sprite instanceof HeroSprite ? player.sprite.getBlade() : undefined;
+      const x = blade ? blade.base.x + (blade.tip.x - blade.base.x) * 0.55 : player.x + player.facing * 60;
+      const y = blade ? blade.base.y + (blade.tip.y - blade.base.y) * 0.55 : player.y - 95;
+      this.impacts.impact(x, y, -player.facing, 0, 'counter', now, player.y + 2);
       this.hud.showCallout('패링!');
       // 패링마다 공명 구슬이 1/3씩 찬다.
       this.setResonanceCharge(chargeOnParry(this.resonanceCharge, RESONANCE));
@@ -2224,19 +2241,30 @@ export class GameScene extends Phaser.Scene {
     return true;
   };
 
-  /** 막는 동안 주인공 앞(바라보는 쪽)에 반투명한 방패 빛을 그린다. */
+  /** 전용 검 막기 자세와 검날을 따라가는 얇은 반사광을 표시한다. */
   private drawShield(time: number): void {
     const shield = this.shield, player = this.player;
     if (!shield) return;
+    const hero = player.sprite;
+    if (hero instanceof HeroSprite) hero.setGuarding(this.blocking);
+    shield.clear();
     shield.setVisible(this.blocking);
-    if (!this.blocking) return;
-    const x = player.x + player.facing * 58, y = player.y - 95;
+    if (!this.blocking || !(hero instanceof HeroSprite)) return;
+    const { base, tip } = hero.getBlade();
+    if (Math.hypot(tip.x - base.x, tip.y - base.y) < 1) return;
     const pulse = 0.75 + 0.25 * Math.sin(time / 90);
-    shield.clear().setDepth(player.y + 1);
-    shield.fillStyle(0x9fc4ff, 0.18 * pulse).fillEllipse(x, y, 46, 150);
-    shield.lineStyle(4, 0xd6e6ff, 0.75 * pulse).beginPath();
-    shield.arc(x - player.facing * 40, y, 80, player.facing > 0 ? -0.9 : Math.PI - 0.9, player.facing > 0 ? 0.9 : Math.PI + 0.9);
-    shield.strokePath();
+    shield.setDepth(player.y + 1);
+    const palm = hero.getGuardSupportPoint();
+    const dx = tip.x - base.x, dy = tip.y - base.y, length = Math.hypot(dx, dy);
+    const at = palm ? ((palm.x - base.x) * dx + (palm.y - base.y) * dy) / (length * length) : 0;
+    const gap = 22 * Math.abs(hero.scaleY) / length;
+    const segments = palm ? [[0, Math.max(0, at - gap)], [Math.min(1, at + gap), 1]] : [[0, 1]];
+    for (const [width, alpha] of [[5, 0.12], [1, 0.65]]) {
+      shield.lineStyle(width, 0xe6f2ff, alpha * pulse);
+      for (const [from, to] of segments) {
+        shield.lineBetween(base.x + dx * from, base.y + dy * from, base.x + dx * to, base.y + dy * to);
+      }
+    }
   }
 
   /** 게임 시간을 잠깐 멈춘다. 겹치면 더 긴 쪽을 따른다. */

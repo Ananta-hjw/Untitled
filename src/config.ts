@@ -33,15 +33,16 @@ export const PLAYER = {
   /**
    * 콤보 단계별 설정. 버튼을 누르고 있거나 연타하면 1 → 2 → 3타로 이어진다.
    *  - intervalMs: 다음 공격으로 연결 가능한 시간(1·2타는 복귀 동작 전)
+   *  - followPauseAtMs / followPauseMs: 타격 후 자세를 유지하는 시작 시각·길이
    *  - hitDelayMs: 동작 시작 후 실제로 타격이 들어가는 시점
    *  - damage / knockback: 기본값에 곱하는 배율
    *  - lungeDistance: 휘두르는 구간에서 전진할 거리(px)
    *  - lungeStartMs / lungeEndMs: 전진 구간(공격 시작 기준)
    */
   combo: [
-    { intervalMs: 336, hitDelayMs: 220, damage: 1, knockback: 0.7, lungeDistance: 13, lungeStartMs: 168, lungeEndMs: 265 },
-    { intervalMs: 237, hitDelayMs: 105, damage: 1.1, knockback: 0.8, lungeDistance: 17, lungeStartMs: 64, lungeEndMs: 186 },
-    { intervalMs: 400, hitDelayMs: 180, damage: 2, knockback: 1.7, lungeDistance: 46, lungeStartMs: 112, lungeEndMs: 200 },
+    { intervalMs: 426, followPauseAtMs: 300, followPauseMs: 90, hitDelayMs: 220, damage: 1, knockback: 0.7, lungeDistance: 13, lungeStartMs: 168, lungeEndMs: 265 },
+    { intervalMs: 327, followPauseAtMs: 200, followPauseMs: 90, hitDelayMs: 105, damage: 1.1, knockback: 0.8, lungeDistance: 17, lungeStartMs: 64, lungeEndMs: 186 },
+    { intervalMs: 520, followPauseAtMs: 260, followPauseMs: 120, hitDelayMs: 180, damage: 2, knockback: 1.7, lungeDistance: 46, lungeStartMs: 112, lungeEndMs: 200 },
   ],
   /** 이 시간 안에 다음 공격을 이어야 콤보가 유지된다 (이전 공격이 끝난 뒤부터) */
   comboWindowMs: 380,

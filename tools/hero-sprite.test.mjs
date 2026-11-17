@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { ACTION_DURATION, attackVector, heroFrame, insideAttackLane, movementFacing } from '../src/entities/heroFrames.ts';
+import { ACTION_DURATION, attackVector, guardFrame, heroFrame, insideAttackLane, movementFacing } from '../src/entities/heroFrames.ts';
 import { PLAYER } from '../src/config.ts';
+import { attackPoseTime, isAttackFollowPause } from '../src/entities/attackTiming.ts';
 
 const root = new URL('../src/assets/hero/academy/', import.meta.url);
 const data = JSON.parse(readFileSync(new URL('frames.json', root)));
@@ -102,4 +103,51 @@ test('회전한 타격 레인은 앞쪽만 허용하고 뒤쪽·옆 레인은 �
     assert.equal(insideAttackLane(x - y / length * 53, y + x / length * 53, direction, 52, .7), false, facing);
   }
   assert.equal(insideAttackLane(100, 52, { x: 1, y: 0 }, 52, .7), true);
+});
+
+test('각 타격 뒤 여섯 방향의 자세를 잠깐 유지하고 명중 구간 이후에만 쉬며 회복 동작을 이어간다', () => {
+  for (const [stage, combo] of PLAYER.combo.entries()) {
+    const action = `attack${stage + 1}`, start = combo.followPauseAtMs, end = start + combo.followPauseMs;
+    assert.ok(start > combo.hitDelayMs + PLAYER.hitWindowMs);
+    assert.ok(start > combo.lungeEndMs);
+    assert.ok(combo.intervalMs >= end);
+    assert.equal(ACTION_DURATION[action], [420, 320, 400][stage] + combo.followPauseMs);
+    for (const facing of ['left', 'right', 'up-left', 'up-right', 'down-left', 'down-right']) {
+      const held = heroFrame(action, facing, start);
+      for (let elapsed = start; elapsed < end; elapsed += 5) {
+        assert.equal(isAttackFollowPause(stage, elapsed), true);
+        assert.equal(heroFrame(action, facing, elapsed), held);
+      }
+    }
+    assert.equal(isAttackFollowPause(stage, start - 1), false);
+    assert.equal(isAttackFollowPause(stage, end), false);
+    assert.equal(attackPoseTime(stage, end + 20), start + 20);
+  }
+});
+
+test('검 막기는 낮춘 손잡이 위에 손바닥을 대고 수직에 가까운 곧은 검날을 가진다', () => {
+  const guard = JSON.parse(readFileSync(new URL('guard/frames.json', root)));
+  assert.equal(guard.frames.length, 3);
+  for (const facing of ['left','right','down','up','down-left','down-right','up-left','up-right']) {
+    assert.ok(guard.frames.some(f => f.name === guardFrame(facing)));
+  }
+  for (const f of guard.frames) {
+    assert.equal(f.originY, 1);
+    const { base, tip } = f.blade;
+    assert.ok(tip.x > base.x && tip.y < base.y);
+    assert.ok(Math.abs(tip.x-base.x)<Math.abs(tip.y-base.y)*.4);
+    assert.ok(f.grip.y>165, 'hilt hand stays below the chest');
+    assert.ok(f.supportGrip.y<f.grip.y-30, 'support palm is above the hilt hand');
+    const vx=tip.x-base.x,vy=tip.y-base.y;
+    const distance=Math.abs((f.supportGrip.x-base.x)*vy-(f.supportGrip.y-base.y)*vx)/Math.hypot(vx,vy);
+    assert.ok(distance<1e-6,'blade runs through the support palm');
+    assert.ok(f.supportCover, 'support hand layer is available');
+    assert.equal(!!f.supportBackCover, f.name==='guard-up', 'only rear camera has a dorsal hand override');
+    const tilt=Math.atan2(Math.abs(vx),Math.abs(vy))*180/Math.PI;
+    assert.ok(Math.abs(tilt-12)<1e-6, 'slight natural tilt');
+    assert.ok(Math.abs(f.supportGrip.x-f.supportPalm.x)<14, 'contact stays within the palm');
+
+    assert.ok(Math.abs(Math.hypot(tip.x-base.x,tip.y-base.y)-150)<1e-6);
+    assert.ok(Math.abs(Math.hypot(base.x-f.grip.x,base.y-f.grip.y)-12)<1e-6);
+  }
 });

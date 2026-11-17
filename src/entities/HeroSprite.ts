@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import type { Blade } from '../combat/blade';
 import data from '../assets/hero/academy/frames.json';
+import guardData from '../assets/hero/academy/guard/frames.json';
+import guardSheet from '../assets/hero/academy/guard/bodies.webp?url';
+import { isAttackFollowPause } from './attackTiming';
 import walkSheet from '../assets/hero/academy/unarmed/player_walk.webp?url';
 import combatSheet from '../assets/hero/academy/unarmed/player_combat.webp?url';
 import diagonalSheet from '../assets/hero/academy/unarmed/player_walk_diagonal.webp?url';
@@ -10,14 +13,18 @@ import weaponAtlas from '../assets/hero/weapons/atlas.json';
 import weaponSheet from '../assets/hero/weapons/weapons.webp?url';
 import { weaponId, weaponPose, type WeaponId } from './weaponPose';
 import type { GearId } from '../items/equipment';
-import { ACTION_DURATION, attackFacingFor, heroFrame, movementFacing, type AttackFacing, type Facing, type HeroAction } from './heroFrames';
+import { ACTION_DURATION, attackFacingFor, guardFrame, heroFrame, movementFacing, type AttackFacing, type Facing, type HeroAction } from './heroFrames';
 
 export const HERO_SPRITE_HEIGHT = data.height;
 interface SpriteFrame {
   name: string; texture: string; x: number; y: number; w: number; h: number;
   originX: number; originY: number; scale: number; blade: Blade | null;
+  grip?: { x: number; y: number };
+  supportGrip?: { x: number; y: number };
+  supportCover?: { name: string; x: number; y: number; w: number; h: number };
+  supportBackCover?: { name: string; x: number; y: number; w: number; h: number };
 }
-const FRAMES = new Map<string, SpriteFrame>(data.frames.map((f) => [f.name, f]));
+const FRAMES = new Map<string, SpriteFrame>([...data.frames, ...guardData.frames].map((f) => [f.name, f]));
 
 export function preloadHeroSprite(scene: Phaser.Scene): void {
   if (!scene.textures.exists('hero-weapons')) scene.load.image('hero-weapons', weaponSheet);
@@ -26,6 +33,7 @@ export function preloadHeroSprite(scene: Phaser.Scene): void {
   if (!scene.textures.exists('hero-academy-diagonal')) scene.load.image('hero-academy-diagonal', diagonalSheet);
   if (!scene.textures.exists('hero-academy-attack-down')) scene.load.image('hero-academy-attack-down', attackDownSheet);
   if (!scene.textures.exists('hero-academy-attack-up')) scene.load.image('hero-academy-attack-up', attackUpSheet);
+  if (!scene.textures.exists('hero-academy-guard')) scene.load.image('hero-academy-guard', guardSheet);
 }
 
 /** Clean body frames and detachable weapons share measured foot, hand and blade anchors. */
@@ -35,6 +43,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   private readonly image: Phaser.GameObjects.Image;
   private readonly weaponBack: Phaser.GameObjects.Image;
   private readonly weaponFront: Phaser.GameObjects.Image;
+  private readonly supportHand: Phaser.GameObjects.Image;
   private weapon: WeaponId | null = 'wooden-sword';
   private animation: HeroAction = 'idle';
   private facing: Facing = 'down';
@@ -43,10 +52,12 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   private finished = false;
   private moving = false;
   private frame!: SpriteFrame;
+  private guarding = false;
+  private guardTime = 0;
 
   constructor(scene: Phaser.Scene) {
     super(scene, 0, 0);
-    for (const f of FRAMES.values()) {
+    for (const f of [...FRAMES.values(), ...guardData.covers]) {
       const texture = scene.textures.get(f.texture);
       if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
     }
@@ -55,13 +66,15 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     this.weaponBack = scene.add.image(0, 0, 'hero-weapons', 'wooden-sword-grip');
     this.weaponFront = scene.add.image(0, 0, 'hero-weapons', 'wooden-sword-blade');
     this.image = scene.add.image(0, 0, 'hero-academy-walk', 'walk-0');
-    this.add([this.weaponBack, this.image, this.weaponFront]);
+    this.supportHand = scene.add.image(0, 0, 'hero-academy-guard', guardData.covers[0].name).setVisible(false);
+    this.add(this.parts);
     this.applyFrame();
   }
 
   play(key: string): this {
     const name = key.slice(key.lastIndexOf('-') + 1) as HeroAction;
     if (!['idle', 'walk', 'attack1', 'attack2', 'attack3', 'dodge'].includes(name)) return this;
+    if (name.startsWith('attack') || name === 'dodge') this.guarding = false;
     this.animation = name;
     this.time = 0;
     this.finished = false;
@@ -79,6 +92,21 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   }
 
   get lookDirection(): Facing { return this.facing; }
+
+  get isGuarding(): boolean { return this.guarding; }
+
+  getGuardSupportPoint(): { x: number; y: number } | undefined {
+    const f = this.frame, palm = f.supportGrip;
+    if (!this.guarding || !palm) return undefined;
+    return this.image.getWorldTransformMatrix().transformPoint(palm.x - f.originX * f.w, palm.y - f.originY * f.h);
+  }
+
+  setGuarding(active: boolean): void {
+    if (this.guarding === active) return;
+    this.guarding = active;
+    this.guardTime = 0;
+    this.applyFrame();
+  }
 
   setAttackFacing(facing: AttackFacing): void {
     this.attackFacing = facing;
@@ -100,7 +128,17 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   setTint(color: number): this { for (const part of this.parts) part.setTint(color); return this; }
   setTintMode(mode: Phaser.TintModes): this { for (const part of this.parts) part.setTintMode(mode); return this; }
   clearTint(): this { for (const part of this.parts) part.clearTint(); return this; }
-  private get parts(): Phaser.GameObjects.Image[] { return [this.weaponBack, this.image, this.weaponFront]; }
+  private get supportHandInFront(): boolean {
+    return this.guarding && (this.facing === 'up-left' || this.facing === 'up-right');
+  }
+  private get parts(): Phaser.GameObjects.Image[] {
+    return this.supportHandInFront ? [this.weaponBack, this.image, this.weaponFront, this.supportHand]
+      : [this.weaponBack, this.image, this.supportHand, this.weaponFront];
+  }
+
+  get isInFollowPause(): boolean {
+    return this.animation.startsWith('attack') && isAttackFollowPause(Number(this.animation.at(-1)) - 1, this.time);
+  }
 
   getBlade(): Blade {
     if (!this.weapon || !this.frame.blade) {
@@ -134,6 +172,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   advance(delta: number): void {
     if (!this.active) return;
     const loop = this.animation === 'idle' || this.animation === 'walk';
+    if (this.guarding) this.guardTime += Math.max(0, Math.min(delta, 50));
     this.time += Math.max(0, Math.min(delta, 50)) * (loop ? this.anims.timeScale : 1);
     let complete = false;
     if (!loop && this.time + 1e-6 >= ACTION_DURATION[this.animation as keyof typeof ACTION_DURATION] && !this.finished) {
@@ -146,8 +185,10 @@ export class HeroSprite extends Phaser.GameObjects.Container {
 
   private applyFrame(): void {
     const attacking = this.animation.startsWith('attack');
-    const frame = FRAMES.get(heroFrame(this.animation, attacking ? this.attackFacing : this.facing, this.time))!;
-    const mirrored = attacking ? this.attackFacing.includes('left') : this.animation === 'dodge' && this.flipX;
+    const frame = FRAMES.get(this.guarding ? guardFrame(this.facing)
+      : heroFrame(this.animation, attacking ? this.attackFacing : this.facing, this.time))!;
+    const mirrored = this.guarding ? this.facing.includes('left') || ((this.facing === 'up' || this.facing === 'down') && this.flipX)
+      : attacking ? this.attackFacing.includes('left') : this.animation === 'dodge' && this.flipX;
     this.frame = frame;
     this.image.setTexture(frame.texture, frame.name).setOrigin(frame.originX, frame.originY)
       .setScale(frame.scale * (mirrored ? -1 : 1), frame.scale);
@@ -155,11 +196,25 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   }
 
   private applyWeapon(): void {
+    const front = this.supportHandInFront ? this.supportHand : this.weaponFront;
+    if (this.getAt(this.length - 1) !== front) this.bringToTop(front);
+    this.supportHand.setVisible(false);
     this.weaponFront.setVisible(!!this.weapon);
     const pose = weaponPose(this.frame);
     this.weaponBack.setVisible(!!this.weapon && !pose.sheathed);
     if (!this.weapon) return;
-    const f = this.frame, { base, tip } = pose.blade;
+    const f = this.frame;
+    let { base, tip } = pose.blade;
+    if (this.guarding && f.grip) {
+      // A small settling motion keeps the blade and hilt rigid around the actual fist.
+      const angle = 0.02 * Math.max(0, 1 - this.guardTime / 70);
+      const grip = f.grip;
+      const rotate = (p: { x: number; y: number }) => ({
+        x: grip.x + (p.x - grip.x) * Math.cos(angle) - (p.y - grip.y) * Math.sin(angle),
+        y: grip.y + (p.x - grip.x) * Math.sin(angle) + (p.y - grip.y) * Math.cos(angle),
+      });
+      base = rotate(base); tip = rotate(tip);
+    }
     const x = (base.x - f.originX * f.w) * this.image.scaleX;
     const y = (base.y - f.originY * f.h) * this.image.scaleY;
     const dx = (tip.x - base.x) * this.image.scaleX, dy = (tip.y - base.y) * this.image.scaleY;
@@ -171,5 +226,13 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     };
     apply(this.weaponFront, pose.sheathed ? 'hilt' : 'blade');
     apply(this.weaponBack, 'grip');
+    if (this.guarding) this.weaponBack.setScale(30 / weaponAtlas.guardX, scale);
+    if (this.guarding && f.supportCover) {
+      const c = this.supportHandInFront ? f.supportBackCover ?? f.supportCover : f.supportCover;
+      this.supportHand.setTexture(f.texture, c.name).setOrigin(0, 0)
+        .setScale(this.image.scaleX, this.image.scaleY)
+        .setPosition((c.x - f.originX * f.w) * this.image.scaleX, (c.y - f.originY * f.h) * this.image.scaleY)
+        .setVisible(true);
+    }
   }
 }
