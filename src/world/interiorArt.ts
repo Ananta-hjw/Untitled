@@ -24,7 +24,10 @@ export function drawInterior(scene: Phaser.Scene, interior: Interior): void {
   for (const bounds of interiorBackgroundPieces(interior)) piece(bounds, 'map-art-background', -110);
   for (const f of interior.furniture) {
     const at = furnitureAt(interior, f);
-    piece(f.art, `interior-furniture-${f.id}`, at.y)
+    // 가구 조각은 원화를 사각형으로 잘라 낸 것이라 주변 바닥도 함께 들어 있다(투명하지 않다).
+    // 그래서 앞쪽 끝이 아니라 뒤쪽 끝(바닥 접촉 영역의 위쪽)을 깊이로 쓴다: 가구 옆에 선 사람은 가구 앞에 그려지고,
+    // 정말 가구 뒤에 선 사람만 가려진다. 앞쪽 끝을 쓰면 옆에 선 사람까지 바닥 사각형에 잘려 보인다.
+    piece(f.art, `interior-furniture-${f.id}`, at.y - f.d)
       .setData({ furnitureId: f.id, kind: f.kind, footprint: { x: at.x, y: at.y - f.d / 2, w: f.w, d: f.d } });
   }
   const foreground = [
