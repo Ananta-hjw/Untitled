@@ -3,7 +3,7 @@ import type { Interactable } from '../world/interactables';
 import type { QuestMarker } from '../story/quests';
 import type { WalkArea } from '../world/walkArea';
 import {
-  NPC_NOTICE_RADIUS, NPC_WALK_SPEED, npcSkin, direction8, pickWanderTarget, walkPose, wanderPauseMs,
+  NPC_TALK_PAUSE_MS, NPC_WALK_SPEED, npcSkin, direction8, pickRoamTarget, pickWanderTarget, roamsFreely, walkPose, wanderPauseMs,
   type Direction8, type NpcDef, type NpcSkin,
 } from '../world/npcs';
 
@@ -55,8 +55,8 @@ function registerWalkFrames(scene: Phaser.Scene, id: NpcSkin, data: WalkData): v
 
 /**
  * 마을 사람. 위치는 발이고 깊이는 y다(Character와 같은 규칙).
- * 모두 8방향 걷기 시트로 그린다. 플레이어가 가까이 오면 멈춰서 플레이어 쪽을 본다.
- * 돌아다니는 범위(wander)가 있는 사람만 자기 자리 주변을 걷고, 장사하는 사람은 제자리에 서 있다.
+ * 모두 8방향 걷기 시트로 그린다. 플레이어가 가까이 와도 하던 대로 걷고, 말을 걸 때만(talkedTo) 멈춰서 돌아본다.
+ * 마을 사람은 맵 안을 넓게 돌아다니고(roamsFreely), 순찰 병사는 자기 자리 주변(wander)만, 장사하는 사람은 제자리에 서 있다.
  * 시간은 씬의 게임 시계(now)를 따른다.
  */
 export class Npc extends Phaser.GameObjects.Container {
@@ -79,6 +79,8 @@ export class Npc extends Phaser.GameObjects.Container {
   private readonly marker: Phaser.GameObjects.Text;
   /** 지금 띄운 퀘스트 표시 (미니맵도 이 값을 쓴다) */
   questMarker?: QuestMarker;
+  /** 말을 건 뒤 이 시각(게임 시계)까지는 서서 플레이어 쪽을 본다. */
+  private talkUntil = 0;
   /** 연출(오프닝) 중: 정해진 경로만 걷고, 돌아다니거나 플레이어를 돌아보지 않는다. */
   private scripted = false;
   private scriptPath: { x: number; y: number }[] = [];
@@ -153,6 +155,15 @@ export class Npc extends Phaser.GameObjects.Container {
     this.showFrame(this.walk.idlePose);
   }
 
+  /** 플레이어가 말을 걸었다: 걷던 것을 멈추고 플레이어 쪽을 본다. 대화가 끝나도 잠깐 그대로 있다가 다시 걷는다. */
+  talkedTo(now: number, player: { x: number; y: number }): void {
+    if (this.scripted) return;
+    this.target = undefined;
+    this.talkUntil = now + NPC_TALK_PAUSE_MS;
+    this.restUntil = Math.max(this.restUntil, this.talkUntil);
+    this.faceTowards(player.x, player.y);
+  }
+
   /** 연출에서 정한 경로를 아직 걷는 중인지 */
   get walking(): boolean {
     return this.scriptPath.length > 0;
@@ -165,7 +176,9 @@ export class Npc extends Phaser.GameObjects.Container {
     this.target = undefined;
   }
 
-  update(now: number, dt: number, player: { x: number; y: number }, area: WalkArea): void {
+  /** canStand: 목적지로 고를 수 있는 곳인지(맵 출구 같은 곳은 씬이 뺀다) */
+  update(now: number, dt: number, player: { x: number; y: number }, area: WalkArea,
+    canStand: (x: number, y: number) => boolean = () => true): void {
     // 퀘스트 표시는 위아래로 천천히 흔들려 눈에 띈다.
     if (this.questMarker) this.marker.setY(-this.def.height - 36 - Math.abs(Math.sin(now / 320)) * 8);
     const idle = this.walk.idlePose;
@@ -192,8 +205,8 @@ export class Npc extends Phaser.GameObjects.Container {
       this.spot.y = this.y + (this.def.talkOffset ?? 0);
       return;
     }
-    if (Math.hypot(player.x - this.x, player.y - this.y) < NPC_NOTICE_RADIUS) {
-      // 말을 걸 수 있게 멈추고 플레이어 쪽을 본다.
+    if (now < this.talkUntil) {
+      // 방금 말을 걸었다: 서서 플레이어 쪽을 본다.
       this.direction = direction8(player.x - this.x, player.y - this.y, this.direction);
       this.showFrame(idle);
       return;
@@ -209,8 +222,15 @@ export class Npc extends Phaser.GameObjects.Container {
         this.showFrame(idle);
         return;
       }
-      this.target = pickWanderTarget(this.def, this.def.wander, this.rand,
-        (x, y) => area.contains(x, y) && area.hasClearPath(this.x, this.y, x, y));
+      const canGo = (x: number, y: number) => area.contains(x, y) && canStand(x, y) && area.hasClearPath(this.x, this.y, x, y);
+      this.target = roamsFreely(this.def)
+        ? pickRoamTarget(this, this.rand, canGo)
+        : pickWanderTarget(this.def, this.def.wander, this.rand, canGo);
+      if (!this.target) {
+        this.restUntil = now + wanderPauseMs(this.rand);
+        this.showFrame(idle);
+        return;
+      }
       this.walkStartedAt = now;
       this.walked = 0;
     }
@@ -218,7 +238,8 @@ export class Npc extends Phaser.GameObjects.Container {
     const dx = this.target.x - this.x, dy = this.target.y - this.y;
     const distance = Math.hypot(dx, dy);
     const travel = NPC_WALK_SPEED * dt;
-    if (distance <= travel || now - this.walkStartedAt > 8000) {
+    // 멀리 가는 길이라 넉넉히 기다리되, 무언가에 막혀 오래 걸리면 포기하고 쉰다.
+    if (distance <= travel || now - this.walkStartedAt > 14000) {
       this.target = undefined;
       this.restUntil = now + wanderPauseMs(this.rand);
       this.showFrame(idle);

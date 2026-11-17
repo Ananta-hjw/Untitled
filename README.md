@@ -61,7 +61,7 @@ npm run test:browser
 | `src/world/village.ts` | 맵의 지형·집·소품·출구 표시와 이동 영역 만들기 |
 | `src/world/villageLayout.ts` | 로웬 마을의 건물·나무·바위 배치와 충돌 영역, 시작 위치 |
 | `src/world/npcs.ts` | 마을 사람 목록(이름, 위치, 대사, 장사·걷기 여부)과 돌아다니기 규칙 |
-| `src/entities/Npc.ts` | 마을 사람 표시, 이름표, 8방향 걷기와 멈춰서 바라보기 |
+| `src/entities/Npc.ts` | 마을 사람 표시, 이름표, 8방향 걷기(맵 안을 넓게 돌아다니고, 말을 걸면 멈춰서 바라본다) |
 | `src/world/navGrid.ts` | 적의 장애물 우회 경로 |
 | `src/ui/Hud.ts`, `src/ui/DamageNumbers.ts` | HUD와 재사용 피해 숫자 |
 | `src/entities/progression.ts` | 경험치·레벨 계산 (레벨별 체력·공격력, 필요 경험치) |

@@ -67,8 +67,13 @@ export const NPCS: NpcDef[] = [
   { id: 'teon', name: '테온', role: '경비대원', x: 1340, y: 1450, height: 150, dialogue: 'npc-teon', wander: 100 },
 ];
 
-/** 마을 사람이 플레이어를 보고 멈춰서 돌아보는 거리 */
-export const NPC_NOTICE_RADIUS = 150;
+/**
+ * 마을 사람은 맵 안을 넓게 돌아다닌다: 지금 자리에서 이 거리 안의 아무 곳이나 다음 목적지로 고른다.
+ * 처음 자리에 묶이지 않으므로 시간이 지나면 맵 곳곳으로 퍼진다. 순찰 병사만 자기 자리 주변(wander)을 돈다.
+ */
+export const NPC_ROAM_HOP = 520;
+/** 말을 건 뒤 그 자리에 서서 플레이어 쪽을 보고 있는 시간(ms, 게임 시계). 대화 중에는 시계가 멈춘다. */
+export const NPC_TALK_PAUSE_MS = 2500;
 export const NPC_WALK_SPEED = 78;
 /**
  * 한 걸음에 나아가는 거리 (키에 대한 비율). 걷기 시트의 옆모습에서 잰 보폭(키의 약 0.26~0.33)에 맞췄다.
@@ -112,6 +117,28 @@ export function pickWanderTarget(
     if (canGo(x, y)) return { x, y };
   }
   return { x: home.x, y: home.y };
+}
+
+/** 맵 안을 자유롭게 돌아다니는지 (순찰 병사는 자기 자리 주변만, 장사하는 사람은 서 있다) */
+export function roamsFreely(def: NpcDef): boolean {
+  return def.wander !== undefined && !def.id.startsWith('guard-');
+}
+
+/**
+ * 자유롭게 돌아다니는 사람의 다음 목적지: 지금 자리에서 NPC_ROAM_HOP 안의 갈 수 있는 곳.
+ * 멀리 있는 곳부터 고르려고 거리의 하한을 둔다. 마땅한 곳이 없으면 없음(undefined) — 잠시 쉬고 다시 고른다.
+ */
+export function pickRoamTarget(
+  from: { x: number; y: number }, rand: () => number, canGo: (x: number, y: number) => boolean,
+): { x: number; y: number } | undefined {
+  for (let i = 0; i < 16; i++) {
+    const angle = rand() * Math.PI * 2;
+    const distance = NPC_ROAM_HOP * (i < 8 ? 0.45 + 0.55 * rand() : 0.15 + 0.4 * rand());
+    const x = from.x + Math.cos(angle) * distance;
+    const y = from.y + Math.sin(angle) * distance * 0.7;
+    if (canGo(x, y)) return { x, y };
+  }
+  return undefined;
 }
 
 /** 한 곳에 도착한 뒤 쉬는 시간 (ms) */

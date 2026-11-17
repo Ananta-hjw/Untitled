@@ -5,7 +5,7 @@ import { DIALOGUES } from '../src/story/dialogues.ts';
 import { MAPS, findExit, walkable } from '../src/world/maps.ts';
 import { BUILDINGS, PLAYER_SPAWN } from '../src/world/villageLayout.ts';
 import {
-  NPCS, NPC_STEP_RATIO, STRESS_STEPS, walkPose, direction8, nextStressCount, pickWanderTarget, stressNpcs, wanderPauseMs,
+  NPCS, NPC_ROAM_HOP, NPC_STEP_RATIO, pickRoamTarget, roamsFreely, STRESS_STEPS, walkPose, direction8, nextStressCount, pickWanderTarget, stressNpcs, wanderPauseMs,
 } from '../src/world/npcs.ts';
 
 const village = MAPS.village;
@@ -124,4 +124,29 @@ test('성능 테스트는 끔 → 50 → 100 → 200 → 끔으로 바뀌고, �
   }
   assert.equal(people[0].name, `${NPCS[0].name} 1`);
   assert.equal(new Set(people.map((p) => p.id)).size, NPCS.length, '모든 그림을 돌려 쓴다');
+});
+
+test('마을 사람은 지금 자리에서 멀리(맵 안 아무 곳)까지 돌아다니고, 순찰 병사·장사하는 사람은 그러지 않는다', () => {
+  let seed = 11;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const walkers = NPCS.filter(roamsFreely);
+  assert.ok(walkers.length >= 6);
+  assert.ok(NPCS.filter(n => n.shop).every(n => !roamsFreely(n)));
+  assert.equal(roamsFreely({ id: 'guard-plaza-west', wander: 110 }), false);
+  for (const npc of walkers) {
+    const map = MAPS[npc.area ?? 'village'];
+    // 여러 번 이어서 걸으면 처음 자리의 예전 반지름(wander)보다 훨씬 멀리 간다.
+    let at = { x: npc.x, y: npc.y }, farthest = 0;
+    for (let i = 0; i < 40; i++) {
+      const next = pickRoamTarget(at, rand, (x, y) => walkable(map, x, y) && !findExit(map, x, y));
+      if (!next) continue;
+      assert.equal(walkable(map, next.x, next.y), true, npc.id);
+      assert.equal(findExit(map, next.x, next.y), undefined, npc.id);
+      assert.ok(Math.hypot(next.x - at.x, next.y - at.y) <= NPC_ROAM_HOP + 1);
+      at = next;
+      farthest = Math.max(farthest, Math.hypot(at.x - npc.x, at.y - npc.y));
+    }
+    if (!npc.inside) assert.ok(farthest > npc.wander * 2, `${npc.id} ${farthest.toFixed(0)}`);
+  }
+  assert.equal(pickRoamTarget({ x: 5, y: 6 }, rand, () => false), undefined);
 });

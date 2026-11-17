@@ -872,7 +872,7 @@ test('느린 화면 중의 공격도 맞고, 칼이 닿으면 게임 시간이 �
   assert.equal(result.settled, true);
 });
 
-test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제자리에 있고, 나머지는 걸어 다닌다', async () => {
+test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제자리에 있고, 나머지는 맵 안을 넓게 걸어 다니며, 다가가도 계속 걷다가 말을 걸 때만 돌아본다', async () => {
   await load('village');
   const result = await evaluate(`(() => {
     const g = window.__game;
@@ -906,19 +906,28 @@ test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제
     const northCount = s.npcs.filter(n=>!n.def.id.startsWith('guard-')).length;
     s.scene.restart({ map: 'village' }); g.step(t += 16, 16);
     s = g.scene.getScene('game');
-    // 루안 옆에 서면 루안이 멈추고, 대화하면 루안의 이름과 그림이 나온다.
+    // 걷고 있는 루안 옆에 서도 루안은 멈추지 않고 계속 걷는다.
     const ruan = s.npcs.find(n => n.def.id === 'ruan');
-    s.player.placeAt(ruan.x + 60, ruan.y + 10);
-    g.step(t += 16, 16);
-    const stoppedAt = { x: ruan.x, y: ruan.y };
-    for (let i = 0; i < 60; i++) s.update(t += 16, 16);
-    const stayed = ruan.x === stoppedAt.x && ruan.y === stoppedAt.y;
+    const goal = [{ x: ruan.x - 200, y: ruan.y }, { x: ruan.x + 200, y: ruan.y }].find(p => s.walkArea.contains(p.x, p.y) && s.walkArea.hasClearPath(ruan.x, ruan.y, p.x, p.y));
+    ruan.restUntil = 0; ruan.target = goal; ruan.walkStartedAt = s.now;
+    s.player.placeAt(ruan.x + 50, ruan.y + 10);
+    const before = { x: ruan.x, y: ruan.y };
+    for (let i = 0; i < 30; i++) s.update(t += 16, 16);
+    const keptWalking = Math.hypot(ruan.x - before.x, ruan.y - before.y) > 20;
     const spotFollows = ruan.spot.x === ruan.x && ruan.spot.y === ruan.y;
+    // 말을 걸면 그때 멈춰서 이쪽을 보고, 대화가 끝나도 잠깐 서 있다가 다시 걷는다.
+    s.player.placeAt(ruan.x + 60, ruan.y + 10);
     s.openDialogue(ruan.spot);
     g.step(t += 16, 16);
     const dialogue = { open: s.dialogue.isOpen, name: s.dialogue.nameText.text, portrait: s.dialogue.portrait.texture.key };
+    const faces = ruan.direction === 'right' || ruan.direction === 'down-right' || ruan.direction === 'up-right';
     s.dialogue.close();
-    return { count, northCount, names, visible, moved, onGround, stayed, spotFollows, dialogue,
+    const stoppedAt = { x: ruan.x, y: ruan.y };
+    for (let i = 0; i < 60; i++) s.update(t += 16, 16);
+    const stayed = ruan.x === stoppedAt.x && ruan.y === stoppedAt.y;
+    for (let i = 0; i < 600; i++) s.update(t += 16, 16);
+    const resumed = Math.hypot(ruan.x - stoppedAt.x, ruan.y - stoppedAt.y) > 20;
+    return { count, northCount, names, visible, moved, onGround, keptWalking, faces, stayed, resumed, spotFollows, dialogue,
       talkable: s.interactables.filter(i => i.id.startsWith('npc-')&&!i.id.startsWith('npc-guard-')).length };
   })()`);
   // 장사하는 세 사람(메리나·도란·로제타)은 가게 안, 에일라는 치유소 안, 시온의 가족·이웃 넷은 마을 북쪽, 셋은 광장에 있다.
@@ -933,8 +942,13 @@ test('로웬 마을 사람들은 이름표를 달고, 장사하는 사람은 제
   for (const id of ['serena', 'sia', 'linea', 'ruan', 'herman', 'vernel', 'teon']) {
     assert.ok(result.moved[id] > 15, `${id} moved ${result.moved[id]}`);
   }
+  // 처음 자리에 묶이지 않고 멀리(예전 돌아다니던 반경 70~150px의 두 배 넘게) 간 사람이 여럿이다.
+  assert.ok(Object.entries(result.moved).filter(([id, d]) => !id.startsWith('guard-') && d > 300).length >= 3, JSON.stringify(result.moved));
   assert.equal(result.onGround, true);
-  assert.equal(result.stayed, true);
+  assert.equal(result.keptWalking, true, '다가가도 멈추지 않는다');
+  assert.equal(result.faces, true, '말을 걸면 이쪽(오른쪽)을 본다');
+  assert.equal(result.stayed, true, '대화 뒤 잠깐 서 있다');
+  assert.equal(result.resumed, true, '그 뒤 다시 걷는다');
   assert.equal(result.spotFollows, true);
   assert.deepEqual(result.dialogue, { open: true, name: '루안', portrait: 'portrait-ruan' });
 

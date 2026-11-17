@@ -241,6 +241,8 @@ export class GameScene extends Phaser.Scene {
   private nav!: NavGrid;
   /** 이 맵의 마을 사람들 */
   private npcs: Npc[] = [];
+  /** 마을 사람이 목적지로 고를 수 있는 곳: 맵 출구 안은 뺀다. */
+  private readonly npcCanStand = (x: number, y: number): boolean => !findExit(this.map, x, y);
   /** 말을 걸 수 있는 대상: 맵의 표지판·문과 마을 사람들 */
   private interactables: Interactable[] = [];
   /** 성능 테스트로 마을에 더 세우는 사람 수 (0 = 끔). 재시작해도 유지한다. ?stress=100으로도 켤 수 있다. */
@@ -670,7 +672,7 @@ export class GameScene extends Phaser.Scene {
       this.applyKnockback(enemy.character, dt);
     }
     this.separateEnemies(dt);
-    for (const npc of this.npcs) npc.update(time, dt, this.player, this.walkArea);
+    for (const npc of this.npcs) npc.update(time, dt, this.player, this.walkArea, this.npcCanStand);
     for (const door of this.doorMarkers) if (door.marker) door.text.setY(door.spot.y - 150 - Math.abs(Math.sin(time / 320)) * 8);
     this.applyKnockback(this.player, dt);
     this.damageNumbers.update(gameStep);
@@ -1525,6 +1527,8 @@ export class GameScene extends Phaser.Scene {
     }
     const beforePhase = chapterPhase(this.quests);
     const player = this.player;
+    // 말을 건 사람만 걷던 것을 멈추고 이쪽을 본다.
+    this.npcs.find(npc => npc.spot === target)?.talkedTo(this.now, player);
     this.hud.dismissHint();
     this.clearAttackInput();
     player.setMotion(false, target.x - player.x);
