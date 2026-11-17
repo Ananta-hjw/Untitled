@@ -68,6 +68,8 @@ export interface QuestDef {
   offer: DialogueLine[];
   /** 진행 중에 퀘스트를 준 사람에게 말을 걸면 */
   reminder: DialogueLine[];
+  /** 의뢰인과 보고 대상이 다를 때, 대화 상대 자신의 진행 안내. */
+  remindersByNpc?: Partial<Record<NpcId, DialogueLine[]>>;
   /** talk 목표: 그 사람에게 말을 걸었을 때 */
   target?: DialogueLine[];
   done: DialogueLine[];
@@ -179,6 +181,7 @@ export const QUESTS: QuestDef[] = [
     rewardXp: 20, rewardItems: [{ id: 'potion', count: 2 }],
     offer: [hero('남쪽 입구를 살펴보고 테온에게 알려 주자.')],
     reminder: [line('herman', '헤르만', '입구를 살핀 뒤 테온에게 알려 주게. 너무 늦진 말고.')],
+    remindersByNpc: { teon: [line('teon', '테온', '남쪽 입구에 모인 나방 봤어? 먼저 흔적을 살펴보고 와 줘. 여기서 기다릴게.')] },
     done: [hero('입구에 잿빛 나방이 모여 있었어. 이런 나방이 있었나?'), line('teon', '테온', '나도 처음 보네. 들판 쪽에서 계속 날아오는 것 같아.')],
   },
   {
@@ -403,7 +406,10 @@ export function talkTo(npc: NpcId, state: QuestState): TalkResult | undefined {
   const offer = ordered.find(q => q.giver === npc && canStart(q, state));
   if (offer) return { lines: offer.offer, state: { ...state, [offer.id]: { status: 'active', count: 0 } }, accepted: offer };
   const active = ordered.find(q => (q.giver === npc || reportTo(q) === npc) && state[q.id]?.status === 'active');
-  if (active) return { lines: active.reminder, state };
+  if (active) {
+    const lines = active.remindersByNpc?.[npc] ?? (active.giver === npc ? active.reminder : undefined);
+    if (lines) return { lines, state };
+  }
   return undefined;
 }
 

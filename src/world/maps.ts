@@ -1,6 +1,7 @@
+import { mapLength, mapPoint, mapRect, mapProp } from './mapScale.ts';
 import { VILLAGE_GATES, perimeterObstacles } from './villagePerimeter.ts';
 import type { EnemyKey } from '../combat/monsterTypes.ts';
-import { FIELD_BOUNDS, FIELD_OBSTACLES, FIELD_POLYGON, insidePolygon } from './southFieldLayout.ts';
+import { FIELD_BOUNDS, FIELD_PROPS, FIELD_POLYGON, insidePolygon } from './southFieldLayout.ts';
 import { MAP_SIZE_SCALE, WORLD_HEIGHT, WORLD_WIDTH } from '../config.ts';
 import type { DialogueId } from '../story/dialogues.ts';
 import { INTERACTABLES, type Interactable } from './interactables.ts';
@@ -80,8 +81,8 @@ function sign(id: string, x: number, y: number, dialogue: DialogueId): { prop: V
 
 export const fieldPoint = (x: number, y: number): Point => ({ x: Math.round(x * MAP_SIZE_SCALE * 1000) / 1000, y: Math.round(y * MAP_SIZE_SCALE * 1000) / 1000 });
 const southSign = sign('south-field-sign', 1420 * MAP_SIZE_SCALE, 330 * MAP_SIZE_SCALE, 'south-field-sign');
-const forestSign = sign('west-forest-sign', 2180, 900, 'west-forest-sign');
-const streamSign = sign('east-stream-sign', 260, 760, 'east-stream-sign');
+const forestSign = sign('west-forest-sign', mapLength(2180), mapLength(900), 'west-forest-sign');
+const streamSign = sign('east-stream-sign', mapLength(260), mapLength(760), 'east-stream-sign');
 
 const outdoorNpcs = (area: VillageArea) => NPCS.filter((n) => !n.inside && (n.area ?? 'village') === area);
 const LINK_X = (VILLAGE_LINK.left + VILLAGE_LINK.right) / 2;
@@ -97,8 +98,8 @@ const VILLAGE_NORTH: GameMap = {
   spawn: PLAYER_SPAWN,
   enemies: [],
   exits: [
-    { to: 'village', zone: { left: VILLAGE_LINK.left, top: 1500, right: VILLAGE_LINK.right, bottom: WORLD_HEIGHT },
-      arrive: { x: LINK_X, y: 330 }, label: '▼ 로웬 마을 광장', labelAt: { x: LINK_X, y: 1478 } },
+    { to: 'village', zone: { left: VILLAGE_LINK.left, top: mapLength(1500), right: VILLAGE_LINK.right, bottom: WORLD_HEIGHT },
+      arrive: { x: LINK_X, y: mapLength(330) }, label: '▼ 로웬 마을 광장', labelAt: { x: LINK_X, y: mapLength(1478) } },
   ],
   interactables: doorSpots('village-north'),
 };
@@ -111,18 +112,18 @@ const VILLAGE: GameMap = {
   props: VILLAGE_PROPS,
   buildings: buildingsIn('village'),
   npcs: outdoorNpcs('village'),
-  spawn: { x: LINK_X, y: 380 },
+  spawn: { x: LINK_X, y: mapLength(380) },
   enemies: [],
   exits: [
-    { to: 'village-north', zone: { left: VILLAGE_LINK.left, top: 0, right: VILLAGE_LINK.right, bottom: 270 },
-      arrive: { x: LINK_X, y: 1440 }, label: '▲ 마을 북쪽 (집)', labelAt: { x: LINK_X, y: 300 } },
+    { to: 'village-north', zone: { left: VILLAGE_LINK.left, top: 0, right: VILLAGE_LINK.right, bottom: mapLength(270) },
+      arrive: { x: LINK_X, y: mapLength(1440) }, label: '▲ 마을 북쪽 (집)', labelAt: { x: LINK_X, y: mapLength(300) } },
     // 남쪽 입구 아치의 두 기둥 사이로 나간다.
     { to: 'south-field', zone: { left: SOUTH_GATE_PASSAGE.left, top: VILLAGE_GATES.south.y, right: SOUTH_GATE_PASSAGE.right, bottom: WORLD_HEIGHT },
-      arrive: fieldPoint(1180, 420), label: '▼ 남쪽 들판', labelAt: { x: 1181, y: VILLAGE_GATES.south.y - 22 } },
-    { to: 'west-forest', zone: { left: 0, top: 940, right: 112, bottom: 1160 },
-      arrive: { x: 2150, y: 1050 }, label: '◀ 서쪽 숲길', labelAt: { x: 150, y: 1000 } },
-    { to: 'east-stream', zone: { left: 2290, top: 960, right: WORLD_WIDTH, bottom: 1140 },
-      arrive: { x: 240, y: 910 }, label: '동쪽 개울가 ▶', labelAt: { x: 2245, y: 1010 } },
+      arrive: fieldPoint(1180, 420), label: '▼ 남쪽 들판', labelAt: { x: mapLength(1181), y: VILLAGE_GATES.south.y - mapLength(22) } },
+    { to: 'west-forest', zone: mapRect({ left: 0, top: 940, right: 112, bottom: 1160 }),
+      arrive: mapPoint({ x: 2150, y: 1050 }), label: '◀ 서쪽 숲길', labelAt: mapPoint({ x: 150, y: 1000 }) },
+    { to: 'east-stream', zone: { left: VILLAGE_GATES.east.x, top: VILLAGE_GATES.east.top, right: WORLD_WIDTH, bottom: VILLAGE_GATES.east.bottom },
+      arrive: mapPoint({ x: 240, y: 910 }), label: '동쪽 개울가 ▶', labelAt: { x: VILLAGE_GATES.east.x - mapLength(45), y: mapLength(1010) } },
   ],
   // 표지판과, 실내가 있는 건물마다 문 앞의 "들어가기"
   interactables: [...INTERACTABLES, ...doorSpots('village')],
@@ -134,8 +135,7 @@ const SOUTH_FIELD: GameMap = {
   hint: '남쪽 들판 · 슬라임과 물방울 버섯이 나타납니다',
   bounds: FIELD_BOUNDS,
   walkPolygon: FIELD_POLYGON,
-  obstacles: FIELD_OBSTACLES,
-  props: [southSign.prop],
+  props: [...FIELD_PROPS, southSign.prop],
   buildings: [],
   npcs: [],
   spawn: fieldPoint(1180, 420),
@@ -147,7 +147,7 @@ const SOUTH_FIELD: GameMap = {
   ],
   exits: [
     { to: 'village', zone: { left: 1040 * MAP_SIZE_SCALE, top: 0, right: 1320 * MAP_SIZE_SCALE, bottom: 290 * MAP_SIZE_SCALE },
-      arrive: { x: 1180, y: VILLAGE_GATES.south.y - 80 }, label: '▲ 로웬 마을', labelAt: fieldPoint(1180, 262) },
+      arrive: { x: mapLength(1180), y: VILLAGE_GATES.south.y - mapLength(80) }, label: '▲ 로웬 마을', labelAt: fieldPoint(1180, 262) },
   ],
   interactables: [southSign.spot],
 };
@@ -173,21 +173,20 @@ const WEST_FOREST: GameMap = {
     { frame: 'stump', x: 820, y: 1000, width: 95, footprint: { rx: 38, ry: 21 } },
     { frame: 'flowers', x: 1560, y: 980, width: 65 },
     { frame: 'flowers', x: 380, y: 860, width: 60 },
-    forestSign.prop,
-  ],
+  ].map(p => mapProp(p as VillageProp)).concat(forestSign.prop),
   buildings: [],
   npcs: [],
   groundTint: 0xb9cfa4,
-  spawn: { x: 2150, y: 1050 },
+  spawn: mapPoint({ x: 2150, y: 1050 }),
   enemies: [
     ...[[900, 700], [1300, 1350], [400, 900], [1500, 1050], [1800, 450]].map(([x, y]): MapEnemySpawn =>
-      ({ key: 'waterdrop-mushroom', x, y })),
+      ({ key: 'waterdrop-mushroom', ...mapPoint({ x, y }) })),
     ...[[600, 1150], [1500, 700], [600, 450], [1200, 600], [1600, 1400]].map(([x, y]): MapEnemySpawn =>
-      ({ key: 'iron-scale-lizard', x, y })),
+      ({ key: 'iron-scale-lizard', ...mapPoint({ x, y }) })),
   ],
   exits: [
-    { to: 'village', zone: { left: 2290, top: 940, right: WORLD_WIDTH, bottom: 1160 },
-      arrive: { x: 230, y: 1050 }, label: '로웬 마을 ▶', labelAt: { x: 2240, y: 1000 } },
+    { to: 'village', zone: { left: mapLength(2290), top: mapLength(940), right: WORLD_WIDTH, bottom: mapLength(1160) },
+      arrive: mapPoint({ x: 230, y: 1050 }), label: '로웬 마을 ▶', labelAt: mapPoint({ x: 2240, y: 1000 }) },
   ],
   interactables: [forestSign.spot],
 };
@@ -196,7 +195,7 @@ const EAST_STREAM: GameMap = {
   id: 'east-stream',
   name: '동쪽 개울가',
   hint: '동쪽 개울가 · 물가에 가까이 가지 마세요',
-  bounds: { ...FULL_BOUNDS, top: 430 },
+  bounds: { ...FULL_BOUNDS, top: mapLength(430) },
   props: [
     { frame: 'boulders', x: 520, y: 470, width: 170, footprint: { rx: 76, ry: 28 } },
     { frame: 'boulders', x: 1420, y: 480, width: 160, footprint: { rx: 72, ry: 27 } },
@@ -212,23 +211,22 @@ const EAST_STREAM: GameMap = {
     { frame: 'flowers', x: 1100, y: 1200, width: 70 },
     { frame: 'flowers', x: 1800, y: 700, width: 65 },
     { frame: 'flowers', x: 600, y: 1100, width: 70 },
-    streamSign.prop,
-  ],
+  ].map(p => mapProp(p as VillageProp)).concat(streamSign.prop),
   buildings: [],
   npcs: [],
   groundTint: 0xd6e8da,
-  water: { top: 230, bottom: 415 },
-  spawn: { x: 240, y: 910 },
+  water: { top: mapLength(230), bottom: mapLength(415) },
+  spawn: mapPoint({ x: 240, y: 910 }),
   enemies: [
-    { key: 'slime-blue', x: 1200, y: 750 },
-    { key: 'slime-green', x: 1700, y: 1150 },
-    { key: 'slime-blue', x: 2000, y: 650 },
-    { key: 'slime-green', x: 900, y: 1100 },
-    { key: 'slime-green', x: 1450, y: 1350 },
+    { key: 'slime-blue', ...mapPoint({ x: 1200, y: 750 }) },
+    { key: 'slime-green', ...mapPoint({ x: 1700, y: 1150 }) },
+    { key: 'slime-blue', ...mapPoint({ x: 2000, y: 650 }) },
+    { key: 'slime-green', ...mapPoint({ x: 900, y: 1100 }) },
+    { key: 'slime-green', ...mapPoint({ x: 1450, y: 1350 }) },
   ],
   exits: [
-    { to: 'village', zone: { left: 0, top: 820, right: 110, bottom: 1000 },
-      arrive: { x: 2180, y: 1050 }, label: '◀ 로웬 마을', labelAt: { x: 160, y: 1010 } },
+    { to: 'village', zone: mapRect({ left: 0, top: 820, right: 110, bottom: 1000 }),
+      arrive: { x: VILLAGE_GATES.east.x - mapLength(110), y: mapLength(1050) }, label: '◀ 로웬 마을', labelAt: mapPoint({ x: 160, y: 1010 }) },
   ],
   interactables: [streamSign.spot],
 };

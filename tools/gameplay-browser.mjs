@@ -97,6 +97,51 @@ after(async () => {
   if (profile) await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
+test('순찰 조사 전 테온과 대화하면 테온의 이름과 일러스트가 표시된다', async () => {
+  await load('village');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    s.quests = { 'evening-patrol': { status: 'active', count: 0 }, 'teon-lunch': { status: 'done', count: 1 } };
+    s.openDialogue(s.interactables.find(i => i.id === 'npc-teon'));
+    return { name: s.dialogue.nameText.text, portrait: s.dialogue.portrait.texture.key,
+      lines: s.dialogue.lines, progress: s.quests['evening-patrol'] };
+  })()`);
+  assert.equal(result.name, '테온');
+  assert.equal(result.portrait, 'portrait-teon');
+  assert.ok(result.lines.every(l => l.speaker === '테온'));
+  assert.deepEqual(result.progress, { status: 'active', count: 0 });
+});
+
+test('들판 나무와 바위 객체는 같은 위치에 충돌이 있고 앞뒤 표시 순서가 바뀐다', async () => {
+  await load('south-field');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    const props = s.map.props.filter(p => p.frame !== 'sign');
+    const objects = props.map(p => {
+      const sprite = s.children.list.find(o => o.texture?.key === 'village-props' && o.frame.name === p.frame && o.x === p.x && o.y === p.y);
+      const obstacle = s.walkArea.obstacles.find(o => o.x === p.x && Math.abs(o.y - (p.y - p.footprint.ry * .45)) < .001);
+      return !!sprite && sprite.depth === p.y && !!obstacle && !s.walkArea.contains(obstacle.x, obstacle.y);
+    });
+    const tree = props.find(p => p.frame === 'oak' && p.x > 1500 && p.y > 2000);
+    s.player.placeAt(tree.x, tree.y - 120);
+    const behind = s.player.depth < tree.y;
+    s.player.placeAt(tree.x, tree.y + 120);
+    const inFront = s.player.depth > tree.y;
+    const rock = props.find(p => p.frame === 'boulders' && p.y > 1000 && p.y < 1300);
+    const o = s.walkArea.obstacles.find(o => o.x === rock.x);
+    const from = { x: o.x - o.rx - 30, y: o.y };
+    const point = { set(x, y) { this.x = x; this.y = y; return this; } };
+    s.walkArea.move(from.x, from.y, o.rx * 2 + 60, 0, point);
+    return { objects, behind, inFront, rockStops: point.x < o.x && s.walkArea.contains(point.x, point.y),
+      noBakedForeground: !s.children.list.some(o => o.name === 'map-art-foreground') };
+  })()`);
+  assert.ok(result.objects.length >= 25 && result.objects.every(Boolean));
+  assert.equal(result.behind, true);
+  assert.equal(result.inFront, true);
+  assert.equal(result.rockStops, true);
+  assert.equal(result.noBakedForeground, true);
+});
+
 test('장면을 다섯 번 재시작해도 적·포인터·텍스처 수와 초기 상태가 유지된다', async () => {
   await load();
   const result = await evaluate(`(() => {
@@ -1273,6 +1318,7 @@ test('목적지 안내는 실제 출구 근처에만 나타나고 지도·일시
 test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 이어지며 마을에는 몬스터가 없다', async () => {
   await load('village');
   const result = await evaluate(`(async () => {
+    const { exitPoint } = await import('/src/world/mapNavigation.ts');
     const g = window.__game, s = g.scene.getScene('game');
     let t = performance.now();
     const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
@@ -1290,33 +1336,41 @@ test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 �
       return { started, frozen, map: s.mapId, x: s.player.x, y: s.player.y, hp: s.player.hp,
         enemies: s.enemies.length, traveling: s.traveling, hint: s.map.hint };
     };
+    const travelTo = id => { const at = exitPoint(s.map, s.map.exits.find(e => e.to === id)); return travel(at.x, at.y); };
     const village = { enemies: s.enemies.length, map: s.mapId };
     s.player.hurt(25);
-    const south = await travel(1180, s.map.exits.find(e => e.to === 'south-field').zone.top + 40);
-    const backFromSouth = await travel(1298, 286);
-    const west = await travel(80, 1050);
-    const backFromWest = await travel(2330, 1050);
-    const east = await travel(2330, 1050);
+    const south = await travelTo('south-field');
+    const backFromSouth = await travelTo('village');
+    const west = await travelTo('west-forest');
+    const backFromWest = await travelTo('village');
+    const east = await travelTo('east-stream');
+    const backFromEast = await travelTo('village');
+    const north = await travelTo('village-north');
+    const backFromNorth = await travelTo('village');
+    await travelTo('east-stream');
     const restartedHere = (() => { s.scene.restart(); step(2); return { map: s.mapId, hp: s.player.hp, maxHp: s.player.maxHp }; })();
-    return { village, south, backFromSouth, west, backFromWest, east, restartedHere };
+    return { village, south, backFromSouth, west, backFromWest, east, backFromEast, north, backFromNorth, restartedHere };
   })()`);
   assert.deepEqual(result.village, { enemies: 0, map: 'village' });
   assert.equal(result.south.started, true);
   assert.equal(result.south.frozen, true);
   assert.equal(result.south.map, 'south-field');
-  assert.deepEqual([result.south.x, result.south.y], [1298, 462]);
+  assert.deepEqual([result.south.x, result.south.y], [1687.4, 600.6]);
   assert.equal(result.south.hp, 75);
   assert.equal(result.south.enemies, 10);
   assert.equal(result.south.traveling, false);
   assert.equal(result.backFromSouth.map, 'village');
-  assert.deepEqual([result.backFromSouth.x, result.backFromSouth.y], [1180, 1520]);
+  assert.deepEqual([result.backFromSouth.x, result.backFromSouth.y], [1534, 1976]);
   assert.equal(result.backFromSouth.enemies, 0);
   assert.equal(result.backFromSouth.hp, 75);
   assert.equal(result.west.map, 'west-forest');
   assert.equal(result.backFromWest.map, 'village');
-  assert.deepEqual([result.backFromWest.x, result.backFromWest.y], [230, 1050]);
+  assert.deepEqual([result.backFromWest.x, result.backFromWest.y], [299, 1365]);
   assert.equal(result.east.map, 'east-stream');
   assert.equal(result.east.enemies, 5);
+  assert.equal(result.backFromEast.map, 'village');
+  assert.equal(result.north.map, 'village-north');
+  assert.equal(result.backFromNorth.map, 'village');
   // 같은 맵에서 다시 시작하면 그 맵에 남고, 체력은 다시 이어 받지 않는다.
   assert.equal(result.restartedHere.map, 'east-stream');
   assert.equal(result.restartedHere.hp, result.restartedHere.maxHp);
@@ -1451,15 +1505,16 @@ test('원화가 있는 실내 여덟 곳과 남쪽 들판은 해당 그림만 �
         textures: Object.keys(s.textures.list).filter(k => k.startsWith('map-art-')),
         foreground: foreground.map(c => ({ width: c.displayWidth, depth: c.depth })),
         walkable: s.walkArea.contains(s.player.x, s.player.y),
-        blocked: s.map.interior ? s.map.interior.furniture.every(f => !s.walkArea.contains(s.map.bounds.left + f.x, s.map.bounds.top + f.y - f.d / 2)) : !s.walkArea.contains(835 * 2640 / 1536, 938 * 1760 / 1024) };
+        blocked: s.map.interior ? s.map.interior.furniture.every(f => !s.walkArea.contains(s.map.bounds.left + f.x, s.map.bounds.top + f.y - f.d / 2)) : !s.walkArea.contains(835 * background.displayWidth / 1536, 938 * background.displayHeight / 1024) };
     })()`);
     assert.equal(art.key, 'map-art-' + id);
     assert.ok(art.textures.every(k => k === art.key || k.startsWith(art.key + '-foreground-')), id + ': 다른 맵 원화를 미리 읽지 않는다');
     assert.equal(art.walkable, true, id);
     assert.equal(art.blocked, true, id);
-    assert.ok(art.width > 0 && art.height > 0 && art.foreground.length >= 2, id);
-    if (id === 'south-field') assert.ok(art.foreground.every(c => c.width < 1000), '전경이 배경 전체를 덮지 않는다');
+    assert.ok(art.width > 0 && art.height > 0, id);
+    if (id === 'south-field') assert.equal(art.foreground.length, 0, '나무·바위는 배경 복사 대신 독립 소품으로 그린다');
     else {
+      assert.ok(art.foreground.length >= 2, id);
       const back = await evaluate(`(async () => {
         const g = window.__game, s = g.scene.getScene('game'), spot = s.interactables.find(i => i.enter), exit = spot.enter;
         let t = performance.now();

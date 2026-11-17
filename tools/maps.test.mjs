@@ -1,11 +1,24 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FIELD_SCALE } from '../src/world/southFieldLayout.ts';
+import { FIELD_PROPS, FIELD_SCALE } from '../src/world/southFieldLayout.ts';
 import { DIALOGUES } from '../src/story/dialogues.ts';
 import { findInteractable } from '../src/world/interactables.ts';
 import { MAPS, START_MAP, findExit, insideRect, isMapId, mapObstacles, walkable } from '../src/world/maps.ts';
 
 const maps = Object.values(MAPS);
+
+test('들판 나무·바위는 개별 객체이고 모든 바닥 접점에 충돌이 있다', () => {
+  const field = MAPS['south-field'];
+  assert.ok(FIELD_PROPS.length >= 25);
+  assert.equal(field.obstacles, undefined, '그림과 별개인 수동 장애물 목록을 두지 않는다');
+  const obstacles = mapObstacles(field);
+  for (const prop of FIELD_PROPS) {
+    assert.ok(field.props.includes(prop));
+    const obstacle = obstacles.find(o => o.x === prop.x && o.y === prop.y - prop.footprint.ry * .45);
+    assert.ok(obstacle, `${prop.frame} ${prop.x},${prop.y}`);
+    assert.equal(walkable(field, obstacle.x, obstacle.y), false);
+  }
+});
 
 /** 시작점에서 32px 격자로 걸어서 닿을 수 있는 칸들 (출구 영역은 지나가지 않는다) */
 function reachable(map, from) {

@@ -51,8 +51,8 @@ test('혼합 사냥터에서도 슬라임 전용 의뢰는 버섯·도마뱀·�
 
 
 test('사냥터는 종류별 다섯 마리이며 야외·실내 바닥은 확장된 크기를 사용한다', () => {
-  assert.equal(MAP_SIZE_SCALE, 1.1);
-  assert.deepEqual([WORLD_WIDTH, WORLD_HEIGHT], [2640, 1760]);
+  assert.equal(MAP_SIZE_SCALE, 1.43);
+  assert.deepEqual([WORLD_WIDTH, WORLD_HEIGHT], [3432, 2288]);
   for (const id of ['south-field', 'west-forest', 'east-stream']) {
     const counts = {};
     for (const enemy of MAPS[id].enemies) {

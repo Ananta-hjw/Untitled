@@ -1,3 +1,4 @@
+import { mapLength, mapPoint } from './mapScale.ts';
 import type { Direction8, NpcDef, NpcId } from './npcs.ts';
 import { VILLAGE_GATES } from './villagePerimeter.ts';
 
@@ -12,19 +13,19 @@ const sentry = (id: string, gate: Gate, x: number, y: number, facing: Direction8
 
 /** 세 외부 출입구에 둘씩. 통행 축과 문기둥·건물의 실루엣에서 비켜 선다. */
 export const GUARDS: readonly GuardDef[] = [
-  sentry('west-north', 'west', 250, VILLAGE_GATES.west.top - 25, 'left'),
-  sentry('west-south', 'west', 280, VILLAGE_GATES.west.bottom + 30, 'left'),
-  sentry('east-north', 'east', 2170, VILLAGE_GATES.east.top - 25, 'right'),
-  sentry('east-south', 'east', 2170, VILLAGE_GATES.east.bottom + 70, 'right'),
+  sentry('west-north', 'west', mapLength(250), VILLAGE_GATES.west.top - mapLength(25), 'left'),
+  sentry('west-south', 'west', mapLength(280), VILLAGE_GATES.west.bottom + mapLength(30), 'left'),
+  sentry('east-north', 'east', VILLAGE_GATES.east.x - mapLength(120), VILLAGE_GATES.east.top - mapLength(25), 'right'),
+  sentry('east-south', 'east', VILLAGE_GATES.east.x - mapLength(120), VILLAGE_GATES.east.bottom + mapLength(70), 'right'),
   // 남문은 초소·수레 양옆에서 지킨다. 기둥 뒤에 가려지거나 들판 출구에 들어서지 않는다.
-  sentry('south-west', 'south', 825, VILLAGE_GATES.south.y - 5, 'down'),
-  sentry('south-east', 'south', 1535, VILLAGE_GATES.south.y - 5, 'down'),
+  sentry('south-west', 'south', mapLength(825), VILLAGE_GATES.south.y - mapLength(5), 'down'),
+  sentry('south-east', 'south', mapLength(1535), VILLAGE_GATES.south.y - mapLength(5), 'down'),
   ...([
     ['plaza-west', 'village', 990, 1030], ['plaza-east', 'village', 1550, 930],
     ['homes-west', 'village-north', 980, 740], ['homes-east', 'village-north', 1900, 1160],
   ] as const).map(([id, area, x, y]): GuardDef => ({
     id: `guard-${id}`, skin: 'soldier', name: '순찰 병사', role: '순찰병', area,
-    x, y, height: 148, dialogue: 'guard-patrol', wander: 110,
+    ...mapPoint({ x, y }), height: 148, dialogue: 'guard-patrol', wander: 110,
   })),
 ];
 

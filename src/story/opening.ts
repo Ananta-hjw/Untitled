@@ -1,3 +1,4 @@
+import { mapLength, mapPoint } from '../world/mapScale.ts';
 import { HERO_NAME, type DialogueLine } from './dialogues.ts';
 import type { NamedNpcId } from '../world/npcs.ts';
 import { LINEA_YARD, PLAYER_SPAWN } from '../world/villageLayout.ts';
@@ -37,20 +38,20 @@ const line = (id: NamedNpcId, speaker: string, text: string): DialogueLine => ({
 export const OPENING_WALK_SCALE = 0.5;
 
 // 리네아의 집 지붕에 가리지 않도록 시온의 집 문 바로 앞에서 이야기한다.
-const front = { x: PLAYER_SPAWN.x + 30, y: PLAYER_SPAWN.y + 15 };
-const byHerman = { x: 1150, y: 640 };
-const byLinea = { x: LINEA_YARD.x + 150, y: LINEA_YARD.y + 30 };
+const front = { x: PLAYER_SPAWN.x + mapLength(30), y: PLAYER_SPAWN.y + mapLength(15) };
+const byHerman = mapPoint({ x: 1150, y: 640 });
+const byLinea = { x: LINEA_YARD.x + mapLength(150), y: LINEA_YARD.y + mapLength(30) };
 
 export const OPENING: OpeningStep[] = [
-  { type: 'place', id: 'sia', at: { x: LINEA_YARD.x + 20, y: LINEA_YARD.y + 70 } },
-  { type: 'place', id: 'linea', at: { x: LINEA_YARD.x - 30, y: LINEA_YARD.y + 10 } },
-  { type: 'place', id: 'herman', at: { x: 1270, y: 600 } },
-  { type: 'place', id: 'serena', at: { x: 720, y: 700 } },
+  { type: 'place', id: 'sia', at: { x: LINEA_YARD.x + mapLength(20), y: LINEA_YARD.y + mapLength(70) } },
+  { type: 'place', id: 'linea', at: { x: LINEA_YARD.x - mapLength(30), y: LINEA_YARD.y + mapLength(10) } },
+  { type: 'place', id: 'herman', at: mapPoint({ x: 1270, y: 600 }) },
+  { type: 'place', id: 'serena', at: mapPoint({ x: 720, y: 700 }) },
   { type: 'caption', text: '로웬 마을\n수확제 전날 아침', ms: 2600 },
   { type: 'wait', ms: 500 },
   { type: 'hero', path: [front] },
   { type: 'say', lines: [hero('…벌써 해가 저만큼 떴네. 오늘이 축제 전날이었지.')] },
-  { type: 'npc', id: 'serena', path: [{ x: front.x + 120, y: front.y + 10 }], wait: true },
+  { type: 'npc', id: 'serena', path: [{ x: front.x + mapLength(120), y: front.y + mapLength(10) }], wait: true },
   { type: 'face', id: 'serena' },
   { type: 'say', lines: [
     line('serena', '세레나', '시온, 이제 일어났니? 아침은 식탁에 차려 뒀어.'),
@@ -59,15 +60,15 @@ export const OPENING: OpeningStep[] = [
     line('serena', '세레나', '오늘 저녁은 축제 전야 잔치야. 해 지기 전엔 꼭 들어오렴.'),
     hero('네, 어머니.'),
   ] },
-  { type: 'npc', id: 'serena', path: [{ x: 720, y: 700 }] },
-  { type: 'hero', path: [{ x: 720, y: 690 }, { x: 1000, y: 700 }, byHerman] },
+  { type: 'npc', id: 'serena', path: [mapPoint({ x: 720, y: 700 })] },
+  { type: 'hero', path: [mapPoint({ x: 720, y: 690 }), mapPoint({ x: 1000, y: 700 }), byHerman] },
   { type: 'face', id: 'herman' },
   { type: 'say', lines: [
     line('herman', '헤르만', '오, 시온이구먼. 올해는 수확이 넉넉해서 잔치 상도 푸짐하겠어.'),
     line('herman', '헤르만', '저녁에 여관으로 다들 모이기로 했네. 늦지 말게.'),
     hero('네, 촌장님. 기대할게요.'),
   ] },
-  { type: 'hero', path: [{ x: 1000, y: 760 }, { x: 860, y: 900 }, byLinea] },
+  { type: 'hero', path: [mapPoint({ x: 1000, y: 760 }), mapPoint({ x: 860, y: 900 }), byLinea] },
   { type: 'face', id: 'sia' },
   { type: 'face', id: 'linea' },
   { type: 'say', lines: [

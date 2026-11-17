@@ -1,3 +1,4 @@
+import { mapPoint } from './mapScale.ts';
 import type { DialogueId } from '../story/dialogues.ts';
 import { interiorShop, type InteriorId } from './interiors.ts';
 import { LINEA_YARD, type VillageArea } from './villageLayout.ts';
@@ -49,7 +50,7 @@ export interface NpcDef {
 
 export function npcSkin(def: NpcDef): NpcSkin { return def.skin ?? def.id as NamedNpcId; }
 
-export const NPCS: NpcDef[] = [
+const BASE_NPCS: NpcDef[] = [
   // 북쪽 맵: 집들 앞
   { id: 'serena', name: '세레나', role: '시온의 어머니', area: 'village-north', x: 700, y: 600, height: 148, dialogue: 'npc-serena', wander: 110 },
   { id: 'sia', name: '시아', role: '시온의 여동생', area: 'village-north', x: 290, y: 680, height: 132, dialogue: 'npc-sia', wander: 150 },
@@ -67,6 +68,8 @@ export const NPCS: NpcDef[] = [
   { id: 'teon', name: '테온', role: '경비대원', x: 1340, y: 1450, height: 150, dialogue: 'npc-teon', wander: 100 },
 ];
 
+export const NPCS = BASE_NPCS.map(n => n.inside || n.id === 'linea' ? n : mapPoint(n));
+
 /**
  * 마을 사람은 맵 안을 넓게 돌아다닌다: 지금 자리에서 이 거리 안의 아무 곳이나 다음 목적지로 고른다.
  * 처음 자리에 묶이지 않으므로 시간이 지나면 맵 곳곳으로 퍼진다. 순찰 병사만 자기 자리 주변(wander)을 돈다.
@@ -74,6 +77,7 @@ export const NPCS: NpcDef[] = [
 export const NPC_ROAM_HOP = 520;
 /** 말을 건 뒤 그 자리에 서서 플레이어 쪽을 보고 있는 시간(ms, 게임 시계). 대화 중에는 시계가 멈춘다. */
 export const NPC_TALK_PAUSE_MS = 2500;
+
 export const NPC_WALK_SPEED = 78;
 /**
  * 한 걸음에 나아가는 거리 (키에 대한 비율). 걷기 시트의 옆모습에서 잰 보폭(키의 약 0.26~0.33)에 맞췄다.
