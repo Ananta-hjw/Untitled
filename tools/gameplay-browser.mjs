@@ -2597,7 +2597,9 @@ test('캐릭터 창·장비창·대장간은 기존 아이템과 새 철검·가
     }
   }
   assert.equal(result.cells['wooden-sword'].key,'icon:items/wooden-sword');
-  assert.equal(result.cells['wooden-sword'].image,true);assert.equal(result.cells['cloth-hood'].image,false);
+  assert.equal(result.cells['wooden-sword'].image,true);
+  // 천 두건도 이제 아이콘이 있다 (src/assets/icons/items/cloth-hood.webp)
+  assert.equal(result.cells['cloth-hood'].key,'icon:items/cloth-hood');assert.equal(result.cells['cloth-hood'].image,true);
   for(const [cell,id] of [[result.weapon,'iron-sword'],[result.body,'leather-armor'],[result.shop['leather-armor'],'leather-armor']]){
     assert.equal(cell.key,'item-icons');assert.equal(cell.frame,id);assert.equal(cell.image,true);assert.equal(cell.fits,true);
   }
