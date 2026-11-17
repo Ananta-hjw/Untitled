@@ -1,3 +1,6 @@
+import { PLAYER } from '../config.ts';
+import { attackPoseTime } from './attackTiming.ts';
+
 export type Facing = 'down' | 'left' | 'right' | 'up' | 'down-left' | 'down-right' | 'up-left' | 'up-right';
 export type AttackFacing = Exclude<Facing, 'up' | 'down'>;
 export type HeroAction = 'idle' | 'walk' | 'attack1' | 'attack2' | 'attack3' | 'dodge';
@@ -7,7 +10,11 @@ const WALK_CYCLE = [1, 2, 3, 2];
 const DIRECTIONS: Facing[] = ['down', 'left', 'right', 'up'];
 const DIAGONALS: Facing[] = ['down-left', 'down-right', 'up-left', 'up-right'];
 const COMPASS: Facing[] = ['right', 'down-right', 'down', 'down-left', 'left', 'up-left', 'up', 'up-right'];
-export const ACTION_DURATION = { attack1: 420, attack2: 320, attack3: 400, dodge: 300 };
+export const ACTION_DURATION = { attack1: 420 + PLAYER.combo[0].followPauseMs, attack2: 320 + PLAYER.combo[1].followPauseMs, attack3: 400 + PLAYER.combo[2].followPauseMs, dodge: 300 };
+
+export function guardFrame(facing: Facing): string {
+  return `guard-${facing.startsWith('up') ? 'up' : facing.startsWith('down') ? 'down' : 'side'}`;
+}
 // Put the drawn striking pose inside each configured damage window.
 // 준비 자세(0번)는 짧게 두어 누르자마자 칼을 드는 것이 보이게 하고, 그만큼 들어 올린 자세(1번)를 길게 보여 준다.
 // 2타(올려 베기)는 낮은 자세에서 올라가는 궤적으로 맞히므로, 타격 그림이 명중 구간이 열리는 순간(hitDelayMs)에 바뀐다.
@@ -59,7 +66,8 @@ export function insideAttackLane(dx: number, dy: number, direction: { x: number;
 }
 
 export function heroFrame(action: HeroAction, facing: Facing, elapsedMs: number): string {
-  const time = Math.max(0, elapsedMs);
+  const elapsed = Math.max(0, elapsedMs);
+  const time = action.startsWith('attack') ? attackPoseTime(Number(action.at(-1)) - 1, elapsed) : elapsed;
   if (action === 'idle' || action === 'walk') {
     const column = action === 'walk' ? WALK_CYCLE[Math.floor(time * WALK_FPS / 1000) % 4] : 0;
     const diagonal = DIAGONALS.indexOf(facing);

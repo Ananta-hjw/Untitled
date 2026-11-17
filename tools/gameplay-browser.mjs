@@ -245,8 +245,8 @@ test('터치·키보드의 짧은 공격과 콤보 예약을 처리하고 누르
       while (s.now < 1900) tick(); const consumedOnce = attacks;
       reset(); tap(); tick(); tap(); tick();
       while (s.now < 1700) tick(); const expired = attacks;
-      reset(); down(); while (s.now < 1800) tick();
-      const held = attacks; up(); while (s.now < 2350) tick(); const released = attacks;
+      reset(); down(); while (s.now < 2000) tick();
+      const held = attacks; up(); while (s.now < 2600) tick(); const released = attacks;
       results.push({ source, quickTap, noExtraAfterTap, bufferedCombo, consumedOnce, expired, held, released });
     }
     return results;
@@ -441,7 +441,7 @@ test('회피 잔상은 프레임 이미지를 재사용하고 장면 재시작 �
     assert.equal(run.pool, result.counts[0].pool);
     assert.ok(run.pool <= 6);
     assert.equal(run.hidden, true);
-    assert.ok(run.children.every((n) => n === 3));
+    assert.ok(run.children.every((n) => n === 4));
   }
   assert.equal(result.oldAttackPool, 0);
   assert.equal(result.oldGhostPool, 0);
@@ -2212,7 +2212,7 @@ test('무기 교체·해제는 별도 레이어와 칼집 손잡이·잔상·저
     const ghost=h.spawnGhost(s.player.x,s.player.y,0,0x9fc4ff,.3),copies=ghost.list.map(o=>o.texture.key+':'+o.frame.name);
     h.setWeapon(undefined);const empty=!h.weaponFront.visible&&!h.weaponBack.visible&&Math.hypot(h.getBlade().tip.x-h.getBlade().base.x,h.getBlade().tip.y-h.getBlade().base.y)===0;
     h.spawnGhost(s.player.x,s.player.y,0,0x9fc4ff,.3,ghost);
-    const emptyGhost=!ghost.getAt(0).visible&&!ghost.getAt(2).visible;ghost.destroy();
+    const emptyGhost=!ghost.getAt(0).visible&&!ghost.getAt(3).visible;ghost.destroy();
     s.scene.restart();g.step(performance.now(),16);g.step(performance.now()+16,16);
     const restored=s.player.sprite.weapon==='iron-sword';
     s.openCharacterPanel('equip');s.characterPanel.selectSlot('weapon');s.characterPanel.primary();s.characterPanel.close();
@@ -2221,5 +2221,160 @@ test('무기 교체·해제는 별도 레이어와 칼집 손잡이·잔상·저
   })()`);
   for(const key of ['equipped','empty','emptyGhost','restored','unequipped'])assert.equal(result[key],true,key);
   assert.ok(result.maxError<.001,JSON.stringify(result));
-  assert.equal(result.copies[0],'hero-weapons:iron-sword-grip');assert.equal(result.copies[2],'hero-weapons:iron-sword-blade');
+  assert.equal(result.copies[0],'hero-weapons:iron-sword-grip');assert.equal(result.copies[3],'hero-weapons:iron-sword-blade');
+});
+
+test('타격 뒤 잠깐 멈춰도 세계 시계와 예약 입력·회피는 동작한다', async () => {
+  await load('village');
+  const result = await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'),p=s.player,h=p.sprite,runs=[];
+    s.enemies=[];let starts=0;const original=s.startAttack;
+    s.startAttack=(...args)=>{starts++;return original.apply(s,args);};
+    const tick=()=>s.update(0,5);
+    const reset=(stage,time)=>{
+      p.revive(1180,1220);s.now=time;s.clearAttackInput();s.joystick.vector.set(0,0);
+      s.attackButton.isDown=false;s.comboStage=stage;s.comboExpiresAt=1e9;s.nextAttackAt=0;
+      s.dodgeProgress=1;s.dodgeUntil=0;s.dodgeReadyAt=0;s.hitStopLeft=0;s.slowMotionLeft=0;
+    };
+    for(const [stage,holdAt,holdMs] of [[0,300,90],[1,200,90],[2,260,120]]){
+      reset(stage,1000+stage*2000);const began=s.now;s.startAttack(began,1);const ready=s.nextAttackAt;
+      while(s.now<began+holdAt)tick();
+      const before={x:p.x,y:p.y,frame:h.image.frame.name,rotation:h.weaponFront.rotation,clock:s.now,count:starts};
+      s.joystick.vector.set(1,0);s.attackButton.pressed=true;tick();
+      while(s.now<began+holdAt+holdMs-5)tick();
+      const stopped=p.x===before.x&&p.y===before.y&&h.image.frame.name===before.frame&&Math.abs(h.weaponFront.rotation-before.rotation)<1e-8;
+      const waited=starts===before.count,clockRan=s.now>before.clock;
+      while(s.now<ready+5)tick();
+      runs.push({stage,stopped,waited,clockRan,queuedOnce:starts===before.count+1});
+    }
+    reset(0,9000);s.startAttack(s.now,1);while(s.now<9300)tick();
+    s.dodgeButton.pressed=true;tick();const dodge=!p.isAttacking&&p.dodging&&!h.isInFollowPause;
+    s.startAttack=original;return {runs,dodge};
+  })()`);
+  for (const run of result.runs) {
+    for (const [key,value] of Object.entries(run).filter(([key])=>key!=='stage')) {
+      assert.equal(value,true,JSON.stringify({key,...run}));
+    }
+  }
+  assert.equal(result.dodge,true);
+});
+
+test('막기는 콤보·후딜·회전 베기를 즉시 취소하고 남은 공격 판정과 전진을 없애며 재사용 대기는 유지한다', async () => {
+  await load();
+  const result = await evaluate(`(async () => {
+    const { PLAYER, BLOCK, SPIN_SLASH } = await import('/src/config.ts');
+    const s = window.__game.scene.getScene('game'), p = s.player, h = p.sprite, e = s.enemies[0];
+    s.enemies = [e]; s.derived.evadeChance = 0;
+    let ownHits = 0; e.character.hurt = () => { ownHits++; return false; };
+    const reset = (stage) => {
+      p.revive(1000,650);e.character.revive(1100,650);s.now=1000;
+      s.clearAttackInput();s.attackButton.isDown=false;s.joystick.vector.set(0,0);
+      s.dodgeProgress=1;s.dodgeUntil=0;s.dodgeReadyAt=0;
+      s.parryUntil=0;s.parryReadyAt=0;s.blocking=false;s.spinHitAt=undefined;
+      s.comboStage=stage;s.comboExpiresAt=1e9;s.nextAttackAt=0;
+      s.hitStopLeft=0;s.slowMotionLeft=0;ownHits=0;
+    };
+    const runs = [];
+    for (const stage of [0,1,2]) {
+      const combo = PLAYER.combo[stage];
+      for (const elapsed of [20,combo.hitDelayMs+5,combo.followPauseAtMs+10]) {
+        reset(stage);s.startAttack(s.now,1);
+        for(let t=0;t<elapsed;t+=10)h.advance(Math.min(10,elapsed-t));
+        s.now+=elapsed;s.updateAttackLunge(s.now);
+        // 다음 공격도 가능한 순간에 두 버튼을 동시에 누른다. 막기가 우선해야 한다.
+        s.nextAttackAt=s.now;s.attackButton.isDown=true;s.attackButton.pressed=true;s.blockButton.pressed=true;
+        s.updatePlayer(s.now,0);s.drawShield(s.now);
+        const canceled=!p.isAttacking&&!h.isInFollowPause&&s.attackTrace===undefined&&s.attackLunge===undefined;
+        const cleared=s.attackBufferedUntil===undefined&&s.comboStage===0&&s.comboExpiresAt===0;
+        const immediate=s.blocking&&s.shield.visible&&s.parryReadyAt===s.now+BLOCK.cooldownMs;
+        const x=p.x,y=p.y;s.now+=100;h.advance(50);
+        s.updatePlayer(s.now,0);s.updateAttackLunge(s.now);s.updateAttackTrace(s.now);
+        const heldSafe=s.blocking&&!p.isAttacking&&p.x===x&&p.y===y&&ownHits===0;
+        e.character.placeAt(p.x+80*p.facing,p.y);e.character.face(-p.facing);p.invulnerableUntil=0;
+        const hp=p.hp;s.onEnemyStrike(e);
+        runs.push({stage,elapsed,canceled,cleared,immediate,heldSafe,protected:p.hp===hp&&s.counterUntil>s.now});
+      }
+    }
+    reset(0);s.startAttack(s.now,1);const trace=s.attackTrace,lunge=s.attackLunge;
+    s.parryReadyAt=s.now+500;s.blockButton.pressed=true;s.updatePlayer(s.now,0);
+    const cooldownKept=p.isAttacking&&!s.blocking&&s.attackTrace===trace&&s.attackLunge===lunge;
+    reset(0);s.mp=s.maxMp;s.nextSpinAt=0;s.startSpin(s.now);
+    const paid=s.mp,spinReady=s.nextSpinAt;s.now+=20;s.blockButton.pressed=true;s.updatePlayer(s.now,0);
+    const spinCanceled=!p.isAttacking&&s.spinHitAt===undefined&&s.blocking;
+    s.now+=SPIN_SLASH.hitDelayMs;s.updateSkill(s.now,10);
+    const noSpinHit=ownHits===0&&s.nextSpinAt===spinReady&&s.mp>=paid&&s.mp<s.maxMp;
+    reset(0);s.mp=s.maxMp;s.nextSpinAt=0;s.skillSlots[0]='spin';s.refreshSkillButtons();s.blockButton.pressed=true;s.skillButtons[0].pressed=true;
+    s.updatePlayer(s.now,0);s.updateSkill(s.now,0);
+    const skillPriority=s.blocking&&!p.isAttacking&&s.spinHitAt===undefined&&s.mp===s.maxMp;
+    s.attackButton.isDown=false;
+    return {runs,cooldownKept,spinCanceled,noSpinHit,skillPriority};
+  })()`);
+  assert.equal(result.runs.length, 9);
+  for (const run of result.runs) {
+    for (const key of ['canceled','cleared','immediate','heldSafe','protected']) {
+      assert.equal(run[key], true, JSON.stringify({ key, ...run }));
+    }
+  }
+  for (const key of ['cooldownKept','spinCanceled','noSpinHit','skillPriority']) {
+    assert.equal(result[key], true, JSON.stringify(result));
+  }
+});
+
+test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 검날 접점에서 패링하며 종료·회피 시 복귀한다', async () => {
+  await load();
+  const result = await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'),p=s.player,h=p.sprite,e=s.enemies[0],runs=[];
+    s.enemies=[];s.derived.evadeChance=0;
+    const contacts=[],impact=s.impacts.impact;
+    s.impacts.impact=(...args)=>{if(args[4]==='counter')contacts.push({x:args[0],y:args[1]});return impact.apply(s.impacts,args);};
+    for(const [facing,dx,dy] of [['right',1,0],['left',-1,0],['down-right',1,1],['down-left',-1,1],['up-right',1,-1],['up-left',-1,-1]]){
+      p.revive(1000,650);s.now=1000;s.clearAttackInput();s.joystick.vector.set(0,0);
+      s.dodgeProgress=1;s.dodgeUntil=0;s.dodgeReadyAt=0;s.parryUntil=0;s.parryReadyAt=0;
+      s.spinHitAt=undefined;s.comboStage=0;s.comboExpiresAt=0;s.nextAttackAt=0;
+      h.setWeapon('iron-sword');s.startAttack(s.now,dx,dy);s.blockButton.pressed=true;
+      s.updatePlayer(s.now,0);s.drawShield(s.now);
+      const name=h.image.frame.name,texture=h.image.texture.key,mirror=h.image.scaleX<0;
+      const lengths=[];for(let i=0;i<5;i++){h.advance(20);s.now+=20;s.drawShield(s.now);const b=h.getBlade();lengths.push(Math.hypot(b.tip.x-b.base.x,b.tip.y-b.base.y));}
+      const blade=h.getBlade(),raised=blade.tip.y<blade.base.y&&(blade.tip.x-blade.base.x)*dx>0;
+      const tilt=Math.atan2(Math.abs(blade.tip.x-blade.base.x),Math.abs(blade.tip.y-blade.base.y))*180/Math.PI;
+      const upright=tilt>=11&&tilt<=14;
+      const f=h.frame,m=h.image.getWorldTransformMatrix();
+      const palm=m.transformPoint(f.supportGrip.x-f.originX*f.w,f.supportGrip.y-f.h);
+      const vx=blade.tip.x-blade.base.x,vy=blade.tip.y-blade.base.y;
+      const palmDistance=Math.abs((palm.x-blade.base.x)*vy-(palm.y-blade.base.y)*vx)/Math.hypot(vx,vy);
+      const rear=facing==='up-left'||facing==='up-right';
+      const palmVisible=h.supportHand.visible&&(rear
+        ? h.list.indexOf(h.supportHand)>h.list.indexOf(h.weaponFront)&&h.supportHand.frame.name==='guard-up-support-back'
+        : h.list.indexOf(h.weaponFront)>h.list.indexOf(h.supportHand)&&h.supportHand.frame.name!=='guard-up-support-back');
+      const held=h.isGuarding&&s.shield.visible&&!p.isAttacking&&h.weaponFront.frame.name==='iron-sword-blade';
+      h.setWeapon('wooden-sword');const wood=h.weaponFront.frame.name==='wooden-sword-blade';h.setWeapon('iron-sword');
+      e.character.revive(p.x+80*p.facing,p.y);e.character.face(-p.facing);p.invulnerableUntil=0;const hp=p.hp;s.onEnemyStrike(e);
+      const contact=contacts.at(-1),error=Math.hypot(contact.x-blade.base.x-(blade.tip.x-blade.base.x)*.55,contact.y-blade.base.y-(blade.tip.y-blade.base.y)*.55);
+      s.now+=5;s.updatePlayer(s.now,0);s.drawShield(s.now);const restored=!h.isGuarding&&h.image.texture.key!=='hero-academy-guard';
+      runs.push({facing,name,texture,mirror,raised,upright,palmDistance,palmVisible,held,wood,lengths,error,restored,protected:p.hp===hp&&s.counterUntil>s.now});
+    }
+    const verticalUnchanged=[];
+    for(const dy of [-1,1]){
+      h.play('hero-idle');h.setMovement(0,dy);h.setGuarding(true);
+      verticalUnchanged.push(h.supportHand.frame.name!=='guard-up-support-back'&&h.list.indexOf(h.weaponFront)>h.list.indexOf(h.supportHand));
+      h.setGuarding(false);
+    }
+    s.parryReadyAt=0;s.blockButton.pressed=true;s.updatePlayer(s.now,0);s.drawShield(s.now);
+    h.setWeapon(undefined);s.drawShield(s.now);const empty=h.getBlade();
+    const unequipped=!h.weaponFront.visible&&!h.weaponBack.visible&&!h.supportHand.visible&&Math.hypot(empty.tip.x-empty.base.x,empty.tip.y-empty.base.y)===0;
+    s.dodgeButton.pressed=true;s.updatePlayer(s.now,0);s.drawShield(s.now);
+    const dodged=p.dodging&&!h.isGuarding&&h.image.texture.key!=='hero-academy-guard';
+    s.impacts.impact=impact;return {runs,unequipped,dodged,verticalUnchanged};
+  })()`);
+  for (const run of result.runs) {
+    assert.equal(run.texture, 'hero-academy-guard');
+    assert.equal(run.name, `guard-${run.facing.startsWith('up')?'up':run.facing.startsWith('down')?'down':'side'}`);
+    assert.equal(run.mirror, run.facing.includes('left'));
+    for (const key of ['raised','upright','palmVisible','held','wood','restored','protected']) assert.equal(run[key],true,JSON.stringify({key,...run}));
+    assert.ok(run.error<.001,JSON.stringify(run));
+    assert.ok(run.palmDistance<.75,JSON.stringify(run));
+    assert.ok(run.lengths.every(n=>Math.abs(n-75)<.001),JSON.stringify(run));
+  }
+  assert.equal(result.unequipped,true);assert.equal(result.dodged,true);
+  assert.ok(result.verticalUnchanged.every(Boolean),JSON.stringify(result));
 });
