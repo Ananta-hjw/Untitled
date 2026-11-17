@@ -50,6 +50,8 @@ export class Character extends Phaser.GameObjects.Container {
   private readonly baseScale: number;
   private readonly shadow: Phaser.GameObjects.Image;
   private readonly hpBar?: Phaser.GameObjects.Graphics;
+  /** 몬스터 머리 위 'Lv. N'. 죽으면 몸과 함께 사라진다. */
+  private readonly levelTagText?: Phaser.GameObjects.Text;
   private readonly hpBarY: number;
   private levelText?: Phaser.GameObjects.Text;
   private moving = false;
@@ -119,9 +121,10 @@ export class Character extends Phaser.GameObjects.Container {
     }
 
     if (options.levelTag !== undefined && !options.name) {
-      this.add(scene.add.text(0, top - 8, `Lv. ${options.levelTag}`, {
+      this.levelTagText = scene.add.text(0, top - 8, `Lv. ${options.levelTag}`, {
         fontFamily: 'system-ui, sans-serif', fontSize: '16px', fontStyle: 'bold', color: '#f0d27a', stroke: '#1a1008', strokeThickness: 4,
-      }).setOrigin(0.5, 1).setResolution(2));
+      }).setOrigin(0.5, 1).setResolution(2);
+      this.add(this.levelTagText);
     }
 
     if (options.showHpBar) {
@@ -213,8 +216,9 @@ export class Character extends Phaser.GameObjects.Container {
     this.attacking = false;
     this.knockback.set(0, 0);
     this.hpBar?.setVisible(false);
+    // 레벨 글씨도 몸과 함께 사라진다(예전에는 몸이 사라진 뒤에도 남아 있었다).
     this.scene.tweens.add({
-      targets: [this.sprite, this.shadow],
+      targets: this.levelTagText ? [this.sprite, this.shadow, this.levelTagText] : [this.sprite, this.shadow],
       alpha: 0,
       duration: 380,
       ease: 'Quad.easeIn',
@@ -229,7 +233,8 @@ export class Character extends Phaser.GameObjects.Container {
   }
 
   revive(x: number, y: number): void {
-    this.scene.tweens.killTweensOf([this.sprite, this.shadow]);
+    this.scene.tweens.killTweensOf(this.levelTagText ? [this.sprite, this.shadow, this.levelTagText] : [this.sprite, this.shadow]);
+    this.levelTagText?.setAlpha(1);
     this.alive = true;
     this.hp = this.maxHp;
     this.attacking = false;

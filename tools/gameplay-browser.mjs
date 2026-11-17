@@ -53,9 +53,18 @@ async function evaluate(expression) {
 
 /** 전투 테스트는 몬스터가 있는 남쪽 들판에서, 마을 지형 테스트는 마을에서 시작한다. */
 async function load(map = 'south-field') {
-  const search = '?test=' + ++navigation + '&map=' + map;
-  await send('Page.navigate', { url: appUrl + search });
-  await until(() => evaluate(`location.search === ${JSON.stringify(search)} && !!window.__game?.scene.getScene('game')?.damageNumbers`));
+  // 긴 전체 실행의 끝무렵에는 헤드리스 Chromium에서 새 페이지가 가끔 아주 느리게(1초에 1프레임 남짓) 돌아
+  // 준비 시간을 넘긴다(브라우저 디버깅 기능을 켜면 사라져 원인은 못 찾았다). 그럴 때 한 번 다시 불러온다.
+  for (let attempt = 0; ; attempt++) {
+    const search = '?test=' + ++navigation + '&map=' + map;
+    await send('Page.navigate', { url: appUrl + search });
+    try {
+      await until(() => evaluate(`location.search === ${JSON.stringify(search)} && !!window.__game?.scene.getScene('game')?.damageNumbers`));
+      break;
+    } catch (error) {
+      if (attempt >= 1) throw error;
+    }
+  }
   await evaluate('window.__game.loop.sleep()');
 }
 
@@ -321,6 +330,27 @@ test('조이스틱은 왼쪽 아래 영역 어디를 눌러도 그 자리에서 
       corner: corner.x === corner.r && corner.y === H - corner.r, onAttack, onHud, onMenu };
   })()`);
   assert.deepEqual(result, { grabbed: true, center: true, right: true, released: true, corner: true, onAttack: false, onHud: false, onMenu: false });
+});
+
+test('몬스터가 쓰러지면 머리 위 레벨 글씨도 몸과 함께 사라지고, 다시 나타나면 보인다', async () => {
+  await load();
+  await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.length > 0; })()`));
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), e = s.enemies[0], c = e.character;
+    const tag = c.list.find(o => typeof o.text === 'string' && o.text.startsWith('Lv. '));
+    const shown = tag.alpha;
+    c.hurt(c.hp); e.kill();
+    // 쓰러지는 연출은 실제 시간으로 흐르므로, 레벨 글씨가 몸과 같은 '사라지기' 연출에 들어 있는지 본다.
+    const fade = s.tweens.getTweensOf(tag)[0];
+    const together = !!fade && fade.targets.includes(c.sprite) && fade.targets.includes(tag);
+    // 다 사라진 상태에서 다시 나타나면 레벨 글씨도 다시 보인다.
+    tag.setAlpha(0);
+    e.respawn(c.x, c.y);
+    return { shown, together, revived: tag.alpha };
+  })()`);
+  assert.equal(result.shown, 1);
+  assert.equal(result.together, true, '레벨 글씨도 몸과 함께 사라진다');
+  assert.equal(result.revived, 1);
 });
 
 test('회피·포커스 이탈·사망은 이전 공격 예약을 취소하고 부활 직전의 죽은 상태 입력도 버린다', async () => {

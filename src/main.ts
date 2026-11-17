@@ -30,10 +30,16 @@ const game = new Phaser.Game({
 
 // 화면 갱신(requestAnimationFrame)마다 그리지 않고 frameRate.fps만큼만 그린다(core/frameRate.ts).
 // 건너뛴 갱신에서는 Phaser의 시계도 멈춰 있으므로, 다음에 그릴 때 지난 시간 전체가 한 번에 넘어간다.
-const loop = game.loop as Phaser.Core.TimeStep & { lastTime: number };
+// 간격은 Phaser의 lastTime이 아니라 우리가 마지막으로 그린 실제 시각(performance.now)으로 잰다.
+// lastTime은 시작할 때 performance.now()로 잡히는데, 브라우저가 넘겨주는 프레임 시각은 그보다 뒤처질 수 있어서
+// (헤드리스 브라우저 등) 그 차이로 재면 첫 프레임을 영영 건너뛰어 게임이 시작되지 않았다.
+const loop = game.loop;
 const loopStep = loop.step.bind(loop);
+let lastDrawn = -Infinity;
 loop.step = (time: number) => {
-  if (!shouldRunFrame(time - loop.lastTime, frameRate.fps)) return;
+  const now = performance.now();
+  if (!shouldRunFrame(now - lastDrawn, frameRate.fps)) return;
+  lastDrawn = now;
   loopStep(time);
 };
 
