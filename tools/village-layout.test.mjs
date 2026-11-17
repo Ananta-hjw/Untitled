@@ -1,3 +1,4 @@
+import { mapLength } from '../src/world/mapScale.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -25,7 +26,7 @@ test('시작점과 모든 건물의 문 앞은 걸을 수 있고, 건물의 벽�
     assert.equal(containsIn(b.area, b.door.x, b.door.y), true, `${b.frame} door`);
     for (const wall of b.footprint) {
       if (wall.y < WALK_BOUNDS.bottom) assert.equal(containsIn(b.area, wall.x, wall.y), false, `${b.frame} wall`);
-      assert.ok(wall.y + wall.ry <= b.y + 40, `${b.frame} wall below the art`);
+      assert.ok(wall.y + wall.ry <= b.y + mapLength(40), `${b.frame} wall below the art`);
     }
   }
 });
@@ -44,7 +45,7 @@ test('건물 벽은 서로 겹치지 않고, 건물 그림은 맵 안에 있다'
 
 test('남쪽 입구는 아치 기둥 사이로만 지나간다', () => {
   const y = BUILDINGS.find(b => b.frame === 'south-gate').y - 20;
-  for (let x = 900; x <= 1460; x += 8) {
+  for (let x = mapLength(900); x <= mapLength(1460); x += 8) {
     const open = x >= SOUTH_GATE_PASSAGE.left && x <= SOUTH_GATE_PASSAGE.right;
     assert.equal(contains(x, y), open, `x=${x}`);
   }

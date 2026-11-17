@@ -1,3 +1,4 @@
+import { mapPoint } from '../world/mapScale';
 import { interiorArtRect } from '../world/interiors';
 import Phaser from 'phaser';
 import { App } from '@capacitor/app';
@@ -1584,7 +1585,7 @@ export class GameScene extends Phaser.Scene {
       this.clearQuickItemInput();
       for (const key of this.dodgeKeys) Phaser.Input.Keyboard.JustDown(key);
       if (beforePhase !== chapterPhase(this.quests)) {
-        const at = { x: 1180, y: 1130 };
+        const at = mapPoint({ x: 1180, y: 1130 });
         this.travel({ to: 'village', arrive: at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: at });
       }
     });

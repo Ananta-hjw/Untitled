@@ -1,3 +1,4 @@
+import { mapPoint } from './mapScale.ts';
 import { MAP_SIZE_SCALE } from '../config.ts';
 import type { Obstacle } from './obstacles.ts';
 import type { BuildingFrame } from './villageLayout.ts';
@@ -206,7 +207,7 @@ export function interiorShop(id: InteriorId): { x: number; y: number; inside: In
 }
 
 /** 실내를 월드 좌표에 놓는 곳: 방 가운데 */
-export const ROOM_CENTER = { x: 1200, y: 820 };
+export const ROOM_CENTER = mapPoint({ x: 1200, y: 820 });
 
 export function interiorFor(building: BuildingFrame): Interior | undefined {
   return INTERIORS.find((i) => i.building === building);

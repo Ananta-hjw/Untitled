@@ -1,3 +1,4 @@
+import { mapLength, mapPoint, mapObstacle, mapProp } from './mapScale.ts';
 import { WORLD_WIDTH, WORLD_HEIGHT } from '../config.ts';
 import type { Obstacle } from './obstacles';
 
@@ -13,15 +14,15 @@ import type { Obstacle } from './obstacles';
  * 좌표는 그림 아래 가운데(바닥에 닿는 곳) 기준이다.
  */
 
-export const PLAYER_SPAWN = { x: 430, y: 640 };
+export const PLAYER_SPAWN = mapPoint({ x: 430, y: 640 });
 // Reserve room for the full walking sprite and its name plate at camera boundaries.
-export const WALK_BOUNDS = { left: 64, top: 224, right: WORLD_WIDTH - 64, bottom: WORLD_HEIGHT - 40 };
+export const WALK_BOUNDS = { left: mapLength(64), top: mapLength(224), right: WORLD_WIDTH - mapLength(64), bottom: WORLD_HEIGHT - mapLength(40) };
 
 /** 마을의 두 맵 (maps.ts의 MapId와 같은 이름) */
 export type VillageArea = 'village' | 'village-north';
 
 /** 두 맵을 잇는 가운데 길 (북쪽 맵의 아래 끝, 광장의 위 끝) */
-export const VILLAGE_LINK = { left: 1100, right: 1260 };
+export const VILLAGE_LINK = { left: mapLength(1100), right: mapLength(1260) };
 
 export type BuildingFrame =
   | 'family-house' | 'training-hall' | 'chief-house' | 'clinic'
@@ -63,13 +64,13 @@ const body = (x: number, y: number, width: number, top: number): Obstacle =>
 
 // 북쪽 맵 위쪽 줄 건물(시온의 집, 촌장의 집, 치유소)은 뒤쪽 벽이 걸을 수 있는 영역의 위쪽 끝에 닿아,
 // 지붕 뒤의 좁은 틈으로 들어가 캐릭터가 통째로 가려지는 일이 없다.
-export const BUILDINGS: Building[] = [
+const BASE_BUILDINGS: Building[] = [
   { frame: 'family-house', area: 'village-north', x: 430, y: 540, width: 500, label: '시온의 집',
-    footprint: [body(430, 540, 500, WALK_BOUNDS.top)], door: { x: 415, y: 580 } },
+    footprint: [body(430, 540, 500, 224)], door: { x: 415, y: 580 } },
   { frame: 'chief-house', area: 'village-north', x: 1180, y: 470, width: 380, label: '촌장의 집',
-    footprint: [body(1180, 470, 380, WALK_BOUNDS.top)], door: { x: 1180, y: 510 } },
+    footprint: [body(1180, 470, 380, 224)], door: { x: 1180, y: 510 } },
   { frame: 'clinic', area: 'village-north', x: 1950, y: 500, width: 540, label: '치유소',
-    footprint: [body(1950, 500, 540, WALK_BOUNDS.top)], door: { x: 1930, y: 540 } },
+    footprint: [body(1950, 500, 540, 224)], door: { x: 1930, y: 540 } },
   // 시온의 집과 같은 폭. 큰 가로길 위쪽 풀밭에 두어 집과 충돌 영역 모두 길에서 벗어난다.
   { frame: 'linea-house', area: 'village-north', x: 430, y: 890, width: 500, label: '리네아의 집',
     footprint: [body(430, 890, 500, 740)], door: { x: 404, y: 930 } },
@@ -88,17 +89,21 @@ export const BUILDINGS: Building[] = [
     footprint: [wall(867, 1470, 1134, 1700), wall(1228, 1540, 1481, 1700)], door: { x: 1181, y: 1540 } },
 ];
 
+export const BUILDINGS: Building[] = BASE_BUILDINGS.map(b => ({
+  ...mapPoint(b), width: mapLength(b.width), footprint: b.footprint.map(mapObstacle), door: mapPoint(b.door),
+}));
+
 export function buildingsIn(area: VillageArea): Building[] {
   return BUILDINGS.filter((b) => b.area === area);
 }
 
 /** 남쪽 입구 아치의 통로 (두 기둥 사이) */
-export const SOUTH_GATE_PASSAGE = { left: 1134, right: 1228 };
+export const SOUTH_GATE_PASSAGE = { left: mapLength(1134), right: mapLength(1228) };
 
 export const HOME = BUILDINGS[0];
 export const LINEA_HOME = BUILDINGS.find((b) => b.frame === 'linea-house')!;
 /** 문 옆의 앞마당. 평상시 대화와 습격 뒤 간호 인물들이 같은 집 앞을 기준으로 선다. */
-export const LINEA_YARD = { x: LINEA_HOME.door.x + 220, y: LINEA_HOME.door.y };
+export const LINEA_YARD = { x: LINEA_HOME.door.x + mapLength(220), y: LINEA_HOME.door.y };
 
 export interface VillageProp {
   frame: 'oak' | 'pine' | 'boulders' | 'shrub' | 'rock' | 'flowers' | 'sign' | 'stump';
@@ -109,7 +114,7 @@ export interface VillageProp {
 }
 
 /** 광장(village)의 소품. 수관 전체가 좌우 돌담 안에 들어오도록 둔다. */
-export const PROPS: VillageProp[] = [
+const BASE_PROPS: VillageProp[] = [
   // 마을 한가운데 큰 나무
   { frame: 'oak', x: 1180, y: 900, width: 420, footprint: { rx: 46, ry: 28 } },
   // 위쪽: 북쪽 맵으로 가는 길(가운데) 양옆의 숲
@@ -139,7 +144,7 @@ export const PROPS: VillageProp[] = [
 ];
 
 /** 북쪽 맵(village-north)의 소품: 집 사이의 나무와 텃밭 꽃 */
-export const NORTH_PROPS: VillageProp[] = [
+const BASE_NORTH_PROPS: VillageProp[] = [
   { frame: 'pine', x: 820, y: 720, width: 210, footprint: { rx: 25, ry: 18 } },
   { frame: 'pine', x: 790, y: 330, width: 220, footprint: { rx: 26, ry: 18 } },
   { frame: 'oak', x: 1540, y: 330, width: 290, footprint: { rx: 34, ry: 22 } },
@@ -165,6 +170,9 @@ export const NORTH_PROPS: VillageProp[] = [
   { frame: 'flowers', x: 690, y: 950, width: 65 },
   { frame: 'flowers', x: 1700, y: 1250, width: 60 },
 ];
+
+export const PROPS = BASE_PROPS.map(mapProp);
+export const NORTH_PROPS = BASE_NORTH_PROPS.map(mapProp);
 
 /** 소품의 바닥 접점(줄기·바위 밑동)만 장애물로 만든다. 다른 맵도 같은 규칙을 쓴다. */
 export function propObstacles(props: readonly VillageProp[]): Obstacle[] {

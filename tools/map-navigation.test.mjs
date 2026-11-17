@@ -20,7 +20,7 @@ test('출구에서 떨어지면 안내하지 않으며, 길이 없는 경계와 
   assert.equal(nearbyExit(map,{x:1200,y:800}),undefined);
   assert.equal(nearbyExit(map,{x:map.bounds.left,y:450}),undefined);
   const west=map.exits.find(e=>e.to==='west-forest');
-  assert.equal(nearbyExit(map,{x:west.zone.right+EXIT_NOTICE_DISTANCE,y:1050}),west);
-  assert.equal(nearbyExit(map,{x:west.zone.right+EXIT_NOTICE_DISTANCE+1,y:1050}),undefined);
+  assert.equal(nearbyExit(map,{x:west.zone.right+EXIT_NOTICE_DISTANCE,y:(west.zone.top+west.zone.bottom)/2}),west);
+  assert.equal(nearbyExit(map,{x:west.zone.right+EXIT_NOTICE_DISTANCE+1,y:(west.zone.top+west.zone.bottom)/2}),undefined);
   for(const m of Object.values(MAPS).filter(m=>m.interior)) assert.equal(nearbyExit(m,m.spawn),undefined);
 });

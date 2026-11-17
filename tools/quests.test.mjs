@@ -16,9 +16,35 @@ test('퀘스트는 마을 사람이 주고, 대사의 화자와 그림이 그 �
     if (q.objective.map) assert.ok(MAPS[q.objective.map], q.id);
     if (q.objective.event === 'talk') assert.ok(names[q.objective.npc] && (q.target?.length || q.steps?.[0].lines?.length), q.id);
     assert.ok(q.objective.need > 0 && q.rewardXp > 0, q.id);
-    for (const l of [...q.offer, ...q.reminder, ...q.done, ...(q.target ?? []), ...(q.steps ?? []).flatMap(o => o.lines ?? [])]) {
+    for (const l of [...q.offer, ...q.reminder, ...Object.values(q.remindersByNpc ?? {}).flat(), ...q.done, ...(q.target ?? []), ...(q.steps ?? []).flatMap(o => o.lines ?? [])]) {
       if (l.portrait && l.portrait !== 'hero-neutral') assert.equal(l.speaker, names[l.portrait], `${q.id}: ${l.text}`);
     }
+  }
+});
+
+test('순찰 조사 전에는 테온 자신의 안내를 하고, 조사 후에는 정상 보고로 이어진다', () => {
+  const state = { 'evening-patrol': { status: 'active', count: 0 }, 'teon-lunch': { status: 'done', count: 1 } };
+  const before = talkTo('teon', state);
+  assert.ok(before.lines.length);
+  assert.ok(before.lines.every(l => l.speaker === '테온' && l.portrait === 'teon'));
+  assert.deepEqual(before.state, state);
+  assert.equal(before.completed, undefined);
+  assert.equal(talkTo('herman', state).lines[0].speaker, '헤르만');
+  const inspected = recordEvent(state, { type: 'inspect', map: 'village', spot: 'south-watch' });
+  const report = talkTo('teon', inspected.state);
+  assert.equal(report.completed.id, 'evening-patrol');
+  assert.equal(report.next.id, 'moth-trail');
+  assert.ok(report.lines.some(l => l.portrait === 'teon'));
+  assert.ok(report.lines.every(l => l.portrait !== 'herman'));
+});
+
+test('다른 보고 대상에게 의뢰인 전용 안내를 대신 말하게 하지 않는다', () => {
+  for (const q of QUESTS.filter(q => q.turnIn && q.turnIn !== q.giver && !q.remindersByNpc?.[q.turnIn])) {
+    // 앞선 메인과 서브는 끝낸 상태로 두고 보고 전에만 말을 건다.
+    const state = Object.fromEntries(QUESTS.map(def => [def.id, { status: 'done', count: 1 }]));
+    state[q.id] = { status: 'active', count: 0 };
+    if ((q.steps?.[0] ?? q.objective).event === 'talk' && (q.steps?.[0] ?? q.objective).npc === q.turnIn) continue;
+    assert.equal(talkTo(q.turnIn, state), undefined, q.id);
   }
 });
 

@@ -42,6 +42,20 @@ export function drawFieldArt(scene: Phaser.Scene): void {
       ctx.closePath(); ctx.clip();
       const source = scene.textures.get(key).getSourceImage() as HTMLImageElement;
       ctx.drawImage(source, left, top, width, height, 0, 0, width, height);
+      // 수관의 바깥 윤곽만으로는 가지 사이의 풀밭까지 복사된다.
+      // 텍스처를 만들 때 한 번 제거하여 캐릭터를 가리는 사각 지대를 없앤다.
+      if ('holes' in layer) {
+        ctx.globalCompositeOperation = 'destination-out';
+        for (const hole of layer.holes) {
+          ctx.beginPath();
+          for (let i = 0; i < hole.length; i += 2) {
+            const x = hole[i] - left, y = hole[i + 1] - top;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+          ctx.closePath(); ctx.fill();
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
       texture.refresh();
     }
     scene.add.image(left * FIELD_SCALE, top * FIELD_SCALE, foregroundKey).setOrigin(0)

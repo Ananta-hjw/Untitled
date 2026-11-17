@@ -1,3 +1,4 @@
+import { mapLength, mapPoint } from '../world/mapScale.ts';
 import type { DialogueLine } from './dialogues.ts';
 import { currentObjective, questDef, type QuestState } from './quests.ts';
 import { GUARDS, isGuardId } from '../world/guards.ts';
@@ -30,26 +31,26 @@ export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: Ma
   }
   return source.filter(n => n.id !== 'sia' && !(phase === 'raid' && n.id === 'linea')).map(n => {
     if (n.id === 'eila') {
-      const outside: NpcDef = { ...n, area: phase === 'raid' ? 'village' : 'village-north', x: phase === 'raid' ? 1540 : LINEA_YARD.x + 130, y: phase === 'raid' ? 1200 : LINEA_YARD.y, wander: undefined };
+      const outside: NpcDef = { ...n, area: phase === 'raid' ? 'village' : 'village-north', x: phase === 'raid' ? mapLength(1540) : LINEA_YARD.x + mapLength(130), y: phase === 'raid' ? mapLength(1200) : LINEA_YARD.y, wander: undefined };
       delete outside.inside;
       delete outside.talkOffset;
       return outside;
     }
     if (n.inside) return { ...n };
-    if (n.id === 'ruan') return { ...n, x: 1080, y: 1150, wander: undefined };
-    if (n.id === 'serena') return { ...n, x: phase === 'raid' ? 1500 : LINEA_YARD.x + 140, y: phase === 'raid' ? 1100 : LINEA_YARD.y + 90, wander: undefined };
+    if (n.id === 'ruan') return { ...n, ...mapPoint({ x: 1080, y: 1150 }), wander: undefined };
+    if (n.id === 'serena') return { ...n, x: phase === 'raid' ? mapLength(1500) : LINEA_YARD.x + mapLength(140), y: phase === 'raid' ? mapLength(1100) : LINEA_YARD.y + mapLength(90), wander: undefined };
     if (n.id === 'linea') return { ...n, ...LINEA_YARD, wander: undefined };
     return { ...n, wander: undefined };
   });
 }
 
 const SPOTS = {
-  'south-watch': { id: 'story-south-watch', x: 1180, y: 1340, radius: 95, markerHeight: 55 },
-  'home-search': { id: 'story-home-search', x: 415, y: 640, radius: 85, markerHeight: 55 },
+  'south-watch': { id: 'story-south-watch', ...mapPoint({ x: 1180, y: 1340 }), radius: 95, markerHeight: 55 },
+  'home-search': { id: 'story-home-search', ...mapPoint({ x: 415, y: 640 }), radius: 85, markerHeight: 55 },
   // 해 질 무렵 남쪽 들판: 나방이 모여 앉았던 풀숲
   'moth-nest': { id: 'story-moth-nest', ...fieldPoint(1250, 860), radius: 95, markerHeight: 55 },
   // 습격 중 마을 북쪽: 리네아의 집 옆 골목
-  'north-alley': { id: 'story-north-alley', x: LINEA_YARD.x + 120, y: LINEA_YARD.y + 70, radius: 95, markerHeight: 55 },
+  'north-alley': { id: 'story-north-alley', x: LINEA_YARD.x + mapLength(120), y: LINEA_YARD.y + mapLength(70), radius: 95, markerHeight: 55 },
 } satisfies Record<string, Interactable>;
 
 export function chapterSpots(state: QuestState, map: MapId): Interactable[] {
@@ -98,10 +99,10 @@ const executioner = (x: number, y: number): RaidSpawn => ({ x, y, key: 'corrosio
  * 마지막 무리에는 부식의 집행자가 길을 막는다.
  */
 export const RAID_WAVES: Array<{ step: number; map: MapId; spawns: RaidSpawn[] }> = [
-  { step: 0, map: 'village', spawns: [tracker(1180, 1320), tracker(1310, 1220), tracker(1460, 1130)] },
-  { step: 2, map: 'village', spawns: [tracker(inn.x - 260, inn.y + 30), tracker(inn.x + 180, inn.y + 40), tracker(inn.x - 90, inn.y + 45)] },
-  { step: 4, map: 'village-north', spawns: [tracker(LINEA_YARD.x + 260, LINEA_YARD.y + 90), executioner(LINEA_YARD.x + 380, LINEA_YARD.y - 20),
-    tracker(LINEA_YARD.x + 120, LINEA_YARD.y + 170)] },
+  { step: 0, map: 'village', spawns: [tracker(mapLength(1180), mapLength(1320)), tracker(mapLength(1310), mapLength(1220)), tracker(mapLength(1460), mapLength(1130))] },
+  { step: 2, map: 'village', spawns: [tracker(inn.x - mapLength(260), inn.y + mapLength(30)), tracker(inn.x + mapLength(180), inn.y + mapLength(40)), tracker(inn.x - mapLength(90), inn.y + mapLength(45))] },
+  { step: 4, map: 'village-north', spawns: [tracker(LINEA_YARD.x + mapLength(260), LINEA_YARD.y + mapLength(90)), executioner(LINEA_YARD.x + mapLength(380), LINEA_YARD.y - mapLength(20)),
+    tracker(LINEA_YARD.x + mapLength(120), LINEA_YARD.y + mapLength(170))] },
 ];
 
 /** 습격 중 이 맵에 나올 수 있는 모든 권속 (그림을 미리 읽어 두려고 쓴다). */

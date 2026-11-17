@@ -28,7 +28,7 @@ export function nearbyExit(map: GameMap, player: Point): MapExit | undefined {
     const dx = player.x - Math.max(z.left, Math.min(z.right, player.x));
     const dy = player.y - Math.max(z.top, Math.min(z.bottom, player.y));
     const d = Math.hypot(dx, dy);
-    if (d <= distance) { nearest = exit; distance = d; }
+    if (d <= distance + 1e-7) { nearest = exit; distance = d; }
   }
   return nearest;
 }
