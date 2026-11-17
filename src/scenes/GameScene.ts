@@ -42,6 +42,7 @@ import { Character } from '../entities/Character';
 import { addXp, statsForLevel, xpToNext, type LevelStats, type Progress } from '../entities/progression';
 import { browserStorage, loadProgress, saveProgress, type SaveStorage } from '../entities/saveData';
 import { ActionButton } from '../ui/ActionButton';
+import { actionIcon, createActionIcons, type ActionIcon } from '../ui/actionIcons';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { HERO_SPRITE_HEIGHT, HeroSprite, preloadHeroSprite } from '../entities/HeroSprite';
 import { attackFacingFor, attackVector, insideAttackLane, movementFacing, strikePoseStart } from '../entities/heroFrames';
@@ -174,7 +175,8 @@ export class GameScene extends Phaser.Scene {
   private damageNumbers!: DamageNumbers;
   private progressEffects!: ProgressEffects;
   private dialogue!: DialogueBox;
-  private talkButton!: ActionButton;
+  private primaryAction: ActionIcon = 'attack';
+  private suppressAttackUntilRelease = false;
   private pauseButton!: ActionButton;
   private pauseMenu!: PauseMenu;
   private pauseKeys: Phaser.Input.Keyboard.Key[] = [];
@@ -513,7 +515,7 @@ export class GameScene extends Phaser.Scene {
     });
     // 공명 버튼: 물약 칸 위(자리는 layout). 키 F.
     this.resonanceButton = new ActionButton(this, {
-      x: 0, y: 0, radius: BUTTON_RADIUS.resonance, label: '공명', color: 0x6a4a12, fontSize: 22, cooldown: true,
+      x: 0, y: 0, radius: BUTTON_RADIUS.resonance, label: '공명', icon: actionIcon('resonance'), color: 0x6a4a12, fontSize: 22, cooldown: true,
     });
     this.resonanceButton.setSizeScale(sizeScale(this.settings.buttonSize));
     this.resonanceKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F)] : [];
@@ -663,6 +665,8 @@ export class GameScene extends Phaser.Scene {
     this.opening?.update(time);
     this.updateRespawns(time);
     this.updateAttackLunge(time);
+    this.updateInteraction(time);
+    if (this.traveling || this.menuOpen()) return;
     this.updatePlayer(time, dt);
     this.drawShield(time);
     if (this.checkExit()) return;
@@ -677,7 +681,6 @@ export class GameScene extends Phaser.Scene {
     for (const door of this.doorMarkers) if (door.marker) door.text.setY(door.spot.y - 150 - Math.abs(Math.sin(time / 320)) * 8);
     this.applyKnockback(this.player, dt);
     this.damageNumbers.update(gameStep);
-    this.updateInteraction(time);
     this.updatePotion(time);
     this.updateSkill(time, gameStep);
     this.updateResonance(time);
@@ -801,7 +804,7 @@ export class GameScene extends Phaser.Scene {
     this.traveling = true;
     this.clearAttackInput();
     this.player.setMotion(false);
-    this.talkButton.setVisible(false);
+    this.attackButton.setVisible(false);
     this.talkMarker.setVisible(false);
     const data: SceneData = { map: exit.to, at: exit.arrive, hp: this.player.hp, herb: this.herb, mp: this.mp,
       resonance: Math.max(0, this.resonanceUntil - this.now) };
@@ -820,16 +823,10 @@ export class GameScene extends Phaser.Scene {
       canGrab: () => !this.menuOpen() && !this.opening,
     });
 
-    this.attackButton = new ActionButton(this, { x: 0, y: VIEW_HEIGHT - 170, label: '공격' });
-    this.talkButton = new ActionButton(this, {
-      x: 0,
-      y: VIEW_HEIGHT - 340,
-      radius: 56,
-      label: '대화',
-      color: 0x3d6b3a,
-      fontSize: 24,
-    });
-    this.talkButton.setVisible(false);
+    createActionIcons(this);
+    this.primaryAction = 'attack';
+    this.suppressAttackUntilRelease = false;
+    this.attackButton = new ActionButton(this, { x: 0, y: VIEW_HEIGHT - 170, label: '공격', fontSize: 22, icon: actionIcon('attack') });
     // 대화창은 화면 어디를 눌러도 넘어간다.
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onDialoguePointer, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -840,11 +837,12 @@ export class GameScene extends Phaser.Scene {
       y: VIEW_HEIGHT - 95,
       radius: BUTTON_RADIUS.dodge,
       label: '회피',
+      icon: actionIcon('dodge'),
       cooldown: true,
       color: 0x2f4a86,
       fontSize: 24,
     });
-    this.blockButton = new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.block, label: '막기', color: 0x5a6b7a, fontSize: 22, cooldown: true });
+    this.blockButton = new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.block, label: '막기', icon: actionIcon('block'), color: 0x5a6b7a, fontSize: 22, cooldown: true });
     this.blockKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L)] : [];
     this.shield = this.add.graphics().setVisible(false);
 
@@ -936,7 +934,6 @@ export class GameScene extends Phaser.Scene {
     this.attackButton.setPosition(buttons.attack.x, buttons.attack.y);
     this.dodgeButton.setPosition(buttons.dodge.x, buttons.dodge.y);
     this.blockButton?.setPosition(buttons.block.x, buttons.block.y);
-    this.talkButton.setPosition(buttons.talk.x, buttons.talk.y);
     this.potionButton?.setPosition(buttons.items[0].x, buttons.items[0].y);
     this.lunchButton?.setPosition(buttons.items[1].x, buttons.items[1].y);
     this.resonanceButton?.setPosition(buttons.resonance.x, buttons.resonance.y);
@@ -981,6 +978,7 @@ export class GameScene extends Phaser.Scene {
     for (const key of this.dodgeKeys) {
       if (Phaser.Input.Keyboard.JustDown(key)) dodgePressed = true;
     }
+    if (!this.attackButton.isDown && !this.attackKeys.some(key => key.isDown)) this.suppressAttackUntilRelease = false;
     const attackPressed = this.attackButton.consumePress() || this.keyboardAttackPressed;
     this.keyboardAttackPressed = false;
     let parryPressed = this.blockButton?.consumePress() ?? false;
@@ -1000,7 +998,7 @@ export class GameScene extends Phaser.Scene {
     if (this.attackBufferedUntil !== undefined && time > this.attackBufferedUntil) {
       this.attackBufferedUntil = undefined;
     }
-    if (attackPressed && !this.opening) {
+    if (attackPressed && !this.opening && !this.suppressAttackUntilRelease && this.primaryAction === 'attack') {
       this.attackBufferedUntil = time + PLAYER.attackBufferMs;
       if (player.sprite instanceof HeroSprite && player.sprite.isInFollowPause) {
         this.attackBufferedUntil = Math.max(this.attackBufferedUntil, this.nextAttackAt + 1);
@@ -1128,8 +1126,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private wantsAttack(time = this.now): boolean {
-    return this.attackButton.isDown || this.attackKeys.some((key) => key.isDown) ||
-      (this.attackBufferedUntil !== undefined && time <= this.attackBufferedUntil);
+    return this.primaryAction === 'attack' && !this.suppressAttackUntilRelease && (this.attackButton.isDown || this.attackKeys.some((key) => key.isDown) ||
+      (this.attackBufferedUntil !== undefined && time <= this.attackBufferedUntil));
   }
 
   /** 회피 시작. 조이스틱 방향으로, 입력이 없으면 바라보는 쪽으로 미끄러진다. */
@@ -1402,7 +1400,6 @@ export class GameScene extends Phaser.Scene {
     this.attackButton.setSizeScale(buttons);
     this.dodgeButton.setSizeScale(buttons);
     this.blockButton?.setSizeScale(buttons);
-    this.talkButton.setSizeScale(buttons);
     this.potionButton?.setSizeScale(buttons);
     this.lunchButton?.setSizeScale(buttons);
     this.resonanceButton?.setSizeScale(buttons);
@@ -1433,12 +1430,13 @@ export class GameScene extends Phaser.Scene {
 
   /** 메뉴를 닫을 때 메뉴를 누르던 입력이 공격·회피·대화로 이어지지 않게 비운다. */
   private onResume(): void {
+    this.attackButton.setVisible(true);
+    this.suppressAttackUntilRelease = true;
     this.pauseButton.setVisible(true);
     this.characterButton?.setVisible(true);
     this.characterButton?.consumePress();
     this.clearAttackInput();
     this.dodgeButton.consumePress();
-    this.talkButton.consumePress();
     this.pauseButton.consumePress();
     this.clearQuickItemInput();
     for (const key of [...this.dodgeKeys, ...this.talkKeys, ...this.attackKeys, ...this.mapKeys]) Phaser.Input.Keyboard.JustDown(key);
@@ -1446,9 +1444,9 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- 대화
 
-  /** 대화 버튼이나 E·Enter 키를 이번 프레임에 눌렀는지. 눌림은 한 번만 센다. */
+  /** E·Enter 보조 상호작용 키의 눌림을 한 번만 센다. */
   private talkPressed(): boolean {
-    let pressed = this.talkButton.consumePress();
+    let pressed = false;
     for (const key of this.talkKeys) {
       if (Phaser.Input.Keyboard.JustDown(key)) pressed = true;
     }
@@ -1464,18 +1462,27 @@ export class GameScene extends Phaser.Scene {
     return this.enemies.some((e) => e.state === 'chase' || e.state === 'windup' || e.state === 'recover');
   }
 
-  /** 가까이 있는 대상을 찾아 말풍선과 대화 버튼을 보여 주고, 누르면 대화를 연다. */
+  private setPrimaryAction(action: ActionIcon, label: string): void {
+    if (this.primaryAction === action) return;
+    this.primaryAction = action;
+    const icon = actionIcon(action);
+    this.attackButton.setLabel(label);
+    this.attackButton.setIcon(icon.texture, icon.frame);
+  }
+
+  /** 대상을 먼저 찾아 주 행동 버튼을 전환하고, 전투 입력을 받기 전에 상호작용을 처리한다. */
   private updateInteraction(time: number): void {
     const player = this.player;
     if (this.opening) {
-      this.talkButton.setVisible(false);
+      this.attackButton.setVisible(false);
       this.talkMarker.setVisible(false);
       this.talkPressed();
       return;
     }
     const free = player.alive && !player.isAttacking && this.dodgeProgress >= 1 && !this.inCombat();
     const target = free ? findInteractable(player.x, player.y, this.interactables) : undefined;
-    this.talkButton.setVisible(!!target);
+    this.attackButton.setVisible(true);
+    if (!target) this.setPrimaryAction('attack', '공격');
 
     const marker = this.talkMarker;
     if (!target) {
@@ -1488,10 +1495,15 @@ export class GameScene extends Phaser.Scene {
     const enter = target.enter;
     // 실내에서 바깥으로 나가는 문은 "나가기"
     const leaving = enter && !enter.to.startsWith('in-');
-    this.talkButton.setLabel(leaving ? '나가기' : enter ? '들어가기' : target.id.startsWith('story-') ? '살펴보기' : target.id.startsWith('rest-') ? '쉬기' : target.id.startsWith('heal-') ? '치료받기' : '대화');
+    const action: ActionIcon = leaving ? 'exit' : enter ? 'enter' : target.id.startsWith('story-') ? 'inspect' : target.id.startsWith('rest-') ? 'rest' : target.id.startsWith('heal-') ? 'heal' : 'talk';
+    this.setPrimaryAction(action, leaving ? '나가기' : enter ? '들어가기' : action === 'inspect' ? '살펴보기' : action === 'rest' ? '쉬기' : action === 'heal' ? '치료받기' : '대화');
     marker.setText(leaving ? '▼ 나가기' : enter ? `▲ ${enter.label}` : '···');
 
-    if (!this.talkPressed()) return;
+    const pressed = this.attackButton.consumePress() || this.keyboardAttackPressed;
+    const talk = this.talkPressed();
+    if (pressed || this.attackButton.isDown || this.attackKeys.some(key => key.isDown)) this.suppressAttackUntilRelease = true;
+    this.clearAttackInput();
+    if (!pressed && !talk) return;
     if (enter && isMapId(enter.to)) {
       this.hud.dismissHint();
       this.travel({ to: enter.to, arrive: enter.at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: enter.at });
@@ -1533,7 +1545,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.dismissHint();
     this.clearAttackInput();
     player.setMotion(false, target.x - player.x);
-    this.talkButton.setVisible(false);
+    this.attackButton.setVisible(false);
     this.talkMarker.setVisible(false);
     // 마을 사람이면 퀘스트 대화를 먼저 본다. 퀘스트와 상관없으면 평소 대사.
     const quest = target.id.startsWith('npc-') ? talkTo(target.id.slice(4) as NpcId, this.quests) : undefined;
@@ -1943,7 +1955,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.worldMap || this.quickSlotPanel?.isOpen || this.storyChoice?.isOpen || this.worldMap.isOpen || this.dialogue.isOpen || this.pauseMenu.isOpen || this.itemPanel?.isOpen || this.characterPanel?.isOpen || this.traveling) return;
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
-    this.talkButton.setVisible(false);
+    this.attackButton.setVisible(false);
     this.talkMarker.setVisible(false);
     this.pauseButton.setVisible(false);
     this.characterButton?.setVisible(false);
@@ -2059,7 +2071,7 @@ export class GameScene extends Phaser.Scene {
       || this.itemPanel?.isOpen || this.worldMap?.isOpen || this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return;
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
-    this.talkButton.setVisible(false);
+    this.attackButton.setVisible(false);
     this.talkMarker.setVisible(false);
     this.pauseButton.setVisible(false);
     this.characterButton?.setVisible(false);
@@ -2088,7 +2100,7 @@ export class GameScene extends Phaser.Scene {
     this.setQuickButtonsVisible(false);
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
-    this.talkButton.setVisible(false);
+    this.attackButton.setVisible(false);
     this.talkMarker.setVisible(false);
     this.pauseButton.setVisible(false);
     this.characterButton?.setVisible(false);

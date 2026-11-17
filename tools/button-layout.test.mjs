@@ -6,13 +6,13 @@ import { MAX_ASPECT, MIN_ASPECT, VIEW_HEIGHT } from '../src/config.ts';
 const SCALES = [0.85, 1, 1.18];
 const circles = (layout, scale) => [
   ['attack', layout.attack, BUTTON_RADIUS.attack], ['dodge', layout.dodge, BUTTON_RADIUS.dodge],
-  ['block', layout.block, BUTTON_RADIUS.block], ['talk', layout.talk, BUTTON_RADIUS.talk],
+  ['block', layout.block, BUTTON_RADIUS.block],
   ['resonance', layout.resonance, BUTTON_RADIUS.resonance],
   ...layout.items.map((p, i) => [`item${i}`, p, BUTTON_RADIUS.item]),
   ...layout.skills.map((p, i) => [`skill${i}`, p, BUTTON_RADIUS.skill]),
 ].map(([name, p, r]) => ({ name, ...p, r: r * scale }));
 
-test('전투 버튼(공격·회피·막기·아이템 둘·공명·기술 다섯·대화)의 터치 범위는 어느 화면 비율·버튼 크기에서도 겹치지 않는다', () => {
+test('전투 버튼(공격·회피·막기·아이템 둘·공명·기술 다섯)의 터치 범위는 어느 화면 비율·버튼 크기에서도 겹치지 않는다', () => {
   for (const aspect of [MIN_ASPECT, 16 / 9, 2, MAX_ASPECT]) {
     const width = Math.round(VIEW_HEIGHT * aspect);
     for (const scale of SCALES) {

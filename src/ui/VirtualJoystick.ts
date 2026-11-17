@@ -202,23 +202,29 @@ export class VirtualJoystick {
     const pad = 6;
     const size = (radius + pad) * 2;
     const g = scene.make.graphics({}, false);
-    g.fillStyle(0x000000, 0.45);
+    g.fillStyle(0x101916, 0.5);
     g.fillCircle(size / 2, size / 2, radius);
-    g.lineStyle(4, 0xe9d7b0, 0.9);
+    g.lineStyle(1.5, 0xd1b47a, 0.85);
     g.strokeCircle(size / 2, size / 2, radius);
-    g.lineStyle(2, 0xe9d7b0, 0.25);
+    g.lineStyle(1, 0xc9a369, 0.3);
+    g.strokeCircle(size / 2, size / 2, radius - 6);
+    g.lineStyle(1, 0xc9a369, 0.16);
     g.strokeCircle(size / 2, size / 2, radius * 0.55);
     g.generateTexture('joy-base', size, size);
 
     const thumbRadius = Math.round(radius * 0.42);
     const thumbSize = (thumbRadius + pad) * 2;
     g.clear();
-    g.fillStyle(0xe9d7b0, 0.95);
+    g.fillStyle(0xb69861, 0.95);
     g.fillCircle(thumbSize / 2, thumbSize / 2, thumbRadius);
-    g.lineStyle(3, 0x5b4326, 1);
-    g.strokeCircle(thumbSize / 2, thumbSize / 2, thumbRadius);
-    g.fillStyle(0xffffff, 0.35);
-    g.fillCircle(thumbSize / 2 - thumbRadius * 0.25, thumbSize / 2 - thumbRadius * 0.3, thumbRadius * 0.35);
+    g.fillStyle(0x1c2521, 0.98);
+    g.fillCircle(thumbSize / 2, thumbSize / 2, thumbRadius - 2);
+    g.fillStyle(0x394038, 0.7);
+    g.fillCircle(thumbSize / 2 - 2, thumbSize / 2 - 3, thumbRadius - 6);
+    g.lineStyle(1, 0xe9d4a0, 0.35);
+    g.strokeCircle(thumbSize / 2, thumbSize / 2, thumbRadius - 6);
+    g.fillStyle(0xe9d4a0, 0.6);
+    g.fillCircle(thumbSize / 2, thumbSize / 2, 2);
     g.generateTexture('joy-thumb', thumbSize, thumbSize);
     g.destroy();
   }

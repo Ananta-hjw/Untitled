@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { cooldownDisplay } from './cooldownDisplay';
+import { buttonSkin } from './buttonSkin';
 import { DEPTH_UI } from '../config';
 
 export interface ActionButtonOptions {
@@ -43,34 +44,19 @@ export class ActionButton {
   constructor(scene: Phaser.Scene, options: ActionButtonOptions) {
     this.radius = options.radius ?? 78;
     const color = options.color ?? 0x8a2c2c;
-    const key = `button-${this.radius}-${color}`;
-
-    if (!scene.textures.exists(key)) {
-      const pad = 6;
-      const size = (this.radius + pad) * 2;
-      const g = scene.make.graphics({}, false);
-      g.fillStyle(0x000000, 0.5);
-      g.fillCircle(size / 2, size / 2, this.radius);
-      g.fillStyle(color, 0.85);
-      g.fillCircle(size / 2, size / 2, this.radius - 10);
-      g.lineStyle(4, 0xe9d7b0, 0.9);
-      g.strokeCircle(size / 2, size / 2, this.radius);
-      g.generateTexture(key, size, size);
-      g.destroy();
-    }
-
-    this.image = scene.add.image(options.x, options.y, key).setScrollFactor(0).setDepth(DEPTH_UI).setAlpha(0.7);
+    const key = buttonSkin(scene, this.radius, color);
+    this.image = scene.add.image(options.x, options.y, key).setScrollFactor(0).setDepth(DEPTH_UI).setScale(.5).setAlpha(.88);
     if (options.icon) this.icon = scene.add.image(options.x, options.y - this.radius * .2, options.icon.texture, options.icon.frame)
-      .setScrollFactor(0).setDepth(DEPTH_UI + 1).setDisplaySize(this.radius * 1.25, this.radius * 1.25);
+      .setScrollFactor(0).setDepth(DEPTH_UI + 1).setDisplaySize(this.radius * 1.08, this.radius * 1.08);
     this.iconAssigned = !!options.icon;
     this.text = scene.add
-      .text(options.x, options.y + (this.icon ? this.radius * .63 : 0), options.label, {
+      .text(options.x, options.y + (this.icon ? this.radius * .57 : 0), options.label, {
         fontFamily: 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
         fontSize: `${options.fontSize ?? 30}px`,
         fontStyle: 'bold',
-        color: '#f5ead2',
+        color: '#e9d9b6',
         stroke: '#1a1008',
-        strokeThickness: 5,
+        strokeThickness: 3,
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
@@ -217,12 +203,12 @@ export class ActionButton {
   }
 
   private refresh(): void {
-    const scale = (this.isDown ? 0.93 : 1) * this.sizeScale;
+    const scale = (this.isDown ? 0.96 : 1) * this.sizeScale;
     const cooling = this.cooldownStep > 0;
-    this.image.setAlpha(!this.enabled && !cooling ? 0.3 : this.isDown ? 1 : 0.7).setScale(scale);
+    this.image.setAlpha(!this.enabled && !cooling ? 0.46 : this.isDown ? 1 : 0.88).setScale(scale * .5);
     this.text.setAlpha(this.enabled || cooling ? 1 : 0.4).setScale(scale * (cooling && !this.iconAssigned ? .7 : 1));
-    this.icon?.setAlpha(this.enabled || cooling ? 1 : 0.35).setDisplaySize(this.radius * 1.25 * scale, this.radius * 1.25 * scale);
-    this.text.setY(this.image.y + (this.iconAssigned ? this.radius * .63 * scale : cooling ? this.radius * .48 * scale : 0));
+    this.icon?.setAlpha(this.enabled || cooling ? 1 : 0.45).setDisplaySize(this.radius * 1.08 * scale, this.radius * 1.08 * scale);
+    this.text.setY(this.image.y + (this.iconAssigned ? this.radius * .57 * scale : cooling ? this.radius * .48 * scale : 0));
     this.icon?.setY(this.image.y - this.radius * .2 * scale);
     this.drawCooldown();
   }

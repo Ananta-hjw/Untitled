@@ -788,11 +788,11 @@ test('대화 대상 근처에서만 대화가 열리고, 대화 중에는 게임
     for (const e of s.enemies) { e.character.placeAt(${mapLength(300)}, ${mapLength(1500)}); e.state = 'wander'; e.timer = 1e12; }
     const sign = s.map.interactables[0];
     step();
-    const atSpawn = s.talkButton.shown;
+    const atSpawn = s.primaryAction !== 'attack';
     p.placeAt(sign.x - 60, sign.y + 20); step();
-    const nearSign = s.talkButton.shown && s.talkMarker.visible;
+    const nearSign = s.attackButton.shown && s.talkMarker.visible;
     // 대화 버튼을 누른 것과 같은 효과
-    s.talkButton.pressed = true; step();
+    s.attackButton.pressed = true; step();
     const opened = s.dialogue.isOpen;
     const frozenAt = s.now; step(30);
     const frozen = s.now === frozenAt;
@@ -801,7 +801,7 @@ test('대화 대상 근처에서만 대화가 열리고, 대화 중에는 게임
     while (s.dialogue.isOpen && taps < 20) { s.onDialoguePointer(); taps++; step(); }
     // 다시 열고, 넘기는 동안 Space를 누른 것처럼 공격 입력을 남긴 채 닫는다.
     // 닫힐 때 공격 입력이 지워져 공격으로 이어지지 않아야 한다.
-    s.talkButton.pressed = true; step();
+    s.attackButton.pressed = true; step();
     const reopened = s.dialogue.isOpen;
     while (s.dialogue.isOpen) { s.keyboardAttackPressed = true; s.attackBufferedUntil = s.now + 999; s.onDialoguePointer(); }
     step(3);
@@ -809,7 +809,7 @@ test('대화 대상 근처에서만 대화가 열리고, 대화 중에는 게임
     // 전투 중에는 대화 버튼이 사라진다
     // 쫓아오는 적은 플레이어 가까이에 둔다(맵이 넓어져 예전 고정 좌표는 추격 거리 밖이었다).
     s.enemies[0].state = 'chase'; s.enemies[0].character.placeAt(p.x + 250, p.y); step();
-    const inCombat = s.talkButton.shown;
+    const inCombat = s.primaryAction !== 'attack';
     return { atSpawn, nearSign, opened, frozen, closed: !s.dialogue.isOpen, taps, attackedAfterClose, inCombat };
   })()`);
   assert.equal(result.atSpawn, false);
@@ -1200,8 +1200,8 @@ test('건물 문 앞에서 들어가기를 누르면 실내로 들어가고, 아
     s.scene.restart({ map: 'village' }); step();
     const door = s.interactables.find(i => i.id === 'door-inn');
     s.player.placeAt(door.x, door.y + 10); step(2);
-    const atDoor = { button: s.talkButton.text.text, visible: s.talkButton.image.visible, marker: s.talkMarker.text };
-    s.talkButton.pressed = true; step();
+    const atDoor = { button: s.attackButton.text.text, visible: s.attackButton.image.visible, marker: s.talkMarker.text };
+    s.attackButton.pressed = true; step();
     const started = s.traveling;
     await waitMap('in-inn');
     step(2);
@@ -1215,9 +1215,9 @@ test('건물 문 앞에서 들어가기를 누르면 실내로 들어가고, 아
     // 문 근처를 지나가기만 해서는 나가지 않는다.
     const exitSpot = s.interactables.find(i => i.id === 'exit-inn');
     s.player.placeAt(exitSpot.x, exitSpot.y - 10); step(3);
-    const nearDoor = { map: s.mapId, button: s.talkButton.text.text, visible: s.talkButton.image.visible, marker: s.talkMarker.text };
+    const nearDoor = { map: s.mapId, button: s.attackButton.text.text, visible: s.attackButton.image.visible, marker: s.talkMarker.text };
     // 나가기 버튼을 누르면 나간다.
-    s.talkButton.pressed = true; step();
+    s.attackButton.pressed = true; step();
     await waitMap('village');
     step(2);
     return { atDoor, started, inside, blocked, nearDoor, back: { map: s.mapId, x: s.player.x, y: s.player.y, door: { x: door.x, y: door.y } } };
@@ -1245,7 +1245,7 @@ test('잡화점 안의 메리나에게 카운터 앞에서 말을 걸면 대화 
     const counterFront = s.map.bounds.top + counter.y;
     s.player.placeAt(merina.spot.x, merina.spot.y + 20);
     for (let i = 0; i < 3; i++) g.step(t += 16, 16);
-    const ready = { button: s.talkButton.image.visible, label: s.talkButton.text.text, behind: merina.y > counterFront - counter.d && merina.y < counterFront && s.children.list.some(o => o.name === 'map-art-foreground' && o.depth > merina.depth), standing: s.player.y > counterFront };
+    const ready = { button: s.attackButton.image.visible, label: s.attackButton.text.text, behind: merina.y > counterFront - counter.d && merina.y < counterFront && s.children.list.some(o => o.name === 'map-art-foreground' && o.depth > merina.depth), standing: s.player.y > counterFront };
     s.openDialogue(merina.spot);
     const name = s.dialogue.nameText.text;
     while (s.dialogue.isOpen) s.dialogue.advance();
@@ -1526,7 +1526,7 @@ test('원화가 있는 실내 여덟 곳과 남쪽 들판은 해당 그림만 �
         let t = performance.now();
         s.player.placeAt(spot.x, spot.y - 10);
         for (let i = 0; i < 3; i++) g.step(t += 16, 16);
-        s.talkButton.pressed = true;
+        s.attackButton.pressed = true;
         for (let i = 0; i < 300; i++) {
           g.step(t += 16, 16);
           if (s.mapId === exit.to && s.sys.isActive() && s.minimap) return { map: s.mapId, expected: exit.to, walkable: s.walkArea.contains(s.player.x, s.player.y) };
@@ -1963,7 +1963,7 @@ test('여관의 로제타에게 쉬어 가거나 집 침대에서 쉬면 체력�
     s.player.placeAt(bed.x, bed.y + 30);
     let t = performance.now();
     for (let i = 0; i < 3; i++) g.step(t += 16, 16);
-    const label = s.talkButton.text.text;
+    const label = s.attackButton.text.text;
     s.openDialogue(bed);
     return { label, saved: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
   })()`);
@@ -1980,7 +1980,7 @@ test('여관의 로제타에게 쉬어 가거나 집 침대에서 쉬면 체력�
     s.mp = 0;
     let t = performance.now();
     for (let i = 0; i < 3; i++) g.step(t += 16, 16);
-    const label = s.talkButton.text.text;
+    const label = s.attackButton.text.text;
     s.openDialogue(bed);
     const base = s.stats.maxHp;
     return { label, full: s.player.hp === s.player.maxHp, boosted: s.player.maxHp === base + s.herb && s.herb > 0, mpFull: s.mp === s.maxMp, slowed: s.now < s.slowedUntil, saved: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
@@ -2220,7 +2220,7 @@ test('물약·도시락 바로 사용 버튼은 해당 물품만 쓰고 대기�
       s.applySettings({...s.settings,buttonSize:size,joystickSize:'large'});
       // Use the same layout method as a resize without changing the canvas underneath the browser harness.
       const original=s.scale.gameSize.width;s.scale.gameSize.width=width;s.layout();
-      const items=[s.potionButton,s.lunchButton],other=[s.attackButton,s.dodgeButton,s.blockButton,s.resonanceButton,...s.skillButtons,s.talkButton];
+      const items=[s.potionButton,s.lunchButton],other=[s.attackButton,s.dodgeButton,s.blockButton,s.resonanceButton,...s.skillButtons];
       layouts.push(items.every((a,i)=>{
         const all=[...other,...items.filter((_,j)=>j!==i)];
         return a.image.x-a.size*1.2>=0&&a.image.x+a.size*1.2<=width&&a.image.y+a.size*1.2<=720&&
@@ -2546,4 +2546,40 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
   }
   assert.equal(result.unequipped,true);assert.equal(result.dodged,true);
   assert.ok(result.verticalPoses.every(Boolean),JSON.stringify(result));
+});
+
+test('공격 버튼 하나가 가까운 대상에 따라 대화·입장으로 바뀌고 상호작용 입력은 공격으로 새지 않는다', async () => {
+  await load('village');
+  const result = await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'),p=s.player,b=s.attackButton;
+    s.enemies=[];s.joystick.vector.set(0,0);
+    const spot=s.interactables.find(i=>i.id==='npc-teon');
+    p.placeAt(spot.x,spot.y+35);s.update(0,16);
+    const near={label:b.text.text,icon:b.icon.texture.key,x:b.image.x,y:b.image.y};
+    const pointer={id:22,x:b.image.x,y:b.image.y};
+    s.input.emit('pointerdown',pointer);s.update(0,16);
+    const opened=s.dialogue.isOpen&&!p.isAttacking&&s.attackBufferedUntil===undefined;
+    s.input.emit('pointerup',pointer);s.dialogue.close();
+    // 대화를 닫는 동안 누르고 있던 공격 키는 멀어져도 떼기 전까지 공격하지 않는다.
+    s.attackKeys[0].isDown=true;
+    p.placeAt(10,10);s.update(0,16);
+    const far={label:b.text.text,icon:b.icon.texture.key,x:b.image.x,y:b.image.y,safe:!p.isAttacking};
+    s.attackKeys[0].isDown=false;s.update(0,16);
+    s.input.emit('pointerdown',pointer);s.update(0,16);
+    const attacks=p.isAttacking;s.input.emit('pointerup',pointer);
+    p.endAttack();s.attackTrace=undefined;s.attackLunge=undefined;s.clearAttackInput();
+    const door=s.interactables.find(i=>i.id==='door-inn');
+    p.placeAt(door.x,door.y+10);s.update(0,16);
+    const enter={label:b.text.text,icon:b.icon.texture.key,x:b.image.x,y:b.image.y};
+    s.enemies=[{state:'chase'}];s.updateInteraction(s.now);
+    const combat=b.text.text==='공격'&&b.icon.texture.key==='action-icon-attack';s.enemies=[];
+    return {near,far,enter,opened,attacks,combat,icons:[s.dodgeButton.icon.texture.key,s.blockButton.icon.texture.key]};
+  })()`);
+  assert.equal(result.near.label,'대화');assert.equal(result.near.icon,'action-icon-talk');
+  assert.equal(result.enter.label,'들어가기');assert.equal(result.enter.icon,'action-icon-enter');
+  assert.equal(result.far.label,'공격');assert.equal(result.far.icon,'action-icon-attack');
+  assert.equal(result.near.x,result.far.x);assert.equal(result.near.y,result.enter.y);
+  for(const key of ['opened','attacks','combat'])assert.equal(result[key],true,JSON.stringify(result));
+  assert.equal(result.far.safe,true,JSON.stringify(result));
+  assert.deepEqual(result.icons,['action-icon-dodge','action-icon-block']);
 });
