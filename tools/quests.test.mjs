@@ -63,8 +63,52 @@ test('루안의 수련은 순서대로 열리고, 완료하면 다음 메인이 
   assert.equal(r.completed.id, 'ruan-training');
   state = r.state;
   assert.equal(markerFor('ruan', state), 'progress');
-  assert.equal(r.next.id, 'ruan-field');
-  assert.deepEqual(state['ruan-field'], { status: 'active', count: 0 });
+  assert.equal(r.next.id, 'ruan-dodge');
+  assert.deepEqual(state['ruan-dodge'], { status: 'active', count: 0 });
+});
+
+test('초반 전투 수련은 공격 → 회피 → 막기 → (들판) → 물약(에일라) → 공명(베르넬) 순서로 하나씩 이어지고, 숲 퀘스트로 넘어간다', () => {
+  let state = { 'ruan-training': { status: 'done', count: 3 }, 'ruan-dodge': { status: 'active', count: 0 } };
+  const step = (event, n = 1) => { for (let i = 0; i < n; i++) state = recordEvent(state, event).state; };
+  const talk = (npc) => { const r = talkTo(npc, state); state = r.state; return r; };
+  step({ type: 'dodge' }, 3);
+  assert.equal(talk('ruan').next.id, 'ruan-parry');
+  step({ type: 'parry' }, 2);
+  assert.equal(talk('ruan').next.id, 'ruan-field');
+  step({ type: 'kill', map: 'south-field', monster: 'slime' }, 5);
+  const field = talk('ruan');
+  assert.equal(field.next.id, 'eila-potion');
+  assert.equal(markerFor('eila', state), 'target', '에일라에게 가라는 표시');
+  assert.equal(talk('eila').progressed.id, 'eila-potion');
+  assert.equal(state['eila-potion'].step, 1);
+  step({ type: 'item' });
+  assert.equal(state['eila-potion'].status, 'ready');
+  const potion = talk('eila');
+  assert.equal(potion.completed.id, 'eila-potion');
+  assert.deepEqual(potion.completed.rewardItems, [{ id: 'potion', count: 2 }]);
+  assert.equal(potion.next.id, 'vernel-resonance');
+  assert.ok(potion.lines.at(-1).speaker === '에일라', '다음 수련은 에일라가 이어서 안내한다');
+  talk('vernel');
+  assert.equal(state['vernel-resonance'].step, 1);
+  step({ type: 'resonance' });
+  const resonance = talk('ruan');
+  assert.equal(resonance.completed.id, 'vernel-resonance');
+  assert.equal(resonance.next.id, 'ruan-forest');
+  for (const id of ['ruan-training', 'ruan-dodge', 'ruan-parry', 'eila-potion', 'vernel-resonance']) assert.equal(QUESTS.find((q) => q.id === id).tutorial, true, id);
+});
+
+test('수련을 넣기 전의 저장: 이미 그 뒤의 메인 퀘스트를 하고 있으면 수련은 끝낸 것으로 치고 다시 끼어들지 않는다', () => {
+  const old = parseQuests(JSON.stringify({ version: 1, quests: { 'ruan-training': { status: 'done', count: 3 }, 'ruan-field': { status: 'active', count: 2 } } }));
+  assert.equal(old['ruan-dodge'].status, 'done');
+  assert.equal(old['ruan-parry'].status, 'done');
+  assert.deepEqual(old['ruan-field'], { status: 'active', count: 2 });
+  assert.equal(old['eila-potion'], undefined, '아직 들판 중이면 물약 수련은 그대로 나중에 온다');
+  const later = parseQuests(JSON.stringify({ version: 1, quests: { 'ruan-training': { status: 'done', count: 3 }, 'ruan-field': { status: 'done', count: 5 }, 'ruan-forest': { status: 'active', count: 1 } } }));
+  for (const id of ['ruan-dodge', 'ruan-parry', 'eila-potion', 'vernel-resonance']) assert.equal(later[id].status, 'done', id);
+  assert.deepEqual(later['ruan-forest'], { status: 'active', count: 1 });
+  // 새 게임에서 막 회피 수련 중이면 건드리지 않는다.
+  const fresh = parseQuests(JSON.stringify({ version: 1, quests: { 'ruan-training': { status: 'done', count: 3 }, 'ruan-dodge': { status: 'active', count: 1 } } }));
+  assert.deepEqual(fresh, { 'ruan-training': { status: 'done', count: 3 }, 'ruan-dodge': { status: 'active', count: 1 } });
 });
 
 test('처치는 정해진 맵에서만 세고, 맵을 가리지 않는 퀘스트는 어디서든 센다', () => {
@@ -120,7 +164,7 @@ test('추적 표시는 메인 퀘스트를 먼저 보여 주고 끝난 퀘스트
 });
 
 test('퀘스트 진행은 저장했다가 그대로 불러오고, 깨진 값은 버린다', () => {
-  const state = { 'ruan-training': { status: 'done', count: 3 }, 'ruan-field': { status: 'active', count: 2 } };
+  const state = { 'ruan-training': { status: 'done', count: 3 }, 'ruan-dodge': { status: 'done', count: 3 }, 'ruan-parry': { status: 'done', count: 2 }, 'ruan-field': { status: 'active', count: 2 } };
   assert.deepEqual(parseQuests(serializeQuests(state)), state);
   assert.deepEqual(parseQuests(null), {});
   assert.deepEqual(parseQuests('{broken'), {});
@@ -129,5 +173,5 @@ test('퀘스트 진행은 저장했다가 그대로 불러오고, 깨진 값은 
     'ruan-field': { status: 'active', count: 99 }, nope: { status: 'active', count: 1 },
     'doran-gel': { status: 'weird', count: 1 }, 'teon-lunch': { status: 'active', count: -1 },
   } });
-  assert.deepEqual(parseQuests(raw), { 'ruan-field': { status: 'ready', count: 5 } });
+  assert.deepEqual(parseQuests(raw), { 'ruan-training': { status: 'done', count: 3 }, 'ruan-dodge': { status: 'done', count: 3 }, 'ruan-parry': { status: 'done', count: 2 }, 'ruan-field': { status: 'ready', count: 5 } });
 });

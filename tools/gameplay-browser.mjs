@@ -57,7 +57,8 @@ async function evaluate(expression) {
 }
 
 /** 전투 테스트는 몬스터가 있는 남쪽 들판에서, 마을 지형 테스트는 마을에서 시작한다. */
-async function load(map = 'south-field') {
+/** guide: 초반 전투 가이드 창을 그대로 둔다. 기본은 모두 본 것으로 적어 다른 테스트를 막지 않게 한다. */
+async function load(map = 'south-field', { guide = false } = {}) {
   // 긴 전체 실행의 끝무렵에는 헤드리스 Chromium에서 새 페이지가 가끔 아주 느리게(1초에 1프레임 남짓) 돌아
   // 준비 시간을 넘긴다(브라우저 디버깅 기능을 켜면 사라져 원인은 못 찾았다). 그럴 때 한 번 다시 불러온다.
   for (let attempt = 0; ; attempt++) {
@@ -71,6 +72,8 @@ async function load(map = 'south-field') {
     }
   }
   await evaluate('window.__game.loop.sleep()');
+  if (!guide) await evaluate(`(() => { const all = ['attack', 'dodge', 'parry', 'potion', 'resonance'];
+    localStorage.setItem('untitled-rpg.guide', JSON.stringify(all)); window.__game.scene.getScene('game').seenLessons = new Set(all); return true; })()`);
 }
 
 before(async () => {
@@ -1126,9 +1129,9 @@ test('퀘스트: 머리 위 표시, 대화로 받고 완료, 목록 표시, 저�
   assert.deepEqual(result.minimap.center, [94, 200, 255], '가운데는 플레이어(하늘색 점)');
   assert.ok(result.minimap.edgeAlpha > 200, '테두리가 그려진다');
   assert.equal(result.minimap.title, '로웬 마을');
-  assert.deepEqual(result.reloaded.quests, { 'ruan-training': { status: 'done', count: 3 }, 'ruan-field': { status: 'active', count: 0 } });
+  assert.deepEqual(result.reloaded.quests, { 'ruan-training': { status: 'done', count: 3 }, 'ruan-dodge': { status: 'active', count: 0 } });
   assert.equal(result.reloaded.ruan, 'progress');
-  assert.match(result.reloaded.tracker, /들판의 슬라임 · 남쪽 들판의 슬라임 0\/5/);
+  assert.match(result.reloaded.tracker, /몸을 빼는 법 · 회피 3번 0\/3/);
 });
 test('골드와 아이템: 슬라임이 골드를 떨어뜨리고, 물약 버튼으로 회복하고, 잡화점에서 사고팔며, 재시작해도 남는다', async () => {
   await load();
@@ -1388,7 +1391,9 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     const g = window.__game;
     let s = g.scene.getScene('game'), t = performance.now();
     const seed = {};
-    for (const q of QUESTS.filter(q => q.main).slice(0, 3)) seed[q.id] = { status: 'done', count: q.objective.need };
+    // 루안의 숲 퀘스트(초반 수련 포함)까지 끝낸 저장에서 시작한다.
+    const mains = QUESTS.filter(q => q.main);
+    for (const q of mains.slice(0, mains.findIndex(q => q.id === 'ruan-forest') + 1)) seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
     localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
     const restart = async map => {
       s.scene.restart({ map }); g.step(t += 16, 16);
@@ -1973,6 +1978,64 @@ test('시온이 쓰러지면 누구에게 몇 번 얼마나 맞았는지 보여 
     return r;
   })()`);
   assert.deepEqual(after, { map: 'in-inn', alive: true, full: true, mana: true, open: false, log: 0 });
+});
+
+test('초반 전투 가이드: 수련을 받으면 시스템 안내 창이 한 번 뜨고(게임 멈춤) 해당 버튼이 반짝이며, 물약 수련은 다친 채로, 공명 수련은 구슬이 찬 채로 연습한다', async () => {
+  await load('village');
+  await evaluate(`(() => { localStorage.removeItem('untitled-rpg.guide'); localStorage.removeItem('untitled-rpg.quests'); return true; })()`);
+  await load('village', { guide: true });
+  const result = await evaluate(`(async () => {
+    const g = window.__game; let s = g.scene.getScene('game');
+    let t = performance.now();
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    const restart = async (map) => {
+      s.scene.restart({ map }); step();
+      for (let i = 0; i < 300; i++) { s = g.scene.getScene('game'); if (s.mapId === map && s.sys.isActive() && s.minimap) return; await new Promise(r => setTimeout(r, 10)); step(); }
+      throw Error('재시작 시간 초과');
+    };
+    // 루안에게 첫 수련을 받으면 공격 안내
+    const ruan = s.npcs.find(n => n.def.id === 'ruan');
+    s.openDialogue(ruan.spot); while (s.dialogue.isOpen) s.dialogue.advance();
+    step(2);
+    const attack = { open: s.guideCard.isOpen, title: s.guideCard.title.text, badge: s.guideCard.badge.text };
+    const frozenAt = s.now; step(10); const frozen = s.now === frozenAt;
+    s.guideCard.close(); step(3);
+    const ring = s.guideCard.ring.commandBuffer.length > 0;
+    step(5); const again = s.guideCard.isOpen;
+    // 물약 수련: 에일라에게 들은 뒤(두 번째 단계) 다친 채로 안내가 뜬다.
+    s.quests = { 'ruan-training': { status: 'done', count: 3 }, 'ruan-dodge': { status: 'done', count: 3 }, 'ruan-parry': { status: 'done', count: 2 },
+      'ruan-field': { status: 'done', count: 5 }, 'eila-potion': { status: 'active', count: 0, step: 1 } };
+    s.saveQuests(); s.inventory = { gold: 0, items: { potion: 3 } }; s.saveInventory();
+    await restart('in-clinic');
+    step(2);
+    const potion = { open: s.guideCard.isOpen, title: s.guideCard.title.text, hurt: s.player.hp < s.player.maxHp };
+    s.guideCard.close(); step(2);
+    s.useHealItem('potion');
+    const potionDone = s.quests['eila-potion'].status;
+    // 공명 수련: 베르넬에게 들은 뒤 구슬이 가득 찬 채로 안내가 뜬다.
+    s.quests = { ...s.quests, 'eila-potion': { status: 'done', count: 1, step: 1 }, 'vernel-resonance': { status: 'active', count: 0, step: 1 } };
+    s.saveQuests(); s.setResonanceCharge(0);
+    await restart('village');
+    step(2);
+    const resonance = { open: s.guideCard.isOpen, title: s.guideCard.title.text, full: s.resonanceCharge === 15 };
+    s.guideCard.close(); step(2);
+    s.resonanceButton.pressed = true; step(3);
+    const resonanceDone = s.quests['vernel-resonance'].status;
+    const seen = JSON.parse(localStorage.getItem('untitled-rpg.guide'));
+    localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.resonance');
+    return { attack, frozen, ring, again, potion, potionDone, resonance, resonanceDone, seen };
+  })()`);
+  assert.equal(result.attack.open, true, '첫 수련을 받으면 안내 창');
+  assert.equal(result.attack.title, '공격');
+  assert.match(result.attack.badge, /전투 가이드 1\/5 · 루안/);
+  assert.equal(result.frozen, true, '안내 창이 열려 있으면 게임이 멈춘다');
+  assert.equal(result.ring, true, '연습하는 동안 공격 버튼 둘레가 반짝인다');
+  assert.equal(result.again, false, '한 번 본 안내는 다시 뜨지 않는다');
+  assert.deepEqual(result.potion, { open: true, title: '물약', hurt: true });
+  assert.equal(result.potionDone, 'ready');
+  assert.deepEqual(result.resonance, { open: true, title: '공명', full: true });
+  assert.equal(result.resonanceDone, 'ready');
+  assert.deepEqual(result.seen, ['attack', 'potion', 'resonance']);
 });
 
 test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 번 돌진하며, 보통 공격에 움찔하지 않고, 절반에서 모두 멈춘 채 포효한 뒤 물러나 2페이즈', async () => {

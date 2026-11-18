@@ -78,6 +78,9 @@ import { CLINIC_BED_SPOT, HOME_BED_SPOT, REST_POINTS, herbBonus, REST_SAVE_KEY, 
 import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, isDusk, raidSpawns, raidSpawnsAnyStep, INSPECTION_LINES, type RaidSpawn } from '../story/chapterOne';
 import { BOSS, entersPhaseTwo } from '../combat/bossPattern';
 import { BossHud } from '../ui/BossHud';
+import { GuideCard } from '../ui/GuideCard';
+import { GUIDE_SAVE_KEY, activeLesson, lessonToShow, parseSeenLessons, serializeSeenLessons, type GuideButton, type LessonId } from '../story/tutorial';
+import { maxCharge } from '../combat/resonance';
 import {
   currentObjective, MARKER_PRIORITY, QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestMarker, type QuestState,
   type InspectSpot,
@@ -150,6 +153,9 @@ export class GameScene extends Phaser.Scene {
   private bossWarningEnd?: number;
   private pendingBoss?: RaidSpawn[];
   private bossRoarUntil = 0;
+  /** 초반 전투 가이드(story/tutorial.ts): 안내 창과 이미 본 안내 */
+  private guideCard?: GuideCard;
+  private seenLessons = new Set<LessonId>();
   private attackTrace?: { startedAt: number; stage: number; direction: { x: number; y: number }; previous: Blade; elapsed: number; hit: Set<Enemy>; effect?: AttackEffect; counter: boolean };
   private nextAttackAt = 0;
   private attackBufferedUntil?: number;
@@ -453,6 +459,8 @@ export class GameScene extends Phaser.Scene {
     this.bossWarningEnd = undefined;
     this.pendingBoss = undefined;
     this.bossRoarUntil = 0;
+    this.guideCard = undefined;
+    this.seenLessons = new Set();
     this.traveling = false;
     this.arrival = undefined;
     this.carriedHp = undefined;
@@ -510,6 +518,8 @@ export class GameScene extends Phaser.Scene {
     this.dialogue = new DialogueBox(this);
     this.storyChoice = new StoryChoice(this, () => this.onResume());
     this.deathPanel = new DeathPanel(this);
+    this.guideCard = new GuideCard(this);
+    try { this.seenLessons = parseSeenLessons(this.storage?.getItem(GUIDE_SAVE_KEY) ?? null); } catch { this.seenLessons = new Set(); }
     if (chapterPhase(this.quests) === 'raid') {
       this.chapterShade = this.add.graphics().setScrollFactor(0).setDepth(DEPTH_LIGHTING);
       this.drawChapterShade(this.scale.gameSize.width);
@@ -619,6 +629,7 @@ export class GameScene extends Phaser.Scene {
     this.setQuickButtonsVisible(!this.traveling && !!this.player?.alive && !this.dialogue.isOpen && !this.pauseMenu.isOpen
       && !this.characterPanel?.isOpen && !this.itemPanel?.isOpen && !this.worldMap?.isOpen && !this.storyChoice?.isOpen && !this.quickSlotPanel?.isOpen
       && !this.deathPanel?.isOpen);
+    this.updateGuideHighlight();
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
     // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
     const step = Math.min(delta, 50);
@@ -636,6 +647,13 @@ export class GameScene extends Phaser.Scene {
     if (this.opening && escape) {
       this.opening.skip();
       escape = false;
+    }
+    // 전투 가이드 창: 확인(Enter·Space·E·J·Esc)으로 닫는다. 그동안 게임은 멈춰 있다.
+    if (this.guideCard?.isOpen) {
+      let confirm = escape || this.talkPressed();
+      for (const key of this.attackKeys) if (Phaser.Input.Keyboard.JustDown(key)) confirm = true;
+      if (confirm) this.guideCard.close();
+      return;
     }
     // 쓰러진 뒤의 창: 확인(Enter·Space·E·J·Esc)을 누를 때까지 게임은 멈춰 있다.
     if (this.deathPanel?.isOpen) {
@@ -699,6 +717,9 @@ export class GameScene extends Phaser.Scene {
       if (advance) this.dialogue.advance();
       return;
     }
+
+    // 수련 연습이 막 시작됐으면 시스템 안내 창을 한 번 띄운다.
+    if (this.showLessonIfNew()) return;
 
     // 타격 순간에는 게임 시간을 아주 잠깐 멈추고(히트스톱), 저스트 회피 뒤에는 느리게 흘린다.
     // 적·플레이어·주인공 그림·타이머가 모두 이 시간을 따르므로 서로 어긋나지 않는다.
@@ -1047,7 +1068,7 @@ export class GameScene extends Phaser.Scene {
   /** 게임을 멈추는 메뉴·창·대화가 열려 있는지 */
   private menuOpen(): boolean {
     return !!(this.quickSlotPanel?.isOpen || this.storyChoice?.isOpen || this.pauseMenu?.isOpen || this.itemPanel?.isOpen
-      || this.characterPanel?.isOpen || this.worldMap?.isOpen || this.dialogue?.isOpen || this.deathPanel?.isOpen);
+      || this.characterPanel?.isOpen || this.worldMap?.isOpen || this.dialogue?.isOpen || this.deathPanel?.isOpen || this.guideCard?.isOpen);
   }
 
   private layout(): void {
@@ -1079,6 +1100,7 @@ export class GameScene extends Phaser.Scene {
     this.storyChoice?.layout(width);
     this.deathPanel?.layout(width);
     this.bossHud?.layout(width);
+    this.guideCard?.layout(width);
     this.drawChapterShade(width);
     this.festivalStage?.layout(width);
     this.pauseMenu.layout(width);
@@ -1289,6 +1311,7 @@ export class GameScene extends Phaser.Scene {
     this.justDodged = false;
     // 민첩(DEX)이 높을수록 회피를 빨리 다시 쓴다.
     this.dodgeReadyAt = time + DODGE.cooldownMs * this.derived.dodgeCooldown;
+    this.questEvent({ type: 'dodge' });
     this.nextAttackAt = Math.max(this.nextAttackAt, this.dodgeUntil);
     this.nextGhostAt = 0;
     player.invulnerableUntil = Math.max(player.invulnerableUntil, this.dodgeUntil + DODGE.graceMs);
@@ -1552,6 +1575,7 @@ export class GameScene extends Phaser.Scene {
   private onBackButton(): void {
     if (this.opening) { this.opening.skip(); return; }
     if (this.deathPanel?.isOpen) { this.deathPanel.confirm(); return; }
+    if (this.guideCard?.isOpen) { this.guideCard.close(); return; }
     if (this.quickSlotPanel?.isOpen) { this.quickSlotPanel.close(); return; }
     if (this.storyChoice?.isOpen) { this.storyChoice.cancel(); return; }
     if (this.pauseMenu.isOpen) this.pauseMenu.back();
@@ -1559,7 +1583,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private openPause(): void {
-    if (this.opening || this.deathPanel?.isOpen) return;
+    if (this.opening || this.deathPanel?.isOpen || this.guideCard?.isOpen) return;
     if (this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return;
     if (!this.pauseMenu || this.pauseMenu.isOpen) return;
     this.pauseButton.setVisible(false);
@@ -1941,6 +1965,7 @@ export class GameScene extends Phaser.Scene {
     if (pressed && ready) {
       this.resonanceUntil = time + RESONANCE.durationMs;
       this.setResonanceCharge(this.resonanceCharge - RESONANCE.cost);
+      this.questEvent({ type: 'resonance' });
       this.hud.showCallout('공명!');
       this.cameras.main.flash(160, 255, 215, 120);
       this.impacts.dust(this.player.x, this.player.y, 8, time, 60);
@@ -2072,6 +2097,7 @@ export class GameScene extends Phaser.Scene {
     this.drawHud();
     this.saveInventory();
     this.refreshInventory();
+    this.questEvent({ type: 'item' });
     return true;
   }
 
@@ -2379,6 +2405,7 @@ export class GameScene extends Phaser.Scene {
       this.counterUntil = now + JUST_DODGE.counterMs;
       this.parryUntil = 0;
       this.parryReadyAt = now;
+      this.questEvent({ type: 'parry' });
       // 패링에 성공하면 회피 대기 시간도 줄어든다.
       this.dodgeReadyAt = Math.max(now, this.dodgeReadyAt - BLOCK.dodgeRefundMs);
       this.cameras.main.shake(70, 0.002);
@@ -2586,6 +2613,38 @@ export class GameScene extends Phaser.Scene {
     this.impacts.screenFlash(0xffffff, 0.2, 300);
     this.cameras.main.shake(420, 0.01);
     this.hud.showCallout(`${enemy.stats.name}를 쓰러뜨렸다!`);
+  }
+
+  /**
+   * 수련 연습이 막 시작됐고 아직 안내를 본 적이 없으면 시스템 안내 창을 띄운다(한 번만, 기기에 저장).
+   * 물약 수련은 다친 상태에서 연습하도록 체력이 가득이면 조금 깎아 두고(에일라가 상처를 봐 주는 장면),
+   * 공명 수련은 바로 써 볼 수 있게 구슬을 가득 채운다.
+   */
+  private showLessonIfNew(): boolean {
+    if (!this.guideCard || this.opening || this.traveling || !this.player?.alive || this.menuOpen()) return false;
+    const lesson = lessonToShow(this.quests, this.seenLessons);
+    if (!lesson) return false;
+    this.seenLessons.add(lesson.id);
+    try { this.storage?.setItem(GUIDE_SAVE_KEY, serializeSeenLessons(this.seenLessons)); } catch { /* 저장소가 막히면 다음에 다시 본다 */ }
+    if (lesson.id === 'potion' && this.player.hp >= this.player.maxHp) {
+      this.player.hp = Math.max(1, Math.round(this.player.maxHp * 0.7));
+      this.drawHud();
+    }
+    if (lesson.id === 'resonance') this.setResonanceCharge(Math.max(this.resonanceCharge, maxCharge(RESONANCE)));
+    this.clearAttackInput();
+    this.joystick.vector.set(0, 0);
+    this.guideCard.open(lesson, () => this.onResume());
+    return true;
+  }
+
+  /** 연습 중인 수련의 버튼 둘레에 고리를 반짝인다. 메뉴·대화·연출 중에는 숨긴다. */
+  private updateGuideHighlight(): void {
+    const lesson = this.player && !this.opening && !this.traveling && !this.menuOpen() ? activeLesson(this.quests) : undefined;
+    const buttons: Record<GuideButton, ActionButton | undefined> = {
+      attack: this.attackButton, dodge: this.dodgeButton, block: this.blockButton, item: this.potionButton, resonance: this.resonanceButton,
+    };
+    const button = lesson ? buttons[lesson.button] : undefined;
+    this.guideCard?.highlight(button?.visible ? { ...button.center, radius: button.size } : undefined, this.time.now);
   }
 
   /** 다시 시작할 곳: 마지막으로 쉰 곳(여관·시온의 집), 쉰 적이 없으면 시온의 집 앞 */

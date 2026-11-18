@@ -129,6 +129,16 @@ export class ActionButton {
   }
 
   /** 현재 크기(반지름, 배율 반영) */
+  /** 화면에서 버튼 가운데 (가이드 강조 고리용) */
+  get center(): { x: number; y: number } {
+    return { x: this.image.x, y: this.image.y };
+  }
+
+  /** 보이는지 (가이드 강조 고리용) */
+  get visible(): boolean {
+    return this.shown && this.image.visible;
+  }
+
   get size(): number {
     return this.radius * this.sizeScale;
   }

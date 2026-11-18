@@ -14,7 +14,8 @@ import type { GearId } from '../items/equipment.ts';
  * 이 파일은 Phaser를 쓰지 않아 tools/quests.test.mjs가 직접 불러 검사한다.
  */
 
-export type QuestId = 'ruan-training' | 'ruan-field' | 'ruan-forest' | 'doran-gel' | 'teon-lunch'
+export type QuestId = 'ruan-training' | 'ruan-dodge' | 'ruan-parry' | 'ruan-field' | 'eila-potion' | 'vernel-resonance'
+  | 'ruan-forest' | 'doran-gel' | 'teon-lunch'
   | 'watch-report' | 'festival-supplies' | 'sia-knot' | 'harvest-help' | 'evening-patrol' | 'moth-trail'
   | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter' | 'first-sword';
 
@@ -22,6 +23,11 @@ export type QuestId = 'ruan-training' | 'ruan-field' | 'ruan-forest' | 'doran-ge
 export type QuestEvent =
   | { type: 'kill'; map: MapId; monster?: MonsterKind; encounter?: 'village-raid' }
   | { type: 'finisher' }
+  // 초반 전투 수련(story/tutorial.ts): 회피, 패링 성공, 회복 아이템 사용, 공명 사용
+  | { type: 'dodge' }
+  | { type: 'parry' }
+  | { type: 'item' }
+  | { type: 'resonance' }
   | { type: 'talk'; npc: NpcId }
   | { type: 'inspect'; spot: InspectSpot; map: MapId };
 
@@ -59,6 +65,11 @@ export interface QuestDef {
   turnIn?: NpcId;
   /** 마지막 대화 대상에게 목표 달성과 보고를 한 번에 처리한다. */
   completeOnTarget?: boolean;
+  /**
+   * 초반 전투 수련(story/tutorial.ts). 예전 저장이 이미 이보다 뒤의 메인 퀘스트를 하고 있으면
+   * 끝낸 것으로 친다(parseQuests). 다시 돌아가 배우게 하지 않는다.
+   */
+  tutorial?: boolean;
   confirm?: boolean;
   rewardXp: number;
   rewardGold?: number;
@@ -90,10 +101,34 @@ export const QUESTS: QuestDef[] = [
       hero('네, 스승님.'),
     ],
     reminder: [ruan('세 번째 일격까지 멈추지 말고 이어라. 손목이 아니라 허리로 베는 거다.')],
-    done: [ruan('좋다. 이제야 칼끝이 제대로 따라오는구나.'), ruan('물약 몇 병 챙겨 둬라. 실전은 다르다. 다음은 들판이다.')],
+    done: [ruan('좋다. 이제야 칼끝이 제대로 따라오는구나.'), ruan('물약 몇 병 챙겨 둬라. 실전은 다르다.')],
+    tutorial: true,
   },
   {
-    id: 'ruan-field', title: '들판의 슬라임', giver: 'ruan', main: true, requires: 'ruan-training',
+    id: 'ruan-dodge', title: '몸을 빼는 법', giver: 'ruan', main: true, requires: 'ruan-training', tutorial: true,
+    objective: { label: '회피 3번', need: 3, event: 'dodge' },
+    rewardXp: 10,
+    offer: [
+      ruan('베는 것만큼 중요한 게 맞지 않는 거다. 칼을 쥔 채로 몸을 빼는 법을 익혀라.'),
+      ruan('상대가 몸을 움츠렸다가 덤벼드는 그 순간에 빠지면, 상대는 허공을 베고 넌 틈을 얻는다.'),
+      ruan('여기서 세 번, 몸이 기억할 때까지 빠져 봐라.'),
+    ],
+    reminder: [ruan('발이 먼저다. 세 번 빠져 봐라.')],
+    done: [ruan('좋아, 발이 가볍구나. 하지만 매번 피할 수는 없다.')],
+  },
+  {
+    id: 'ruan-parry', title: '칼로 받아내기', giver: 'ruan', main: true, requires: 'ruan-dodge', tutorial: true,
+    objective: { label: '적의 공격을 막기로 받아내기 (남쪽 들판의 슬라임)', need: 2, event: 'parry' },
+    rewardXp: 20,
+    offer: [
+      ruan('피할 수 없을 땐 칼로 받아낸다. 덤벼드는 그 순간에 칼을 세우면, 힘은 흘러가고 상대는 무너진다.'),
+      ruan('너무 일찍 세우면 팔만 저리지. 이건 혼자서는 못 익힌다. 남쪽 들판의 슬라임을 상대로 두 번 받아내 봐라.'),
+    ],
+    reminder: [ruan('들판의 슬라임이 덤벼드는 순간, 칼을 세워라. 두 번이다.')],
+    done: [ruan('받아냈구나. 칼끝이 울리는 그 느낌, 잊지 마라.')],
+  },
+  {
+    id: 'ruan-field', title: '들판의 슬라임', giver: 'ruan', main: true, requires: 'ruan-parry',
     objective: { label: '남쪽 들판의 슬라임', need: 5, event: 'kill', map: 'south-field', monster: 'slime' },
     rewardXp: 30, rewardGold: 50,
     offer: [
@@ -104,7 +139,44 @@ export const QUESTS: QuestDef[] = [
     done: [ruan('다치지 않고 돌아왔구나. 잘했다.')],
   },
   {
-    id: 'ruan-forest', title: '늘어난 마물', giver: 'ruan', main: true, requires: 'ruan-field',
+    id: 'eila-potion', title: '약은 아끼지 말고', giver: 'ruan', main: true, requires: 'ruan-field', tutorial: true,
+    turnIn: 'eila',
+    objective: { label: '마을 북쪽 치유소의 에일라 찾아가기', need: 1, event: 'talk', npc: 'eila' },
+    steps: [
+      { label: '마을 북쪽 치유소의 에일라 찾아가기', need: 1, event: 'talk', npc: 'eila', lines: [
+        line('eila', '에일라', '루안이 보냈구나. 어디 보자… 들판에서 긁힌 데가 그대로네.'),
+        line('eila', '에일라', '싸우다 다치면 참지 말고 물약을 마시렴. 미리 손닿는 곳에 챙겨 두는 게 중요해.'),
+        line('eila', '에일라', '지금 한 병 마셔 보렴. 마시고 나면 다시 말 걸고.'),
+      ] },
+      { label: '물약 마셔 보기', need: 1, event: 'item' },
+    ],
+    rewardXp: 15, rewardItems: [{ id: 'potion', count: 2 }],
+    offer: [ruan('그래도 들판을 돌고 왔으니 에일라에게 가서 상처를 보여라. 약 쓰는 법도 배워 두고. 치유소는 마을 북쪽이다.')],
+    reminder: [ruan('치유소의 에일라에게 가 봐라. 마을 북쪽이다.')],
+    remindersByNpc: { eila: [line('eila', '에일라', '물약 칸에 물약을 넣어 두고, 한 병 마셔 보렴.')] },
+    done: [line('eila', '에일라', '잘했어. 한 병 더 챙겨 줄게. 물약은 아끼다 쓰러지면 소용없단다.')],
+  },
+  {
+    id: 'vernel-resonance', title: '칼끝의 울림', giver: 'eila', main: true, requires: 'eila-potion', tutorial: true,
+    turnIn: 'ruan',
+    objective: { label: '광장의 베르넬에게 이야기 듣기', need: 1, event: 'talk', npc: 'vernel' },
+    steps: [
+      { label: '광장의 베르넬에게 이야기 듣기', need: 1, event: 'talk', npc: 'vernel', lines: [
+        line('vernel', '베르넬', '루안에게 들었어. 칼로 공격을 받아낼 때 칼끝이 울린다고.'),
+        line('vernel', '베르넬', '옛 기록에 그런 울림을 모아 몸에 두르는 검사들 얘기가 있어. 울림이 다섯 번 가득 차면, 잠깐 동안 더 세게 베고 덜 다친대.'),
+        hero('그게 정말 돼요?'),
+        line('vernel', '베르넬', '해 보면 알겠지. 마침 네 칼끝에 울림이 가득해 보이는데? 한번 끌어내 봐.'),
+      ] },
+      { label: '공명 써 보기', need: 1, event: 'resonance' },
+    ],
+    rewardXp: 20,
+    offer: [line('eila', '에일라', '그러고 보니 베르넬이 너를 찾더구나. 칼끝의 울림이 어쩌고 하던데. 광장에 있을 거야.')],
+    reminder: [line('eila', '에일라', '베르넬은 광장에 있을 거야.')],
+    remindersByNpc: { vernel: [line('vernel', '베르넬', '울림을 끌어내 봐. 공명이라고 부르면 되겠군.')] },
+    done: [ruan('베르넬이 또 옛 기록 얘기를 했구나. …그래도 그 울림은 나도 안다. 함부로 믿지는 말고, 버릴 필요도 없다.')],
+  },
+  {
+    id: 'ruan-forest', title: '늘어난 마물', giver: 'ruan', main: true, requires: 'vernel-resonance',
     objective: { label: '서쪽 숲길의 마물', need: 5, event: 'kill', map: 'west-forest' },
     rewardXp: 40, rewardGold: 80,
     offer: [
@@ -474,7 +546,23 @@ export function parseQuests(raw: string | null): QuestState {
     // 목표 수를 바꿨을 때도 말이 되게 상태를 다시 맞춘다.
     state[def.id] = { status: status === 'done' ? 'done' : clamped >= objective.need ? 'ready' : 'active', count: clamped, ...(step !== undefined ? { step } : {}) };
   }
-  return continueMainQuest(state);
+  return continueMainQuest(skipPassedTutorials(state));
+}
+
+/**
+ * 전투 수련 퀘스트를 넣기 전의 저장: 이미 그보다 뒤의 메인 퀘스트를 받았으면 수련은 끝낸 것으로 친다.
+ * (그러지 않으면 한창 진행 중인 사람에게 처음 수련이 다시 끼어든다.)
+ */
+export function skipPassedTutorials(state: QuestState): QuestState {
+  const mains = QUESTS.filter((q) => q.main);
+  let next = state;
+  mains.forEach((q, i) => {
+    if (!q.tutorial || next[q.id]?.status === 'done') return;
+    if (!mains.slice(i + 1).some((later) => !later.tutorial && next[later.id])) return;
+    const last = q.steps?.at(-1) ?? q.objective;
+    next = { ...next, [q.id]: { status: 'done', count: last.need, ...(q.steps ? { step: q.steps.length - 1 } : {}) } };
+  });
+  return next;
 }
 
 export function serializeQuests(state: QuestState): string {
