@@ -2185,14 +2185,15 @@ test('1장 수확제 연출: 잔치에 모두 모이고 하늘 등불·경보·�
       lanterns: 0, raiders: 0, fought: false, talked: 0, attacked: false };
     return true;
   })()`);
-  for (let chunk = 0; chunk < 60; chunk++) {
+  // 연출 로직은 렌더링 없이 진행한다. 화면 객체·UI 상태는 그대로 검사하고 재시작 후에는 실제 프레임을 그린다.
+  for (let chunk = 0; chunk < 180; chunk++) {
     const running = await evaluate(`(() => {
       const g = window.__game, s = g.scene.getScene('game'), f = window.__fest;
-      for (let i = 0; i < 300 && s.opening; i++) {
+      for (let i = 0; i < 100 && s.opening; i++) {
         if (s.dialogue.isOpen) { s.dialogue.advance(); s.dialogue.advance(); f.talked++; }
         // 플레이어 입력은 무시된다.
         s.joystick.vector.set(1, 0); s.attackButton.pressed = true;
-        g.step(f.t += 16, 16);
+        g.headlessStep(f.t += 16, 16);
         if (s.player.isAttacking) f.attacked = true;
         f.lanterns = Math.max(f.lanterns, s.festivalStage?.lanternCount ?? 0);
         f.raiders = Math.max(f.raiders, s.festivalRaiders.length);
@@ -2504,7 +2505,7 @@ test('일반 병사들은 그림을 공유하고 세 문에 두 명씩 서며 �
   })()`);
   assert.deepEqual([plaza.count,plaza.posts,plaza.patrol],[8,6,2]);
   for(const key of ['stationary','walking','onGround','shared'])assert.equal(plaza[key],true,key);
-  assert.equal(plaza.frames,32);assert.equal(plaza.textures.length,2);
+  assert.equal(plaza.frames,32);assert.equal(plaza.textures.length,3);
   assert.deepEqual(plaza.dialogue,{open:true,name:'서문 병사',key:'portrait-soldier'});
   await load('village-north');
   const north=await evaluate(`(()=>{const s=window.__game.scene.getScene('game');return s.npcs.filter(n=>n.def.skin==='soldier').map(n=>({wander:n.def.wander,clear:s.walkArea.contains(n.x,n.y)}));})()`);
@@ -3009,4 +3010,99 @@ test('글자와 함께 그린 8방향 막기 검날은 실제 화면에서도 �
   })()`);
   await send('Emulation.clearDeviceMetricsOverride');
   for (const result of results) assert.deepEqual(result.missing, [], JSON.stringify(result));
+});
+
+test('마을 수비대는 습격 중 실제 공격·막기·피격·부상 그림을 쓰고 평소에는 순찰로 돌아온다', async () => {
+  await load('village');
+  const result = await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game');
+    const savedQuests=localStorage.getItem('untitled-rpg.quests');
+    s.quests={'festival-eve':{status:'done',count:0},'village-raid':{status:'active',step:0,count:0}};
+    s.syncRaidEnemies(false);
+    const enemy=s.enemies[0];
+    for(const e of s.enemies.slice(1))e.kill();
+    let x=0,y=0;
+    search:for(let yy=700;yy<2200;yy+=100)for(let xx=700;xx<2500;xx+=100){
+      if(s.walkArea.contains(xx,yy)&&s.walkArea.contains(xx+90,yy)&&s.walkArea.hasClearPath(xx,yy,xx+90,yy)){x=xx;y=yy;break search;}
+    }
+    if(!x)throw Error('No test battle ground');
+    s.player.placeAt(x-800,y-800);
+    const runs=[];
+    for(const [index,skin] of ['ruan','teon','soldier'].entries()){
+      for(const n of s.npcs){n.setBattle(false);n.placeAt(x-700,y-700);}
+      const npc=s.npcs.find(n=>n.skin===skin);npc.placeAt(x,y);
+      enemy.respawn(x+80,y);enemy.character.face(-1);enemy.state='chase';
+      s.now=1000+index*10000;
+      const hp=enemy.character.hp;
+      s.updateNpcCombat(s.now,0);
+      const attack=npc.figure.texture.key==='npc-'+skin+'-combat'&&npc.figure.frame.name==='attack';
+      const selected=s.defenderTarget(enemy)===npc;
+      s.now+=210;s.updateNpcCombat(s.now,0);
+      const damage=hp-enemy.character.hp;
+      s.now+=10;s.updateNpcCombat(s.now,0);
+      const once=hp-enemy.character.hp===damage;
+      npc.setBattle(false);npc.setBattle(true);enemy.state='windup';
+      s.now+=2000;s.updateNpcCombat(s.now,0);
+      const before=npc.fighter.hp;
+      const blocked=s.onEnemyStrike(enemy)&&npc.fighter.hp===before&&npc.combatPose==='guard';
+      s.now+=800;s.updateNpcCombat(s.now,0);
+      const hit=s.onEnemyStrike(enemy)&&npc.fighter.hp<before&&npc.figure.frame.name==='hit';
+      npc.receiveCombatHit(s.now+800,enemy.character,9999);
+      npc.update(s.now+900,.1,s.player,s.walkArea);
+      const injured=npc.figure.frame.name==='injured'&&!npc.canFight;
+      runs.push({skin,attack,selected,damage,once,blocked,hit,injured});
+    }
+    // 아군 마무리도 같은 습격 처치 이벤트를 사용한다.
+    for(const n of s.npcs){n.setBattle(false);n.placeAt(x-700,y-700);}
+    const ruan=s.npcs.find(n=>n.def.id==='ruan');ruan.placeAt(x,y);
+    enemy.respawn(x+80,y);enemy.character.hp=1;enemy.state='chase';
+    s.now+=4000;s.updateNpcCombat(s.now,0);s.now+=210;s.updateNpcCombat(s.now,0);
+    const credited=enemy.state==='dead'&&s.quests['village-raid'].count===1;
+    s.quests={};s.updateNpcCombat(s.now,0);
+    for(const n of s.npcs)n.update(s.now,0,s.player,s.walkArea);
+    const peace=s.npcs.filter(n=>['ruan','teon','soldier'].includes(n.skin)).every(n=>!n.combatControlled&&!n.figure.texture.key.endsWith('-combat'));
+    s.quests={'village-raid':{status:'done',count:0}};s.updateNpcCombat(s.now,0);
+    const aftermath=ruan.figure.frame.name==='injured'&&!ruan.canFight;
+    if(savedQuests===null)localStorage.removeItem('untitled-rpg.quests');else localStorage.setItem('untitled-rpg.quests',savedQuests);
+    return {runs,credited,peace,aftermath};
+  })()`);
+  for (const run of result.runs) {
+    for (const key of ['attack','selected','once','blocked','hit','injured']) assert.equal(run[key],true,JSON.stringify(run));
+    assert.ok(run.damage>0,JSON.stringify(run));
+  }
+  for (const key of ['credited','peace','aftermath']) assert.equal(result[key],true,JSON.stringify(result));
+});
+
+test('습격의 적 AI는 가까운 경비병을 추격하고 실시간 교전으로 서로 피해를 준다', async () => {
+  await load('village');
+  const result = await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game');
+    const savedQuests=localStorage.getItem('untitled-rpg.quests');
+    s.quests={'festival-eve':{status:'done',count:0},'village-raid':{status:'active',step:0,count:0}};
+    s.syncRaidEnemies(false);
+    const enemy=s.enemies[0];for(const e of s.enemies.slice(1))e.kill();
+    let x=0,y=0;
+    search:for(let yy=700;yy<2200;yy+=100)for(let xx=700;xx<2500;xx+=100){
+      if(s.walkArea.contains(xx,yy)&&s.walkArea.contains(xx+250,yy)&&s.walkArea.hasClearPath(xx,yy,xx+250,yy)){x=xx;y=yy;break search;}
+    }
+    if(!x)throw Error('No test battle ground');
+    for(const n of s.npcs)n.placeAt(x-800,y-800);
+    const npc=s.npcs.find(n=>n.skin==='soldier');npc.placeAt(x,y);
+    s.player.placeAt(x-1000,y-1000);
+    enemy.respawn(x+210,y);enemy.character.setAlpha(1);
+    const initial=enemy.character.hp,poses=new Set();let onGround=true;
+    for(let i=0;i<1200&&enemy.character.alive;i++){
+      s.now+=20;s.updateNpcCombat(s.now,.02);
+      const defender=s.defenderTarget(enemy);
+      enemy.update(s.now,.02,s.player,s.walkArea,s.nav,s.onEnemyStrike,undefined,
+        defender?{x:defender.x,y:defender.y,alive:defender.canFight}:undefined);
+      npc.update(s.now,.02,s.player,s.walkArea);
+      poses.add(npc.combatPose);onGround&&=s.walkArea.contains(npc.x,npc.y);
+      if(npc.combatPose==='injured')break;
+    }
+    if(savedQuests===null)localStorage.removeItem('untitled-rpg.quests');else localStorage.setItem('untitled-rpg.quests',savedQuests);
+    return {poses:[...poses],enemyHurt:enemy.character.hp<initial,npcHurt:npc.fighter.hp<75,onGround};
+  })()`);
+  for (const key of ['enemyHurt','npcHurt','onGround']) assert.equal(result[key],true,JSON.stringify(result));
+  for (const pose of ['attack','guard','hit']) assert.ok(result.poses.includes(pose),JSON.stringify(result));
 });

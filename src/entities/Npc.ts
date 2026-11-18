@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { NPC_COMBAT } from '../config';
+import { isFighterSkin, NpcFighter, type NpcCombatPose, type NpcCombatTarget } from './npcCombat';
 import type { Interactable } from '../world/interactables';
 import type { QuestMarker } from '../story/quests';
 import type { WalkArea } from '../world/walkArea';
@@ -16,6 +18,9 @@ interface WalkData { fps: number; idlePose: number; walkPoses: number[]; referen
 // 인물마다 walk_cardinal-60.webp, walk_diagonal-60.webp(줄인 시트)와 walk_frames.json(원본 시트 좌표)이 있다.
 const SHEET_URLS = import.meta.glob<string>('../assets/characters/*/walk_*-60.webp', { eager: true, query: '?url', import: 'default' });
 const FRAME_DATA = import.meta.glob<WalkData>('../assets/characters/*/walk_frames.json', { eager: true, import: 'default' });
+const COMBAT_URLS = import.meta.glob<string>('../assets/characters/*/combat.webp', { eager: true, query: '?url', import: 'default' });
+interface CombatFrame { name: string; x: number; y: number; w: number; h: number; originX: number; originY: number }
+const COMBAT_DATA = import.meta.glob<{ frames: CombatFrame[] }>('../assets/characters/*/combat-frames.json', { eager: true, import: 'default' });
 
 /** walk_*-60.webp는 원본 시트를 이 배율로 줄인 것이다 (tools/build_rowen_assets.py). */
 const WALK_SHEET_SCALE = 0.6;
@@ -37,6 +42,9 @@ const walkData = (id: NpcSkin) => FRAME_DATA[`../assets/characters/${id}/walk_fr
 
 export function preloadNpcs(scene: Phaser.Scene, npcs: readonly NpcDef[]): void {
   for (const id of new Set(npcs.map(npcSkin))) {
+    if (isFighterSkin(id) && !scene.textures.exists(`npc-${id}-combat`)) {
+      scene.load.image(`npc-${id}-combat`, COMBAT_URLS[`../assets/characters/${id}/combat.webp`]);
+    }
     for (const sheet of ['walk_cardinal', 'walk_diagonal']) {
       const key = sheetKey(id, sheet);
       if (!scene.textures.exists(key)) scene.load.image(key, sheetUrl(id, sheet));
@@ -86,6 +94,9 @@ export class Npc extends Phaser.GameObjects.Container {
   /** 연출에서 걷는 빠르기 배율 (뛰기 등) */
   private scriptSpeed = 1;
   private scriptPath: { x: number; y: number }[] = [];
+  private fighter?: NpcFighter;
+  private battle = false;
+  private storyInjured = false;
 
   constructor(scene: Phaser.Scene, def: NpcDef, rand: () => number = Math.random) {
     super(scene, def.x, def.y);
@@ -95,6 +106,13 @@ export class Npc extends Phaser.GameObjects.Container {
     this.add(shadow);
 
     this.skin = npcSkin(def);
+    if (isFighterSkin(this.skin)) {
+      this.fighter = new NpcFighter(this.skin);
+      const texture = scene.textures.get(`npc-${this.skin}-combat`);
+      for (const f of COMBAT_DATA[`../assets/characters/${this.skin}/combat-frames.json`].frames) {
+        if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
+      }
+    }
     this.direction = def.facing ?? 'down';
     this.walk = walkData(this.skin);
     registerWalkFrames(scene, this.skin, this.walk);
@@ -172,6 +190,50 @@ export class Npc extends Phaser.GameObjects.Container {
     return this.scriptPath.length > 0;
   }
 
+  get combatPose(): NpcCombatPose | undefined { return this.combatControlled ? this.fighter?.pose : undefined; }
+  get combatControlled(): boolean { return !!this.fighter && (this.battle || this.storyInjured); }
+  get canFight(): boolean { return this.battle && !!this.fighter && this.fighter.hp > 0; }
+
+  setBattle(enabled: boolean, injured = false): void {
+    if (!this.fighter) return;
+    if (enabled && !this.battle) this.fighter = new NpcFighter(this.fighter.skin);
+    const changed = enabled !== this.battle || injured !== this.storyInjured;
+    this.battle = enabled;
+    this.storyInjured = injured;
+    if (injured) this.fighter.injure();
+    if (changed) {
+      this.target = undefined;
+      this.scriptPath = [];
+      this.showFrame(this.walk.idlePose);
+    }
+  }
+
+  updateCombat(now: number, dt: number, targets: readonly NpcCombatTarget[], area: WalkArea,
+    canStand: (x: number, y: number) => boolean, strike: (id: number, damage: number) => void): void {
+    if (!this.combatControlled || !this.fighter) return;
+    const plan = this.fighter.step(now, this, targets, target => area.hasClearPath(this.x, this.y, target.x, target.y));
+    if (plan.moveX || plan.moveY) {
+      const distance = NPC_COMBAT.speed * dt;
+      const next = area.move(this.x, this.y, plan.moveX * distance, plan.moveY * distance, this.step);
+      const moved = Math.hypot(next.x-this.x, next.y-this.y);
+      if (canStand(next.x, next.y)) {
+        this.setPosition(next.x, next.y).setDepth(next.y);
+        this.walked += moved;
+      }
+      this.direction = direction8(plan.moveX, plan.moveY);
+      this.showFrame(walkPose(this.walked, this.def.height, this.walk.walkPoses), true);
+      this.spot.x = this.x; this.spot.y = this.y + (this.def.talkOffset ?? 0);
+    } else this.showCombat(plan.pose);
+    if (plan.strike !== undefined) strike(plan.strike, NPC_COMBAT.profiles[this.fighter.skin].damage);
+  }
+
+  receiveCombatHit(now: number, source: { x: number; y: number }, damage: number): 'miss' | 'blocked' | 'hit' | 'injured' {
+    if (!this.canFight || !this.fighter) return 'miss';
+    const result = this.fighter.hit(now, this, source, damage);
+    this.showCombat(this.fighter.pose);
+    return result;
+  }
+
   /** 연출을 마치고 평소처럼 돌아다니게 한다. */
   release(): void {
     this.scripted = false;
@@ -184,6 +246,7 @@ export class Npc extends Phaser.GameObjects.Container {
     canStand: (x: number, y: number) => boolean = () => true): void {
     // 퀘스트 표시는 위아래로 천천히 흔들려 눈에 띈다.
     if (this.questMarker) this.marker.setY(-this.def.height - 36 - Math.abs(Math.sin(now / 320)) * 8);
+    if (this.combatControlled) return;
     const idle = this.walk.idlePose;
     if (this.scripted) {
       const next = this.scriptPath[0];
@@ -257,10 +320,18 @@ export class Npc extends Phaser.GameObjects.Container {
     this.showFrame(walkPose(this.walked, this.def.height, this.walk.walkPoses));
   }
 
-  private showFrame(pose: number): void {
+  private showFrame(pose: number, combatWalk = false): void {
+    if (this.combatControlled && !combatWalk) { this.showCombat(this.fighter!.pose); return; }
     const frame = this.frames.get(`${this.direction}-${pose}`)!;
     this.figure.setTexture(sheetKey(this.skin, frame.sheet), frame.name)
+      .setFlipX(false)
       .setOrigin(frame.originX, frame.originY)
       .setScale(this.scale0 * frame.scale);
+  }
+
+  private showCombat(pose: NpcCombatPose): void {
+    const frame = COMBAT_DATA[`../assets/characters/${this.skin}/combat-frames.json`].frames.find(f => f.name === pose)!;
+    this.figure.setTexture(`npc-${this.skin}-combat`, pose).setFlipX(this.fighter!.facingX < 0)
+      .setOrigin(frame.originX, frame.originY).setScale(this.def.height / NPC_COMBAT.artHeight);
   }
 }

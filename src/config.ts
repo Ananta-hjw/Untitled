@@ -80,6 +80,19 @@ export const DODGE = {
   graceMs: 80,
 };
 
+/** 습격 때 마을을 지키는 NPC. 시간은 게임 시계 기준이다. */
+export const NPC_COMBAT = {
+  engageRadius: 300, attackRange: 105, hitRange: 135, guardRange: 150,
+  speed: 88, attackWindupMs: 210, attackMs: 520, attackCooldownMs: 1450,
+  guardMs: 700, guardCooldownMs: 2300, hitMs: 320, invulnerableMs: 650,
+  knockback: 45, blockStunMs: 220, artHeight: 336,
+  profiles: {
+    ruan: { hp: 180, damage: 9 },
+    teon: { hp: 120, damage: 6 },
+    soldier: { hp: 75, damage: 4 },
+  },
+} as const;
+
 export const ENEMY = {
   maxHp: 32,
   damage: 8,
