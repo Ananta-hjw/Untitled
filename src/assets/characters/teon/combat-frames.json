@@ -1,0 +1,40 @@
+{
+  "frames": [
+    {
+      "name": "attack",
+      "x": 0,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 1
+    },
+    {
+      "name": "guard",
+      "x": 512,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 1
+    },
+    {
+      "name": "hit",
+      "x": 0,
+      "y": 384,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 1
+    },
+    {
+      "name": "injured",
+      "x": 512,
+      "y": 384,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 1
+    }
+  ]
+}

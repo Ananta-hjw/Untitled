@@ -94,6 +94,7 @@ export class Enemy {
     nav: NavGrid,
     onStrike: (enemy: Enemy, hit?: EnemyHit) => boolean | void,
     onHazard?: HazardHandler,
+    chaseTarget?: { x: number; y: number; alive: boolean },
   ): void {
     const c = this.character;
     if (this.state === 'dead') return;
@@ -105,10 +106,11 @@ export class Enemy {
     this.updateProjectile(time, dt, player, area, onStrike);
     if (c.sprite instanceof MonsterSprite) c.sprite.advance(dt * 1000);
 
-    const dx = player.x - c.x;
-    const dy = player.y - c.y;
+    const opponent = chaseTarget ?? player;
+    const dx = opponent.x - c.x;
+    const dy = opponent.y - c.y;
     // 보스는 나타나면 주인공이 어디 있든 쫓는다.
-    const playerNear = player.alive && (this.boss || (Math.abs(dx) < ENEMY.aggroX && Math.abs(dy) < ENEMY.aggroY));
+    const playerNear = opponent.alive && (this.boss || (Math.abs(dx) < ENEMY.aggroX && Math.abs(dy) < ENEMY.aggroY));
 
     switch (this.state) {
       case 'wander': {
@@ -128,7 +130,7 @@ export class Enemy {
       }
 
       case 'chase': {
-        if (!player.alive || (!this.boss && Math.abs(dx) > ENEMY.aggroX * 1.5)) {
+        if (!opponent.alive || (!this.boss && Math.abs(dx) > ENEMY.aggroX * 1.5)) {
           this.state = 'wander';
           this.target.set(c.x, c.y);
           break;
@@ -144,8 +146,8 @@ export class Enemy {
         }
         const ranged = this.kind === 'waterdrop-mushroom';
         const charge = isCharger(this.kind);
-        const inRange = ranged ? Math.hypot(dx, dy) <= 350 && area.hasClearPath(c.x, c.y, player.x, player.y)
-          : charge ? Math.hypot(dx, dy) <= 250 && area.hasClearPath(c.x, c.y, player.x, player.y)
+        const inRange = ranged ? Math.hypot(dx, dy) <= 350 && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
+          : charge ? Math.hypot(dx, dy) <= 250 && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
           : Math.abs(dx) < ENEMY.attackRangeX && Math.abs(dy) < ENEMY.attackRangeY;
         if (inRange) {
           // 보스는 돌진을 BOSS.chain번 잇달아 한다.
@@ -155,13 +157,13 @@ export class Enemy {
         }
         // 플레이어의 옆자리(같은 높이)로 붙는다.
         const side = dx > 0 ? -1 : 1;
-        const goalX = player.x + side * (this.kind === 'waterdrop-mushroom' ? 180 : ENEMY.attackRangeX - 25);
+        const goalX = opponent.x + side * (this.kind === 'waterdrop-mushroom' ? 180 : ENEMY.attackRangeX - 25);
         const step = this.stats.speed * dt;
         // 곧장 갈 수 있으면 곧장 가고, 테이블이나 카운터에 막혀 있으면 격자가 알려 주는 길로 돌아간다.
-        if (!area.hasClearPath(c.x, c.y, goalX, player.y) && nav.next(c.x, c.y, this.waypoint)) {
+        if (!chaseTarget && !area.hasClearPath(c.x, c.y, goalX, opponent.y) && nav.next(c.x, c.y, this.waypoint)) {
           this.stepToward(this.waypoint.x, this.waypoint.y, step, area);
         } else {
-          this.stepToward(goalX, player.y, step, area);
+          this.stepToward(goalX, opponent.y, step, area);
         }
         break;
       }
@@ -174,7 +176,7 @@ export class Enemy {
       case 'recover':
         c.setMotion(false);
         if (time < this.timer) break;
-        if (this.chainPending && player.alive) {
+        if (this.chainPending && opponent.alive) {
           // 연속 공격의 다음 돌진: 쉬는 동안 움직인 주인공 쪽을 다시 겨눈다.
           this.chainPending = false;
           this.beginWindup(time, dx, dy);

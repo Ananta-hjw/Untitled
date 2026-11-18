@@ -16,6 +16,7 @@ import {
   DODGE,
   JUST_DODGE,
   ENEMY,
+  NPC_COMBAT,
   KNOCKBACK_DAMPING,
   PLAYER,
   PLAYER_SPEED,
@@ -735,9 +736,12 @@ export class GameScene extends Phaser.Scene {
       if (this.checkExit()) return;
       this.updateAttackTrace(time);
     }
+    this.updateNpcCombat(time, dt);
     this.nav.setTarget(this.player.x, this.player.y);
     for (const enemy of this.enemies) {
-      enemy.update(time, dt, this.player, this.walkArea, this.nav, this.onEnemyStrike, this.onBossHazard);
+      const defender = this.defenderTarget(enemy);
+      enemy.update(time, dt, this.player, this.walkArea, this.nav, this.onEnemyStrike, this.onBossHazard,
+        defender ? { x: defender.x, y: defender.y, alive: defender.canFight } : undefined);
       this.applyKnockback(enemy.character, dt);
     }
     this.separateEnemies(dt);
@@ -749,6 +753,38 @@ export class GameScene extends Phaser.Scene {
     this.updateSkill(time, gameStep);
     this.updateResonance(time);
     this.updateCombatCooldowns(time);
+  }
+
+  /** 습격 때만 전투에 참여한다. 평소 NPC 순찰과 축제 연출은 기존 제어를 유지한다. */
+  private updateNpcCombat(time: number, dt: number): void {
+    const phase = chapterPhase(this.quests);
+    const enabled = phase === 'raid' && !this.playFestival;
+    const targets = this.enemies.map((enemy, id) => ({ id, x: enemy.character.x, y: enemy.character.y,
+      alive: enemy.character.alive && !enemy.untouchable, attacking: enemy.state === 'windup' }));
+    for (const npc of this.npcs) {
+      npc.setBattle(enabled, phase === 'aftermath' && npc.def.id === 'ruan');
+      npc.updateCombat(time, dt, targets, this.walkArea, this.npcCanStand, (id, damage) => {
+        const enemy = this.enemies[id];
+        if (!enemy?.character.alive || enemy.untouchable) return;
+        const c = enemy.character, distance = Math.hypot(c.x-npc.x, c.y-npc.y) || 1;
+        const dx = (c.x-npc.x)/distance, dy = (c.y-npc.y)/distance;
+        const died = c.hurt(damage);
+        this.showDamage(c.x, c.y-95, damage, '#bfe9ff', 26);
+        this.impacts.impact(c.x, c.y-65, dx, dy, 'normal', time, c.y);
+        // 아군이 마무리해도 습격 처치 수·다음 무리·보스 진행은 같은 경로로 처리한다.
+        this.resolveEnemyHit(enemy, died, dx, dy, NPC_COMBAT.knockback);
+      });
+    }
+  }
+
+  private defenderTarget(enemy: Enemy): Npc | undefined {
+    if (enemy.boss || !this.raidEnemies.has(enemy)) return;
+    const c = enemy.character;
+    const playerDistance = Math.hypot(this.player.x-c.x, this.player.y-c.y);
+    return this.npcs.filter(npc => npc.canFight
+      && Math.hypot(npc.x-c.x, npc.y-c.y) < Math.min(NPC_COMBAT.engageRadius, playerDistance)
+      && this.walkArea.hasClearPath(c.x, c.y, npc.x, npc.y))
+      .sort((a, b) => Math.hypot(a.x-c.x, a.y-c.y)-Math.hypot(b.x-c.x, b.y-c.y))[0];
   }
 
   // ---------------------------------------------------------------- 오프닝
@@ -865,7 +901,12 @@ export class GameScene extends Phaser.Scene {
       const area = this.walkArea, b = this.map.bounds;
       defs = [...defs, ...stressNpcs(this.stressCount, defs, Math.random, b, (x, y) => area.contains(x, y) && !findExit(this.map, x, y))];
     }
-    this.npcs = defs.map((def) => new Npc(this, def));
+    const phase = chapterPhase(this.quests);
+    this.npcs = defs.map((def) => {
+      const npc = new Npc(this, def);
+      npc.setBattle(phase === 'raid' && !this.playFestival, phase === 'aftermath' && def.id === 'ruan');
+      return npc;
+    });
     this.interactables = [...this.map.interactables, ...this.npcs.map((npc) => npc.spot),
       // 시온의 집 침대 앞: 쉬기 (저장)
       ...(this.mapId === 'in-home' ? [{ ...HOME_BED_SPOT }] : []),
@@ -2345,6 +2386,20 @@ export class GameScene extends Phaser.Scene {
     const now = this.now;
     if (!player.alive || this.dialogue.isOpen) return false;
     const reaches = (x: number, y: number) => hit ? enemyHitReaches(hit, x, y) : strikeReaches(c.x, c.y, c.facing, x, y);
+    if (!reaches(player.x, player.y)) {
+      const defender = this.npcs.filter(npc => npc.canFight && reaches(npc.x, npc.y))
+        .sort((a, b) => Math.hypot(a.x-c.x, a.y-c.y)-Math.hypot(b.x-c.x, b.y-c.y))[0];
+      if (defender) {
+        const source = hit ? { x: defender.x-hit.dx, y: defender.y-hit.dy } : c;
+        const result = defender.receiveCombatHit(now, source, enemy.stats.damage * (hit?.damageScale ?? 1));
+        if (result !== 'miss') {
+          this.impacts.impact(defender.x, defender.y-65, Math.sign(c.x-defender.x), 0,
+            result === 'blocked' ? 'counter' : 'normal', now, defender.y+2);
+          if (result === 'blocked' && !hit) enemy.interrupt(now, NPC_COMBAT.blockStunMs);
+          return true;
+        }
+      }
+    }
 
     // 공격이 닿기 직전에 피했고, 피하지 않았다면 맞았을 자리였으면 저스트 회피다.
     if (!this.justDodged && enemy.lastStrikeAt !== undefined
