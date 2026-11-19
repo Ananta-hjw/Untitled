@@ -78,6 +78,7 @@ import { StoryChoice } from '../ui/StoryChoice';
 import { CLINIC_BED_SPOT, HOME_BED_SPOT, REST_POINTS, herbBonus, REST_SAVE_KEY, canRest, parseRestPoint, serializeRestPoint, type RestPointId } from '../story/restPoints';
 import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, isDusk, raidSpawns, raidSpawnsAnyStep, INSPECTION_LINES, type RaidSpawn } from '../story/chapterOne';
 import { BOSS, entersPhaseTwo } from '../combat/bossPattern';
+import { ARENA, bossLanding, chooseArena, entryPoint, insideArena, pushTowardArena, type Arena } from '../combat/bossArena';
 import { BossHud } from '../ui/BossHud';
 import { GuideCard } from '../ui/GuideCard';
 import { GUIDE_SAVE_KEY, activeLesson, lessonToShow, parseSeenLessons, serializeSeenLessons, type GuideButton, type LessonId } from '../story/tutorial';
@@ -154,6 +155,17 @@ export class GameScene extends Phaser.Scene {
   private bossWarningEnd?: number;
   private pendingBoss?: RaidSpawn[];
   private bossRoarUntil = 0;
+  /**
+   * 보스전 결계(combat/bossArena.ts): 고리, 닫혔는지, 걷히는 시각, 원래 걸을 수 있는 영역, 물러난 병사들.
+   * 경고가 뜨면 고리가 번지고 병사들이 물러나며, 보스가 나타나면 닫혀 walkArea가 고리 안으로 좁아진다.
+   */
+  private arena?: Arena;
+  private arenaClosed = false;
+  private arenaFadeAt?: number;
+  private arenaOpenedAt = 0;
+  private baseWalkArea?: WalkArea;
+  private awayNpcs = new Set<Npc>();
+  private arenaRing?: Phaser.GameObjects.Graphics;
   /** 초반 전투 가이드(story/tutorial.ts): 안내 창과 이미 본 안내 */
   private guideCard?: GuideCard;
   private seenLessons = new Set<LessonId>();
@@ -460,6 +472,14 @@ export class GameScene extends Phaser.Scene {
     this.bossWarningEnd = undefined;
     this.pendingBoss = undefined;
     this.bossRoarUntil = 0;
+    this.arena = undefined;
+    this.arenaClosed = false;
+    this.arenaFadeAt = undefined;
+    this.arenaOpenedAt = 0;
+    this.baseWalkArea = undefined;
+    this.awayNpcs = new Set();
+    this.arenaRing = undefined;
+    this.occluderCache = undefined;
     this.guideCard = undefined;
     this.seenLessons = new Set();
     this.traveling = false;
@@ -743,7 +763,7 @@ export class GameScene extends Phaser.Scene {
     this.festivalStage?.update(time);
     this.updateFestivalRaiders(time);
     this.updateRespawns(time);
-    this.updateBoss(time);
+    this.updateBoss(time, dt);
     this.updateAttackLunge(time);
     this.updateInteraction(time);
     if (this.traveling || this.menuOpen()) return;
@@ -766,7 +786,7 @@ export class GameScene extends Phaser.Scene {
       this.applyKnockback(enemy.character, dt);
     }
     this.separateEnemies(dt);
-    for (const npc of this.npcs) npc.update(time, dt, this.player, this.walkArea, this.npcCanStand);
+    for (const npc of this.npcs) if (!this.awayNpcs.has(npc)) npc.update(time, dt, this.player, this.walkArea, this.npcCanStand);
     for (const door of this.doorMarkers) if (door.marker) door.text.setY(door.spot.y - 150 - Math.abs(Math.sin(time / 320)) * 8);
     this.applyKnockback(this.player, dt);
     this.damageNumbers.update(gameStep);
@@ -783,6 +803,7 @@ export class GameScene extends Phaser.Scene {
     const targets = this.enemies.map((enemy, id) => ({ id, x: enemy.character.x, y: enemy.character.y,
       alive: enemy.character.alive && !enemy.untouchable, attacking: enemy.state === 'windup' }));
     for (const npc of this.npcs) {
+      if (this.awayNpcs.has(npc)) continue;
       npc.setBattle(enabled, phase === 'aftermath' && npc.def.id === 'ruan');
       npc.updateCombat(time, dt, targets, this.walkArea, this.npcCanStand, (id, damage) => {
         const enemy = this.enemies[id];
@@ -1879,6 +1900,8 @@ export class GameScene extends Phaser.Scene {
       this.pendingBoss = spawns;
       this.bossWarningEnd = this.now + BOSS.warningMs;
       this.bossHud?.showWarning(MONSTERS[spawns.find((s) => s.boss)!.key].name, this.now);
+      // 결계는 다음 프레임(updateBoss)에 연다: 장면을 만드는 중이면 아직 병사와 HUD가 없다.
+      this.arena = undefined;
       this.cameras.main.shake(BOSS.warningMs * 0.3, 0.003);
       return;
     }
@@ -2398,7 +2421,7 @@ export class GameScene extends Phaser.Scene {
   /** 미니맵이 다시 그릴 때만 부른다. */
   private readonly collectMinimap = () => ({
     npcs: [
-      ...this.npcs.map((n) => ({ x: n.x, y: n.y, marker: n.questMarker })),
+      ...this.npcs.filter((n) => n.visible).map((n) => ({ x: n.x, y: n.y, marker: n.questMarker })),
       ...this.doorMarkers.filter((d) => d.marker).map((d) => ({ x: d.spot.x, y: d.spot.y, marker: d.marker })),
       ...chapterSpots(this.quests, this.mapId).map(spot => ({ x: spot.x, y: spot.y, marker: 'target' as const })),
     ],
@@ -2613,9 +2636,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 보스: 경고가 끝나면 나타나게 하고, 체력 막대를 맞춘다. */
-  private updateBoss(time: number): void {
+  private updateBoss(time: number, dt: number): void {
+    this.drawArena(time);
     if (this.bossWarningEnd !== undefined) {
       this.bossHud?.updateWarning(time);
+      if (!this.arena || this.arenaFadeAt !== undefined) this.openArena();
+      this.pushIntoArena(dt);
       if (time >= this.bossWarningEnd) this.spawnBoss(time);
     }
     const boss = this.boss;
@@ -2627,7 +2653,10 @@ export class GameScene extends Phaser.Scene {
     this.bossWarningEnd = undefined;
     this.pendingBoss = undefined;
     this.bossHud?.hideWarning();
-    for (const point of spawns) {
+    this.closeArena();
+    for (const spawn of spawns) {
+      // 보스는 결계 안에서 주인공의 반대편에 내려앉는다.
+      const point = spawn.boss && this.arena ? { ...spawn, ...bossLanding(this.arena, this.player, this.arenaOpen) } : spawn;
       const enemy = new Enemy(this, point.key, point.x, point.y, point.level, !!point.boss);
       this.enemies.push(enemy);
       this.raidEnemies.add(enemy);
@@ -2665,9 +2694,130 @@ export class GameScene extends Phaser.Scene {
     this.boss = undefined;
     this.bossHud?.hideBar();
     this.bossRoarUntil = 0;
+    this.liftArena();
     this.impacts.screenFlash(0xffffff, 0.2, 300);
     this.cameras.main.shake(420, 0.01);
     this.hud.showCallout(`${enemy.stats.name}를 쓰러뜨렸다!`);
+  }
+
+  // ---------------------------------------------------------------- 보스전 결계
+
+  /** 결계 자리로 쓸 수 있는 바닥인지: 원래 걸을 수 있고, 출구가 아니고, 건물 그림·나무 뒤에 가려지지 않는 곳 */
+  private readonly arenaOpen = (x: number, y: number): boolean => {
+    const area = this.baseWalkArea ?? this.walkArea;
+    if (!area.contains(x, y) || findExit(this.map, x, y)) return false;
+    return !this.arenaOccluders().some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom);
+  };
+
+  private occluderCache?: Array<{ left: number; top: number; right: number; bottom: number }>;
+
+  /** 발이 이 안에 있으면 그림에 몸이 가려지는 사각형들 (건물 그림, 나무 갓). 그림의 아래 끝보다 위쪽만. */
+  private arenaOccluders(): Array<{ left: number; top: number; right: number; bottom: number }> {
+    if (this.occluderCache) return this.occluderCache;
+    const rects: Array<{ left: number; top: number; right: number; bottom: number }> = [];
+    for (const o of this.children.list) {
+      if (!(o instanceof Phaser.GameObjects.Image)) continue;
+      const key = o.texture.key;
+      if (key !== 'village-buildings' && key !== 'village-props') continue;
+      const w = o.displayWidth, h = o.displayHeight;
+      // 꽃·덤불처럼 낮은 소품은 몸을 가리지 않는다.
+      if (h < 140) continue;
+      const inset = key === 'village-props' ? 0.28 : 0.08;
+      rects.push({ left: o.x - w / 2 + w * inset, right: o.x + w / 2 - w * inset, top: o.y - h * 0.85, bottom: o.y - 8 });
+    }
+    return (this.occluderCache = rects);
+  }
+
+  /** "보스 등장" 경고와 함께: 결계 자리를 고르고 고리를 번지게 하며, 싸우던 병사들은 물러난다. */
+  private openArena(): void {
+    this.baseWalkArea = this.walkArea;
+    this.arena = chooseArena(this.player, this.map.bounds, this.arenaOpen);
+    this.arenaClosed = false;
+    this.arenaFadeAt = undefined;
+    this.arenaOpenedAt = this.now;
+    this.arenaRing ??= this.add.graphics().setDepth(-40);
+    const away = this.npcs.filter((npc) => npc.isFighter);
+    for (const npc of away) this.awayNpcs.add(npc);
+    const spots = new Set(away.map((npc) => npc.spot));
+    this.interactables = this.interactables.filter((spot) => !spots.has(spot));
+    if (away.length > 0) this.hud.showCallout('병사들이 주민들을 지키러 물러난다');
+  }
+
+  /** 경고 동안: 고리 밖에 있으면 안개가 주인공을 고리 안쪽으로 밀어 넣는다(조작은 막지 않는다). */
+  private pushIntoArena(dt: number): void {
+    const arena = this.arena;
+    if (!arena || this.arenaClosed || !this.player.alive || insideArena(arena, this.player.x, this.player.y, ARENA.pushInner)) return;
+    const to = pushTowardArena(arena, this.player.x, this.player.y, ARENA.pushSpeed * dt);
+    const next = this.walkArea.move(this.player.x, this.player.y, to.x - this.player.x, to.y - this.player.y, this.scratch);
+    this.player.placeAt(next.x, next.y);
+  }
+
+  /** 보스가 나타나는 순간: 고리가 닫혀 그 밖으로 나갈 수 없다. 아직 밖에 있으면 고리 안쪽 첫 자리로 옮긴다. */
+  private closeArena(): void {
+    const arena = this.arena;
+    if (!arena || !this.baseWalkArea) return;
+    const base = this.baseWalkArea;
+    if (!insideArena(arena, this.player.x, this.player.y) || !base.contains(this.player.x, this.player.y)) {
+      const at = entryPoint(arena, this.player.x, this.player.y, (x, y) => base.contains(x, y) && !findExit(this.map, x, y));
+      this.player.placeAt(at.x, at.y);
+      this.impacts.dust(at.x, at.y, 8, this.now, 70);
+    }
+    this.walkArea = base.fenced((x, y) => insideArena(arena, x, y) && !findExit(this.map, x, y));
+    this.arenaClosed = true;
+  }
+
+  /** 보스를 쓰러뜨리면 안개가 걷히고, 걸을 수 있는 영역과 물러났던 병사들이 돌아온다. */
+  private liftArena(): void {
+    if (!this.arena) return;
+    if (this.baseWalkArea) this.walkArea = this.baseWalkArea;
+    this.baseWalkArea = undefined;
+    this.arenaClosed = false;
+    this.arenaFadeAt = this.now;
+    const back = [...this.awayNpcs];
+    this.awayNpcs.clear();
+    for (const npc of back) {
+      npc.setVisible(true).setAlpha(0);
+      if (!this.interactables.includes(npc.spot)) this.interactables.push(npc.spot);
+    }
+    if (back.length > 0) this.hud.showCallout('안개가 걷히고 병사들이 돌아온다');
+  }
+
+  /** 바닥의 부식 안개 고리. 경고 동안 번지고, 닫히면 짙어지며, 걷힐 때 흐려진다. 물러나고 돌아오는 병사도 흐려졌다 나타난다. */
+  private drawArena(time: number): void {
+    const arena = this.arena, g = this.arenaRing;
+    if (!arena || !g) return;
+    const spread = Math.min(1, (time - this.arenaOpenedAt) / (BOSS.warningMs * 0.7));
+    const fade = this.arenaFadeAt === undefined ? 1 : 1 - (time - this.arenaFadeAt) / ARENA.fadeOutMs;
+    for (const npc of this.npcs) {
+      if (this.awayNpcs.has(npc)) {
+        const alpha = Math.max(0, 1 - (time - this.arenaOpenedAt) / 700);
+        npc.setAlpha(alpha).setVisible(alpha > 0);
+      } else if (npc.alpha < 1) npc.setAlpha(Math.min(1, npc.alpha + 0.04));
+    }
+    g.clear();
+    if (fade <= 0) {
+      this.arena = undefined;
+      return;
+    }
+    const strength = (this.arenaClosed ? 1 : 0.55 + 0.25 * spread) * fade;
+    const scale = 0.35 + 0.65 * (1 - (1 - spread) ** 3);
+    const rx = arena.rx * scale, ry = arena.ry * scale;
+    // 고리 바깥쪽으로 짙은 안개 띠를 겹겹이(바깥일수록 옅게), 테두리는 넘실거리는 안개 덩어리와 밝은 선으로.
+    for (let band = 0; band < 6; band++) {
+      const grow = 30 + band * 34;
+      g.lineStyle(40, band % 2 ? 0x3d2a4a : 0x2f4a22, (0.34 - band * 0.05) * strength)
+        .strokeEllipse(arena.x, arena.y, rx * 2 + grow, ry * 2 + grow * 0.56);
+    }
+    const count = 64;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + time / 9000;
+      const wobble = Math.sin(time / 420 + i * 1.7);
+      const x = arena.x + Math.cos(a) * (rx + 14 + 8 * wobble);
+      const y = arena.y + Math.sin(a) * (ry + 8 + 5 * wobble);
+      g.fillStyle(i % 3 === 0 ? 0x6b4a82 : 0x5f8f36, (0.38 + 0.14 * wobble) * strength).fillCircle(x, y, 26 + 9 * wobble);
+    }
+    g.lineStyle(6, 0xb6f07a, 0.8 * strength).strokeEllipse(arena.x, arena.y, rx * 2, ry * 2);
+    g.lineStyle(2, 0xeaffd0, 0.5 * strength * (0.6 + 0.4 * Math.sin(time / 200))).strokeEllipse(arena.x, arena.y, rx * 2 - 16, ry * 2 - 9);
   }
 
   /**

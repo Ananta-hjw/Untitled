@@ -2106,6 +2106,56 @@ test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 
   assert.deepEqual(result.after, { bar: false, boss: false, step: 5 });
 });
 
+test('보스전 결계: 경고와 함께 병사들이 물러나고 고리가 번지며, 밖의 주인공은 밀려 들어오고, 보스가 나오면 고리 밖으로 못 나가고, 쓰러뜨리면 모두 돌아온다', async () => {
+  await load('village-north');
+  await evaluate(`(() => { const s = window.__game.scene.getScene('game');
+    s.quests = { 'festival-eve': { status: 'done', count: 1 }, 'village-raid': { status: 'active', count: 8, step: 4 } }; s.saveQuests(); return true; })()`);
+  await load('village-north');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+    let t = performance.now();
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    const fighters = s.npcs.filter((n) => n.isFighter);
+    const arena = s.arena;
+    const away = fighters.length > 0 && fighters.every((n) => s.awayNpcs.has(n) && !s.interactables.includes(n.spot));
+    // 고리 밖 멀리로 옮겨 두면 경고 동안 밀려 들어온다.
+    const ellipse = (x, y, k = 1) => ((x - arena.x) / (arena.rx * k)) ** 2 + ((y - arena.y) / (arena.ry * k)) ** 2 <= 1;
+    const outside = [[arena.x, arena.y + arena.ry * 1.6], [arena.x, arena.y - arena.ry * 1.6], [arena.x + arena.rx * 1.4, arena.y], [arena.x - arena.rx * 1.4, arena.y]]
+      .find(([x, y]) => s.walkArea.contains(x, y));
+    p.placeAt(outside[0], outside[1]);
+    for (let i = 0; i < 400 && !s.boss; i++) step();
+    step(30);
+    const hidden = fighters.every((n) => !n.visible);
+    const inside = ellipse(p.x, p.y);
+    const boss = s.boss, c = boss.character;
+    const bossInside = ellipse(c.x, c.y);
+    // 닫힌 뒤에는 한쪽으로 계속 걸어도 고리 밖으로 나가지 못한다.
+    p.invulnerableUntil = Infinity; s.derived.evadeChance = 0;
+    s.joystick.vector.set(0, 1);
+    step(240);
+    s.joystick.vector.set(0, 0);
+    const held = ellipse(p.x, p.y);
+    const fenced = !s.walkArea.contains(arena.x, arena.y + arena.ry * 1.2) && s.baseWalkArea.contains(p.x, p.y);
+    c.hp = 0; s.resolveEnemyHit(boss, true, 1, 0, 0);
+    step(90);
+    const back = fighters.every((n) => n.visible && n.alpha === 1 && s.interactables.includes(n.spot)) && s.awayNpcs.size === 0;
+    const released = s.walkArea === s.baseWalkArea || s.baseWalkArea === undefined;
+    const ringGone = s.arena === undefined;
+    localStorage.removeItem('untitled-rpg.quests');
+    return { fighters: fighters.length, away, hidden, inside, bossInside, held, fenced, back, released, ringGone };
+  })()`);
+  assert.ok(result.fighters > 0, '북쪽 맵에 병사가 있다');
+  assert.equal(result.away, true, '경고와 함께 병사들이 물러난다(대화도 안 된다)');
+  assert.equal(result.hidden, true);
+  assert.equal(result.inside, true, '고리 밖의 주인공은 경고 동안 고리 안으로 들어온다');
+  assert.equal(result.bossInside, true, '보스는 고리 안에 내려앉는다');
+  assert.equal(result.held, true, '닫힌 고리 밖으로는 걸어 나가지 못한다');
+  assert.equal(result.fenced, true);
+  assert.equal(result.back, true, '보스를 쓰러뜨리면 병사들이 돌아온다');
+  assert.equal(result.released, true, '걸을 수 있는 영역도 원래대로');
+  assert.equal(result.ringGone, true, '안개 고리가 걷힌다');
+});
+
 test('보스 2페이즈: 멀면 부식 산탄 3발(빗나가면 웅덩이), 돌진 자리에 웅덩이, 웅덩이는 작은 피해·둔화, 체력 1/4에서 부식의 장막 한 번', async () => {
   await load('village-north');
   await evaluate(`(() => { const s = window.__game.scene.getScene('game');

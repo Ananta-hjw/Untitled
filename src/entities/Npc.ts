@@ -190,6 +190,8 @@ export class Npc extends Phaser.GameObjects.Container {
     return this.scriptPath.length > 0;
   }
 
+  /** 전투 동작이 있는 사람(병사·테온·루안): 보스전 결계 동안 물러난다 */
+  get isFighter(): boolean { return !!this.fighter; }
   get combatPose(): NpcCombatPose | undefined { return this.combatControlled ? this.fighter?.pose : undefined; }
   get combatControlled(): boolean { return !!this.fighter && (this.battle || this.storyInjured); }
   get canFight(): boolean { return this.battle && !!this.fighter && this.fighter.hp > 0; }

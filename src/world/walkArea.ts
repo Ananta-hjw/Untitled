@@ -66,6 +66,17 @@ export class WalkArea {
     return true;
   }
 
+  /**
+   * 이 영역 가운데 fence 안만 걸을 수 있는 영역 (보스전 결계). 원래 영역은 그대로 두고,
+   * move·hasClearPath·randomPoint가 모두 새 contains를 따르도록 이 객체를 원형으로 삼는다.
+   */
+  fenced(fence: (x: number, y: number) => boolean): WalkArea {
+    const base = this;
+    const area: WalkArea = Object.create(base);
+    area.contains = (x: number, y: number) => base.contains(x, y) && fence(x, y);
+    return area;
+  }
+
   /** 걸을 수 있는 영역을 감싸는 사각형 */
   get bounds(): Phaser.Geom.Rectangle {
     return Phaser.Geom.Polygon.GetAABB(this.polygon);
