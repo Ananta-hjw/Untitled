@@ -2446,6 +2446,67 @@ test('잡화점 구매·판매 탭은 한 개씩 거래하고 부족·한도를 
   for(const key of ['noPurchase','noOverflow','goldCap','empty','reused','frozen','closed'])assert.equal(result[key],true,key);
 });
 
+test('창이 열려 있을 때 그 아래 전투 버튼 자리를 눌러도 버튼이 눌리지 않는다 (쉬어 가기 아래의 공명)', async () => {
+  await load('in-inn');
+  const at = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    localStorage.removeItem('untitled-rpg.rest'); s.quests = {};
+    s.setResonanceCharge(15); s.player.hp = 10;
+    s.openDialogue(s.npcs.find(n => n.def.id === 'rosetta').spot);
+    while (s.dialogue.isOpen) s.dialogue.advance();
+    const c = s.resonanceButton.center, yes = s.storyChoice.yes.getBounds();
+    const r = window.__game.canvas.getBoundingClientRect(), size = window.__game.scale.gameSize;
+    return { open: s.storyChoice.isOpen, underYes: yes.contains(c.x, c.y),
+      x: r.left + c.x * r.width / size.width, y: r.top + c.y * r.height / size.height };
+  })()`);
+  assert.equal(at.open, true);
+  // 실제 마우스로 공명 버튼 가운데를 누른다. 이 자리는 쉬어 가기 버튼 위이기도 하다.
+  for (const type of ['mousePressed', 'mouseReleased']) {
+    await send('Input.dispatchMouseEvent', { type, x: at.x, y: at.y, button: 'left', clickCount: 1 });
+    await evaluate(`(() => { const g = window.__game; let t = performance.now(); for (let i = 0; i < 3; i++) g.step(t += 16, 16); return true; })()`);
+  }
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    let t = performance.now(); for (let i = 0; i < 10; i++) g.step(t += 16, 16);
+    const out = { choice: s.storyChoice.isOpen, resonating: s.resonating, charge: s.resonanceCharge, healed: s.player.hp === s.player.maxHp };
+    localStorage.removeItem('untitled-rpg.rest'); s.setResonanceCharge(0);
+    return out;
+  })()`);
+  assert.equal(result.resonating, false, '공명이 쓰이지 않는다');
+  assert.equal(result.charge, 15, '구슬도 그대로');
+  if (at.underYes) assert.deepEqual([result.choice, result.healed], [false, true], '누른 곳의 창 버튼(쉬어 가기)만 동작한다');
+});
+
+test('대화를 넘기려고 공명·막기 버튼 자리를 눌러도, 대화가 닫힌 뒤 그 버튼이 쓰이지 않는다', async () => {
+  await load('village');
+  for (const name of ['resonanceButton', 'blockButton']) {
+    const at = await evaluate(`(() => {
+      const s = window.__game.scene.getScene('game');
+      s.quests = {}; s.setResonanceCharge(15); s.parryReadyAt = 0; s.parryUntil = 0;
+      s.openDialogue(s.npcs.find(n => n.def.id === 'vernel').spot);
+      const c = s.${name}.center, r = window.__game.canvas.getBoundingClientRect(), size = window.__game.scale.gameSize;
+      return { open: s.dialogue.isOpen, x: r.left + c.x * r.width / size.width, y: r.top + c.y * r.height / size.height };
+    })()`);
+    assert.equal(at.open, true);
+    // 대화가 닫힐 때까지 같은 자리를 실제 마우스로 누른다(마지막 누름이 대화를 닫는다).
+    for (let i = 0; i < 16; i++) {
+      if (!await evaluate(`window.__game.scene.getScene('game').dialogue.isOpen`)) break;
+      for (const type of ['mousePressed', 'mouseReleased']) {
+        await send('Input.dispatchMouseEvent', { type, x: at.x, y: at.y, button: 'left', clickCount: 1 });
+        await evaluate(`(() => { const g = window.__game; let t = performance.now(); for (let i = 0; i < 3; i++) g.step(t += 16, 16); return true; })()`);
+      }
+    }
+    const result = await evaluate(`(() => {
+      const g = window.__game, s = g.scene.getScene('game');
+      let t = performance.now(); for (let i = 0; i < 10; i++) g.step(t += 16, 16);
+      const out = { open: s.dialogue.isOpen, resonating: s.resonating, charge: s.resonanceCharge, parried: s.parryUntil > 0 };
+      s.setResonanceCharge(0);
+      return out;
+    })()`);
+    assert.deepEqual(result, { open: false, resonating: false, charge: 15, parried: false }, name);
+  }
+});
+
 test('여관 휴식 창은 회복량·다음 위치를 보여 주고 취소 시 유지하며 확인 시 한 번만 회복·저장한다', async () => {
   await load('in-inn');
   const result=await evaluate(`(() => {

@@ -46,6 +46,18 @@ export interface NpcDef {
   area?: VillageArea;
   /** 카운터 뒤처럼 바로 다가갈 수 없는 자리면, 말을 거는 자리를 이만큼 앞(아래)으로 옮긴다. */
   talkOffset?: number;
+  /**
+   * 맡은 일 (습격 뒤 복구·치료·경계): 이 자리들을 차례로 오가며, 각 자리에 멈춰 있는 동안 머리 위에 하는 일을 띄운다.
+   * 있으면 wander 대신 이것을 따른다. 첫 자리가 처음 서 있는 자리다.
+   */
+  duty?: DutyPoint[];
+}
+
+export interface DutyPoint { x: number; y: number; label: string; facing?: Direction8 }
+
+/** 맡은 일 자리에 멈춰 일하는 시간(ms, 게임 시계) */
+export function dutyPauseMs(rand: () => number): number {
+  return 3200 + rand() * 3300;
 }
 
 export function npcSkin(def: NpcDef): NpcSkin { return def.skin ?? def.id as NamedNpcId; }

@@ -298,6 +298,8 @@ export class GameScene extends Phaser.Scene {
   /** 퀘스트 진행. 바뀔 때마다 기기에 저장한다(진행 상황과 따로). */
   private quests: QuestState = {};
   private storyChoice?: StoryChoice;
+  /** 마지막으로 대화를 넘긴 누름 (onDialoguePointer) */
+  private dialogueTap?: { id: number; downTime: number };
   private storyMarkers: Phaser.GameObjects.Text[] = [];
   private raidEnemies = new Set<Enemy>();
   /** 습격의 밤 그늘. Rectangle의 반투명 채우기는 Phaser 4에서 훨씬 옅게 그려져 Graphics로 그린다. */
@@ -405,6 +407,7 @@ export class GameScene extends Phaser.Scene {
     this.perf = undefined;
     this.quests = {};
     this.storyChoice = undefined;
+    this.dialogueTap = undefined;
     this.storyMarkers = [];
     this.raidEnemies = new Set();
     this.chapterShade = undefined;
@@ -563,13 +566,13 @@ export class GameScene extends Phaser.Scene {
     this.minimap = new Minimap(this, this.map);
     this.questTracker = new QuestTracker(this);
     registerItemIcons(this);
-    this.potionButton = new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.item, label: '', color: 0x3e2221, fontSize: 18, icon: { texture: ITEM_ICON_TEXTURE, frame: 'potion' }, cooldown: true, releaseToPress: true, onLongPress: () => this.openQuickSlot(0) });
-    this.lunchButton = new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.item, label: '', color: 0x38442a, fontSize: 18, icon: { texture: ITEM_ICON_TEXTURE, frame: 'lunch' }, cooldown: true, releaseToPress: true, onLongPress: () => this.openQuickSlot(1) });
+    this.potionButton = new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.item, label: '', color: 0x3e2221, fontSize: 18, icon: { texture: ITEM_ICON_TEXTURE, frame: 'potion' }, cooldown: true, releaseToPress: true, onLongPress: () => this.openQuickSlot(0), ignore: this.ignoreCombatPress });
+    this.lunchButton = new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.item, label: '', color: 0x38442a, fontSize: 18, icon: { texture: ITEM_ICON_TEXTURE, frame: 'lunch' }, cooldown: true, releaseToPress: true, onLongPress: () => this.openQuickSlot(1), ignore: this.ignoreCombatPress });
     this.lunchKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R)] : [];
     this.potionButton.setSizeScale(sizeScale(this.settings.buttonSize));
     this.lunchButton.setSizeScale(sizeScale(this.settings.buttonSize));
     this.potionKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q)] : [];
-    this.skillButtons = this.skillSlots.map(() => new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.skill, label: '', color: 0x2a3140, fontSize: 13, cooldown: true }));
+    this.skillButtons = this.skillSlots.map(() => new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.skill, label: '', color: 0x2a3140, fontSize: 13, cooldown: true, ignore: this.ignoreCombatPress }));
     for (const button of this.skillButtons) button.setSizeScale(sizeScale(this.settings.buttonSize));
     const digits = [Phaser.Input.Keyboard.KeyCodes.ONE, Phaser.Input.Keyboard.KeyCodes.TWO, Phaser.Input.Keyboard.KeyCodes.THREE,
       Phaser.Input.Keyboard.KeyCodes.FOUR, Phaser.Input.Keyboard.KeyCodes.FIVE];
@@ -592,7 +595,7 @@ export class GameScene extends Phaser.Scene {
     });
     // 공명 버튼: 물약 칸 위(자리는 layout). 키 F.
     this.resonanceButton = new ActionButton(this, {
-      x: 0, y: 0, radius: BUTTON_RADIUS.resonance, label: '공명', icon: actionIcon('resonance'), color: 0x6a4a12, fontSize: 22, cooldown: true,
+      x: 0, y: 0, radius: BUTTON_RADIUS.resonance, label: '공명', icon: actionIcon('resonance'), color: 0x6a4a12, fontSize: 22, cooldown: true, ignore: this.ignoreCombatPress,
     });
     this.resonanceButton.setSizeScale(sizeScale(this.settings.buttonSize));
     this.resonanceKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F)] : [];
@@ -1035,7 +1038,7 @@ export class GameScene extends Phaser.Scene {
     createActionIcons(this);
     this.primaryAction = 'attack';
     this.suppressAttackUntilRelease = false;
-    this.attackButton = new ActionButton(this, { x: 0, y: VIEW_HEIGHT - 170, label: '공격', fontSize: 22, icon: actionIcon('attack') });
+    this.attackButton = new ActionButton(this, { x: 0, y: VIEW_HEIGHT - 170, label: '공격', fontSize: 22, icon: actionIcon('attack'), ignore: this.ignoreCombatPress });
     // 대화창은 화면 어디를 눌러도 넘어간다.
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onDialoguePointer, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -1048,10 +1051,11 @@ export class GameScene extends Phaser.Scene {
       label: '회피',
       icon: actionIcon('dodge'),
       cooldown: true,
+      ignore: this.ignoreCombatPress,
       color: 0x2f4a86,
       fontSize: 24,
     });
-    this.blockButton = new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.block, label: '막기', icon: actionIcon('block'), color: 0x5a6b7a, fontSize: 22, cooldown: true });
+    this.blockButton = new ActionButton(this, { x: 0, y: 0, radius: BUTTON_RADIUS.block, label: '막기', icon: actionIcon('block'), color: 0x5a6b7a, fontSize: 22, cooldown: true, ignore: this.ignoreCombatPress });
     this.blockKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L)] : [];
     this.shield = this.add.graphics().setVisible(false);
 
@@ -1679,9 +1683,19 @@ export class GameScene extends Phaser.Scene {
     return pressed;
   }
 
-  private onDialoguePointer(): void {
-    if (this.dialogue.isOpen && !this.pauseMenu.isOpen) this.dialogue.advance();
+  private onDialoguePointer(pointer?: Phaser.Input.Pointer): void {
+    if (!this.dialogue.isOpen || this.pauseMenu.isOpen) return;
+    // 이 누름은 대화를 넘기는 데 썼다. 같은 누름이 그 자리의 전투 버튼(공명·막기 등)으로 이어지지 않게 적어 둔다.
+    if (pointer) this.dialogueTap = { id: pointer.id, downTime: pointer.downTime };
+    this.dialogue.advance();
   }
+
+  /**
+   * 전투 버튼이 이 누름을 받지 않을지: 대화·메뉴·창이 열려 있거나, 대화를 넘기거나 닫은 바로 그 누름일 때.
+   * 버튼과 대화의 누름 처리 순서가 정해져 있지 않아, 마지막 줄을 닫은 누름이 버튼에 먼저 닿지 않아도 막는다.
+   */
+  private readonly ignoreCombatPress = (pointer: Phaser.Input.Pointer): boolean =>
+    this.menuOpen() || (this.dialogueTap?.id === pointer.id && this.dialogueTap.downTime === pointer.downTime);
 
   /** 싸우는 중에는 말을 걸 수 없다. 대화 중에는 게임이 멈추므로 공격받는 도중에 열리지 않게 한다. */
   private inCombat(): boolean {
@@ -2142,9 +2156,16 @@ export class GameScene extends Phaser.Scene {
     this.lunchButton?.setVisible(visible);
   }
 
+  /**
+   * 물약 칸과 함께 막기·공명 버튼의 쌓인 눌림도 비운다. 대화를 넘기거나 창을 닫으려고 화면을 누른 자리가
+   * 이 버튼들 위였으면, 닫힌 뒤 막기나 공명이 저절로 쓰이지 않게 한다.
+   */
   private clearQuickItemInput(): void {
     this.potionButton?.consumePress();
     this.lunchButton?.consumePress();
+    this.blockButton?.consumePress();
+    this.resonanceButton?.consumePress();
+    for (const key of [...this.blockKeys, ...this.resonanceKeys]) Phaser.Input.Keyboard.JustDown(key);
     for (const key of this.potionKeys) Phaser.Input.Keyboard.JustDown(key);
     for (const key of this.lunchKeys) Phaser.Input.Keyboard.JustDown(key);
   }

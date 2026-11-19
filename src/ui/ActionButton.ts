@@ -14,6 +14,8 @@ export interface ActionButtonOptions {
   cooldown?: boolean;
   releaseToPress?: boolean;
   onLongPress?: () => void;
+  /** 이 누름을 받지 않을 때 (대화·창이 열려 있거나, 그 누름으로 대화를 넘겼을 때). 전투 버튼에만 준다. */
+  ignore?: (pointer: Phaser.Input.Pointer) => boolean;
 }
 
 /**
@@ -21,6 +23,12 @@ export interface ActionButtonOptions {
  * 조이스틱과 마찬가지로 자기 터치(포인터 ID)만 추적하므로 이동하면서 동시에 누를 수 있다.
  * 누르고 있는 동안 `isDown`이 true다.
  */
+/** 이 버튼보다 위에 그려지는 보이는 입력 대상(창의 버튼·가림막)인지. 버튼의 글자·대기 표시(+3)까지는 같은 버튼이다. */
+function covers(o: Phaser.GameObjects.GameObject, depth: number): boolean {
+  const shown = o as Phaser.GameObjects.GameObject & { depth?: number; visible?: boolean };
+  return (shown.depth ?? 0) > depth + 3 && shown.visible !== false;
+}
+
 export class ActionButton {
   isDown = false;
 
@@ -77,6 +85,10 @@ export class ActionButton {
       const dx = pointer.x - this.image.x;
       const dy = pointer.y - this.image.y;
       if (dx * dx + dy * dy > reach * reach) return;
+      // 버튼은 화면 전체의 누름을 직접 받으므로, 그 위에 열린 창(선택지·안내·메뉴 등)의 버튼이나 가림막을
+      // 누른 것이면 무시한다. 그러지 않으면 창이 닫힌 뒤 눌림이 남아 공명 같은 버튼이 저절로 쓰였다.
+      if (scene.input.hitTestPointer(pointer).some((o) => covers(o, this.image.depth))) return;
+      if (options.ignore?.(pointer)) return;
       this.pointerId = pointer.id;
       this.pressed = !options.releaseToPress;
       held = false;

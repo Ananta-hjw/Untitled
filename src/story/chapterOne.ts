@@ -2,7 +2,7 @@ import { mapLength, mapPoint } from '../world/mapScale.ts';
 import type { DialogueLine } from './dialogues.ts';
 import { currentObjective, questDef, type QuestState } from './quests.ts';
 import { GUARDS, isGuardId } from '../world/guards.ts';
-import { NPCS, type Direction8, type NamedNpcId, type NpcDef, type NpcId } from '../world/npcs.ts';
+import { NPCS, type Direction8, type DutyPoint, type NamedNpcId, type NpcDef, type NpcId } from '../world/npcs.ts';
 import { INTERIORS, interiorArtPoint, type InteriorId } from '../world/interiors.ts';
 import type { MapId } from '../world/maps.ts';
 import type { Interactable } from '../world/interactables.ts';
@@ -55,6 +55,30 @@ function raidNpcs(base: readonly NpcDef[], map: MapId): NpcDef[] {
   return [...guards, ...people];
 }
 
+/**
+ * 습격 뒤 마을 사람들이 맡은 일: 복구·치료·경계. 자리들을 차례로 오가며 멈춘 동안 머리 위에 하는 일을 띄운다(NpcDef.duty).
+ * 다친 루안과 기운이 없는 리네아는 제자리에 있고, 가게 주인들은 가게를 다시 연다. 좌표는 옛 배치 기준(mapPoint).
+ */
+const duty = (label: string, ...points: Array<[number, number]>): DutyPoint[] =>
+  points.map(([x, y]) => ({ ...mapPoint({ x, y }), label }));
+export const AFTERMATH_DUTIES: Partial<Record<NpcId, DutyPoint[]>> = {
+  herman: [...duty('마을 살피는 중', [1290, 600]), ...duty('부서진 곳 살피는 중', [1150, 1080]), ...duty('사람들 다독이는 중', [1450, 1180])],
+  serena: [...duty('리네아 간호 중', [764, 1020]), ...duty('물 길어 오는 중', [740, 680]), ...duty('집 정리하는 중', [480, 650]), ...duty('널어 둔 이불 걷는 중', [700, 640])],
+  eila: [...duty('리네아 치료 중', [754, 930]), ...duty('다친 사람 살피는 중', [1300, 1000]), ...duty('약초 챙기는 중', [1930, 600])],
+  'guard-homes-west': duty('경계 중', [980, 760], [900, 1200], [1350, 1250]),
+  'guard-homes-east': duty('경계 중', [1900, 1160], [2300, 1100], [2250, 800], [1800, 800]),
+  teon: duty('남문 경계 중', [1340, 1450], [1050, 1420], [1500, 1300]),
+  vernel: duty('권속 흔적 조사 중', [1200, 1330], [1350, 1250], [1300, 1450]),
+  'guard-plaza-west': duty('울타리 고치는 중', [950, 1400], [1550, 1420]),
+  'guard-plaza-east': duty('경계 중', [1550, 930], [1700, 1250], [1250, 1250], [1250, 950]),
+};
+
+/** 맡은 일이 있으면 그 첫 자리에서 시작해 자리들을 오간다. */
+function withDuty(n: NpcDef): NpcDef {
+  const points = AFTERMATH_DUTIES[n.id];
+  return points ? { ...n, x: points[0].x, y: points[0].y, wander: undefined, duty: points } : n;
+}
+
 export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: MapId): NpcDef[] {
   const phase = chapterPhase(state);
   if (phase === 'day') return [...base];
@@ -68,7 +92,7 @@ export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: Ma
     source = source.filter(n => n.id !== 'eila' || (phase === 'raid' && map === 'village'));
     if (phase === 'aftermath' && map === 'village-north') source = [...source, NPCS.find(n => n.id === 'eila')!];
   }
-  return source.filter(n => n.id !== 'sia' && !(phase === 'raid' && n.id === 'linea')).map(n => {
+  const placed = source.filter(n => n.id !== 'sia' && !(phase === 'raid' && n.id === 'linea')).map(n => {
     if (n.id === 'eila') {
       const outside: NpcDef = { ...n, area: phase === 'raid' ? 'village' : 'village-north', x: phase === 'raid' ? mapLength(1540) : LINEA_YARD.x + mapLength(130), y: phase === 'raid' ? mapLength(1200) : LINEA_YARD.y, wander: undefined };
       delete outside.inside;
@@ -81,6 +105,7 @@ export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: Ma
     if (n.id === 'linea') return { ...n, ...LINEA_YARD, wander: undefined };
     return { ...n, wander: undefined };
   });
+  return phase === 'aftermath' ? placed.map(withDuty) : placed;
 }
 
 const SPOTS = {

@@ -5,8 +5,8 @@ import type { Interactable } from '../world/interactables';
 import type { QuestMarker } from '../story/quests';
 import type { WalkArea } from '../world/walkArea';
 import {
-  NPC_TALK_PAUSE_MS, NPC_WALK_SPEED, npcSkin, direction8, pickRoamTarget, pickWanderTarget, roamsFreely, walkPose, wanderPauseMs,
-  type Direction8, type NpcDef, type NpcSkin,
+  NPC_TALK_PAUSE_MS, NPC_WALK_SPEED, dutyPauseMs, npcSkin, direction8, pickRoamTarget, pickWanderTarget, roamsFreely, walkPose, wanderPauseMs,
+  type Direction8, type DutyPoint, type NpcDef, type NpcSkin,
 } from '../world/npcs';
 
 interface WalkFrame {
@@ -85,6 +85,11 @@ export class Npc extends Phaser.GameObjects.Container {
   private readonly rand: () => number;
   private readonly step = new Phaser.Math.Vector2();
   private readonly marker: Phaser.GameObjects.Text;
+  /** 맡은 일(def.duty) 자리에 멈춰 있을 때 머리 위에 띄우는 하는 일 */
+  private readonly activity: Phaser.GameObjects.Text;
+  private dutyIndex = 0;
+  /** 맡은 일 자리에 와 있는지(가는 길이 아니라) */
+  private atDuty = true;
   /** 지금 띄운 퀘스트 표시 (미니맵도 이 값을 쓴다) */
   questMarker?: QuestMarker;
   /** 말을 건 뒤 이 시각(게임 시계)까지는 서서 플레이어 쪽을 본다. */
@@ -132,6 +137,10 @@ export class Npc extends Phaser.GameObjects.Container {
       fontFamily: FONT, fontSize: '38px', fontStyle: 'bold', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 7,
     }).setOrigin(0.5, 1).setResolution(2).setVisible(false);
     this.add(this.marker);
+    this.activity = scene.add.text(0, -def.height - 38, def.duty?.[0].label ?? '', {
+      fontFamily: FONT, fontSize: '17px', color: '#d9f0c8', stroke: '#1a1008', strokeThickness: 4,
+    }).setOrigin(0.5, 1).setResolution(2).setVisible(!!def.duty);
+    this.add(this.activity);
 
     // 카운터 뒤의 사람은 카운터 앞에서 말을 건다. 말풍선은 그래도 그 사람 머리 위에 뜬다.
     const offset = def.talkOffset ?? 0;
@@ -148,6 +157,7 @@ export class Npc extends Phaser.GameObjects.Container {
     }
     const style = MARKER_STYLE[marker];
     this.marker.setText(style.text).setColor(style.color).setVisible(true);
+    this.activity.setVisible(false);
   }
 
   /** 연출: 그 자리로 옮겨 세운다. */
@@ -179,6 +189,9 @@ export class Npc extends Phaser.GameObjects.Container {
   /** 플레이어가 말을 걸었다: 걷던 것을 멈추고 플레이어 쪽을 본다. 대화가 끝나도 잠깐 그대로 있다가 다시 걷는다. */
   talkedTo(now: number, player: { x: number; y: number }): void {
     if (this.scripted) return;
+    // 일하러 가던 길이면 대화 뒤에 같은 자리로 다시 간다.
+    const points = this.def.duty;
+    if (points && this.target && !this.atDuty) this.dutyIndex = (this.dutyIndex - 1 + points.length) % points.length;
     this.target = undefined;
     this.talkUntil = now + NPC_TALK_PAUSE_MS;
     this.restUntil = Math.max(this.restUntil, this.talkUntil);
@@ -279,6 +292,10 @@ export class Npc extends Phaser.GameObjects.Container {
       this.showFrame(idle);
       return;
     }
+    if (this.def.duty) {
+      this.updateDuty(now, dt, area, this.def.duty);
+      return;
+    }
     if (this.def.wander === undefined) {
       // 장사하는 사람은 손님이 떠나면 다시 앞을 본다.
       this.direction = this.def.facing ?? 'down';
@@ -310,6 +327,44 @@ export class Npc extends Phaser.GameObjects.Container {
     if (distance <= travel || now - this.walkStartedAt > 14000) {
       this.target = undefined;
       this.restUntil = now + wanderPauseMs(this.rand);
+      this.showFrame(idle);
+      return;
+    }
+    area.move(this.x, this.y, (dx / distance) * travel, (dy / distance) * travel, this.step);
+    this.direction = direction8(dx, dy, this.direction);
+    this.walked += Math.hypot(this.step.x - this.x, this.step.y - this.y);
+    this.setPosition(this.step.x, this.step.y).setDepth(this.step.y);
+    this.spot.x = this.x;
+    this.spot.y = this.y + (this.def.talkOffset ?? 0);
+    this.showFrame(walkPose(this.walked, this.def.height, this.walk.walkPoses));
+  }
+
+  /** 맡은 일: 자리들을 차례로 오가고, 자리에 멈춘 동안 하는 일을 띄운다. 막혀 오래 걸리면 그 자리를 건너뛴다. */
+  private updateDuty(now: number, dt: number, area: WalkArea, points: readonly DutyPoint[]): void {
+    const idle = this.walk.idlePose;
+    if (!this.target) {
+      if (now < this.restUntil) {
+        this.activity.setVisible(this.atDuty && !this.questMarker);
+        this.showFrame(idle);
+        return;
+      }
+      this.dutyIndex = (this.dutyIndex + 1) % points.length;
+      this.target = points[this.dutyIndex];
+      this.walkStartedAt = now;
+      this.walked = 0;
+      this.atDuty = false;
+      this.activity.setVisible(false);
+    }
+    const dx = this.target.x - this.x, dy = this.target.y - this.y;
+    const distance = Math.hypot(dx, dy);
+    const travel = NPC_WALK_SPEED * dt;
+    if (distance <= travel || now - this.walkStartedAt > 14000) {
+      const point = points[this.dutyIndex];
+      this.target = undefined;
+      this.restUntil = now + dutyPauseMs(this.rand);
+      this.atDuty = true;
+      if (point.facing) this.direction = point.facing;
+      this.activity.setText(point.label);
       this.showFrame(idle);
       return;
     }

@@ -3,6 +3,7 @@ import test from 'node:test';
 import { QUESTS, currentObjective, continueMainQuest, markerFor, parseQuests, questDef, recordEvent, serializeQuests, talkTo, trackedQuests } from '../src/story/quests.ts';
 import { DUSK_MOTH_POINTS, RAID_WAVES, chapterPhase, chapterNpcs, chapterSpots, isDusk, raidSpawns, raidSpawnsAnyStep, raidWaveSize } from '../src/story/chapterOne.ts';
 import { NPCS } from '../src/world/npcs.ts';
+import { guardsForMap } from '../src/world/guards.ts';
 import { MAPS, fieldPoint, findExit, walkable } from '../src/world/maps.ts';
 
 const through = id => {
@@ -141,6 +142,37 @@ test('에일라는 낮에는 치유소 안, 습격 때는 광장, 습격 뒤에�
   const outside = chapterNpcs(MAPS['village-north'].npcs, after, 'village-north').find((n) => n.id === 'eila');
   assert.equal(outside.inside, undefined);
   assert.equal(walkable(MAPS['village-north'], outside.x, outside.y), true);
+});
+
+test('습격 뒤 마을 사람들은 복구·치료·경계로 맡은 자리들을 오가고, 자리와 그 사이 길은 막히지 않았다', () => {
+  const after = { 'festival-eve': { status: 'done', count: 1 }, 'village-raid': { status: 'done', count: 3 } };
+  const clear = (map, a, b) => {
+    for (let i = 0; i <= 20; i++) if (!walkable(map, a.x + (b.x - a.x) * i / 20, a.y + (b.y - a.y) * i / 20)) return false;
+    return true;
+  };
+  const working = [];
+  for (const id of ['village', 'village-north']) {
+    const map = MAPS[id];
+    for (const n of chapterNpcs([...map.npcs, ...guardsForMap(id)], after, id)) {
+      if (!n.duty) continue;
+      working.push(n.id);
+      assert.deepEqual([n.x, n.y], [n.duty[0].x, n.duty[0].y], `${n.id}: 첫 자리에서 시작`);
+      assert.ok(n.duty.length >= 2 && n.duty.every((p) => p.label.length > 0), n.id);
+      n.duty.forEach((p, i) => {
+        assert.equal(walkable(map, p.x, p.y), true, `${id} ${n.id} ${i}`);
+        assert.equal(findExit(map, p.x, p.y), undefined, `${n.id} ${i}: 출구가 아니다`);
+        assert.equal(clear(map, p, n.duty[(i + 1) % n.duty.length]), true, `${id} ${n.id} ${i}→다음`);
+      });
+    }
+  }
+  for (const id of ['herman', 'serena', 'eila', 'teon', 'vernel', 'guard-homes-west', 'guard-homes-east', 'guard-plaza-west', 'guard-plaza-east']) {
+    assert.ok(working.includes(id), id);
+  }
+  assert.equal(working.length, new Set(working).size);
+  // 습격 중과 낮에는 맡은 일이 없다.
+  const raid = { 'festival-eve': { status: 'done', count: 1 } };
+  assert.ok(chapterNpcs(MAPS.village.npcs, raid, 'village').every((n) => !n.duty));
+  assert.ok(chapterNpcs(MAPS.village.npcs, {}, 'village').every((n) => !n.duty));
 });
 
 test('습격 때 마을 사람들은 여관·대장간이 아니라 북쪽 치유소·촌장의 집으로 피하고, 몇 명은 밖에 남는다', () => {
