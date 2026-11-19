@@ -143,6 +143,27 @@ test('에일라는 낮에는 치유소 안, 습격 때는 광장, 습격 뒤에�
   assert.equal(walkable(MAPS['village-north'], outside.x, outside.y), true);
 });
 
+test('습격 때 마을 사람들은 여관·대장간이 아니라 북쪽 치유소·촌장의 집으로 피하고, 몇 명은 밖에 남는다', () => {
+  const raid = { 'festival-eve': { status: 'done', count: 1 }, 'village-raid': { status: 'active', count: 0, step: 0 } };
+  const at = (map) => chapterNpcs(MAPS[map].npcs, raid, map).filter((n) => !n.id.startsWith('guard-'));
+  const ids = (map) => at(map).map((n) => n.id).sort();
+  for (const map of ['in-inn', 'in-smithy', 'in-store']) assert.deepEqual(ids(map), [], `${map}은 비어 있다`);
+  assert.deepEqual(ids('in-clinic'), ['merina', 'rosetta']);
+  assert.deepEqual(ids('in-chief'), ['vernel']);
+  assert.deepEqual(ids('village-north'), ['doran', 'herman'], '북쪽 밖에서 문을 지킨다');
+  assert.deepEqual(ids('village'), ['eila', 'ruan', 'serena', 'teon'], '광장에 남아 이끄는 사람과 싸우는 사람');
+  // 한 사람은 한 곳에만, 모두 그 맵의 걸을 수 있는 곳(실내는 바닥)에 선다.
+  const seen = Object.keys(MAPS).flatMap((map) => at(map).map((n) => n.id));
+  assert.equal(new Set(seen).size, seen.length);
+  for (const map of ['in-clinic', 'in-chief', 'village-north', 'village']) {
+    for (const n of at(map)) {
+      assert.equal(walkable(MAPS[map], n.x, n.y), true, `${map} ${n.id}`);
+      assert.equal(n.wander, undefined);
+      assert.equal(n.inside, map.startsWith('in-') ? map.slice(3) : undefined, n.id);
+    }
+  }
+});
+
 test('습격은 입구(추적자 6) → 여관 앞(3) → 북쪽 길(추적자 4·나방 4 뒤에 보스 집행자)이고, 남은 수만 복원한다', () => {
   const at = (step, count = 0) => ({ ...through('festival-eve'), 'village-raid': { status: 'active', count, step } });
   assert.equal(raidSpawns(at(0), 'village').length, 6);

@@ -293,10 +293,10 @@ export const QUESTS: QuestDef[] = [
       { label: '남쪽 입구에서 들어온 권속 저지하기', need: 6, event: 'kill', map: 'village', encounter: 'village-raid' },
       { label: '남쪽 입구의 테온 살피기', need: 1, event: 'talk', npc: 'teon', lines: [
         line('teon', '테온', '윽… 괜찮아, 긁힌 거야. 그보다 몇 놈이 여관 쪽 골목으로 빠졌어!'),
-        line('teon', '테온', '사람들이 여관으로 모이고 있어. 시온, 그쪽을 막아 줘!'),
+        line('teon', '테온', '북쪽으로 피하던 사람들이 아직 그 골목에 남아 있어. 시온, 그쪽을 막아 줘!'),
         hero('알았어. 테온은 여기서 버텨!')] },
       { label: '여관 앞 골목의 권속 저지하기', need: 3, event: 'kill', map: 'village', encounter: 'village-raid' },
-      { label: '광장의 세레나 안전 확인하기', need: 1, event: 'talk', npc: 'serena', lines: [line('serena', '세레나', '나는 괜찮아. 다친 사람들과 여관으로 갈게. 시아는… 리네아와 북쪽 집 쪽으로 먼저 갔는데.'), hero('북쪽으로요? 제가 가 볼게요. 어머니는 안으로 들어가세요.')] },
+      { label: '광장의 세레나 안전 확인하기', need: 1, event: 'talk', npc: 'serena', lines: [line('serena', '세레나', '나는 괜찮아. 다친 사람들은 북쪽 치유소로 보냈어. 시아는… 리네아와 북쪽 집 쪽으로 먼저 갔는데.'), hero('북쪽으로요? 제가 가 볼게요. 어머니도 남은 사람들과 북쪽으로 피하세요.')] },
       // 추적자 넷·잿빛 나방 넷을 막으면 1장 보스 부식의 집행자가 나타난다 (story/chapterOne.ts RAID_WAVES)
       { label: '마을 북쪽 길을 막은 권속과 부식의 집행자 저지하기', need: 9, event: 'kill', map: 'village-north', encounter: 'village-raid' },
       { label: '리네아의 집 옆 골목 살펴보기', need: 1, event: 'inspect', spot: 'north-alley', map: 'village-north' },

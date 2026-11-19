@@ -2,7 +2,8 @@ import { mapLength, mapPoint } from '../world/mapScale.ts';
 import type { DialogueLine } from './dialogues.ts';
 import { currentObjective, questDef, type QuestState } from './quests.ts';
 import { GUARDS, isGuardId } from '../world/guards.ts';
-import { NPCS, type NpcDef, type NpcId } from '../world/npcs.ts';
+import { NPCS, type Direction8, type NamedNpcId, type NpcDef, type NpcId } from '../world/npcs.ts';
+import { INTERIORS, interiorArtPoint, type InteriorId } from '../world/interiors.ts';
 import type { MapId } from '../world/maps.ts';
 import type { Interactable } from '../world/interactables.ts';
 import { BUILDINGS, LINEA_YARD } from '../world/villageLayout.ts';
@@ -17,9 +18,47 @@ export function chapterPhase(state: QuestState): ChapterPhase {
   return state['festival-eve']?.status === 'done' ? 'raid' : 'day';
 }
 
+/**
+ * 습격의 밤에 마을 사람들이 있는 곳. 여관과 대장간은 남쪽 입구에 가까워, 사람들은 북쪽 마을로 피해
+ * 치유소와 촌장의 집에 들어가 있다. 밖에도 몇 명 남아 있다: 광장에서는 세레나가 피하는 사람들을 이끌고
+ * 에일라가 다친 사람을 살피며(습격 퀘스트의 대화 상대), 북쪽에서는 헤르만이 자기 집 앞, 도란이 치유소 문 앞을 지킨다.
+ * 루안과 테온은 광장에서 싸운다. 시아와 리네아는 보이지 않는다(이야기). 실내는 원화 픽셀 좌표(room).
+ */
+type RaidPlace = { map: MapId; x: number; y: number; facing?: Direction8 } | { map: MapId; room: InteriorId; x: number; y: number; facing?: Direction8 };
+const RAID_PLACES: Partial<Record<NamedNpcId, RaidPlace>> = {
+  ruan: { map: 'village', ...mapPoint({ x: 1080, y: 1150 }) },
+  teon: { map: 'village', ...mapPoint({ x: 1340, y: 1450 }) },
+  serena: { map: 'village', x: mapLength(1500), y: mapLength(1100) },
+  eila: { map: 'village', x: mapLength(1540), y: mapLength(1200) },
+  herman: { map: 'village-north', ...mapPoint({ x: 1290, y: 600 }), facing: 'down' },
+  doran: { map: 'village-north', ...mapPoint({ x: 2090, y: 600 }), facing: 'down' },
+  rosetta: { map: 'in-clinic', room: 'clinic', x: 560, y: 640, facing: 'left' },
+  merina: { map: 'in-clinic', room: 'clinic', x: 930, y: 650, facing: 'down' },
+  vernel: { map: 'in-chief', room: 'chief', x: 860, y: 540, facing: 'down' },
+};
+
+/** 습격 중 이 맵에 있을 사람: 그 맵의 병사들과 RAID_PLACES에서 이 맵에 있는 마을 사람들 */
+function raidNpcs(base: readonly NpcDef[], map: MapId): NpcDef[] {
+  const guards = base.filter((n) => isGuardId(n.id)).map((n) => ({ ...n, wander: undefined }));
+  const people = NPCS.flatMap((n): NpcDef[] => {
+    const place = RAID_PLACES[n.id as NamedNpcId];
+    if (!place || place.map !== map) return [];
+    const def: NpcDef = { ...n, x: place.x, y: place.y, wander: undefined, ...(place.facing ? { facing: place.facing } : {}) };
+    if ('room' in place) {
+      const at = interiorArtPoint(INTERIORS.find((i) => i.id === place.room)!, place.x, place.y);
+      return [{ ...def, ...at, inside: place.room, talkOffset: 0 }];
+    }
+    delete def.inside;
+    delete def.talkOffset;
+    return [{ ...def, area: map === 'village-north' ? 'village-north' : 'village' }];
+  });
+  return [...guards, ...people];
+}
+
 export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: MapId): NpcDef[] {
   const phase = chapterPhase(state);
   if (phase === 'day') return [...base];
+  if (phase === 'raid' && map !== undefined) return raidNpcs(base, map);
   const evacuated = ['serena', 'eila', 'herman'];
   let source = phase === 'raid' && map === 'village'
     ? [...base, ...NPCS.filter(n => evacuated.includes(n.id) && !base.some(b => b.id === n.id))]
@@ -178,14 +217,14 @@ export function chapterDialogue(npc: NpcId, state: QuestState): DialogueLine[] |
   };
   const raidTexts: Partial<Record<NpcId, string>> = {
     ruan: '시온, 길을 막는 녀석들부터 저지하자. 사람들이 지나갈 길을 열어야 해!',
-    serena: '다친 사람들을 여관으로 데려가야겠어. 시온, 너도 조심하렴.',
-    eila: '움직일 수 있는 사람부터 여관으로! 다친 사람은 내가 살펴볼게.',
+    serena: '다친 사람들은 북쪽 치유소로 보내고 있어. 시온, 너도 조심하렴.',
+    eila: '움직일 수 있는 사람은 북쪽으로! 다친 사람은 여기서 내가 먼저 살펴볼게.',
     teon: '입구에서 밀려들고 있어! 마을 안쪽으로 보내면 안 돼!',
-    herman: '여관으로 모이게! 뒤처진 사람이 없는지 살펴 주게나.',
-    merina: '상처가 나면 바로 물약을 써. 필요한 건 여기 있어!',
-    doran: '이쪽 길은 내가 살필 테니 사람들을 부탁한다!',
-    vernel: '무슨 일이 벌어진 거지…? 우선 사람들부터 도와야겠어.',
-    rosetta: '여관 문은 열어 뒀어! 안전한 길이 열리면 사람들을 데려와 줘!',
+    herman: '내 집과 치유소에 사람들을 들였네. 뒤처진 사람이 없는지 살펴 주게나.',
+    merina: '가게에서 물약을 챙겨 왔어. 상처가 나면 바로 써. 필요한 건 여기 있어!',
+    doran: '치유소 문은 내가 지킨다. 너는 길을 막는 놈들을 부탁한다!',
+    vernel: '무슨 일이 벌어진 거지…? 아이들은 여기서 내가 보고 있겠네.',
+    rosetta: '여관은 남쪽 입구와 너무 가까워서 다들 여기로 옮겼어. 담요는 넉넉해!',
   };
   const text = (phase === 'raid' ? raidTexts : texts)[npc];
   const names: Partial<Record<NpcId, string>> = { ruan: '루안', linea: '리네아', serena: '세레나', eila: '에일라', teon: '테온', rosetta: '로제타', herman: '헤르만', vernel: '베르넬', merina: '메리나', doran: '도란' };

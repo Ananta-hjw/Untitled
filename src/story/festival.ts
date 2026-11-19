@@ -11,7 +11,8 @@ import type { OpeningStep, Point } from './opening.ts';
  * 1장 수확제 연출 (약 3분, 플레이어는 조작하지 않는다).
  * 로제타에게 잔치 준비가 됐다고 말하면(축제 전야 완료) 광장(village)으로 나가 이 연출을 본다:
  * 모닥불과 등불 줄 아래 잔치 → 헤르만의 건배 → 가족·친구·스승과의 이야기 → 하늘 등불 띄우기 →
- * 차가운 바람 → 남문으로 권속이 들어오고 → 사람들이 여관과 북쪽으로 피하고 → 시온과 루안이 검을 든다.
+ * 차가운 바람 → 남문으로 권속이 들어오고 → 사람들이 북쪽 마을(치유소·촌장의 집)로 피하고(세레나·에일라는 광장에 남아
+ * 사람들을 이끌고 다친 사람을 살핀다) → 시온과 루안이 검을 든다. 여관과 대장간은 남쪽 입구에 가까워 피난처로 쓰지 않는다.
  * 끝나거나 건너뛰면 광장을 습격 상태로 다시 열어 첫 무리와 싸운다(꺼져 가는 등불 첫 단계).
  *
  * 연출 실행은 오프닝과 같은 scenes/OpeningDirector.ts, 모닥불·등불·경보 같은 그림은 scenes/FestivalStage.ts.
@@ -240,19 +241,20 @@ export const FESTIVAL: OpeningStep[] = [
   { type: 'wait', ms: 3600 },
   { type: 'emote', who: 'teon', text: '!' },
   { type: 'say', lines: [
-    line('teon', '테온', '남쪽 입구다! 권속이야! 모두 여관 쪽으로 물러서!'),
+    line('teon', '테온', '남쪽 입구다! 권속이야! 모두 북쪽으로 물러서!'),
   ] },
   { type: 'camera', to: 'hero', ms: 1100 },
   { type: 'say', lines: [
-    line('rosetta', '로제타', '여관으로! 문 열어 둘게, 어서 들어와!'),
-    line('herman', '헤르만', '아이들과 노인부터 먼저! 서두르게!'),
+    line('herman', '헤르만', '북쪽 마을로! 내 집과 치유소 문을 열어 두겠네. 아이들과 노인부터!'),
+    line('rosetta', '로제타', '여관은 입구랑 너무 가까워! 다들 북쪽 길로, 어서!'),
+    line('eila', '에일라', '다친 사람은 나한테! 걸을 수 있으면 치유소로 가요!'),
   ] },
-  { type: 'npc', id: 'rosetta', path: [P(1500, 1250), P(1540, 1500), P(1700, 1610), P(1800, 1610)], speed: 1.5 },
-  { type: 'npc', id: 'merina', path: [P(1560, 1300), P(1550, 1520), P(1740, 1615)], speed: 1.5 },
-  { type: 'npc', id: 'herman', path: [P(1420, 1060), P(1560, 1250), P(1540, 1520), P(1680, 1620)], speed: 1.3 },
-  { type: 'npc', id: 'eila', path: [P(1520, 1400), P(1560, 1600), P(1760, 1615)], speed: 1.4 },
-  { type: 'npc', id: 'vernel', path: [P(1480, 1400), P(1540, 1590), P(1700, 1620)], speed: 1.4 },
-  { type: 'npc', id: 'serena', path: [P(1020, 1060), P(1500, 1080), P(1560, 1300), P(1540, 1560)], speed: 1.4 },
+  { type: 'npc', id: 'herman', path: [P(1250, 960), P(1220, 760), P(1180, 620), P(1170, 430)], speed: 1.3 },
+  { type: 'npc', id: 'rosetta', path: [P(1340, 960), P(1230, 800), P(1200, 600), P(1190, 430)], speed: 1.5 },
+  { type: 'npc', id: 'merina', path: [P(1600, 1000), P(1380, 850), P(1230, 620), P(1210, 440)], speed: 1.5 },
+  { type: 'npc', id: 'vernel', path: [P(1420, 1250), P(1640, 1180), P(1620, 960), P(1300, 760), P(1220, 450)], speed: 1.5 },
+  { type: 'npc', id: 'eila', path: [P(1450, 1250), P(1540, 1200)], speed: 1.2 },
+  { type: 'npc', id: 'serena', path: [P(1000, 1260), P(1450, 1250), P(1500, 1110)], speed: 1.3 },
   { type: 'face', id: 'sia', to: 'hero' },
   { type: 'say', lines: [
     line('linea', '리네아', '시아는 내가 데리고 갈게! 북쪽 집으로 피할게!'),
@@ -267,9 +269,9 @@ export const FESTIVAL: OpeningStep[] = [
   { type: 'face', id: 'ruan' },
   { type: 'face', id: 'doran', to: 'hero' },
   { type: 'say', lines: [
-    line('doran', '도란', '나는 대장간 문을 잠그고 오지! 시온, 무리하지 마라!'),
+    line('doran', '도란', '대장간은 그냥 둬! 나는 치유소 문을 지키지. 시온, 무리하지 마라!'),
   ] },
-  { type: 'npc', id: 'doran', path: [P(1000, 1150), P(850, 1400), P(840, 1600), P(600, 1610)], speed: 1.4 },
+  { type: 'npc', id: 'doran', path: [P(1250, 1000), P(1200, 700), P(1180, 440)], speed: 1.4 },
   { type: 'say', lines: [
     line('ruan', '루안', '시온, 검을 들어라. 수련한 대로만 하면 된다.'),
     hero('…네.'),
