@@ -1239,6 +1239,22 @@ test('건물 문 앞에서 들어가기를 누르면 실내로 들어가고, 아
   const fromDoor = Math.hypot(result.back.x - result.back.door.x, result.back.y - result.back.door.y);
   assert.ok(fromDoor > 70 && fromDoor < 100, String(fromDoor));
 });
+test('실내 전경(계산대 앞면·문턱)은 원화 전체에서 잘라 그려져, 계산대 뒤의 사람을 가린다', async () => {
+  for (const [map, id] of [['in-store', 'merina'], ['in-inn', 'rosetta']]) {
+    await load(map);
+    const r = await evaluate(`(() => {
+      const s = window.__game.scene.getScene('game');
+      const fg = s.children.list.filter(o => o.name === 'map-art-foreground');
+      const npc = s.npcs.find(n => n.def.id === '${id}');
+      // 계산대 앞면 조각: 자르기 높이가 있고, 그 사람보다 앞(깊이가 크다)에 그려진다.
+      const counter = fg.filter(o => o._crop.height > 0 && o.depth > npc.depth && o.depth < npc.depth + 200);
+      return { all: fg.every(o => o._crop.width > 0 && o._crop.height > 0), counter: counter.length };
+    })()`);
+    assert.equal(r.all, true, map + ': 잘린 전경이 비어 있지 않다');
+    assert.ok(r.counter >= 1, map + ': 계산대 앞면이 ' + id + '보다 앞에 그려진다');
+  }
+});
+
 test('잡화점 안의 메리나에게 카운터 앞에서 말을 걸면 대화 뒤 잡화점이 열린다', async () => {
   await load('in-store');
   const result = await evaluate(`(() => {

@@ -37,7 +37,9 @@ export function drawInterior(scene: Phaser.Scene, interior: Interior): void {
   ];
   for (const [left, top, right, bottom] of foreground) {
     const depth = interiorArtPoint(interior, left, bottom).y;
-    scene.add.image(rect.left, rect.top, key).setOrigin(0).setDisplaySize(width, height)
+    // 원화 전체(__BASE)를 써야 한다. 프레임을 생략하면 위에서 잘라 붙인 첫 조각이 기본 프레임이 되어
+    // 자르기 영역이 엉뚱해지고(높이 0) 계산대 앞면이 그려지지 않아, 그 뒤의 사람이 계산대를 뚫고 서 있는 것처럼 보였다.
+    scene.add.image(rect.left, rect.top, key, '__BASE').setOrigin(0).setDisplaySize(width, height)
       .setCrop(left / art.width * source.width, top / art.height * source.height,
         (right - left) / art.width * source.width, (bottom - top) / art.height * source.height)
       .setDepth(depth).setName('map-art-foreground');

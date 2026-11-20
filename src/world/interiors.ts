@@ -143,7 +143,7 @@ export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
     ],
     // 발은 상판(y=390)이 아닌 계산대에 가려진 바닥 높이에 둔다.
     // 원화의 상판·전면을 전경으로 겹쳐 상반신만 자연스럽게 보이게 한다.
-    foreground: [[670, 390, 1240, 560]], shop: { x: 960, y: 480, talkY: 590 },
+    foreground: [[670, 390, 1240, 560]], shop: { x: 1010, y: 445, talkY: 590 },
   },
   smithy: {
     width: 1536, height: 1024, floor: [90, 510, 1440, 850], doorX: 750,
