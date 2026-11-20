@@ -35,7 +35,7 @@ test('가구는 방 안의 독립된 객체이고 밟을 수 없으며, 들어�
     assert.equal(walkable(map, at.x, at.y), true, interior.id);
     assert.equal(findExit(map, at.x, at.y), undefined, interior.id);
     // 문 앞에서 방 안쪽으로 한 발 더 들어갈 수 있다.
-    assert.equal(walkable(map, at.x, at.y - 60), true, interior.id);
+    assert.equal(walkable(map, at.x, at.y - 30), true, interior.id);
   }
 });
 
@@ -48,7 +48,11 @@ test('실내에서는 문 앞에서 나가기를 눌러야 나가고, 나오면 
     const exit = spots[0].enter;
     const building = BUILDINGS.find((b) => b.frame === interior.building);
     assert.equal(exit.to, building.area);
-    assert.ok(Math.hypot(exit.at.x - building.door.x, exit.at.y - building.door.y) < 40, interior.id);
+    // 나오면 건물 문 앞에 서되, 들어가기 지점(반지름)보다는 조금 앞이라 나오자마자 다시 들어가기가 뜨지 않는다.
+    const door = MAPS[building.area].interactables.find((i) => i.enter?.to === map.id);
+    const fromDoor = Math.hypot(exit.at.x - building.door.x, exit.at.y - building.door.y);
+    assert.ok(fromDoor < 100 && fromDoor > door.radius, `${interior.id} ${fromDoor}`);
+    assert.ok(exit.at.y > building.door.y, '문 앞(아래)쪽');
     assert.equal(walkable(MAPS[building.area], exit.at.x, exit.at.y), true, interior.id);
     assert.equal(findExit(MAPS[building.area], exit.at.x, exit.at.y), undefined, interior.id);
     // 들어온 자리에서는 바로 나가기 버튼이 뜨지 않는다.

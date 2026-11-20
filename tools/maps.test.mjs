@@ -85,7 +85,8 @@ test('모든 출구는 되돌아오는 출구가 있고, 그 출구로 돌아오
       assert.ok(back, `${exit.to} → ${map.id}`);
       const z = exit.zone;
       const nearest = { x: Math.min(Math.max(back.arrive.x, z.left), z.right), y: Math.min(Math.max(back.arrive.y, z.top), z.bottom) };
-      assert.ok(Math.hypot(back.arrive.x - nearest.x, back.arrive.y - nearest.y) < 200, `${map.id} ↔ ${exit.to}`);
+      // 남문은 아치 그림 뒤에 가려지지 않게 아치 안쪽 광장에 서므로 조금 더 떨어져 있다.
+      assert.ok(Math.hypot(back.arrive.x - nearest.x, back.arrive.y - nearest.y) < 400, `${map.id} ↔ ${exit.to}`);
     }
   }
 });
@@ -141,4 +142,24 @@ test('사냥터의 표지판은 대사가 있고, 시작점에서는 대화 버�
       assert.equal(findExit(map, spot.x, spot.y), undefined);
     }
   }
+});
+
+test('맵을 옮겨 도착한 자리는 들어가기·나가기 지점 밖이고, 문지기 사이나 남문 아치 아래가 아니다', async () => {
+  const { GUARDS } = await import('../src/world/guards.ts');
+  const { VILLAGE_GATES } = await import('../src/world/villagePerimeter.ts');
+  const arrivals = [];
+  for (const map of Object.values(MAPS)) {
+    for (const exit of map.exits) arrivals.push({ from: map.id, to: exit.to, at: exit.arrive });
+    for (const spot of map.interactables) if (spot.enter) arrivals.push({ from: map.id, to: spot.enter.to, at: spot.enter.at });
+  }
+  for (const { from, to, at } of arrivals) {
+    const target = MAPS[to];
+    // 도착하자마자 들어가기·나가기가 떠서, 누르던 버튼에 바로 되돌아가지 않는다.
+    assert.equal(findInteractable(at.x, at.y, target.interactables.filter((i) => i.enter)), undefined, `${from} → ${to}`);
+    for (const g of GUARDS.filter((g) => g.gate && g.area === to)) {
+      assert.ok(Math.hypot(g.x - at.x, g.y - at.y) > 140, `${from} → ${to}: ${g.id} 곁`);
+    }
+  }
+  const south = MAPS['south-field'].exits.find((e) => e.to === 'village').arrive;
+  assert.ok(south.y < VILLAGE_GATES.south.y - 300, '남문 아치(종·들보) 그림 뒤가 아니라 그 안쪽 광장');
 });

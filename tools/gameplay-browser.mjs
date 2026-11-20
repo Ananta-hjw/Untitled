@@ -1235,7 +1235,9 @@ test('건물 문 앞에서 들어가기를 누르면 실내로 들어가고, 아
   assert.equal(result.blocked, true);
   assert.deepEqual(result.nearDoor, { map: 'in-inn', button: '나가기', visible: true, marker: '▼ 나가기' });
   assert.equal(result.back.map, 'village');
-  assert.ok(Math.hypot(result.back.x - result.back.door.x, result.back.y - result.back.door.y) < 40);
+  // 문 앞에 서되, 들어가기 지점보다 조금 앞이라 나오자마자 다시 들어가기가 뜨지 않는다.
+  const fromDoor = Math.hypot(result.back.x - result.back.door.x, result.back.y - result.back.door.y);
+  assert.ok(fromDoor > 70 && fromDoor < 100, String(fromDoor));
 });
 test('잡화점 안의 메리나에게 카운터 앞에서 말을 걸면 대화 뒤 잡화점이 열린다', async () => {
   await load('in-store');
@@ -1368,12 +1370,14 @@ test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 �
   assert.equal(result.south.enemies, 10);
   assert.equal(result.south.traveling, false);
   assert.equal(result.backFromSouth.map, 'village');
-  assert.deepEqual([result.backFromSouth.x, result.backFromSouth.y], [1534, 1976]);
+  // 남문 아치 그림 뒤가 아니라 아치 안쪽 광장에 선다.
+  assert.deepEqual([result.backFromSouth.x, result.backFromSouth.y], [mapLength(1180), VILLAGE_GATES.south.y - mapLength(280)]);
   assert.equal(result.backFromSouth.enemies, 0);
   assert.equal(result.backFromSouth.hp, 75);
   assert.equal(result.west.map, 'west-forest');
   assert.equal(result.backFromWest.map, 'village');
-  assert.deepEqual([result.backFromWest.x, result.backFromWest.y], [299, 1365]);
+  // 서문 기둥과 문지기 사이가 아니라 문 안쪽으로 조금 들어온 곳에 선다.
+  assert.deepEqual([result.backFromWest.x, result.backFromWest.y], [mapLength(400), mapLength(1050)]);
   assert.equal(result.east.map, 'east-stream');
   assert.equal(result.east.enemies, 5);
   assert.equal(result.backFromEast.map, 'village');

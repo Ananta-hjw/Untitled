@@ -261,7 +261,8 @@ export function doorOf(interior: Interior): { x: number; y: number } {
 /** 들어왔을 때 서는 자리: 문 바로 안쪽 */
 export function arrivalOf(interior: Interior): { x: number; y: number } {
   const door = doorOf(interior);
-  return { x: door.x, y: door.y - 80 };
+  // 나가기 지점(문 앞, 반지름 90)보다 안쪽에 선다. 들어오자마자 "나가기"가 떠서 잘못 눌러 다시 나가지 않게.
+  return { x: door.x, y: door.y - 120 };
 }
 
 /** 밟을 수 없는 가구의 바닥 영역 */

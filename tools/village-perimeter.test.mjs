@@ -90,5 +90,7 @@ test('동쪽 담은 오른쪽 월드 경계 가까이에 있고 출구와 병사
   assert.ok(village.bounds.right - gate.x < mapLength(120));
   assert.equal(village.exits.find(e => e.to === 'east-stream').zone.left, gate.x);
   const back = MAPS['east-stream'].exits.find(e => e.to === 'village');
-  assert.ok(back.arrive.x > gate.x - mapLength(150));
+  // 동문 안쪽에 서되, 문 양옆의 문지기 사이(문 바로 앞)는 비켜 선다.
+  assert.ok(back.arrive.x > gate.x - mapLength(320) && back.arrive.x < gate.x - mapLength(200));
+  assert.ok(back.arrive.y > gate.top && back.arrive.y < gate.bottom);
 });

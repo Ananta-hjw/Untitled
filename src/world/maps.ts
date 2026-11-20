@@ -147,7 +147,8 @@ const SOUTH_FIELD: GameMap = {
   ],
   exits: [
     { to: 'village', zone: { left: 1040 * MAP_SIZE_SCALE, top: 0, right: 1320 * MAP_SIZE_SCALE, bottom: 290 * MAP_SIZE_SCALE },
-      arrive: { x: mapLength(1180), y: VILLAGE_GATES.south.y - mapLength(80) }, label: '▲ 로웬 마을', labelAt: fieldPoint(1180, 262) },
+      // 남문 아치(종·들보) 그림 뒤에 가려지지 않도록 아치 안쪽 광장에 선다.
+      arrive: { x: mapLength(1180), y: VILLAGE_GATES.south.y - mapLength(280) }, label: '▲ 로웬 마을', labelAt: fieldPoint(1180, 262) },
   ],
   interactables: [southSign.spot],
 };
@@ -186,7 +187,8 @@ const WEST_FOREST: GameMap = {
   ],
   exits: [
     { to: 'village', zone: { left: mapLength(2290), top: mapLength(940), right: WORLD_WIDTH, bottom: mapLength(1160) },
-      arrive: mapPoint({ x: 230, y: 1050 }), label: '로웬 마을 ▶', labelAt: mapPoint({ x: 2240, y: 1000 }) },
+      // 서문 기둥과 문지기 둘 사이가 아니라, 문 안쪽으로 조금 들어온 곳에 선다.
+      arrive: mapPoint({ x: 400, y: 1050 }), label: '로웬 마을 ▶', labelAt: mapPoint({ x: 2240, y: 1000 }) },
   ],
   interactables: [forestSign.spot],
 };
@@ -226,7 +228,8 @@ const EAST_STREAM: GameMap = {
   ],
   exits: [
     { to: 'village', zone: mapRect({ left: 0, top: 820, right: 110, bottom: 1000 }),
-      arrive: { x: VILLAGE_GATES.east.x - mapLength(110), y: mapLength(1050) }, label: '◀ 로웬 마을', labelAt: mapPoint({ x: 160, y: 1010 }) },
+      // 동문 기둥과 문지기 둘 사이가 아니라, 문 안쪽으로 조금 들어온 곳에 선다.
+      arrive: { x: VILLAGE_GATES.east.x - mapLength(290), y: mapLength(1050) }, label: '◀ 로웬 마을', labelAt: mapPoint({ x: 160, y: 1010 }) },
   ],
   interactables: [streamSign.spot],
 };
@@ -261,7 +264,8 @@ function interiorMap(interior: Interior): GameMap {
     exits: [],
     interactables: [{
       id: `exit-${interior.id}`, x: door.x, y: door.y - 15, radius: 90, markerHeight: 150,
-      enter: { to: building.area, at: { x: building.door.x, y: building.door.y + 18 }, label: '나가기' },
+      // 건물 문 앞(들어가기 지점, 반지름 70)보다 조금 앞에 선다. 나오자마자 "들어가기"가 떠 다시 들어가지 않게.
+      enter: { to: building.area, at: { x: building.door.x, y: building.door.y + 80 }, label: '나가기' },
     }],
     interior,
   };
