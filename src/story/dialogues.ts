@@ -90,8 +90,8 @@ export const DIALOGUES = {
     { speaker: '도란', portrait: 'doran', text: '요즘 숲에서 잡혔다는 도마뱀 비늘을 하나 봤는데, 쇠처럼 단단하더라. 마물 주제에 웬 쇠비늘인지.' },
   ],
   'npc-rosetta': [
-    { speaker: '로제타', portrait: 'rosetta', text: '어머, 시온! 오늘 밤 여관에서 축제 전야 잔치 하는 거 알지?' },
-    { speaker: '로제타', portrait: 'rosetta', text: '마을 사람이 다 모여도 자리는 넉넉해. 이 여관이 보기보다 튼튼하거든.' },
+    { speaker: '로제타', portrait: 'rosetta', text: '어머, 시온! 오늘 밤 광장에서 축제 전야 잔치 하는 거 알지? 음식은 우리 여관에서 다 차려 내갈 거야.' },
+    { speaker: '로제타', portrait: 'rosetta', text: '마을 사람이 다 모여도 국은 넉넉해. 냄비째 들고 나갈 거니까 그릇만 챙겨 와.' },
     { speaker: '로제타', portrait: 'rosetta', text: '배고프면 언제든 들러. 국은 늘 끓고 있으니까.' },
   ],
   'npc-vernel': [

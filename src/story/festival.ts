@@ -179,7 +179,7 @@ export const FESTIVAL: OpeningStep[] = [
   { type: 'face', id: 'ruan' },
   { type: 'say', lines: [
     line('ruan', '루안', '오늘 수련, 끝까지 잘 버텼다. 마지막 베기는 제법이더구나.'),
-    hero('아저씨가 칭찬을 다 하시네요.'),
+    hero('스승님이 칭찬을 다 하시네요.'),
     line('ruan', '루안', '칭찬은 오늘만이다. 내일부터는 다시 기본부터지.'),
     line('ruan', '루안', '…시온. 검은 지킬 것이 생길 때 무거워진다. 오늘 이 광장을 잘 봐 두렴.'),
     hero('네. 잊지 않을게요.'),
@@ -219,8 +219,8 @@ export const FESTIVAL: OpeningStep[] = [
   { type: 'camera', to: { x: fire.x, y: fire.y - 220 }, ms: 2400 },
   { type: 'wait', ms: 3200 },
   { type: 'say', lines: [
-    line('sia', '시아', '봐! 내 거 제일 높이 올라간다!'),
-    line('linea', '리네아', '…내년에도 이렇게 셋이서 띄우자.'),
+    line('sia', '시아', '어? 내 건 아직 불이 안 붙었어… 다들 먼저 올라가 버렸잖아!'),
+    line('linea', '리네아', '괜찮아, 금방 붙을 거야. …내년에도 이렇게 셋이서 띄우자.'),
     hero('그래. 내년에도, 그다음 해에도.'),
   ] },
   { type: 'wait', ms: 1200 },
@@ -260,6 +260,7 @@ export const FESTIVAL: OpeningStep[] = [
     line('linea', '리네아', '시아는 내가 데리고 갈게! 북쪽 집으로 피할게!'),
     hero('리네아, 시아 부탁해!'),
     line('sia', '시아', '오빠도… 꼭 와야 해!'),
+    line('sia', '시아', '내 등불은… 나중에 같이 띄우자.'),
   ] },
   { type: 'npc', id: 'linea', path: [P(1060, 1150), P(1130, 980), P(1180, 760), P(1180, 560)], speed: 1.6 },
   { type: 'npc', id: 'sia', path: [P(1030, 1170), P(1100, 990), P(1160, 760), P(1170, 560)], speed: 1.6 },

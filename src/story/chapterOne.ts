@@ -23,6 +23,8 @@ export function chapterPhase(state: QuestState): ChapterPhase {
  * 치유소와 촌장의 집에 들어가 있다. 밖에도 몇 명 남아 있다: 광장에서는 세레나가 피하는 사람들을 이끌고
  * 에일라가 다친 사람을 살피며(습격 퀘스트의 대화 상대), 북쪽에서는 헤르만이 자기 집 앞, 도란이 치유소 문 앞을 지킨다.
  * 루안과 테온은 광장에서 싸운다. 시아와 리네아는 보이지 않는다(이야기). 실내는 원화 픽셀 좌표(room).
+ * 습격이 진행되면 자리를 옮긴다(RAID_MOVES): 시온이 안전을 확인하면 세레나는 북쪽 치유소로 피하고,
+ * 북쪽 길의 무리를 막으면 에일라도 다친 사람들(골목에서 업어 온 리네아)과 함께 치유소로 간다.
  */
 type RaidPlace = { map: MapId; x: number; y: number; facing?: Direction8 } | { map: MapId; room: InteriorId; x: number; y: number; facing?: Direction8 };
 const RAID_PLACES: Partial<Record<NamedNpcId, RaidPlace>> = {
@@ -36,12 +38,24 @@ const RAID_PLACES: Partial<Record<NamedNpcId, RaidPlace>> = {
   merina: { map: 'in-clinic', room: 'clinic', x: 930, y: 650, facing: 'down' },
   vernel: { map: 'in-chief', room: 'chief', x: 860, y: 540, facing: 'down' },
 };
+/** 습격 단계(village-raid의 step)가 이 값 이상이면 옮겨 간 자리 */
+const RAID_MOVES: Partial<Record<NamedNpcId, { fromStep: number; place: RaidPlace }>> = {
+  // 세레나 안전 확인(step 3)을 마치면
+  serena: { fromStep: 4, place: { map: 'in-clinic', room: 'clinic', x: 600, y: 560, facing: 'left' } },
+  // 북쪽 길의 무리와 집행자(step 4)를 막으면
+  eila: { fromStep: 5, place: { map: 'in-clinic', room: 'clinic', x: 850, y: 560, facing: 'left' } },
+};
+
+function raidPlace(id: NamedNpcId, step: number): RaidPlace | undefined {
+  const move = RAID_MOVES[id];
+  return move && step >= move.fromStep ? move.place : RAID_PLACES[id];
+}
 
 /** 습격 중 이 맵에 있을 사람: 그 맵의 병사들과 RAID_PLACES에서 이 맵에 있는 마을 사람들 */
-function raidNpcs(base: readonly NpcDef[], map: MapId): NpcDef[] {
+function raidNpcs(base: readonly NpcDef[], map: MapId, step: number): NpcDef[] {
   const guards = base.filter((n) => isGuardId(n.id)).map((n) => ({ ...n, wander: undefined }));
   const people = NPCS.flatMap((n): NpcDef[] => {
-    const place = RAID_PLACES[n.id as NamedNpcId];
+    const place = raidPlace(n.id as NamedNpcId, step);
     if (!place || place.map !== map) return [];
     const def: NpcDef = { ...n, x: place.x, y: place.y, wander: undefined, ...(place.facing ? { facing: place.facing } : {}) };
     if ('room' in place) {
@@ -82,7 +96,7 @@ function withDuty(n: NpcDef): NpcDef {
 export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: MapId): NpcDef[] {
   const phase = chapterPhase(state);
   if (phase === 'day') return [...base];
-  if (phase === 'raid' && map !== undefined) return raidNpcs(base, map);
+  if (phase === 'raid' && map !== undefined) return raidNpcs(base, map, state['village-raid']?.step ?? 0);
   const evacuated = ['serena', 'eila', 'herman'];
   let source = phase === 'raid' && map === 'village'
     ? [...base, ...NPCS.filter(n => evacuated.includes(n.id) && !base.some(b => b.id === n.id))]
@@ -133,7 +147,7 @@ export const INSPECTION_LINES: Record<string, DialogueLine[]> = {
   ],
   'story-north-alley': [
     { speaker: '시온', portrait: 'hero-neutral', text: '리네아의 등불이 깨진 채 떨어져 있어. 그 옆에… 시아의 머리끈.' },
-    { speaker: '시온', portrait: 'hero-neutral', text: '둘이 여기 있었던 거야. 다친 사람들은 광장으로 모이고 있다고 했지. 에일라라면 알 거야.' },
+    { speaker: '시온', portrait: 'hero-neutral', text: '둘이 여기 있었던 거야. 다친 사람은 치유소로 옮긴다고 했지. 에일라라면 알 거야.' },
   ],
   'story-home-search': [
     { speaker: '시온', portrait: 'hero-neutral', text: '시아야? …대답이 없어. 집 안이 엉망이야… 시아가 다녀갔는지도 모르겠어.' },

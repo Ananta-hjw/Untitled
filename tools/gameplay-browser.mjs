@@ -1492,7 +1492,9 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     for (let i = 0; i < 400 && !s.boss; i++) g.step(t += 16, 16);
     const boss = s.boss?.kind;
     clear(); inspect('story-north-alley');
-    await restart('village'); talk('eila'); talk('ruan'); settle();
+    // 북쪽 길을 막은 뒤 에일라는 다친 사람들과 치유소에 있다.
+    await restart('in-clinic'); talk('eila');
+    await restart('village'); talk('ruan'); settle();
     await restart('village-north');
     const aftermath = { sia: s.npcs.some(n => n.def.id === 'sia'), linea: s.npcs.some(n => n.def.id === 'linea'), shade: !!s.chapterShade };
     talk('serena');

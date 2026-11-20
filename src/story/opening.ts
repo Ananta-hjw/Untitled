@@ -80,7 +80,7 @@ export const OPENING: OpeningStep[] = [
   { type: 'face', id: 'herman' },
   { type: 'say', lines: [
     line('herman', '헤르만', '오, 시온이구먼. 올해는 수확이 넉넉해서 잔치 상도 푸짐하겠어.'),
-    line('herman', '헤르만', '저녁에 여관으로 다들 모이기로 했네. 늦지 말게.'),
+    line('herman', '헤르만', '저녁엔 광장에서 잔치를 열기로 했네. 로제타가 여관에서 상을 차린다더군. 늦지 말게.'),
     hero('네, 촌장님. 기대할게요.'),
   ] },
   { type: 'hero', path: [mapPoint({ x: 1000, y: 760 }), mapPoint({ x: 860, y: 900 }), byLinea] },

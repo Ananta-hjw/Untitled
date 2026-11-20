@@ -193,7 +193,7 @@ export const QUESTS: QuestDef[] = [
     rewardXp: 15,
     offer: [ruan('테온은 남쪽 입구에 있을 거다. 나는 마을 안쪽을 살펴볼게.')],
     reminder: [ruan('네가 직접 본 걸 테온에게 전해 주렴. 괜히 겁을 줄 필요는 없고.')],
-    target: [hero('테온, 숲에 마물이 평소보다 많았어. 루안 선생님도 신경이 쓰이신대.'), line('teon', '테온', '알려 줘서 고마워. 입구 경계를 더 살필게. 넌 잠깐 축제 준비를 도와줄래?')],
+    target: [hero('테온, 숲에 마물이 평소보다 많았어. 스승님도 신경이 쓰이신대.'), line('teon', '테온', '역시 그랬구나… 내가 들은 것보다 많네. 입구 경계를 더 살필게. 넌 잠깐 축제 준비를 도와줄래?')],
     done: [line('teon', '테온', '로제타 아주머니가 리네아에게 보낼 등불 재료를 챙겨 두셨어.')],
   },
   {
@@ -245,7 +245,7 @@ export const QUESTS: QuestDef[] = [
     rewardXp: 25, rewardGold: 40,
     offer: [line('herman', '헤르만', '마침 잘 왔네. 일손이 필요하던 참이야.')],
     reminder: [line('herman', '헤르만', '도란에게 걸쇠를, 메리나에게 초를 받아 오게.')],
-    done: [line('herman', '헤르만', '그런데 테온이 입구 쪽이 어수선하다더군. 해 지기 전에 한 번만 살펴봐 주겠나? 그다음엔 여관으로 가게.')],
+    done: [line('herman', '헤르만', '그런데 테온이 입구 쪽이 어수선하다더군. 해 지기 전에 한 번만 살펴봐 주겠나? 그다음엔 여관의 로제타에게 가 보게. 잔치 상을 차리고 있을 걸세.')],
   },
   {
     id: 'evening-patrol', title: '해 질 무렵의 순찰', giver: 'herman', main: true, requires: 'harvest-help', turnIn: 'teon',
@@ -300,12 +300,12 @@ export const QUESTS: QuestDef[] = [
       // 추적자 넷·잿빛 나방 넷을 막으면 1장 보스 부식의 집행자가 나타난다 (story/chapterOne.ts RAID_WAVES)
       { label: '마을 북쪽 길을 막은 권속과 부식의 집행자 저지하기', need: 9, event: 'kill', map: 'village-north', encounter: 'village-raid' },
       { label: '리네아의 집 옆 골목 살펴보기', need: 1, event: 'inspect', spot: 'north-alley', map: 'village-north' },
-      { label: '광장의 에일라에게 부상자 상황 확인하기', need: 1, event: 'talk', npc: 'eila', lines: [line('eila', '에일라', '북쪽 골목에서 리네아를 찾았어. 큰 외상은 없는데 쓰러져 있었어. 시아는 보이지 않고… 루안도 크게 다쳤으니 먼저 가 보렴.'), hero('리네아는요? 괜찮은 거죠?'), line('eila', '에일라', '내가 곁에 있을게. 지금은 모두 안전하게 옮기는 게 먼저야.')] },
+      { label: '마을 북쪽 치유소의 에일라에게 부상자 상황 확인하기', need: 1, event: 'talk', npc: 'eila', lines: [line('eila', '에일라', '사람들이 북쪽 골목에서 리네아를 업어 왔어. 큰 외상은 없는데 쓰러져 있었어. 시아는 보이지 않고… 루안도 크게 다쳤으니 먼저 가 보렴.'), hero('리네아는요? 괜찮은 거죠?'), line('eila', '에일라', '내가 곁에 있을게. 지금은 모두 안전하게 옮기는 게 먼저야.')] },
     ],
     rewardXp: 50, rewardItems: [{ id: 'potion', count: 3 }],
     // 습격은 수확제 연출 끝에서 시작한다(연출의 대사가 이 퀘스트를 연다).
     offer: [],
-    reminder: [line('rosetta', '로제타', '길을 막는 권속부터 물리쳐 줘. 세레나와 에일라도 밖에 있어! 북쪽 집들도 걱정이야.')],
+    reminder: [line('rosetta', '로제타', '길을 막는 권속부터 물리쳐 줘. 광장엔 아직 세레나와 에일라가 남아 있어!')],
     done: [ruan('더는 따라오지 않는구나… 사람들은 무사하니?'), hero('네. 하지만 시아가 안 보여요. 리네아도 다쳤고요.'), ruan('나는 조금 쉬어야겠다. 가족부터 찾아보렴. 혼자 너무 멀리 나가지는 말고.')],
   },
   {

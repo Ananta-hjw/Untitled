@@ -144,6 +144,22 @@ test('에일라는 낮에는 치유소 안, 습격 때는 광장, 습격 뒤에�
   assert.equal(walkable(MAPS['village-north'], outside.x, outside.y), true);
 });
 
+test('습격이 진행되면 세레나는 안전 확인 뒤, 에일라는 북쪽 길을 막은 뒤 치유소로 옮긴다', () => {
+  const at = (step) => ({ 'festival-eve': { status: 'done', count: 1 }, 'village-raid': { status: 'active', count: 0, step } });
+  const where = (state, id) => Object.keys(MAPS).filter((map) => chapterNpcs(MAPS[map].npcs, state, map).some((n) => n.id === id));
+  assert.deepEqual(where(at(3), 'serena'), ['village'], '안전 확인 전에는 광장');
+  assert.deepEqual(where(at(4), 'serena'), ['in-clinic']);
+  assert.deepEqual(where(at(4), 'eila'), ['village'], '북쪽 무리를 막기 전에는 광장에서 부상자를 살핀다');
+  assert.deepEqual(where(at(5), 'eila'), ['in-clinic']);
+  assert.deepEqual(where(at(6), 'eila'), ['in-clinic'], '리네아 상태를 묻는 마지막 단계도 치유소');
+  const clinic = chapterNpcs(MAPS['in-clinic'].npcs, at(6), 'in-clinic');
+  assert.deepEqual(clinic.map((n) => n.id).sort(), ['eila', 'merina', 'rosetta', 'serena']);
+  for (const n of clinic) assert.equal(walkable(MAPS['in-clinic'], n.x, n.y), true, n.id);
+  for (let i = 0; i < clinic.length; i++) for (let j = i + 1; j < clinic.length; j++) {
+    assert.ok(Math.hypot(clinic[i].x - clinic[j].x, clinic[i].y - clinic[j].y) > 60, `${clinic[i].id}·${clinic[j].id} 겹침`);
+  }
+});
+
 test('습격 뒤 마을 사람들은 복구·치료·경계로 맡은 자리들을 오가고, 자리와 그 사이 길은 막히지 않았다', () => {
   const after = { 'festival-eve': { status: 'done', count: 1 }, 'village-raid': { status: 'done', count: 3 } };
   const clear = (map, a, b) => {
