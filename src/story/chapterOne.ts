@@ -230,6 +230,8 @@ export function raidSpawns(state: QuestState, map: MapId): RaidSpawn[] {
 export function chapterDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined {
   const phase = chapterPhase(state);
   if (phase === 'day') return undefined;
+  // 동료(entities/companion.ts)는 이 대사를 쓰지 않는다.
+  if (npc.startsWith('companion-')) return undefined;
   if (isGuardId(npc)) {
     const guard = GUARDS.find(g => g.id === npc);
     if (!guard) return undefined;
@@ -267,5 +269,5 @@ export function chapterDialogue(npc: NpcId, state: QuestState): DialogueLine[] |
   };
   const text = (phase === 'raid' ? raidTexts : texts)[npc];
   const names: Partial<Record<NpcId, string>> = { ruan: '루안', linea: '리네아', serena: '세레나', eila: '에일라', teon: '테온', rosetta: '로제타', herman: '헤르만', vernel: '베르넬', merina: '메리나', doran: '도란' };
-  return text ? [{ speaker: names[npc]!, portrait: npc, text }] : undefined;
+  return text ? [{ speaker: names[npc]!, portrait: npc as NamedNpcId, text }] : undefined;
 }

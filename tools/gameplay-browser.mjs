@@ -2529,6 +2529,54 @@ test('대화를 넘기려고 공명·막기 버튼 자리를 눌러도, 대화�
   }
 });
 
+test('동료는 주인공을 따라오고, 가까운 적과 스스로 싸우며, 쓰러지면 다시 일어나고, 맵을 옮겨도 함께 온다', async () => {
+  await load('south-field');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+    let t = performance.now(); const step = (n) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    const before = !!s.companion;
+    s.setCompanion('joan');
+    const c = s.companion;
+    const saved = localStorage.getItem('untitled-rpg.companion');
+    for (const e of s.enemies) e.character.placeAt(e.character.x + 6000, e.character.y);
+    s.joystick.vector.set(1, 0); step(120); s.joystick.vector.set(0, 0); step(90);
+    const follow = Math.hypot(c.x - p.x, c.y - p.y);
+    p.invulnerableUntil = Infinity;
+    const e = s.enemies[0]; e.character.placeAt(c.x + 60, c.y);
+    const hp0 = e.character.hp; let hit = false;
+    for (let i = 0; i < 400 && !hit; i++) { step(1); if (e.character.hp < hp0) hit = true; }
+    c.receiveCombatHit(s.now, { x: c.x + 10, y: c.y }, 9999);
+    const downed = c.downed;
+    step(2);
+    // 일어나기까지 기다리는 대신, 쓰러진 시각을 회복 시간만큼 앞당긴다.
+    const stillDown = c.downed && s.companionDownAt !== undefined;
+    s.companionDownAt -= 8000;
+    step(2);
+    return { before, name: c.def.name, saved, follow, hit, downed: downed && stillDown, revived: !c.downed && c.canFight };
+  })()`);
+  assert.equal(result.before, false, '정하기 전에는 동료가 없다');
+  assert.equal(result.name, '조안');
+  assert.equal(result.saved, 'joan');
+  assert.ok(result.follow < 200, '걸어간 주인공을 따라온다: ' + result.follow);
+  assert.equal(result.hit, true, '가까운 적을 스스로 친다');
+  assert.equal(result.downed, true);
+  assert.equal(result.revived, true, '쓰러져도 잠시 뒤 다시 일어난다');
+  const after = await evaluate(`(async () => {
+    const g = window.__game; let s = g.scene.getScene('game');
+    s.travel(s.map.exits.find(x => x.to === 'village'));
+    for (let i = 0; i < 400; i++) {
+      await new Promise(r => setTimeout(r, 10)); g.step(performance.now(), 16); s = g.scene.getScene('game');
+      if (s.mapId === 'village' && s.sys.isActive() && s.minimap && !s.traveling) break;
+    }
+    const near = s.companion && Math.hypot(s.companion.x - s.player.x, s.companion.y - s.player.y);
+    s.setCompanion(undefined);
+    return { map: s.mapId, near, gone: !s.companion && localStorage.getItem('untitled-rpg.companion') === null };
+  })()`);
+  assert.equal(after.map, 'village');
+  assert.ok(after.near < 250, '맵을 옮기면 주인공 곁에 함께 선다: ' + after.near);
+  assert.equal(after.gone, true, '떠나보내면 사라지고 저장도 지운다');
+});
+
 test('여관 휴식 창은 회복량·다음 위치를 보여 주고 취소 시 유지하며 확인 시 한 번만 회복·저장한다', async () => {
   await load('in-inn');
   const result=await evaluate(`(() => {

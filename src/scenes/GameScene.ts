@@ -78,6 +78,7 @@ import { StoryChoice } from '../ui/StoryChoice';
 import { CLINIC_BED_SPOT, HOME_BED_SPOT, REST_POINTS, herbBonus, REST_SAVE_KEY, canRest, parseRestPoint, serializeRestPoint, type RestPointId } from '../story/restPoints';
 import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, isDusk, raidSpawns, raidSpawnsAnyStep, INSPECTION_LINES, type RaidSpawn } from '../story/chapterOne';
 import { BOSS, entersPhaseTwo } from '../combat/bossPattern';
+import { COMPANION, COMPANION_SAVE_KEY, canEngage, companionDamage, companionNpcDef, followPlan, followSpot, isCompanionId, parseCompanion, type CompanionId } from '../entities/companion';
 import { ARENA, bossLanding, chooseArena, entryPoint, insideArena, pushTowardArena, type Arena } from '../combat/bossArena';
 import { BossHud } from '../ui/BossHud';
 import { GuideCard } from '../ui/GuideCard';
@@ -166,6 +167,14 @@ export class GameScene extends Phaser.Scene {
   private baseWalkArea?: WalkArea;
   private awayNpcs = new Set<Npc>();
   private arenaRing?: Phaser.GameObjects.Graphics;
+  /**
+   * 동료(entities/companion.ts): 함께 다니는 사람(저장된다), 그려지는 NPC, 쓰러진 시각, 패링·저스트 회피로 먼저 노릴 적.
+   * 동료는 this.npcs에 넣지 않는다(대화·퀘스트 표시·결계·습격 배치에서 빠진다).
+   */
+  private companionId?: CompanionId;
+  private companion?: Npc;
+  private companionDownAt?: number;
+  private companionFocus?: { enemy: Enemy; until: number };
   /** 초반 전투 가이드(story/tutorial.ts): 안내 창과 이미 본 안내 */
   private guideCard?: GuideCard;
   private seenLessons = new Set<LessonId>();
@@ -481,6 +490,9 @@ export class GameScene extends Phaser.Scene {
     this.arenaOpenedAt = 0;
     this.baseWalkArea = undefined;
     this.awayNpcs = new Set();
+    this.companion = undefined;
+    this.companionDownAt = undefined;
+    this.companionFocus = undefined;
     this.arenaRing = undefined;
     this.occluderCache = undefined;
     this.guideCard = undefined;
@@ -544,6 +556,8 @@ export class GameScene extends Phaser.Scene {
     this.deathPanel = new DeathPanel(this);
     this.guideCard = new GuideCard(this);
     try { this.seenLessons = parseSeenLessons(this.storage?.getItem(GUIDE_SAVE_KEY) ?? null); } catch { this.seenLessons = new Set(); }
+    this.loadCompanion();
+    this.spawnCompanion();
     if (chapterPhase(this.quests) === 'raid') {
       this.chapterShade = this.add.graphics().setScrollFactor(0).setDepth(DEPTH_LIGHTING);
       this.drawChapterShade(this.scale.gameSize.width);
@@ -781,6 +795,7 @@ export class GameScene extends Phaser.Scene {
       this.updateAttackTrace(time);
     }
     this.updateNpcCombat(time, dt);
+    this.updateCompanion(time, dt);
     this.nav.setTarget(this.player.x, this.player.y);
     for (const enemy of this.enemies) {
       const defender = this.defenderTarget(enemy);
@@ -808,25 +823,29 @@ export class GameScene extends Phaser.Scene {
     for (const npc of this.npcs) {
       if (this.awayNpcs.has(npc)) continue;
       npc.setBattle(enabled, phase === 'aftermath' && npc.def.id === 'ruan');
-      npc.updateCombat(time, dt, targets, this.walkArea, this.npcCanStand, (id, damage) => {
-        const enemy = this.enemies[id];
-        if (!enemy?.character.alive || enemy.untouchable) return;
-        const c = enemy.character, distance = Math.hypot(c.x-npc.x, c.y-npc.y) || 1;
-        const dx = (c.x-npc.x)/distance, dy = (c.y-npc.y)/distance;
-        const died = c.hurt(damage);
-        this.showDamage(c.x, c.y-95, damage, '#bfe9ff', 26);
-        this.impacts.impact(c.x, c.y-65, dx, dy, 'normal', time, c.y);
-        // 아군이 마무리해도 습격 처치 수·다음 무리·보스 진행은 같은 경로로 처리한다.
-        this.resolveEnemyHit(enemy, died, dx, dy, NPC_COMBAT.knockback);
-      });
+      npc.updateCombat(time, dt, targets, this.walkArea, this.npcCanStand, (id, damage) => this.allyStrike(npc, id, damage, time));
     }
   }
 
+  /** 아군(수비대·동료)의 일격이 적에게 닿았다. 처치·다음 무리·경험치는 주인공의 일격과 같은 경로로 처리한다. */
+  private allyStrike(npc: Npc, id: number, damage: number, time: number): void {
+    const enemy = this.enemies[id];
+    if (!enemy?.character.alive || enemy.untouchable) return;
+    const c = enemy.character, distance = Math.hypot(c.x-npc.x, c.y-npc.y) || 1;
+    const dx = (c.x-npc.x)/distance, dy = (c.y-npc.y)/distance;
+    const died = c.hurt(damage);
+    this.showDamage(c.x, c.y-95, damage, '#bfe9ff', 26);
+    this.impacts.impact(c.x, c.y-65, dx, dy, 'normal', time, c.y);
+    this.resolveEnemyHit(enemy, died, dx, dy, NPC_COMBAT.knockback);
+  }
+
   private defenderTarget(enemy: Enemy): Npc | undefined {
-    if (enemy.boss || !this.raidEnemies.has(enemy)) return;
+    if (enemy.boss) return;
     const c = enemy.character;
     const playerDistance = Math.hypot(this.player.x-c.x, this.player.y-c.y);
-    return this.npcs.filter(npc => npc.canFight
+    // 습격의 적은 가까운 수비대를, 어느 적이든 가까운 동료를 노릴 수 있다.
+    const candidates = [...(this.raidEnemies.has(enemy) ? this.npcs : []), ...this.companionFighters()];
+    return candidates.filter(npc => npc.canFight
       && Math.hypot(npc.x-c.x, npc.y-c.y) < Math.min(NPC_COMBAT.engageRadius, playerDistance)
       && this.walkArea.hasClearPath(c.x, c.y, npc.x, npc.y))
       .sort((a, b) => Math.hypot(a.x-c.x, a.y-c.y)-Math.hypot(b.x-c.x, b.y-c.y))[0];
@@ -2442,7 +2461,7 @@ export class GameScene extends Phaser.Scene {
   /** 미니맵이 다시 그릴 때만 부른다. */
   private readonly collectMinimap = () => ({
     npcs: [
-      ...this.npcs.filter((n) => n.visible).map((n) => ({ x: n.x, y: n.y, marker: n.questMarker })),
+      ...[...this.npcs, ...(this.companion ? [this.companion] : [])].filter((n) => n.visible).map((n) => ({ x: n.x, y: n.y, marker: n.questMarker })),
       ...this.doorMarkers.filter((d) => d.marker).map((d) => ({ x: d.spot.x, y: d.spot.y, marker: d.marker })),
       ...chapterSpots(this.quests, this.mapId).map(spot => ({ x: spot.x, y: spot.y, marker: 'target' as const })),
     ],
@@ -2457,7 +2476,7 @@ export class GameScene extends Phaser.Scene {
     if (!player.alive || this.dialogue.isOpen) return false;
     const reaches = (x: number, y: number) => hit ? enemyHitReaches(hit, x, y) : strikeReaches(c.x, c.y, c.facing, x, y);
     if (!reaches(player.x, player.y)) {
-      const defender = this.npcs.filter(npc => npc.canFight && reaches(npc.x, npc.y))
+      const defender = [...this.npcs, ...this.companionFighters()].filter(npc => npc.canFight && reaches(npc.x, npc.y))
         .sort((a, b) => Math.hypot(a.x-c.x, a.y-c.y)-Math.hypot(b.x-c.x, b.y-c.y))[0];
       if (defender) {
         const source = hit ? { x: defender.x-hit.dx, y: defender.y-hit.dy } : c;
@@ -2501,6 +2520,7 @@ export class GameScene extends Phaser.Scene {
       // 패링마다 공명 구슬이 1/3씩 찬다.
       this.setResonanceCharge(chargeOnParry(this.resonanceCharge, RESONANCE));
       enemy.interrupt(now, BLOCK.stunMs);
+      this.focusCompanion(enemy);
       this.counterUntil = now + JUST_DODGE.counterMs;
       this.parryUntil = 0;
       this.parryReadyAt = now;
@@ -2620,6 +2640,7 @@ export class GameScene extends Phaser.Scene {
     this.dodgeReadyAt = now;
     this.dodgeButton.setEnabled(true);
     enemy.interrupt(now, JUST_DODGE.stunMs);
+    this.focusCompanion(enemy);
     this.hud.showCallout('저스트 회피!');
     this.impacts.dust(this.player.x, this.player.y, 6, now, 60);
     this.cameras.main.flash(120, 170, 220, 255);
@@ -2719,6 +2740,97 @@ export class GameScene extends Phaser.Scene {
     this.impacts.screenFlash(0xffffff, 0.2, 300);
     this.cameras.main.shake(420, 0.01);
     this.hud.showCallout(`${enemy.stats.name}를 쓰러뜨렸다!`);
+  }
+
+  // ---------------------------------------------------------------- 동료
+
+  /** 저장된 동료를 읽는다. 개발 빌드에서는 ?companion=joan으로 정할 수 있다(?companion=none은 해제). */
+  private loadCompanion(): void {
+    let id: CompanionId | undefined;
+    try { id = parseCompanion(this.storage?.getItem(COMPANION_SAVE_KEY) ?? null); } catch { id = undefined; }
+    if (import.meta.env.DEV) {
+      const fromUrl = new URLSearchParams(location.search).get('companion');
+      if (fromUrl === 'none') id = undefined;
+      else if (isCompanionId(fromUrl)) id = fromUrl;
+    }
+    this.companionId = id;
+  }
+
+  /** 동료를 정하거나(이야기에서 부른다) 떠나보낸다. 저장되어 맵을 옮기거나 다시 켜도 이어진다. */
+  setCompanion(id: CompanionId | undefined): void {
+    this.companionId = id;
+    try {
+      if (id) this.storage?.setItem(COMPANION_SAVE_KEY, id);
+      else this.storage?.removeItem(COMPANION_SAVE_KEY);
+    } catch { /* 저장소가 막히면 이번 실행 동안만 */ }
+    this.companion?.destroy();
+    this.companion = undefined;
+    this.companionDownAt = undefined;
+    this.spawnCompanion();
+  }
+
+  /** 주인공 뒤(걸을 수 있으면)에 동료를 세운다. */
+  private spawnCompanion(): void {
+    if (!this.companionId || this.companion || !this.player) return;
+    const at = this.companionSpot();
+    const npc = new Npc(this, companionNpcDef(this.companionId, at));
+    npc.setBattle(true);
+    this.companion = npc;
+  }
+
+  /** 동료가 설 자리: 주인공 뒤, 막혀 있으면 주인공 옆, 그것도 막히면 주인공 자리 */
+  private companionSpot(): { x: number; y: number } {
+    const p = this.player;
+    const facing = { x: p.facing || 1, y: 0.4 };
+    for (const spot of [followSpot(p, facing), followSpot(p, { x: -facing.x, y: 0.4 }), { x: p.x, y: p.y + 40 }]) {
+      if (this.walkArea.contains(spot.x, spot.y) && this.npcCanStand(spot.x, spot.y)) return spot;
+    }
+    return { x: p.x, y: p.y };
+  }
+
+  /** 적이 노리거나 칠 수 있는 동료 (쓰러져 있거나 숨어 있으면 없음) */
+  private companionFighters(): Npc[] {
+    const c = this.companion;
+    return c && c.visible && c.canFight ? [c] : [];
+  }
+
+  /** 주인공이 패링·저스트 회피로 휘청이게 한 적을 동료가 먼저 노린다. */
+  private focusCompanion(enemy: Enemy): void {
+    if (this.companion) this.companionFocus = { enemy, until: this.now + COMPANION.focusMs };
+  }
+
+  /**
+   * 동료: 연출과 보스전(결계) 동안에는 물러나 있고, 쓰러졌으면 recoverMs 뒤 다시 일어난다.
+   * 주인공 가까이(leash)에 적이 있으면 수비대와 같은 전투(NpcFighter)로 싸우고, 없으면 주인공을 따라온다.
+   */
+  private updateCompanion(time: number, dt: number): void {
+    const c = this.companion;
+    if (!c) return;
+    const away = !!this.opening || this.arena !== undefined;
+    c.setVisible(!away);
+    if (away) return;
+    if (c.downed) {
+      this.companionDownAt ??= time;
+      if (time < this.companionDownAt + COMPANION.recoverMs) return;
+      c.revive();
+      this.companionDownAt = undefined;
+    }
+    const hero = this.player;
+    const focus = this.companionFocus && time < this.companionFocus.until && this.companionFocus.enemy.character.alive ? this.companionFocus.enemy : undefined;
+    if (!focus) this.companionFocus = undefined;
+    const targets = this.enemies.map((e, id) => {
+      const ok = canEngage({ x: e.character.x, y: e.character.y, alive: e.character.alive && e.state !== 'dead' && !e.untouchable, boss: e.boss }, hero);
+      return { id, x: e.character.x, y: e.character.y, alive: ok && (!focus || e === focus), attacking: e.state === 'windup' };
+    });
+    const near = targets.some((t) => t.alive && Math.hypot(t.x - c.x, t.y - c.y) <= NPC_COMBAT.engageRadius);
+    if (near || c.fighting) {
+      c.updateCombat(time, dt, targets, this.walkArea, this.npcCanStand, (id) => {
+        const enemy = this.enemies[id];
+        if (enemy) this.allyStrike(c, id, companionDamage(this.stats.damageMin, this.stats.damageMax, enemy === focus), time);
+      });
+      return;
+    }
+    c.followHero(hero, dt, PLAYER_SPEED, this.walkArea, followPlan(c, hero), this.companionSpot());
   }
 
   // ---------------------------------------------------------------- 보스전 결계

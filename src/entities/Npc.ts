@@ -4,6 +4,7 @@ import { isFighterSkin, NpcFighter, type NpcCombatPose, type NpcCombatTarget } f
 import type { Interactable } from '../world/interactables';
 import type { QuestMarker } from '../story/quests';
 import type { WalkArea } from '../world/walkArea';
+import type { FollowPlan } from './companion';
 import {
   NPC_TALK_PAUSE_MS, NPC_WALK_SPEED, dutyPauseMs, npcSkin, direction8, pickRoamTarget, pickWanderTarget, roamsFreely, walkPose, wanderPauseMs,
   type Direction8, type DutyPoint, type NpcDef, type NpcSkin,
@@ -240,6 +241,43 @@ export class Npc extends Phaser.GameObjects.Container {
       this.spot.x = this.x; this.spot.y = this.y + (this.def.talkOffset ?? 0);
     } else this.showCombat(plan.pose);
     if (plan.strike !== undefined) strike(plan.strike, NPC_COMBAT.profiles[this.fighter.skin].damage);
+  }
+
+  /** 동료(entities/companion.ts): 체력이 다해 무릎을 꿇고 있는지 */
+  get downed(): boolean { return !!this.fighter && this.battle && this.fighter.hp <= 0; }
+
+  /** 동료: 다시 일어난다(체력이 가득 찬 새 전투 상태). */
+  revive(): void {
+    if (!this.fighter) return;
+    this.fighter = new NpcFighter(this.fighter.skin);
+    this.showFrame(this.walk.idlePose, true);
+  }
+
+  /** 동료: 지금 싸울 상대가 있는지(싸우는 동작 중이거나 노릴 적이 가까이 있다) */
+  get fighting(): boolean { return !!this.fighter && this.fighter.pose !== 'guard'; }
+
+  /**
+   * 동료: 주인공을 따라온다. 가까우면 서서 주인공 쪽을 보고, 멀면 걷거나 뛰고, 너무 멀면 주인공 뒤로 옮겨 온다.
+   * speed는 주인공의 걷는 빠르기. warpTo는 옮겨 올 자리(걸을 수 있는 곳이어야 한다).
+   */
+  followHero(hero: { x: number; y: number }, dt: number, speed: number, area: WalkArea,
+    plan: FollowPlan, warpTo: { x: number; y: number }): void {
+    if (plan.kind === 'warp') {
+      this.setPosition(warpTo.x, warpTo.y).setDepth(warpTo.y);
+    } else if (plan.kind === 'move') {
+      const distance = speed * plan.scale * dt;
+      const next = area.move(this.x, this.y, plan.x * distance, plan.y * distance, this.step);
+      this.walked += Math.hypot(next.x - this.x, next.y - this.y);
+      this.setPosition(next.x, next.y).setDepth(next.y);
+      this.direction = direction8(plan.x, plan.y, this.direction);
+      this.showFrame(walkPose(this.walked, this.def.height, this.walk.walkPoses), true);
+    }
+    if (plan.kind !== 'move') {
+      this.direction = direction8(hero.x - this.x, hero.y - this.y, this.direction);
+      this.showFrame(this.walk.idlePose, true);
+    }
+    this.spot.x = this.x;
+    this.spot.y = this.y + (this.def.talkOffset ?? 0);
   }
 
   receiveCombatHit(now: number, source: { x: number; y: number }, damage: number): 'miss' | 'blocked' | 'hit' | 'injured' {

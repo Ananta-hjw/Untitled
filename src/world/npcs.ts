@@ -19,7 +19,7 @@ export type NamedNpcId =
   | 'merina' | 'doran' | 'rosetta' | 'vernel' | 'teon';
 
 export type NpcSkin = NamedNpcId | 'soldier';
-export type NpcId = NamedNpcId | `guard-${string}`;
+export type NpcId = NamedNpcId | `guard-${string}` | `companion-${string}`;
 
 export interface NpcDef {
   id: NpcId;
