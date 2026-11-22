@@ -6,7 +6,7 @@ export const CHAPTER_TWO_CAST: ReadonlyArray<{
 }> = [
   { id: 'evan', name: '에반', role: '나루의 사공', height: 148 },
   { id: 'joan', name: '조안', role: '젊은 사공', height: 142 },
-  { id: 'marta', name: '마르타', role: '청동 종 장인', height: 138 },
+  { id: 'marta', name: '마르타', role: '대장장이', height: 138 },
   { id: 'morgan', name: '모르간', role: '나루의 후원자', height: 150 },
   { id: 'finn', name: '핀', role: '여관의 소년', height: 116 },
   { id: 'dor', name: '도르', role: '고개 쉼터의 약초꾼', height: 144 },
