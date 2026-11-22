@@ -80,7 +80,7 @@ const BASE_NPCS: NpcDef[] = [
   // 치유사 에일라는 낮에는 치유소 안에서 조금씩 오간다. 습격 뒤 자리는 story/chapterOne.ts가 정한다.
   { id: 'eila', name: '에일라', role: '치유사', ...interiorShop('clinic'), talkOffset: 0, height: 146, dialogue: 'npc-eila', wander: 70 },
   { id: 'vernel', name: '베르넬', role: '유적 연구자', x: 1660, y: 1610, height: 150, dialogue: 'npc-vernel', wander: 70 },
-  { id: 'teon', name: '테온', role: '경비대원', x: 1340, y: 1450, height: 150, dialogue: 'npc-teon', wander: 100 },
+  { id: 'teon', name: '테온', role: '경비대장', x: 1340, y: 1450, height: 150, dialogue: 'npc-teon', wander: 100 },
 ];
 
 export const NPCS = BASE_NPCS.map(n => n.inside || n.id === 'linea' ? n : mapPoint(n));
