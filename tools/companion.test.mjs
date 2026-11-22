@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { COMPANION, COMPANIONS, canEngage, companionDamage, companionNpcDef, followPlan, followSpot, parseCompanion } from '../src/entities/companion.ts';
 import { isFighterSkin } from '../src/entities/npcCombat.ts';
+import { npcSkin } from '../src/world/npcs.ts';
 
 test('동료는 가까우면 서 있고, 멀면 걷거나 뛰어 다가오며, 너무 멀면 주인공 곁으로 옮겨 온다', () => {
   const hero = { x: 1000, y: 1000 };
@@ -48,6 +49,8 @@ test('동료 저장은 아는 동료만 읽고, 동료의 NPC 정의는 전투 �
     const npc = companionNpcDef(def.id, { x: 10, y: 20 });
     assert.equal(npc.id, `companion-${def.id}`);
     assert.equal(npc.name, def.name);
+    assert.equal(npcSkin(npc), 'joan', '전투 프로필을 재사용해도 외형은 조안');
+    assert.equal(npc.dialogue, 'npc-joan');
     assert.deepEqual([npc.x, npc.y, npc.wander, npc.shop], [10, 20, undefined, undefined]);
   }
 });

@@ -15,10 +15,13 @@ interface WalkFrame {
   x: number; y: number; w: number; h: number; originX: number; originY: number; scale: number;
 }
 interface WalkData { fps: number; idlePose: number; walkPoses: number[]; referenceHeight: number; frames: WalkFrame[] }
+interface IdleData { width: number; height: number; originX: number; originY: number }
 
 // 인물마다 walk_cardinal-60.webp, walk_diagonal-60.webp(줄인 시트)와 walk_frames.json(원본 시트 좌표)이 있다.
 const SHEET_URLS = import.meta.glob<string>('../assets/characters/*/walk_*-60.webp', { eager: true, query: '?url', import: 'default' });
 const FRAME_DATA = import.meta.glob<WalkData>('../assets/characters/*/walk_frames.json', { eager: true, import: 'default' });
+const IDLE_URLS = import.meta.glob<string>('../assets/characters/*/sd_idle-256.webp', { eager: true, query: '?url', import: 'default' });
+const IDLE_DATA = import.meta.glob<IdleData>('../assets/characters/*/sd_idle.json', { eager: true, import: 'default' });
 const COMBAT_URLS = import.meta.glob<string>('../assets/characters/*/combat.webp', { eager: true, query: '?url', import: 'default' });
 interface CombatFrame { name: string; x: number; y: number; w: number; h: number; originX: number; originY: number }
 const COMBAT_DATA = import.meta.glob<{ frames: CombatFrame[] }>('../assets/characters/*/combat-frames.json', { eager: true, import: 'default' });
@@ -45,6 +48,11 @@ export function preloadNpcs(scene: Phaser.Scene, npcs: readonly NpcDef[]): void 
   for (const id of new Set(npcs.map(npcSkin))) {
     if (isFighterSkin(id) && !scene.textures.exists(`npc-${id}-combat`)) {
       scene.load.image(`npc-${id}-combat`, COMBAT_URLS[`../assets/characters/${id}/combat.webp`]);
+    }
+    if (!walkData(id)) {
+      const key = `npc-${id}-idle`;
+      if (!scene.textures.exists(key)) scene.load.image(key, IDLE_URLS[`../assets/characters/${id}/sd_idle-256.webp`]);
+      continue;
     }
     for (const sheet of ['walk_cardinal', 'walk_diagonal']) {
       const key = sheetKey(id, sheet);
@@ -73,6 +81,7 @@ export class Npc extends Phaser.GameObjects.Container {
   /** 대화 대상. 걷는 동안 위치를 따라 옮긴다. */
   readonly spot: Interactable;
   private readonly skin: NpcSkin;
+  private readonly idle?: IdleData;
   private readonly figure: Phaser.GameObjects.Image;
   private readonly walk: WalkData;
   private readonly frames: Map<string, WalkFrame>;
@@ -112,19 +121,25 @@ export class Npc extends Phaser.GameObjects.Container {
     this.add(shadow);
 
     this.skin = npcSkin(def);
+    const combatSkin = def.skin ?? this.skin;
+    if (isFighterSkin(combatSkin)) this.fighter = new NpcFighter(combatSkin);
     if (isFighterSkin(this.skin)) {
-      this.fighter = new NpcFighter(this.skin);
       const texture = scene.textures.get(`npc-${this.skin}-combat`);
       for (const f of COMBAT_DATA[`../assets/characters/${this.skin}/combat-frames.json`].frames) {
         if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
       }
     }
     this.direction = def.facing ?? 'down';
-    this.walk = walkData(this.skin);
-    registerWalkFrames(scene, this.skin, this.walk);
+    this.idle = walkData(this.skin) ? undefined : IDLE_DATA[`../assets/characters/${this.skin}/sd_idle.json`];
+    this.walk = walkData(this.skin) ?? {
+      fps: 0, idlePose: 0, walkPoses: [0], referenceHeight: this.idle!.height, frames: [],
+    };
+    if (walkData(this.skin)) registerWalkFrames(scene, this.skin, this.walk);
     this.frames = new Map(this.walk.frames.map((f) => [f.name, f]));
-    this.scale0 = def.height / (this.walk.referenceHeight * WALK_SHEET_SCALE);
-    this.figure = scene.add.image(0, 0, sheetKey(this.skin, 'walk_cardinal'), 'down-0');
+    this.scale0 = def.height / (this.walk.referenceHeight * (this.idle ? 1 : WALK_SHEET_SCALE));
+    this.figure = this.idle
+      ? scene.add.image(0, 0, `npc-${this.skin}-idle`)
+      : scene.add.image(0, 0, sheetKey(this.skin, 'walk_cardinal'), 'down-0');
     this.showFrame(this.walk.idlePose);
     this.restUntil = rand() * 2000;
     this.add(this.figure);
@@ -416,6 +431,12 @@ export class Npc extends Phaser.GameObjects.Container {
   }
 
   private showFrame(pose: number, combatWalk = false): void {
+    // 방향·전투 시트가 아직 없는 인물은 정면 SD를 유지한다. 다른 인물의 그림으로 바뀌지 않는다.
+    if (this.idle) {
+      this.figure.setTexture(`npc-${this.skin}-idle`).setFlipX(false)
+        .setOrigin(this.idle.originX, this.idle.originY).setScale(this.scale0);
+      return;
+    }
     if (this.combatControlled && !combatWalk) { this.showCombat(this.fighter!.pose); return; }
     const frame = this.frames.get(`${this.direction}-${pose}`)!;
     this.figure.setTexture(sheetKey(this.skin, frame.sheet), frame.name)
@@ -425,6 +446,7 @@ export class Npc extends Phaser.GameObjects.Container {
   }
 
   private showCombat(pose: NpcCombatPose): void {
+    if (this.idle) { this.showFrame(0, true); return; }
     const frame = COMBAT_DATA[`../assets/characters/${this.skin}/combat-frames.json`].frames.find(f => f.name === pose)!;
     this.figure.setTexture(`npc-${this.skin}-combat`, pose).setFlipX(this.fighter!.facingX < 0)
       .setOrigin(frame.originX, frame.originY).setScale(this.def.height / NPC_COMBAT.artHeight);

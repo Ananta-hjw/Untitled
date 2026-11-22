@@ -44,6 +44,26 @@ export const DIALOGUES = {
   'guard-south': [{ speaker: '남문 병사', portrait: 'soldier', text: '남쪽 들판은 마을 밖입니다. 물약은 챙기셨죠? 무리하지 말고 위험하면 바로 돌아오세요.' }],
   'guard-patrol': [{ speaker: '순찰 병사', portrait: 'soldier', text: '마을을 순찰하고 있습니다. 도움이 필요하거나 수상한 것을 발견하면 저희에게 알려 주세요.' }],
 
+  // 2장 인물의 기본 대사. 조안은 구출 뒤의 대사이며, 본편에서는 구출 단계에 맞춰 배치한다.
+  'npc-evan': [
+    { speaker: '에반', portrait: 'evan', text: '지금은 배를 띄우지 않아. 밤에 종이 울리거든… 귀를 막고 있어.' },
+  ],
+  'npc-joan': [
+    { speaker: '조안', portrait: 'joan', text: '여울 너머까지는 내가 안내할게. 강가에서는 발밑부터 살펴.' },
+  ],
+  'npc-marta': [
+    { speaker: '마르타', portrait: 'marta', text: '쇠도 청동도 서두르면 못 써. 어디, 고칠 물건이 있느냐?' },
+  ],
+  'npc-morgan': [
+    { speaker: '모르간', portrait: 'morgan', text: '나루에 오신 걸 환영합니다. 곤란한 일이 있으면 말씀하시지요.' },
+  ],
+  'npc-finn': [
+    { speaker: '핀', portrait: 'finn', text: '어른들은 내 말을 잘 안 믿어. 하지만 난 봤어. 밤에 강가에서.' },
+  ],
+  'npc-dor': [
+    { speaker: '도르', portrait: 'dor', text: '고개를 넘을 참인가? 물부터 한 모금 마시게. 산길에서는 쉬어 가는 것도 일이야.' },
+  ],
+
   // 로웬 마을 사람들의 첫날 대사 (docs/story-chapter1.md: 수확제 전날, 평화로운 하루. 아주 작은 복선만 둔다)
   'npc-serena': [
     { speaker: '세레나', portrait: 'serena', text: '시온, 나가니? 오늘 저녁은 축제 전야니까 해 지기 전에 들어오렴.' },

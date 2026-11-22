@@ -18,13 +18,16 @@ export type NamedNpcId =
   | 'serena' | 'sia' | 'linea' | 'ruan' | 'herman' | 'eila'
   | 'merina' | 'doran' | 'rosetta' | 'vernel' | 'teon';
 
-export type NpcSkin = NamedNpcId | 'soldier';
-export type NpcId = NamedNpcId | `guard-${string}` | `companion-${string}`;
+export type ChapterTwoNpcId = 'evan' | 'joan' | 'marta' | 'morgan' | 'finn' | 'dor';
+export type NpcSkin = NamedNpcId | ChapterTwoNpcId | 'soldier';
+export type NpcId = NamedNpcId | ChapterTwoNpcId | `guard-${string}` | `companion-${string}`;
 
 export interface NpcDef {
   id: NpcId;
   /** 여러 일반 병사는 위치·대화만 다르고 하나의 그래픽을 공유한다. */
   skin?: NpcSkin;
+  /** 전투 수치는 기존 프로필을 쓰더라도 외형은 이 인물의 그림으로 표시한다. */
+  visualSkin?: NpcSkin;
   facing?: Direction8;
   /** 머리 위 이름표와 대화창에 나오는 이름 */
   name: string;
@@ -60,7 +63,7 @@ export function dutyPauseMs(rand: () => number): number {
   return 3200 + rand() * 3300;
 }
 
-export function npcSkin(def: NpcDef): NpcSkin { return def.skin ?? def.id as NamedNpcId; }
+export function npcSkin(def: NpcDef): NpcSkin { return def.visualSkin ?? def.skin ?? def.id as NpcSkin; }
 
 const BASE_NPCS: NpcDef[] = [
   // 북쪽 맵: 집들 앞

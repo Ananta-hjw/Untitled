@@ -12,6 +12,12 @@ import rosettaPortrait from '../assets/characters/rosetta/dialogue-768.webp?url'
 import vernelPortrait from '../assets/characters/vernel/dialogue-768.webp?url';
 import soldierPortrait from '../assets/characters/soldier/dialogue-768.webp?url';
 import teonPortrait from '../assets/characters/teon/dialogue-768.webp?url';
+import evanPortrait from '../assets/characters/evan/dialogue-768.webp?url';
+import joanPortrait from '../assets/characters/joan/dialogue-768.webp?url';
+import martaPortrait from '../assets/characters/marta/dialogue-768.webp?url';
+import morganPortrait from '../assets/characters/morgan/dialogue-768.webp?url';
+import finnPortrait from '../assets/characters/finn/dialogue-768.webp?url';
+import dorPortrait from '../assets/characters/dor/dialogue-768.webp?url';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 import type { DialogueLine, Portrait } from '../story/dialogues';
 
@@ -38,6 +44,12 @@ const PORTRAITS: Record<Portrait, { key: string; url: string }> = {
   vernel: { key: 'portrait-vernel', url: vernelPortrait },
   teon: { key: 'portrait-teon', url: teonPortrait },
   soldier: { key: 'portrait-soldier', url: soldierPortrait },
+  evan: { key: 'portrait-evan', url: evanPortrait },
+  joan: { key: 'portrait-joan', url: joanPortrait },
+  marta: { key: 'portrait-marta', url: martaPortrait },
+  morgan: { key: 'portrait-morgan', url: morganPortrait },
+  finn: { key: 'portrait-finn', url: finnPortrait },
+  dor: { key: 'portrait-dor', url: dorPortrait },
 };
 /** 초당 나오는 글자 수 (38자는 읽기 전에 지나가서 조금 늦췄다) */
 const CHARS_PER_SECOND = 28;

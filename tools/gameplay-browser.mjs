@@ -105,6 +105,56 @@ after(async () => {
   if (profile) await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
+test('2장 여섯 인물은 각자의 SD와 대화 초상화를 쓰고 대화 뒤에도 같은 외형을 유지한다', async () => {
+  await load('east-stream&npcs=chapter2&companion=none');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    return s.npcs.map(n => {
+      const before = n.figure.texture.key;
+      s.openDialogue(n.spot);
+      const portrait = s.dialogue.portrait.texture.key, name = s.dialogue.nameText.text;
+      while (s.dialogue.isOpen) s.dialogue.advance();
+      n.faceTowards(n.x - 100, n.y - 100);
+      return { id: n.def.id, before, after: n.figure.texture.key, portrait, name,
+        expectedName: n.def.name, height: n.figure.displayHeight, expectedHeight: n.def.height,
+        footOrigin: n.figure.originY, walkable: s.walkArea.contains(n.x, n.y) };
+    });
+  })()`);
+  assert.deepEqual(result.map(n => n.id).sort(), ['dor', 'evan', 'finn', 'joan', 'marta', 'morgan']);
+  for (const n of result) {
+    assert.equal(n.before, `npc-${n.id}-idle`);
+    assert.equal(n.after, n.before);
+    assert.equal(n.portrait, `portrait-${n.id}`);
+    assert.equal(n.name, n.expectedName);
+    assert.ok(Math.abs(n.height - n.expectedHeight) < 1);
+    assert.ok(n.footOrigin > .98 && n.footOrigin <= 1);
+    assert.equal(n.walkable, true);
+  }
+});
+
+test('동료 조안은 따라오기·피격·회복 중에도 테온 대신 자신의 SD를 표시한다', async () => {
+  await load('east-stream&npcs=chapter2&companion=none');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    s.setCompanion('joan');
+    const c = s.companion, keys = [c.figure.texture.key];
+    c.placeAt(s.player.x - 280, s.player.y);
+    const before = c.x;
+    for (let i = 0; i < 15; i++) s.updateCompanion(s.now + i * 20, .02);
+    keys.push(c.figure.texture.key);
+    c.receiveCombatHit(s.now + 1000, {x:c.x, y:c.y-100}, 10000);
+    keys.push(c.figure.texture.key);
+    const downed = c.downed;
+    c.revive();
+    keys.push(c.figure.texture.key);
+    s.setCompanion(undefined);
+    return { keys, moved: c.x > before, downed };
+  })()`);
+  assert.ok(result.keys.every(key => key === 'npc-joan-idle'));
+  assert.equal(result.moved, true);
+  assert.equal(result.downed, true);
+});
+
 test('순찰 조사 전 테온과 대화하면 테온의 이름과 일러스트가 표시된다', async () => {
   await load('village');
   const result = await evaluate(`(() => {

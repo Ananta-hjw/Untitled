@@ -71,6 +71,7 @@ import { DIALOGUES, HERO_NAME } from '../story/dialogues';
 import { findInteractable, type Interactable } from '../world/interactables';
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
+import { chapterTwoPreviewNpcs } from '../world/chapterTwoNpcs';
 import { PerfOverlay } from '../ui/PerfOverlay';
 import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
@@ -352,6 +353,13 @@ export class GameScene extends Phaser.Scene {
     if (isMapId(data.map)) this.mapId = data.map;
     else if (isMapId(fromUrl)) this.mapId = fromUrl;
     this.map = MAPS[this.mapId];
+    if (this.previewChapterTwo) {
+      // 본편의 1장 배치나 진행 조건을 바꾸지 않고 같은 NPC·대화 시스템으로 새 원화를 확인한다.
+      const at = mapPoint({ x: 1400, y: 1250 });
+      this.map = { ...this.map, name: '2장 인물 확인', hint: '2장 인물 확인 · 가까이 가서 대화해 보세요',
+        spawn: { x: at.x, y: at.y + 170 }, npcs: chapterTwoPreviewNpcs(at), enemies: [], exits: [],
+        props: [], buildings: [], interactables: [], obstacles: [] };
+    }
     if (data.stress !== undefined) this.stressCount = data.stress;
     this.arrival = data.at;
     this.fromTitle = !!data.fromTitle;
@@ -533,7 +541,7 @@ export class GameScene extends Phaser.Scene {
     // 습격 중에는 이 맵에 나올 모든 무리의 그림을 미리 읽는다(대화 뒤 다음 무리가 바로 나타난다).
     preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...raidSpawnsAnyStep(this.quests, this.mapId)]);
     preloadVillage(this, this.map);
-    preloadNpcs(this, [...NPCS, ...GUARDS]);
+    preloadNpcs(this, [...NPCS, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 })]);
     preloadDialogue(this);
     preloadItemIcons(this);
   }
@@ -954,13 +962,20 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- 월드
 
+  /** ?map=east-stream&npcs=chapter2: 미구현 2장 인물의 그림·대화 확인용. 배포판에는 적용하지 않는다. */
+  private get previewChapterTwo(): boolean {
+    return import.meta.env.DEV && this.mapId === 'east-stream'
+      && new URLSearchParams(location.search).get('npcs') === 'chapter2';
+  }
+
   private buildCharacters(): void {
     // 사냥터 몬스터는 그 맵의 권장 레벨 범위를 차례로 받는다. 해 질 무렵의 나방은 따로 정한 레벨.
     this.map.enemies.forEach((spawn, i) => this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, spawnLevel(this.mapId, i))));
     for (const spawn of this.duskSpawns()) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, DUSK_MOTH_LEVEL));
     this.syncRaidEnemies(false);
     // 축제 연출 동안에는 마을 사람 모두가 광장의 잔치 자리에 있다.
-    let defs = this.playFestival ? festivalNpcs() : chapterNpcs([...this.map.npcs, ...guardsForMap(this.mapId)], this.quests, this.mapId);
+    let defs = this.previewChapterTwo ? this.map.npcs
+      : this.playFestival ? festivalNpcs() : chapterNpcs([...this.map.npcs, ...guardsForMap(this.mapId)], this.quests, this.mapId);
     if (this.stressCount > 0 && this.mapId === 'village' && chapterPhase(this.quests) === 'day') {
       const area = this.walkArea, b = this.map.bounds;
       defs = [...defs, ...stressNpcs(this.stressCount, defs, Math.random, b, (x, y) => area.contains(x, y) && !findExit(this.map, x, y))];

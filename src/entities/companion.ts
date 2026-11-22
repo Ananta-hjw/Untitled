@@ -34,15 +34,16 @@ export interface CompanionDef {
   id: CompanionId;
   name: string;
   /**
-   * 그림(걷기·전투). 조안의 그림이 아직 없어 전투 그림이 있는 테온 그림을 임시로 쓴다.
-   * 조안의 그림이 생기면 이것만 바꾼다(npcCombat.ts의 profiles에 조안을 더한다).
+   * 전투 수치는 테온의 프로필을 재사용한다. 외형은 visualSkin의 조안 SD를 쓴다.
+   * 조안의 걷기·전투 시트가 준비되면 별도 전투 프로필로 교체한다.
    */
   skin: 'teon';
+  visualSkin: 'joan';
   height: number;
 }
 
 export const COMPANIONS: Record<CompanionId, CompanionDef> = {
-  joan: { id: 'joan', name: '조안', skin: 'teon', height: 146 },
+  joan: { id: 'joan', name: '조안', skin: 'teon', visualSkin: 'joan', height: 142 },
 };
 
 export const COMPANION_SAVE_KEY = 'untitled-rpg.companion';
@@ -60,8 +61,8 @@ export function parseCompanion(raw: string | null): CompanionId | undefined {
 export function companionNpcDef(id: CompanionId, at: { x: number; y: number }): NpcDef {
   const def = COMPANIONS[id];
   return {
-    id: `companion-${id}`, skin: def.skin, name: def.name, role: '동료',
-    x: at.x, y: at.y, height: def.height, dialogue: 'npc-teon',
+    id: `companion-${id}`, skin: def.skin, visualSkin: def.visualSkin, name: def.name, role: '동료',
+    x: at.x, y: at.y, height: def.height, dialogue: 'npc-joan',
   };
 }
 
