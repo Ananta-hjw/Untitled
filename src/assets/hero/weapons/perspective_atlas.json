@@ -1,0 +1,44 @@
+{
+    "frames":  [
+                   {
+                       "name":  "iron-sword-down",
+                       "x":  4,
+                       "y":  4,
+                       "w":  82,
+                       "h":  220,
+                       "originX":  0.4943,
+                       "originY":  0.2388,
+                       "bladeLength":  167
+                   },
+                   {
+                       "name":  "iron-sword-up",
+                       "x":  90,
+                       "y":  4,
+                       "w":  86,
+                       "h":  220,
+                       "originX":  0.4973,
+                       "originY":  0.629,
+                       "bladeLength":  138
+                   },
+                   {
+                       "name":  "wooden-sword-down",
+                       "x":  180,
+                       "y":  4,
+                       "w":  79,
+                       "h":  220,
+                       "originX":  0.4911,
+                       "originY":  0.2175,
+                       "bladeLength":  172
+                   },
+                   {
+                       "name":  "wooden-sword-up",
+                       "x":  263,
+                       "y":  4,
+                       "w":  87,
+                       "h":  220,
+                       "originX":  0.4973,
+                       "originY":  0.6111,
+                       "bladeLength":  134
+                   }
+               ]
+}

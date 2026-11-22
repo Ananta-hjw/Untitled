@@ -1468,7 +1468,6 @@ export class GameScene extends Phaser.Scene {
         if (!c.alive) continue;
         const dx = c.x - player.x, dy = (c.y - player.y) / VERTICAL_SPEED_RATIO;
         const candidate = movementFacing(dx, dy, hero.lookDirection, false);
-        if (candidate === 'up' || candidate === 'down') continue;
         const distance = Math.hypot(dx, dy);
         if (distance < nearest) {
           nearest = distance;
@@ -1524,11 +1523,14 @@ export class GameScene extends Phaser.Scene {
     const lastElapsed = trace.elapsed;
     trace.elapsed = elapsed;
     const end = combo.hitDelayMs + PLAYER.hitWindowMs;
-    // 휘두르는 그림이 나타나는 순간, 직전 자세의 칼에서 지금 칼까지 초승달 궤적을 그린다.
+    // 휘두르기 시작 시각에 손그림 검기·찌르기 이펙트를 재생하고, 없을 때만 벡터 초승달로 대체한다.
     const strikeAt = strikePoseStart(trace.stage);
     if (lastElapsed < strikeAt && elapsed >= strikeAt) {
-      trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, combo.hitDelayMs, player.y + 2);
-      this.effects.slash(trace.effect, previous, current, time, trace.direction.x);
+      const played = this.effects.spawnSlashSprite(trace.stage, rig.activeAttackFacing, player.x, player.y, rig.scaleX, player.y, time);
+      if (!played) {
+        trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, combo.hitDelayMs, player.y + 2);
+        this.effects.slash(trace.effect, previous, current, time, trace.direction.x, trace.direction.y);
+      }
     }
     const sweep = clipBladeSweep(previous, current, lastElapsed, elapsed, combo.hitDelayMs, end);
     if (elapsed >= end) this.attackTrace = undefined;

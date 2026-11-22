@@ -1,0 +1,316 @@
+{
+    "frames":  [
+                   {
+                       "name":  "attack-down-diag-0",
+                       "texture":  "hero-academy-attack-down-diag",
+                       "x":  4,
+                       "y":  4,
+                       "w":  217,
+                       "h":  304,
+                       "originX":  0.4885,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  185,
+                                    "y":  86
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  191.7,
+                                                  "y":  78.6
+                                              },
+                                     "tip":  {
+                                                 "x":  284,
+                                                 "y":  -24
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-down-diag-1",
+                       "texture":  "hero-academy-attack-down-diag",
+                       "x":  300,
+                       "y":  4,
+                       "w":  226,
+                       "h":  298,
+                       "originX":  0.4867,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  116,
+                                    "y":  194
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  122.2,
+                                                  "y":  201.9
+                                              },
+                                     "tip":  {
+                                                 "x":  207.2,
+                                                 "y":  310.6
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-down-diag-2",
+                       "texture":  "hero-academy-attack-down-diag",
+                       "x":  596,
+                       "y":  4,
+                       "w":  239,
+                       "h":  292,
+                       "originX":  0.4979,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  204,
+                                    "y":  218
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  210.9,
+                                                  "y":  225.2
+                                              },
+                                     "tip":  {
+                                                 "x":  309.5,
+                                                 "y":  327.3
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-down-diag-3",
+                       "texture":  "hero-academy-attack-down-diag",
+                       "x":  892,
+                       "y":  4,
+                       "w":  200,
+                       "h":  294,
+                       "originX":  0.445,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  186,
+                                    "y":  218
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  192.2,
+                                                  "y":  225.9
+                                              },
+                                     "tip":  {
+                                                 "x":  274.7,
+                                                 "y":  331.5
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-down-diag-4",
+                       "texture":  "hero-academy-attack-down-diag",
+                       "x":  4,
+                       "y":  316,
+                       "w":  211,
+                       "h":  303,
+                       "originX":  0.4313,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  18,
+                                    "y":  86
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  10.6,
+                                                  "y":  79.3
+                                              },
+                                     "tip":  {
+                                                 "x":  -92,
+                                                 "y":  -13
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-down-diag-5",
+                       "texture":  "hero-academy-attack-down-diag",
+                       "x":  300,
+                       "y":  316,
+                       "w":  239,
+                       "h":  301,
+                       "originX":  0.4686,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  222,
+                                    "y":  188
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  231.7,
+                                                  "y":  190.4
+                                              },
+                                     "tip":  {
+                                                 "x":  371.4,
+                                                 "y":  225.2
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-down-diag-6",
+                       "texture":  "hero-academy-attack-down-diag",
+                       "x":  596,
+                       "y":  316,
+                       "w":  230,
+                       "h":  303,
+                       "originX":  0.4391,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  214,
+                                    "y":  158
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  224,
+                                                  "y":  158.7
+                                              },
+                                     "tip":  {
+                                                 "x":  371.6,
+                                                 "y":  169
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-down-diag-7",
+                       "texture":  "hero-academy-attack-down-diag",
+                       "x":  892,
+                       "y":  316,
+                       "w":  198,
+                       "h":  303,
+                       "originX":  0.5051,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  180,
+                                    "y":  164
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  189.8,
+                                                  "y":  165.7
+                                              },
+                                     "tip":  {
+                                                 "x":  325.7,
+                                                 "y":  189.7
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-down-diag-8",
+                       "texture":  "hero-academy-attack-down-diag",
+                       "x":  4,
+                       "y":  628,
+                       "w":  205,
+                       "h":  304,
+                       "originX":  0.4732,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  184,
+                                    "y":  166
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  193.5,
+                                                  "y":  169.1
+                                              },
+                                     "tip":  {
+                                                 "x":  324.7,
+                                                 "y":  211.7
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-down-diag-9",
+                       "texture":  "hero-academy-attack-down-diag",
+                       "x":  300,
+                       "y":  628,
+                       "w":  222,
+                       "h":  295,
+                       "originX":  0.509,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  50,
+                                    "y":  202
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  59.5,
+                                                  "y":  205.1
+                                              },
+                                     "tip":  {
+                                                 "x":  188.8,
+                                                 "y":  247.1
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-down-diag-10",
+                       "texture":  "hero-academy-attack-down-diag",
+                       "x":  596,
+                       "y":  628,
+                       "w":  288,
+                       "h":  304,
+                       "originX":  0.4271,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  268,
+                                    "y":  160
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  277.3,
+                                                  "y":  163.7
+                                              },
+                                     "tip":  {
+                                                 "x":  429.4,
+                                                 "y":  225.1
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-down-diag-11",
+                       "texture":  "hero-academy-attack-down-diag",
+                       "x":  892,
+                       "y":  628,
+                       "w":  195,
+                       "h":  304,
+                       "originX":  0.4923,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  178,
+                                    "y":  168
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  187.3,
+                                                  "y":  171.7
+                                              },
+                                     "tip":  {
+                                                 "x":  311.5,
+                                                 "y":  221.9
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   }
+               ]
+}

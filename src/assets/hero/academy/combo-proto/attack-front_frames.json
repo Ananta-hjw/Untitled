@@ -1,0 +1,316 @@
+{
+    "frames":  [
+                   {
+                       "name":  "attack-front-0",
+                       "texture":  "hero-academy-attack-front",
+                       "x":  4,
+                       "y":  4,
+                       "w":  196,
+                       "h":  304,
+                       "originX":  0.5102,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  168,
+                                    "y":  92
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  175.4,
+                                                  "y":  85.3
+                                              },
+                                     "tip":  {
+                                                 "x":  276.5,
+                                                 "y":  -5.7
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-front-1",
+                       "texture":  "hero-academy-attack-front",
+                       "x":  231,
+                       "y":  4,
+                       "w":  196,
+                       "h":  304,
+                       "originX":  0.551,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  155,
+                                    "y":  162
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  150,
+                                                  "y":  170.7
+                                              },
+                                     "tip":  {
+                                                 "x":  84,
+                                                 "y":  285
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-front-2",
+                       "texture":  "hero-academy-attack-front",
+                       "x":  458,
+                       "y":  4,
+                       "w":  218,
+                       "h":  289,
+                       "originX":  0.4541,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  118,
+                                    "y":  240
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  110.1,
+                                                  "y":  246.2
+                                              },
+                                     "tip":  {
+                                                 "x":  1.4,
+                                                 "y":  331.2
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-front-3",
+                       "texture":  "hero-academy-attack-front",
+                       "x":  685,
+                       "y":  4,
+                       "w":  193,
+                       "h":  304,
+                       "originX":  0.5181,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  110,
+                                    "y":  224
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  101.5,
+                                                  "y":  229.3
+                                              },
+                                     "tip":  {
+                                                 "x":  -10.4,
+                                                 "y":  299.2
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-front-4",
+                       "texture":  "hero-academy-attack-front",
+                       "x":  4,
+                       "y":  316,
+                       "w":  208,
+                       "h":  303,
+                       "originX":  0.4471,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  18,
+                                    "y":  88
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  10.6,
+                                                  "y":  81.3
+                                              },
+                                     "tip":  {
+                                                 "x":  -90.5,
+                                                 "y":  -9.7
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-front-5",
+                       "texture":  "hero-academy-attack-front",
+                       "x":  231,
+                       "y":  316,
+                       "w":  207,
+                       "h":  303,
+                       "originX":  0.5894,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  190,
+                                    "y":  152
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  199.6,
+                                                  "y":  154.8
+                                              },
+                                     "tip":  {
+                                                 "x":  332.3,
+                                                 "y":  192.8
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-front-6",
+                       "texture":  "hero-academy-attack-front",
+                       "x":  458,
+                       "y":  316,
+                       "w":  219,
+                       "h":  303,
+                       "originX":  0.4338,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  200,
+                                    "y":  158
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  210,
+                                                  "y":  158.7
+                                              },
+                                     "tip":  {
+                                                 "x":  355.6,
+                                                 "y":  168.9
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-front-7",
+                       "texture":  "hero-academy-attack-front",
+                       "x":  685,
+                       "y":  316,
+                       "w":  194,
+                       "h":  303,
+                       "originX":  0.4845,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  172,
+                                    "y":  168
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  181.8,
+                                                  "y":  169.7
+                                              },
+                                     "tip":  {
+                                                 "x":  317.7,
+                                                 "y":  193.7
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-front-8",
+                       "texture":  "hero-academy-attack-front",
+                       "x":  4,
+                       "y":  628,
+                       "w":  191,
+                       "h":  304,
+                       "originX":  0.5026,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  172,
+                                    "y":  168
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  181.1,
+                                                  "y":  172.1
+                                              },
+                                     "tip":  {
+                                                 "x":  305.3,
+                                                 "y":  227.4
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   },
+                   {
+                       "name":  "attack-front-9",
+                       "texture":  "hero-academy-attack-front",
+                       "x":  231,
+                       "y":  628,
+                       "w":  179,
+                       "h":  304,
+                       "originX":  0.514,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  148,
+                                    "y":  196
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  149,
+                                                  "y":  205.9
+                                              },
+                                     "tip":  {
+                                                 "x":  161.3,
+                                                 "y":  323.3
+                                             }
+                                 },
+                       "weaponPerspective":  "down"
+                   },
+                   {
+                       "name":  "attack-front-10",
+                       "texture":  "hero-academy-attack-front",
+                       "x":  458,
+                       "y":  628,
+                       "w":  214,
+                       "h":  304,
+                       "originX":  0.5374,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  122,
+                                    "y":  174
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  122,
+                                                  "y":  184
+                                              },
+                                     "tip":  {
+                                                 "x":  122,
+                                                 "y":  342
+                                             }
+                                 },
+                       "weaponPerspective":  "down"
+                   },
+                   {
+                       "name":  "attack-front-11",
+                       "texture":  "hero-academy-attack-front",
+                       "x":  685,
+                       "y":  628,
+                       "w":  179,
+                       "h":  304,
+                       "originX":  0.5196,
+                       "originY":  1,
+                       "scale":  1,
+                       "grip":  {
+                                    "x":  160,
+                                    "y":  180
+                                },
+                       "blade":  {
+                                     "base":  {
+                                                  "x":  168.1,
+                                                  "y":  185.9
+                                              },
+                                     "tip":  {
+                                                 "x":  271.7,
+                                                 "y":  261.1
+                                             }
+                                 },
+                       "weaponPerspective":  "side"
+                   }
+               ]
+}

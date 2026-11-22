@@ -5,6 +5,10 @@ import type { Blade } from '../combat/blade';
 import data from '../assets/hero/academy/frames.json';
 import guardData from '../assets/hero/academy/guard/frames.json';
 import guardSheet from '../assets/hero/academy/guard/bodies.webp?url';
+import attackFrontData from '../assets/hero/academy/combo-proto/attack-front_frames.json';
+import attackFrontSheet from '../assets/hero/academy/combo-proto/attack-front.png?url';
+import attackDownDiagData from '../assets/hero/academy/combo-proto/attack-down-diag_frames.json';
+import attackDownDiagSheet from '../assets/hero/academy/combo-proto/attack-down-diag.png?url';
 import { isAttackFollowPause } from './attackTiming';
 import walkSheet from '../assets/hero/academy/unarmed/player_walk.webp?url';
 import combatSheet from '../assets/hero/academy/unarmed/player_combat.webp?url';
@@ -13,6 +17,10 @@ import attackDownSheet from '../assets/hero/academy/unarmed/player_attack_down.w
 import attackUpSheet from '../assets/hero/academy/unarmed/player_attack_up.webp?url';
 import weaponAtlas from '../assets/hero/weapons/atlas.json';
 import weaponSheet from '../assets/hero/weapons/weapons.webp?url';
+import perspectiveAtlas from '../assets/hero/weapons/perspective_atlas.json';
+import perspectiveSheet from '../assets/hero/weapons/perspective.png?url';
+import slashFxAtlas from '../assets/effects/slash_fx_atlas.json';
+import slashFxSheet from '../assets/effects/slash_fx.png?url';
 import { weaponId, weaponPose, type WeaponId } from './weaponPose';
 import type { GearId } from '../items/equipment';
 import { ACTION_DURATION, attackFacingFor, guardFrame, heroFrame, movementFacing, type AttackFacing, type Facing, type HeroAction } from './heroFrames';
@@ -26,16 +34,26 @@ interface SpriteFrame {
   supportCover?: { name: string; x: number; y: number; w: number; h: number };
   supportBackCover?: { name: string; x: number; y: number; w: number; h: number };
   weaponBehind?: boolean;
+  weaponPerspective?: string;
 }
-const FRAMES = new Map<string, SpriteFrame>([...data.frames, ...guardData.frames].map((f) => [f.name, f]));
+const FRAMES = new Map<string, SpriteFrame>([
+  ...data.frames,
+  ...guardData.frames,
+  ...attackFrontData.frames,
+  ...attackDownDiagData.frames,
+].map((f) => [f.name, f]));
 
 export function preloadHeroSprite(scene: Phaser.Scene): void {
   if (!scene.textures.exists('hero-weapons')) scene.load.image('hero-weapons', weaponSheet);
+  if (!scene.textures.exists('hero-weapons-perspective')) scene.load.image('hero-weapons-perspective', perspectiveSheet);
+  if (!scene.textures.exists('combat-slash-fx')) scene.load.image('combat-slash-fx', slashFxSheet);
   if (!scene.textures.exists('hero-academy-walk')) scene.load.image('hero-academy-walk', walkSheet);
   if (!scene.textures.exists('hero-academy-combat')) scene.load.image('hero-academy-combat', combatSheet);
   if (!scene.textures.exists('hero-academy-diagonal')) scene.load.image('hero-academy-diagonal', diagonalSheet);
   if (!scene.textures.exists('hero-academy-attack-down')) scene.load.image('hero-academy-attack-down', attackDownSheet);
   if (!scene.textures.exists('hero-academy-attack-up')) scene.load.image('hero-academy-attack-up', attackUpSheet);
+  if (!scene.textures.exists('hero-academy-attack-front')) scene.load.image('hero-academy-attack-front', attackFrontSheet);
+  if (!scene.textures.exists('hero-academy-attack-down-diag')) scene.load.image('hero-academy-attack-down-diag', attackDownDiagSheet);
   if (!scene.textures.exists('hero-academy-guard')) scene.load.image('hero-academy-guard', guardSheet);
 }
 
@@ -57,6 +75,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   private frame!: SpriteFrame;
   private guarding = false;
   private guardTime = 0;
+  private attackWeaponBehind = false;
 
   constructor(scene: Phaser.Scene) {
     super(scene, 0, 0);
@@ -66,6 +85,14 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     }
     const weapons = scene.textures.get('hero-weapons');
     for (const f of weaponAtlas.frames) if (!weapons.has(f.name)) weapons.add(f.name, 0, f.x, f.y, f.w, f.h);
+    if (scene.textures.exists('hero-weapons-perspective')) {
+      const persp = scene.textures.get('hero-weapons-perspective');
+      for (const f of perspectiveAtlas.frames) if (!persp.has(f.name)) persp.add(f.name, 0, f.x, f.y, f.w, f.h);
+    }
+    if (scene.textures.exists('combat-slash-fx')) {
+      const fx = scene.textures.get('combat-slash-fx');
+      for (const f of slashFxAtlas.frames) if (!fx.has(f.name)) fx.add(f.name, 0, f.x, f.y, f.w, f.h);
+    }
     this.weaponBack = scene.add.image(0, 0, 'hero-weapons', 'wooden-sword-grip');
     this.weaponFront = scene.add.image(0, 0, 'hero-weapons', 'wooden-sword-blade');
     this.image = scene.add.image(0, 0, 'hero-academy-walk', 'walk-0');
@@ -135,7 +162,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     return this.guarding && (this.facing === 'up-left' || this.facing === 'up-right');
   }
   private get parts(): Phaser.GameObjects.Image[] {
-    if (this.guardWeaponBehind) return [this.weaponBack, this.weaponFront, this.image, this.supportHand];
+    if (this.guardWeaponBehind || this.attackWeaponBehind) return [this.weaponBack, this.weaponFront, this.image, this.supportHand];
     return this.supportHandInFront ? [this.weaponBack, this.image, this.weaponFront, this.supportHand]
       : [this.weaponBack, this.image, this.supportHand, this.weaponFront];
   }
@@ -146,6 +173,8 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     return this.animation.startsWith('attack') && isAttackFollowPause(Number(this.animation.at(-1)) - 1, this.time);
   }
 
+  get activeAttackFacing(): AttackFacing { return this.attackFacing; }
+
   getBlade(): Blade {
     if (!this.weapon || !this.frame.blade) {
       const f = this.frame, p = f.blade?.base ?? { x: f.originX * f.w, y: f.h };
@@ -153,6 +182,16 @@ export class HeroSprite extends Phaser.GameObjects.Container {
       return { base: { x: point.x, y: point.y }, tip: { x: point.x, y: point.y } };
     }
     const matrix = this.weaponFront.getWorldTransformMatrix();
+    const persp = this.frame.weaponPerspective;
+    if (persp === 'down' || persp === 'up') {
+      const meta = perspectiveAtlas.frames.find(f => f.name === `${this.weapon}-${persp}`);
+      if (meta) {
+        return {
+          base: matrix.transformPoint(0, 0),
+          tip: matrix.transformPoint(0, persp === 'down' ? meta.bladeLength : -meta.bladeLength),
+        };
+      }
+    }
     return { base: matrix.transformPoint(0, 0), tip: matrix.transformPoint(weaponAtlas.bladeLength, 0) };
   }
 
@@ -203,13 +242,16 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   }
 
   private applyWeapon(): void {
+    const attacking = this.animation.startsWith('attack') && !this.guarding;
+    this.attackWeaponBehind = attacking && this.attackFacing === 'up';
     for (const part of this.parts) this.bringToTop(part);
     this.supportHand.setVisible(false);
     this.weaponFront.setVisible(!!this.weapon);
     const pose = weaponPose(this.frame);
-    this.weaponBack.setVisible(!!this.weapon && !pose.sheathed);
-    if (!this.weapon) return;
     const f = this.frame;
+    const persp = !this.guarding && (f.weaponPerspective === 'down' || f.weaponPerspective === 'up') ? f.weaponPerspective : undefined;
+    this.weaponBack.setVisible(!!this.weapon && !pose.sheathed && !persp);
+    if (!this.weapon) return;
     let { base, tip } = pose.blade;
     if (this.guarding && f.grip) {
       // A small settling motion keeps the blade and hilt rigid around the actual fist.
@@ -223,10 +265,23 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     }
     const x = (base.x - f.originX * f.w) * this.image.scaleX;
     const y = (base.y - f.originY * f.h) * this.image.scaleY;
-    const dx = (tip.x - base.x) * this.image.scaleX, dy = (tip.y - base.y) * this.image.scaleY;
+    const dx = (tip.x - base.x) * this.image.scaleX;
+    const dy = (tip.y - base.y) * this.image.scaleY;
+    if (persp) {
+      const name = `${this.weapon}-${persp}`;
+      const meta = perspectiveAtlas.frames.find(entry => entry.name === name)!;
+      const scale = Math.hypot(dx, dy) / meta.bladeLength;
+      const baseAngle = persp === 'down' ? Math.PI / 2 : -Math.PI / 2;
+      this.weaponFront.setTexture('hero-weapons-perspective', name)
+        .setOrigin(meta.originX, meta.originY)
+        .setPosition(x, y)
+        .setRotation(Math.atan2(dy, dx) - baseAngle)
+        .setScale(scale);
+      return;
+    }
     const scale = Math.hypot(dx, dy) / weaponAtlas.bladeLength;
     const apply = (image: Phaser.GameObjects.Image, part: string) => {
-      const name = `${this.weapon}-${part}`, meta = weaponAtlas.frames.find(f => f.name === name)!;
+      const name = `${this.weapon}-${part}`, meta = weaponAtlas.frames.find(entry => entry.name === name)!;
       image.setTexture('hero-weapons', name).setOrigin(meta.originX, meta.originY)
         .setPosition(x, y).setRotation(Math.atan2(dy, dx)).setScale(scale);
     };

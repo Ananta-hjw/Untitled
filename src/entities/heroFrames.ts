@@ -2,7 +2,7 @@ import { PLAYER } from '../config.ts';
 import { attackPoseTime } from './attackTiming.ts';
 
 export type Facing = 'down' | 'left' | 'right' | 'up' | 'down-left' | 'down-right' | 'up-left' | 'up-right';
-export type AttackFacing = Exclude<Facing, 'up' | 'down'>;
+export type AttackFacing = Facing;
 export type HeroAction = 'idle' | 'walk' | 'attack1' | 'attack2' | 'attack3' | 'dodge';
 
 export const WALK_FPS = 8;
@@ -28,6 +28,12 @@ const POSE_STARTS = {
   attack3: [0, 50, 168, 300],
   dodge: [0, 60, 130, 240],
 };
+/** 신규 4포즈(예비→스윙/당김→타격/찌르기→잔심) 시트용 전환 시각(ms). */
+const PROTO_POSE_STARTS = {
+  attack1: [0, 145, 205, 305],
+  attack2: [0, 68, 105, 205],
+  attack3: [0, 50, 168, 300],
+};
 
 /** 콤보 단계(0~2)에서 휘두르는 그림(타격 자세)이 나타나는 시각(ms). 이때 칼 궤적을 그린다. */
 export function strikePoseStart(stage: number): number {
@@ -48,12 +54,14 @@ export function movementFacing(dx: number, dy: number, previous: Facing, moving:
   return COMPASS[Math.round(angle / 45) % 8];
 }
 
-export function attackFacingFor(facing: Facing, horizontalSide = 1): AttackFacing {
-  return facing === 'up' || facing === 'down' ? horizontalSide < 0 ? 'left' : 'right' : facing;
+export function attackFacingFor(facing: Facing, _horizontalSide = 1): AttackFacing {
+  return facing;
 }
 
 /** Unit direction on the ground plane; apply the vertical projection when moving in world space. */
 export function attackVector(facing: AttackFacing): { x: number; y: number } {
+  if (facing === 'up') return { x: 0, y: -1 };
+  if (facing === 'down') return { x: 0, y: 1 };
   const x = facing.includes('left') ? -1 : 1;
   if (facing === 'left' || facing === 'right') return { x, y: 0 };
   return { x: x * Math.SQRT1_2, y: (facing.startsWith('up') ? -1 : 1) * Math.SQRT1_2 };
@@ -76,12 +84,17 @@ export function heroFrame(action: HeroAction, facing: Facing, elapsedMs: number)
     const diagonal = DIAGONALS.indexOf(facing);
     return diagonal >= 0 ? `diagonal-${diagonal * 4 + column}` : `walk-${DIRECTIONS.indexOf(facing) * 4 + column}`;
   }
-  const starts = POSE_STARTS[action];
+  const useProto = action !== 'dodge' && (facing === 'down' || facing === 'down-right' || facing === 'down-left');
+  const starts = useProto
+    ? PROTO_POSE_STARTS[action as 'attack1' | 'attack2' | 'attack3']
+    : POSE_STARTS[action];
   let column = 0;
   while (column < 3 && time >= starts[column + 1]) column++;
   const row = action === 'dodge' ? 3 : Number(action.at(-1)) - 1;
-  if (action !== 'dodge' && DIAGONALS.includes(facing)) {
-    return `attack-${facing.startsWith('up') ? 'up' : 'down'}-${row * 4 + column}`;
+  if (action !== 'dodge') {
+    if (facing === 'down') return `attack-front-${row * 4 + column}`;
+    if (facing === 'down-right' || facing === 'down-left') return `attack-down-diag-${row * 4 + column}`;
+    if (facing.startsWith('up')) return `attack-up-${row * 4 + column}`;
   }
   return `combat-${row * 4 + column}`;
 }

@@ -1,13 +1,15 @@
 import Phaser from 'phaser';
 import { HeroSprite } from '../entities/HeroSprite';
+import { slashFxPlacement } from '../entities/attackMotion';
+import type { AttackFacing } from '../entities/heroFrames';
 import { interpolateBlade, type Blade, type BladeSweep } from './blade';
 
 const TRAIL_SAMPLE_MS = 10;
 const ATTACK_FADE_MS = 110;
 const GHOST_FADE_MS = 220;
 /** 칼 궤적(초승달)이 칼끝을 따라 다 그려지는 시간과, 다 그려진 뒤 남아 있는 시간 */
-const SLASH_GROW_MS = 45;
-const SLASH_HOLD_MS = 70;
+const SLASH_GROW_MS = 70;
+const SLASH_HOLD_MS = 75;
 const SLASH_SEGMENTS = 16;
 
 /** 휘두름 궤적: 손잡이(pivot)를 축으로 칼끝이 a0에서 a0 + delta까지 돈다. */
@@ -39,10 +41,21 @@ interface GhostEffect {
   startedAt: number;
 }
 
+interface SlashSpriteEffect {
+  image: Phaser.GameObjects.Image;
+  startedAt: number;
+  baseScaleX: number;
+  baseScaleY: number;
+}
+
+const SLASH_SPRITE_POP_MS = 55;
+const SLASH_SPRITE_LIFE_MS = 185;
+
 /** 효과 객체를 재사용하고, 생성·농도가 렌더 프레임 수에 비례하지 않게 한다. */
 export class CombatEffects {
   private readonly attackPool: AttackEffect[] = [];
   private readonly ghostPool: GhostEffect[] = [];
+  private readonly slashSpritePool: SlashSpriteEffect[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
@@ -77,12 +90,36 @@ export class CombatEffects {
     this.render(effect, time);
   }
 
+  /** 손그림 검기(1·2타) 또는 찌르기 충격파(3타) 이펙트를 8방향에 맞춰 재생한다. */
+  spawnSlashSprite(stage: number, facing: AttackFacing, x: number, y: number, heroScale: number, depth: number, time: number): boolean {
+    if (!this.scene.textures.exists('combat-slash-fx')) return false;
+    const p = slashFxPlacement(stage, facing);
+    let entry = this.slashSpritePool.find((item) => !item.image.active);
+    if (!entry) {
+      const image = this.scene.add.image(0, 0, 'combat-slash-fx', p.frame)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      entry = { image, startedAt: time, baseScaleX: 1, baseScaleY: 1 };
+      this.slashSpritePool.push(entry);
+    }
+    entry.startedAt = time;
+    entry.baseScaleX = p.scaleX * heroScale;
+    entry.baseScaleY = p.scaleY * heroScale;
+    entry.image.setTexture('combat-slash-fx', p.frame)
+      .setPosition(x + p.offsetX * heroScale, y + p.offsetY * heroScale)
+      .setRotation(p.rotation)
+      .setScale(entry.baseScaleX * 0.72, entry.baseScaleY * 0.72)
+      .setAlpha(0.95)
+      .setDepth(p.behind ? depth - 4 : depth + 4)
+      .setActive(true)
+      .setVisible(true);
+    return true;
+  }
+
   /**
-   * 칼을 든 그림에서 휘두른 그림으로 바뀌는 순간, 그 사이를 칼끝이 지나간 초승달 궤적으로 채운다.
-   * 그림이 몇 장뿐이라 칼이 순간이동하는 것처럼 보이는 것을 막는다. 명중 판정에는 쓰지 않는다.
-   * forwardX: 공격 방향(왼쪽 -1, 오른쪽 1). 궤적은 몸 앞쪽을 지나는 방향으로 돈다.
+   * 휘두름의 시작 검날과 끝 검날 사이를 초승달(1·2타) 또는 찌르기 줄기(3타) 궤적으로 채운다.
+   * forwardX, forwardY: 8방향 공격 벡터. 궤적은 항상 몸 앞쪽(공격 방향)을 지나는 호를 선택한다.
    */
-  slash(effect: AttackEffect, from: Blade, to: Blade, time: number, forwardX: number): void {
+  slash(effect: AttackEffect, from: Blade, to: Blade, time: number, forwardX: number, forwardY = 0): void {
     const pivot = { x: (from.base.x + to.base.x) / 2, y: (from.base.y + to.base.y) / 2 };
     const a0 = Math.atan2(from.tip.y - pivot.y, from.tip.x - pivot.x);
     const a1 = Math.atan2(to.tip.y - pivot.y, to.tip.x - pivot.x);
@@ -91,14 +128,15 @@ export class CombatEffects {
       const delta = Phaser.Math.Angle.Wrap(a1 - a0) + turn;
       if (Math.abs(delta) > 1.9 * Math.PI) continue;
       // 가운데 지점이 몸 앞쪽(공격 방향)에 있을수록, 덜 돌수록 자연스럽다.
-      const score = Math.cos(a0 + delta / 2) * forwardX - Math.abs(delta) * 0.15;
+      const mid = a0 + delta / 2;
+      const score = Math.cos(mid) * forwardX + Math.sin(mid) * forwardY - Math.abs(delta) * 0.15;
       if (score > bestScore) { bestScore = score; best = delta; }
     }
     effect.slash = {
       at: time, pivot, a0, delta: best,
       r0: Math.hypot(from.tip.x - pivot.x, from.tip.y - pivot.y),
       r1: Math.hypot(to.tip.x - pivot.x, to.tip.y - pivot.y),
-      thrust: effect.stage === 2 ? { from: { ...to.base }, to: { ...to.tip } } : undefined,
+      thrust: effect.stage === 2 ? { from: { ...from.base }, to: { ...to.tip } } : undefined,
     };
     effect.activeUntil = Math.max(effect.activeUntil, time + SLASH_GROW_MS + SLASH_HOLD_MS);
     this.render(effect, time);
@@ -195,12 +233,27 @@ export class CombatEffects {
       if (remaining <= 0) effect.object.setActive(false).setVisible(false);
       else effect.object.setAlpha(0.35 * remaining);
     }
+    for (const entry of this.slashSpritePool) {
+      if (!entry.image.active) continue;
+      const age = time - entry.startedAt;
+      if (age >= SLASH_SPRITE_LIFE_MS) {
+        entry.image.setActive(false).setVisible(false);
+        continue;
+      }
+      const pop = Math.min(1, age / SLASH_SPRITE_POP_MS);
+      const easePop = 1 - (1 - pop) ** 3;
+      const growth = 0.72 + 0.36 * easePop;
+      const fade = age < SLASH_SPRITE_POP_MS ? 1 : 1 - (age - SLASH_SPRITE_POP_MS) / (SLASH_SPRITE_LIFE_MS - SLASH_SPRITE_POP_MS);
+      entry.image.setScale(entry.baseScaleX * growth, entry.baseScaleY * growth).setAlpha(Math.max(0, fade * 0.96));
+    }
   }
 
   private destroy(): void {
     for (const effect of this.attackPool) effect.graphic.destroy();
     for (const effect of this.ghostPool) effect.object.destroy();
+    for (const entry of this.slashSpritePool) entry.image.destroy();
     this.attackPool.length = 0;
     this.ghostPool.length = 0;
+    this.slashSpritePool.length = 0;
   }
 }

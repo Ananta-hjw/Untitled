@@ -7,6 +7,9 @@ import { attackPoseTime, isAttackFollowPause } from '../src/entities/attackTimin
 
 const root = new URL('../src/assets/hero/academy/', import.meta.url);
 const data = JSON.parse(readFileSync(new URL('frames.json', root)));
+const attackFrontData = JSON.parse(readFileSync(new URL('combo-proto/attack-front_frames.json', root)));
+const attackDownDiagData = JSON.parse(readFileSync(new URL('combo-proto/attack-down-diag_frames.json', root)));
+const allFrames = [...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames];
 
 test('원본 4방향 시트는 Unity 아래쪽 좌표를 Phaser 위쪽 좌표로 변환한다', () => {
   const original = JSON.parse(readFileSync(new URL('player_walk_atlas.json', root)));
@@ -86,8 +89,8 @@ test('대각선 4방향은 각 콤보에서 전용 타격 그림을 선택한다
   for (const facing of ['down-left', 'down-right', 'up-left', 'up-right']) {
     for (let stage = 0; stage < 3; stage++) {
       const frame = heroFrame(`attack${stage + 1}`, facing, PLAYER.combo[stage].hitDelayMs + 30);
-      assert.equal(frame, `attack-${facing.startsWith('up') ? 'up' : 'down'}-${stage * 4 + 2}`);
-      assert.ok(data.frames.find((f) => f.name === frame).blade);
+      assert.equal(frame, `${facing.startsWith('up') ? 'attack-up' : 'attack-down-diag'}-${stage * 4 + 2}`);
+      assert.ok(allFrames.find((f) => f.name === frame).blade);
     }
   }
 });
