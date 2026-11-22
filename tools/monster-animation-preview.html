@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>몬스터 · 8방향 모션 미리보기</title>
+<style>
+body{margin:24px;background:#19251f;color:#f3ebd8;font:16px system-ui}h1{font-size:24px}header{display:flex;gap:20px;align-items:center;flex-wrap:wrap;position:sticky;top:0;background:#19251f;padding:12px 0;z-index:1}button,select,input{font:inherit}button,select{padding:6px 12px}.grid{display:grid;grid-template-columns:repeat(8,minmax(120px,1fr));gap:8px;overflow:auto}figure{margin:0;text-align:center;background:repeating-conic-gradient(#334539 0% 25%,#3b4d40 0% 50%) 0/24px 24px;border-radius:8px}canvas{width:100%;min-width:120px;aspect-ratio:1}figcaption{padding:6px;background:#24362c}p{color:#cad4c8}#error{color:#ffbdab}h2{font-size:20px}
+</style>
+<h1>몬스터 · 8방향 모션 미리보기</h1>
+<header><label>동작 <select id="motion"><option value="walk">이동</option><option value="attack">공격</option><option value="idle">대기</option></select></label><button id="pause">일시정지</button><label>초당 프레임 <input id="fps" type="range" min="2" max="12" value="8"><output id="rate">8</output></label></header>
+<p>공격은 비교를 위해 반복 재생하며, 공격 시트가 없는 권속은 대기로 표시합니다. 실제 이동·타격 판정·독립 투사체는 포함하지 않습니다.</p>
+<div id="error" role="alert"></div><main id="main"></main>
+<script type="module">
+const root = window.MONSTER_ROOT ?? '../src/assets/monsters/';
+const baseNames = { slime: '슬라임 · 탄성 돌진', 'waterdrop-mushroom': '물방울 버섯 · 물방울 발사', 'iron-scale-lizard': '쇠비늘 도마뱀 · 낮은 돌진', 'frost-beetle': '서리 딱정벌레 · 껍질 밀치기' };
+const raidNames = { 'ashen-moth': '잿빛 나방 · 날갯짓', 'corrosion-tracker': '부식의 추적자 · 낮은 보행', 'corrosion-executioner': '부식의 집행자 · 무거운 걸음' };
+const names = window.MONSTER_NAMES ?? (new URLSearchParams(location.search).get('group') === 'raid' ? raidNames : { ...baseNames, ...raidNames });
+const directions = { up: '위', 'up-right': '오른쪽 위', right: '오른쪽', 'down-right': '오른쪽 아래', down: '아래', 'down-left': '왼쪽 아래', left: '왼쪽', 'up-left': '왼쪽 위' };
+const items = [];
+let paused = false, elapsed = 0, previous;
+document.querySelector('#pause').onclick = () => { paused = !paused; document.querySelector('#pause').textContent = paused ? '계속 재생' : '일시정지'; };
+document.querySelector('#fps').oninput = e => document.querySelector('#rate').textContent = e.target.value;
+document.querySelector('#motion').onchange = () => elapsed = 0;
+const loadImage = url => new Promise((resolve, reject) => { const im = new Image(); im.onload = () => resolve(im); im.onerror = () => reject(new Error('이미지 로딩 실패: ' + url)); im.src = url; });
+try {
+  for (const [name, label] of Object.entries(names)) {
+    const data = window.MONSTER_DATA?.[name] ?? await fetch(`${root}${name}/animation_frames.json`).then(r => { if (!r.ok) throw new Error('좌표 로딩 실패: ' + name); return r.json(); });
+    const sheets = {};
+    for (const filename of Object.keys(data.sheets)) sheets[filename] = await loadImage(`${root}${name}/${filename}`);
+    const section = document.createElement('section'), title = document.createElement('h2'), grid = document.createElement('div');
+    title.textContent = label; grid.className = 'grid'; section.append(title, grid); document.querySelector('#main').append(section);
+    // Fit every pose using one common scale per monster; do not resize individual attack poses.
+    const b = data.bounds;
+    const fit = Math.min(260 / (b.right - b.left), 245 / (b.bottom - b.top));
+    const pivotX = 150 - (b.left + b.right) * fit / 2;
+    const pivotY = 265 - b.bottom * fit;
+    for (const [direction, label] of Object.entries(directions)) {
+      const figure = document.createElement('figure'), canvas = document.createElement('canvas'), caption = document.createElement('figcaption');
+      canvas.width = 300; canvas.height = 300; canvas.dataset.monster = name; canvas.dataset.direction = direction;
+      caption.textContent = label; figure.append(canvas, caption); grid.append(figure);
+      items.push({ canvas, data, sheets, direction, fit, pivotX, pivotY });
+    }
+  }
+  window.MONSTER_ANIMATION_READY = true;
+  function render(time) {
+    if (previous !== undefined && !paused) elapsed += Math.min(time - previous, 100);
+    previous = time;
+    const motion = document.querySelector('#motion').value;
+    const fps = Number(document.querySelector('#fps').value);
+    for (const {canvas, data, sheets, direction, fit, pivotX, pivotY} of items) {
+      const animation = data.animations[motion] ?? data.animations.idle;
+      const pose = animation.poses[Math.floor(elapsed / 1000 * fps) % animation.poses.length];
+      const frame = data.frames.find(f => f.animation === animation.source && f.direction === direction && f.pose === pose);
+      const scale = frame.scale * fit;
+      const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, 300, 300);
+      ctx.drawImage(sheets[frame.sheet], frame.x, frame.y, frame.w, frame.h, pivotX - frame.w * frame.originX * scale, pivotY - frame.h * frame.originY * scale, frame.w * scale, frame.h * scale);
+      canvas.dataset.pose = String(pose); canvas.dataset.animation = data.animations[motion] ? motion : 'idle';
+    }
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+} catch (error) { document.querySelector('#error').textContent = error.message; }
+</script>
+</html>
