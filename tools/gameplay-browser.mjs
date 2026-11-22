@@ -1553,7 +1553,7 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     const searchRestored = s.interactables.some(p => p.id === 'story-home-search');
     inspect('story-home-search'); talk('eila'); talk('herman');
     await restart('village'); talk('vernel');
-    // 첫 진짜 검: 도란이 철검을 건넨다(가방에 들어온다).
+    // 도란의 검: 도란이 철검을 건넨다(가방에 들어온다).
     await restart('in-smithy'); talk('doran'); s.characterPanel.close();
     const sword = s.character.gear.bag['iron-sword'] ?? 0;
     await restart('village');

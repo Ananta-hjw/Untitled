@@ -337,7 +337,7 @@ export const QUESTS: QuestDef[] = [
       line('vernel', '베르넬', '그러고 보니 도란이 너를 찾더군. 대장간 불이 밤새 꺼지지 않았어.')],
   },
   {
-    id: 'first-sword', title: '첫 진짜 검', giver: 'vernel', main: true, requires: 'sealed-letter',
+    id: 'first-sword', title: '도란의 검', giver: 'vernel', main: true, requires: 'sealed-letter',
     turnIn: 'doran', completeOnTarget: true,
     objective: { label: '대장간의 도란 찾아가기', need: 1, event: 'talk', npc: 'doran' },
     rewardXp: 20, rewardGear: ['iron-sword'],
@@ -345,9 +345,9 @@ export const QUESTS: QuestDef[] = [
     reminder: [line('vernel', '베르넬', '도란이 대장간에서 기다리고 있을 걸세.')],
     target: [
       line('doran', '도란', '왔냐. …앉아라, 아니 서 있어도 되고.'),
-      line('doran', '도란', '그 나무검으로는 권속을 못 벤다. 밤새 두들겼다. 받아라.'),
+      line('doran', '도란', '앞으로도 그런 밤을 견디려면, 네 손에 맞는 검이 있어야지. 밤새 두들겼다. 받아라.'),
       hero('이걸… 저한테요?'),
-      line('doran', '도란', '언젠가 진짜 검 한 자루 두들겨 주겠다고 했잖냐. 생각보다 일찍 오긴 했다만.'),
+      line('doran', '도란', '언젠가 네 검 한 자루 두들겨 주겠다고 했잖냐. 생각보다 일찍 오긴 했다만.'),
       line('doran', '도란', '시아 데려와라. 리네아도 고칠 방법 찾고. 날이 무뎌지면 언제든 돌아와서 맡겨.'),
     ],
     done: [line('doran', '도란', '장비 창에서 무기 칸에 끼워라. 손에 익을 때까지 휘둘러 보고.')],
