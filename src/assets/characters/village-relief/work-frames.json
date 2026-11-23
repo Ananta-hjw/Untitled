@@ -1,0 +1,94 @@
+{
+  "frames": [
+    {
+      "name": "herman-record-0",
+      "x": 4,
+      "y": 5,
+      "w": 143,
+      "h": 303,
+      "originX": 0.41216216216216217,
+      "originY": 1
+    },
+    {
+      "name": "herman-record-1",
+      "x": 388,
+      "y": 4,
+      "w": 137,
+      "h": 304,
+      "originX": 0.4225352112676056,
+      "originY": 1
+    },
+    {
+      "name": "doran-file-0",
+      "x": 4,
+      "y": 324,
+      "w": 211,
+      "h": 304,
+      "originX": 0.47393364928909953,
+      "originY": 1
+    },
+    {
+      "name": "doran-file-1",
+      "x": 388,
+      "y": 324,
+      "w": 200,
+      "h": 304,
+      "originX": 0.4625,
+      "originY": 1
+    },
+    {
+      "name": "merina-supplies-0",
+      "x": 4,
+      "y": 644,
+      "w": 169,
+      "h": 304,
+      "originX": 0.48324022346368717,
+      "originY": 1
+    },
+    {
+      "name": "merina-supplies-1",
+      "x": 388,
+      "y": 644,
+      "w": 168,
+      "h": 304,
+      "originX": 0.49719101123595505,
+      "originY": 1
+    },
+    {
+      "name": "rosetta-blankets-0",
+      "x": 4,
+      "y": 964,
+      "w": 190,
+      "h": 304,
+      "originX": 0.5145631067961165,
+      "originY": 1
+    },
+    {
+      "name": "rosetta-blankets-1",
+      "x": 388,
+      "y": 964,
+      "w": 188,
+      "h": 304,
+      "originX": 0.5220588235294118,
+      "originY": 1
+    },
+    {
+      "name": "vernel-inspect-0",
+      "x": 4,
+      "y": 1284,
+      "w": 295,
+      "h": 304,
+      "originX": 0.5190677966101694,
+      "originY": 1
+    },
+    {
+      "name": "vernel-inspect-1",
+      "x": 388,
+      "y": 1284,
+      "w": 295,
+      "h": 304,
+      "originX": 0.5190677966101694,
+      "originY": 1
+    }
+  ]
+}

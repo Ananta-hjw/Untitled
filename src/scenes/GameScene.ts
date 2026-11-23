@@ -50,6 +50,7 @@ import { attackFacingFor, attackVector, insideAttackLane, movementFacing, strike
 import { createPlaceholderArt } from '../world/placeholderArt';
 import type { WalkArea } from '../world/walkArea';
 import { NavGrid } from '../world/navGrid';
+import { npcExitPath } from '../world/npcExitPath';
 import { buildMap, preloadVillage } from '../world/village';
 import { MAPS, START_MAP, fieldPoint, findExit, isMapId, type GameMap, type MapExit, type MapId, type Point } from '../world/maps';
 import { Hud, ORBS } from '../ui/Hud';
@@ -94,6 +95,7 @@ import {
   type InspectSpot,
 } from '../story/quests';
 import { GUARDS, guardsForMap } from '../world/guards';
+import { defenderRecovery, loadDefenderInjuries, saveDefenderInjuries } from '../story/defenderRecovery';
 import type { NpcId } from '../world/npcs';
 import { QuickSlotPanel } from '../ui/QuickSlotPanel';
 import { loadQuickSlots, saveQuickSlots, type QuickSlots } from '../items/quickSlots';
@@ -173,6 +175,7 @@ export class GameScene extends Phaser.Scene {
   private arenaOpenedAt = 0;
   private baseWalkArea?: WalkArea;
   private awayNpcs = new Set<Npc>();
+  private departingNpcs = new Set<Npc>();
   private arenaRing?: Phaser.GameObjects.Graphics;
   /**
    * 동료(entities/companion.ts): 함께 다니는 사람(저장된다), 그려지는 NPC, 쓰러진 시각, 패링·저스트 회피로 먼저 노릴 적.
@@ -318,6 +321,7 @@ export class GameScene extends Phaser.Scene {
   private perf?: PerfOverlay;
   /** 퀘스트 진행. 바뀔 때마다 기기에 저장한다(진행 상황과 따로). */
   private quests: QuestState = {};
+  private defenderInjuries = new Set<NpcId>();
   private storyChoice?: StoryChoice;
   /** 마지막으로 대화를 넘긴 누름 (onDialoguePointer) */
   private dialogueTap?: { id: number; downTime: number };
@@ -388,6 +392,7 @@ export class GameScene extends Phaser.Scene {
     // 저장된 진행 상황이 있으면 그 레벨로 시작한다 (재시작 포함).
     this.storage = browserStorage();
     this.quests = this.loadQuests();
+    this.defenderInjuries = loadDefenderInjuries(this.storage, this.quests);
     this.saveQuests();
     this.inventory = this.loadInventory();
     this.quickSlots = loadQuickSlots(this.storage);
@@ -437,6 +442,7 @@ export class GameScene extends Phaser.Scene {
 
     this.perf = undefined;
     this.quests = {};
+    this.defenderInjuries = new Set();
     this.storyChoice = undefined;
     this.dialogueTap = undefined;
     this.storyMarkers = [];
@@ -512,6 +518,7 @@ export class GameScene extends Phaser.Scene {
     this.arenaOpenedAt = 0;
     this.baseWalkArea = undefined;
     this.awayNpcs = new Set();
+    this.departingNpcs = new Set();
     this.companion = undefined;
     this.companionDownAt = undefined;
     this.companionFocus = undefined;
@@ -838,6 +845,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.separateEnemies(dt);
     for (const npc of this.npcs) if (!this.awayNpcs.has(npc)) npc.update(time, dt, this.player, this.walkArea, this.npcCanStand);
+    this.finishSerenaEvacuation();
     for (const door of this.doorMarkers) if (door.marker) door.text.setY(door.spot.y - 150 - Math.abs(Math.sin(time / 320)) * 8);
     this.applyKnockback(this.player, dt);
     this.damageNumbers.update(gameStep);
@@ -849,15 +857,27 @@ export class GameScene extends Phaser.Scene {
 
   /** 습격 때만 전투에 참여한다. 평소 NPC 순찰과 축제 연출은 기존 제어를 유지한다. */
   private updateNpcCombat(time: number, dt: number): void {
-    const phase = chapterPhase(this.quests);
-    const enabled = phase === 'raid' && !this.playFestival;
     const targets = this.enemies.map((enemy, id) => ({ id, x: enemy.character.x, y: enemy.character.y,
       alive: enemy.character.alive && !enemy.untouchable, attacking: enemy.state === 'windup' }));
     for (const npc of this.npcs) {
       if (this.awayNpcs.has(npc)) continue;
-      npc.setBattle(enabled, phase === 'aftermath' && npc.def.id === 'ruan');
+      this.syncDefenderRecovery(npc);
       npc.updateCombat(time, dt, targets, this.walkArea, this.npcCanStand, (id, damage) => this.allyStrike(npc, id, damage, time));
     }
+  }
+
+  private syncDefenderRecovery(npc: Npc): void {
+    if (!npc.isFighter) return;
+    const phase = chapterPhase(this.quests);
+    if (phase === 'raid' && npc.downed && !this.defenderInjuries.has(npc.def.id)) {
+      this.defenderInjuries.add(npc.def.id);
+      saveDefenderInjuries(this.storage, this.defenderInjuries);
+    }
+    const recovery = this.playFestival ? undefined : defenderRecovery(npc.def.id, this.quests, this.defenderInjuries);
+    const action = recovery === 'rest' || recovery === 'sentry' ? recovery : undefined;
+    if (action !== undefined && (!npc.isRecovering || npc.currentStoryAction !== action)) npc.setRecovery(action);
+    else if (action === undefined && npc.isRecovering) npc.setRecovery();
+    npc.setBattle(phase === 'raid' && !this.playFestival && !action, recovery === 'injured');
   }
 
   /** 아군(수비대·동료)의 일격이 적에게 닿았다. 처치·다음 무리·경험치는 주인공의 일격과 같은 경로로 처리한다. */
@@ -1019,10 +1039,9 @@ export class GameScene extends Phaser.Scene {
       const area = this.walkArea, b = this.map.bounds;
       defs = [...defs, ...stressNpcs(this.stressCount, defs, Math.random, b, (x, y) => area.contains(x, y) && !findExit(this.map, x, y))];
     }
-    const phase = chapterPhase(this.quests);
     this.npcs = defs.map((def) => {
       const npc = new Npc(this, def);
-      npc.setBattle(phase === 'raid' && !this.playFestival, phase === 'aftermath' && def.id === 'ruan');
+      this.syncDefenderRecovery(npc);
       return npc;
     });
     if (this.previewNpcGroup === 'innkeeper' && new URLSearchParams(location.search).get('sleepwalk') === '1') {
@@ -2077,6 +2096,7 @@ export class GameScene extends Phaser.Scene {
       }).setOrigin(0.5, 1).setDepth(spot.y + 400).setResolution(2));
     }
     for (const npc of this.npcs) {
+      this.syncDefenderRecovery(npc);
       const recovery = npc.def.id === 'linea' ? lineaRecovery(this.quests) : undefined;
       if (recovery && npc.currentStoryAction !== recovery) npc.setStoryAction(recovery);
       npc.setQuestMarker(this.playFestival || !chapterCanTalk(npc.def.id, this.quests) ? undefined : markerFor(npc.def.id, this.quests));
@@ -2088,6 +2108,39 @@ export class GameScene extends Phaser.Scene {
       door.text.setVisible(!!door.marker);
     }
     this.questTracker?.refresh(this.quests);
+    this.syncSerenaEvacuation();
+  }
+
+  /** The safety conversation sends Serena north immediately, without waiting for a map reload. */
+  private syncSerenaEvacuation(): void {
+    if (this.playFestival || this.mapId !== 'village' || chapterPhase(this.quests) !== 'raid'
+      || (this.quests['village-raid']?.step ?? 0) < 4) return;
+    const npc = this.npcs.find(n => n.def.id === 'serena');
+    const exit = this.map.exits.find(e => e.to === 'village-north');
+    if (!npc || !exit) return;
+    if (!this.departingNpcs.has(npc)) {
+      const destination = { x: (exit.zone.left + exit.zone.right) / 2, y: exit.zone.bottom - 20 };
+      const path = npcExitPath(npc, destination, this.map.bounds, (x, y) => this.walkArea.contains(x, y));
+      if (path.length === 0) return;
+      npc.setStoryAction();
+      npc.walkTo(path, 1.25);
+      this.departingNpcs.add(npc);
+    }
+    npc.setQuestMarker(undefined);
+    this.interactables = this.interactables.filter(spot => spot !== npc.spot);
+  }
+
+  private finishSerenaEvacuation(): void {
+    if (this.departingNpcs.size === 0) return;
+    const exit = this.map.exits.find(e => e.to === 'village-north');
+    if (!exit) return;
+    const { left, top, right, bottom } = exit.zone;
+    for (const npc of this.departingNpcs) {
+      if (npc.x < left || npc.x > right || npc.y < top || npc.y > bottom) continue;
+      this.departingNpcs.delete(npc);
+      this.npcs = this.npcs.filter(n => n !== npc);
+      npc.destroy();
+    }
   }
 
   private loadQuests(): QuestState {
@@ -2630,6 +2683,7 @@ export class GameScene extends Phaser.Scene {
       if (defender) {
         const source = hit ? { x: defender.x-hit.dx, y: defender.y-hit.dy } : c;
         const result = defender.receiveCombatHit(now, source, enemy.stats.damage * (hit?.damageScale ?? 1));
+        if (result === 'injured' && this.npcs.includes(defender)) this.syncDefenderRecovery(defender);
         if (result !== 'miss') {
           this.impacts.impact(defender.x, defender.y-65, Math.sign(c.x-defender.x), 0,
             result === 'blocked' ? 'counter' : 'normal', now, defender.y+2);

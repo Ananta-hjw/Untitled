@@ -1,0 +1,76 @@
+{
+  "frames": [
+    {
+      "name": "ruan-rest-0",
+      "x": 4,
+      "y": 10,
+      "w": 243,
+      "h": 298,
+      "originX": 0.528169014084507,
+      "originY": 1
+    },
+    {
+      "name": "ruan-rest-1",
+      "x": 388,
+      "y": 4,
+      "w": 243,
+      "h": 304,
+      "originX": 0.519298245614035,
+      "originY": 1
+    },
+    {
+      "name": "teon-sentry-0",
+      "x": 4,
+      "y": 327,
+      "w": 164,
+      "h": 301,
+      "originX": 0.45544554455445546,
+      "originY": 1
+    },
+    {
+      "name": "teon-sentry-1",
+      "x": 388,
+      "y": 324,
+      "w": 163,
+      "h": 304,
+      "originX": 0.46,
+      "originY": 1
+    },
+    {
+      "name": "soldier-rest-0",
+      "x": 4,
+      "y": 647,
+      "w": 268,
+      "h": 301,
+      "originX": 0.5032154340836013,
+      "originY": 1
+    },
+    {
+      "name": "soldier-rest-1",
+      "x": 388,
+      "y": 644,
+      "w": 270,
+      "h": 304,
+      "originX": 0.5063897763578274,
+      "originY": 1
+    },
+    {
+      "name": "soldier-repair-0",
+      "x": 4,
+      "y": 964,
+      "w": 242,
+      "h": 304,
+      "originX": 0.4946236559139785,
+      "originY": 1
+    },
+    {
+      "name": "soldier-repair-1",
+      "x": 388,
+      "y": 969,
+      "w": 239,
+      "h": 299,
+      "originX": 0.5309090909090909,
+      "originY": 1
+    }
+  ]
+}

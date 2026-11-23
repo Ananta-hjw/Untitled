@@ -1561,6 +1561,101 @@ test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 �
   assert.equal(result.restartedHere.hp, result.restartedHere.maxHp);
 });
 
+test('세레나는 안전 확인 대화 뒤 북쪽 출입구로 걸어 대피하고 재진입해도 광장에 되돌아오지 않는다', async () => {
+  await load('village');
+  await evaluate(`(async () => {
+    const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
+    for (const q of QUESTS.filter(q => q.main)) {
+      seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+      if (q.id === 'festival-eve') break;
+    }
+    seed['village-raid'] = { status: 'active', step: 3, count: 0 };
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+    localStorage.setItem('untitled-rpg.festival', 'seen');
+  })()`);
+  await load('village');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), n = s.npcs.find(n => n.def.id === 'serena');
+    const at = { x: n.x, y: n.y }; s.player.placeAt(n.spot.x, n.spot.y);
+    s.attackButton.pressed = true; s.updateInteraction(s.now);
+    while (s.dialogue.isOpen) s.dialogue.advance();
+    const started = n.walking && n.visible, interactive = s.interactables.includes(n.spot);
+    const step = s.quests['village-raid'].step;
+    s.refreshQuests(); s.refreshQuests();
+    let blocked = false, moved = false;
+    for (let i = 0; i < 1200 && s.npcs.includes(n); i++) {
+      s.update(0, 50); blocked ||= !s.walkArea.contains(n.x, n.y);
+      moved ||= Math.hypot(n.x - at.x, n.y - at.y) > 20;
+    }
+    const zone = s.map.exits.find(e => e.to === 'village-north').zone;
+    return { started, interactive, step, blocked, moved, left: !s.npcs.includes(n),
+      atExit: n.x >= zone.left && n.x <= zone.right && n.y >= zone.top && n.y <= zone.bottom };
+  })()`);
+  assert.deepEqual(result, { started: true, interactive: false, step: 4, blocked: false, moved: true, left: true, atExit: true });
+  await load('village');
+  assert.equal(await evaluate(`window.__game.scene.getScene('game').npcs.some(n => n.def.id === 'serena')`), false);
+  await load('in-clinic');
+  assert.equal(await evaluate(`window.__game.scene.getScene('game').npcs.find(n => n.def.id === 'serena').currentStoryAction`), 'wring-cloth');
+});
+
+test('세레나는 치유소와 자택에서 간호·물수건 준비를 반복하며 대화 뒤에도 간호를 이어 간다', async () => {
+  await load('village');
+  for (const [through, map, nursing] of [['village-raid', 'in-clinic', 'nurse-left'], ['first-sword', 'in-linea', 'nurse-right']]) {
+    await evaluate(`(async () => {
+      const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
+      for (const q of QUESTS.filter(q => q.main)) {
+        seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+        if (q.id === ${JSON.stringify(through)}) break;
+      }
+      localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+      localStorage.setItem('untitled-rpg.festival', 'seen');
+    })()`);
+    await load(map);
+    const result = await evaluate(`(() => {
+      const s = window.__game.scene.getScene('game'), n = s.npcs.find(n => n.def.id === 'serena');
+      const frames = new Set(); let blocked = false, walked = false;
+      const step = () => {
+        const at = { x: n.x, y: n.y }; s.update(0, 50);
+        blocked ||= !s.walkArea.contains(n.x, n.y);
+        walked ||= !n.currentStoryAction && Math.hypot(n.x - at.x, n.y - at.y) > .01;
+      };
+      const until = check => { for (let i = 0; i < 1400 && !check(); i++) step(); return check(); };
+      const talk = () => {
+        s.player.placeAt(n.spot.x, n.spot.y); s.attackButton.pressed = true; s.updateInteraction(s.now);
+        const opened = s.dialogue.isOpen, ownPortrait = s.dialogue.lines.some(l => l.portrait === 'serena');
+        const before = n.currentStoryAction;
+        while (s.dialogue.isOpen) s.dialogue.advance();
+        const frame = n.figure.frame.name;
+        for (let i = 0; i < 5; i++) step();
+        const paused = frame === n.figure.frame.name;
+        s.player.placeAt(s.map.spawn.x, s.map.spawn.y);
+        return { opened, ownPortrait, before, after: n.currentStoryAction, paused };
+      };
+      const start = n.currentStoryAction, kneelingLabel = n.nameLabel.y;
+      for (let i = 0; i < 40; i++) { frames.add(n.figure.frame.name); step(); }
+      const nursingTalk = talk();
+      const beganWalking = until(() => n.currentStoryAction === undefined), walkingLabel = n.nameLabel.y;
+      const reachedWater = until(() => n.currentStoryAction === 'wring-cloth');
+      const water = { x: n.x, y: n.y, frame: n.figure.frame.name };
+      for (let i = 0; i < 12; i++) step();
+      const waterAnimates = water.frame !== n.figure.frame.name, waterTalk = talk();
+      const returned = until(() => n.currentStoryAction === start);
+      return { start, frames: [...frames], kneelingLabel, walkingLabel, nursingTalk, waterTalk, beganWalking, reachedWater,
+        waterAnimates, returned, blocked, walked, flipX: n.figure.flipX,
+        atBed: Math.hypot(n.x - n.def.duty[0].x, n.y - n.def.duty[0].y) };
+    })()`);
+    assert.equal(result.start, nursing); assert.equal(result.frames.length, 4);
+    assert.equal(result.kneelingLabel, -135); assert.equal(result.walkingLabel, -158);
+    for (const key of ['beganWalking', 'reachedWater', 'waterAnimates', 'returned', 'walked']) assert.equal(result[key], true, key);
+    assert.equal(result.blocked, false); assert.ok(result.atBed < .01); assert.equal(result.flipX, nursing === 'nurse-right');
+    for (const talk of [result.nursingTalk, result.waterTalk]) {
+      assert.equal(talk.opened, true); assert.equal(talk.ownPortrait, true); assert.equal(talk.before, talk.after); assert.equal(talk.paused, true);
+    }
+    await load(map);
+    assert.equal(await evaluate(`window.__game.scene.getScene('game').npcs.find(n => n.def.id === 'serena').currentStoryAction`), nursing);
+  }
+});
+
 test('에일라는 병상 치료와 약품 준비를 반복하고, 대화·이동·재접속 뒤에도 올바른 동작을 유지한다', async () => {
   await load('village');
   for (const [through, map, treatment] of [['village-raid', 'in-clinic', 'treat-left'], ['first-sword', 'in-linea', 'treat-right']]) {
@@ -3460,6 +3555,79 @@ test('글자와 함께 그린 8방향 막기 검날은 실제 화면에서도 �
   for (const result of results) assert.deepEqual(result.missing, [], JSON.stringify(result));
 });
 
+test('수비대 부상은 보고 전 적용되고 경비병은 재접속 뒤에도 회복 중이며 치료 후 복귀한다', async () => {
+  await load('village');
+  await evaluate(`(() => {
+    localStorage.removeItem('untitled-rpg.defender-injuries');
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({version:1,quests:{
+      'festival-eve':{status:'done',count:0}, 'village-raid':{status:'active',step:0,count:0}
+    }}));
+  })()`);
+  await load('village');
+  const raid = await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'), teon=s.npcs.find(n=>n.def.id==='teon'), ruan=s.npcs.find(n=>n.def.id==='ruan');
+    const guard=s.npcs.find(n=>n.def.id==='guard-plaza-west');
+    guard.receiveCombatHit(1000,{x:guard.x,y:guard.y+100},99999);
+    s.updateNpcCombat(1001,0);
+    const saved=JSON.parse(localStorage.getItem('untitled-rpg.defender-injuries'));
+    s.quests['village-raid'].step=1;s.refreshQuests();
+    const teonBeforeTalk=teon.combatPose==='injured'&&!teon.canFight;
+    teon.talkedTo(1100,s.player);s.updateNpcCombat(1101,0);
+    s.quests['village-raid'].step=5;s.refreshQuests();
+    const ruanBeforeReport=ruan.combatPose==='injured'&&!ruan.canFight;
+    s.saveQuests();
+    return {saved,teonBeforeTalk,teonAfterTalk:teon.combatPose,ruanBeforeReport};
+  })()`);
+  assert.ok(raid.saved.includes('guard-plaza-west'));
+  assert.equal(raid.teonBeforeTalk,true);assert.equal(raid.teonAfterTalk,'injured');assert.equal(raid.ruanBeforeReport,true);
+  await load('village');
+  assert.equal(await evaluate(`window.__game.scene.getScene('game').npcs.find(n=>n.def.id==='guard-plaza-west').combatPose`),'injured');
+  await evaluate(`(() => { const s=window.__game.scene.getScene('game');s.quests['village-raid']={status:'done',count:0};s.saveQuests(); })()`);
+  await load('village');
+  const recovery=await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'), result=[];
+    for(const id of ['ruan','teon','guard-plaza-west']) {
+      const n=s.npcs.find(n=>n.def.id===id), x=n.x,y=n.y,frames=new Set();
+      for(let i=0;i<50;i++){s.updateNpcCombat(2000+i*100,.1);n.update(2000+i*100,.1,s.player,s.walkArea);frames.add(n.figure.frame.name);}
+      const stable=n.x===x&&n.y===y;
+      s.openDialogue(n.spot);const portrait=s.dialogue.portrait.texture.key;
+      while(s.dialogue.isOpen)s.dialogue.advance();
+      n.update(9000,.1,s.player,s.walkArea);
+      result.push({id,action:n.currentStoryAction,canFight:n.canFight,stable,frames:[...frames],portrait,afterTalk:n.figure.texture.key});
+    }
+    s.quests['first-sword']={status:'done',count:0};s.refreshQuests();s.saveQuests();
+    return {result,healed:s.npcs.filter(n=>['teon','guard-plaza-west'].includes(n.def.id)).every(n=>!n.isRecovering&&!n.combatControlled)};
+  })()`);
+  assert.equal(recovery.healed,true);
+  for(const n of recovery.result) {
+    assert.equal(n.action,n.id==='teon'?'sentry':'rest');assert.equal(n.canFight,false);assert.equal(n.stable,true);
+    assert.equal(n.frames.length,2);assert.equal(n.afterTalk,'npc-defender-recovery');
+    assert.equal(n.portrait,n.id.startsWith('guard-')?'portrait-soldier':'portrait-'+n.id);
+  }
+  await load('village');
+  assert.equal(await evaluate(`(() => { const s=window.__game.scene.getScene('game');return s.npcs.filter(n=>['teon','guard-plaza-west'].includes(n.def.id)).every(n=>!n.isRecovering&&!n.combatControlled);})()`),true);
+  await evaluate(`localStorage.removeItem('untitled-rpg.defender-injuries')`);
+});
+
+test('건강한 병사는 목재 수리 동작 뒤 걸어서 다음 작업장으로 이동한다', async () => {
+  await load('village');
+  await evaluate(`localStorage.removeItem('untitled-rpg.defender-injuries');localStorage.setItem('untitled-rpg.quests',JSON.stringify({version:1,quests:{'village-raid':{status:'done',count:0},'first-sword':{status:'done',count:0}}}))`);
+  await load('village');
+  const result=await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'),n=s.npcs.find(n=>n.def.id==='guard-plaza-west');
+    const frames=new Set(),start={x:n.x,y:n.y};let walked=false,returned=false,clear=true;
+    for(let i=0;i<600;i++){
+      n.update(i*50,.05,s.player,s.walkArea);
+      clear &&= s.walkArea.contains(n.x,n.y);
+      if(n.currentStoryAction==='repair')frames.add(n.figure.frame.name);
+      if(n.figure.texture.key.includes('cardinal')||n.figure.texture.key.includes('diagonal'))walked=true;
+      if(Math.hypot(n.x-start.x,n.y-start.y)>200&&n.currentStoryAction==='repair'){returned=true;break;}
+    }
+    return {frames:[...frames],walked,returned,clear};
+  })()`);
+  assert.equal(result.frames.length,2);assert.equal(result.walked,true);assert.equal(result.returned,true);assert.equal(result.clear,true);
+});
+
 test('마을 수비대는 습격 중 실제 공격·막기·피격·부상 그림을 쓰고 평소에는 순찰로 돌아온다', async () => {
   await load('village');
   const result = await evaluate(`(() => {
@@ -3510,7 +3678,7 @@ test('마을 수비대는 습격 중 실제 공격·막기·피격·부상 그�
     for(const n of s.npcs)n.update(s.now,0,s.player,s.walkArea);
     const peace=s.npcs.filter(n=>['ruan','teon','soldier'].includes(n.skin)).every(n=>!n.combatControlled&&!n.figure.texture.key.endsWith('-combat'));
     s.quests={'village-raid':{status:'done',count:0}};s.updateNpcCombat(s.now,0);
-    const aftermath=ruan.figure.frame.name==='injured'&&!ruan.canFight;
+    const aftermath=ruan.figure.frame.name.startsWith('ruan-rest-')&&!ruan.canFight;
     if(savedQuests===null)localStorage.removeItem('untitled-rpg.quests');else localStorage.setItem('untitled-rpg.quests',savedQuests);
     return {runs,credited,peace,aftermath};
   })()`);
@@ -3966,4 +4134,65 @@ test('미연결 계승자 다섯은 각자의 8방향 이동·초상화를 쓰�
   for(const n of result){assert.equal(n.frames,8,n.id);assert.equal(n.moved,true,n.id);assert.equal(n.own,true,n.id);assert.equal(n.safe,true,n.id);assert.equal(n.portrait,'portrait-'+n.id);}
   await load('east-stream&companion=none');
   assert.equal(await evaluate(`window.__game.scene.getScene('game').npcs.some(n=>['bram','mirel','kairen','velka','razen','toby','bell-ringer','bell-ringer-mother'].includes(n.def.id))`),false);
+});
+
+test('복구 상점 주민은 작업 그림을 유지하고 대화·거래·재접속 뒤에도 준비를 이어 간다', async () => {
+  await load('village');
+  await evaluate(`localStorage.setItem('untitled-rpg.quests',JSON.stringify({version:1,quests:{'village-raid':{status:'done',count:0},'doran-gel':{status:'done',count:5}}}))`);
+  for (const [map,id,action] of [['in-smithy','doran','file'],['in-store','merina','supplies'],['in-inn','rosetta','blankets']]) {
+    await load(map);
+    const result=await evaluate(`(() => {
+      const s=window.__game.scene.getScene('game'),n=s.npcs.find(n=>n.def.id===${JSON.stringify(id)}),frames=new Set();
+      for(let i=0;i<40;i++){n.update(4000+i*100,.1,s.player,s.walkArea);frames.add(n.figure.frame.name);}
+      n.talkedTo(8000,s.player);const before=n.storyElapsed;n.update(8100,.1,s.player,s.walkArea);
+      const paused=n.storyElapsed===before;
+      s.openDialogue(n.spot);const portrait=s.dialogue.portrait.texture.key;
+      while(s.dialogue.isOpen)s.dialogue.advance();
+      const trade=n.def.id==='merina'?s.itemPanel.isOpen:n.def.id==='doran'?s.characterPanel.isOpen:true;
+      n.update(12000,.6,s.player,s.walkArea);
+      return {frames:[...frames],paused,portrait,trade,action:n.currentStoryAction,texture:n.figure.texture.key,resumed:n.storyElapsed>before,
+        offset:n.spot.y-n.y,expectedOffset:n.def.talkOffset??0};
+    })()`);
+    assert.equal(result.frames.length,2,id);assert.equal(result.paused,true,id);assert.equal(result.resumed,true,id);
+    assert.equal(result.trade,true,id);assert.equal(result.action,action,id);assert.equal(result.texture,'npc-village-relief',id);
+    assert.equal(result.portrait,'portrait-'+id);assert.ok(Math.abs(result.offset-result.expectedOffset)<.001,id);
+    await load(map);
+    assert.equal(await evaluate(`window.__game.scene.getScene('game').npcs.find(n=>n.def.id===${JSON.stringify(id)}).currentStoryAction`),action);
+  }
+});
+
+test('헤르만과 베르넬은 기록·조사 동작에서 걷기로 전환하고 다음 현장에서 작업을 재개한다', async () => {
+  await load('village');
+  await evaluate(`localStorage.setItem('untitled-rpg.quests',JSON.stringify({version:1,quests:{'village-raid':{status:'done',count:0}}}))`);
+  for(const [map,id,action] of [['village-north','herman','record'],['village','vernel','inspect']]) {
+    await load(map);
+    const result=await evaluate(`(() => {
+      const s=window.__game.scene.getScene('game'),n=s.npcs.find(n=>n.def.id===${JSON.stringify(id)}),start={x:n.x,y:n.y},frames=new Set();
+      let walked=false,resumed=false,safe=true;
+      for(let i=0;i<1800;i++){
+        n.update(i*50,.05,s.player,s.walkArea,s.npcCanStand);safe&&=s.walkArea.contains(n.x,n.y);
+        if(n.currentStoryAction===${JSON.stringify(action)})frames.add(n.figure.frame.name);
+        else if(n.figure.texture.key.includes('cardinal')||n.figure.texture.key.includes('diagonal'))walked=true;
+        if(walked&&Math.hypot(n.x-start.x,n.y-start.y)>100&&n.currentStoryAction===${JSON.stringify(action)}){resumed=true;break;}
+      }
+      n.talkedTo(100000,s.player);const before=n.storyElapsed;n.update(100100,.1,s.player,s.walkArea);
+      const paused=n.storyElapsed===before;
+      return {frames:[...frames],walked,resumed,safe,paused,action:n.currentStoryAction,label:n.nameLabel.y};
+    })()`);
+    assert.equal(result.frames.length,2,id);for(const key of ['walked','resumed','safe','paused'])assert.equal(result[key],true,id+':'+key);
+    assert.equal(result.action,action);if(id==='vernel')assert.equal(result.label,-135);
+  }
+});
+
+test('습격 중 메리나와 로제타는 치유소에서 구호 물품과 담요를 준비한다', async () => {
+  await load('village');
+  await evaluate(`localStorage.setItem('untitled-rpg.quests',JSON.stringify({version:1,quests:{'festival-eve':{status:'done',count:0},'village-raid':{status:'active',step:5,count:0}}}))`);
+  await load('in-clinic');
+  const result=await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game');
+    return ['merina','rosetta'].map(id=>{const n=s.npcs.find(n=>n.def.id===id),frames=new Set();
+      for(let i=0;i<30;i++) {n.update(i*100,.1,s.player,s.walkArea);frames.add(n.figure.frame.name);}
+      return {id,action:n.currentStoryAction,frames:[...frames],safe:s.walkArea.contains(n.x,n.y),texture:n.figure.texture.key};});
+  })()`);
+  for(const n of result){assert.equal(n.action,n.id==='merina'?'supplies':'blankets');assert.equal(n.frames.length,2);assert.equal(n.safe,true);assert.equal(n.texture,'npc-village-relief');}
 });

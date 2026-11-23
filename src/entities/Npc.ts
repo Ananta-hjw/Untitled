@@ -102,6 +102,7 @@ export class Npc extends Phaser.GameObjects.Container {
   private readonly rand: () => number;
   private readonly step = new Phaser.Math.Vector2();
   private readonly marker: Phaser.GameObjects.Text;
+  private readonly nameLabel: Phaser.GameObjects.Text;
   /** 맡은 일(def.duty) 자리에 멈춰 있을 때 머리 위에 띄우는 하는 일 */
   private readonly activity: Phaser.GameObjects.Text;
   private dutyIndex = 0;
@@ -119,6 +120,7 @@ export class Npc extends Phaser.GameObjects.Container {
   private fighter?: NpcFighter;
   private battle = false;
   private storyInjured = false;
+  private recovering = false;
   private sleeping = false;
   private sleepElapsed = 0;
   private storyAction?: StoryAction;
@@ -162,7 +164,7 @@ export class Npc extends Phaser.GameObjects.Container {
     this.add(this.figure);
 
     const labelHeight = def.labelOffset ?? def.height;
-    const label = scene.add.text(0, -labelHeight - 10, def.name, {
+    const label = this.nameLabel = scene.add.text(0, -labelHeight - 10, def.name, {
       fontFamily: FONT, fontSize: '20px', fontStyle: 'bold',
       color: def.shop ? '#ffe09a' : '#f5ead2', stroke: '#1a1008', strokeThickness: 5,
     }).setOrigin(0.5, 1).setResolution(2);
@@ -189,6 +191,7 @@ export class Npc extends Phaser.GameObjects.Container {
     this.questMarker = marker;
     if (!marker) {
       this.marker.setVisible(false);
+      this.activity.setVisible(!!this.storyAction?.activity || this.recovering || (!!this.def.duty && this.atDuty));
       return;
     }
     const style = MARKER_STYLE[marker];
@@ -226,11 +229,34 @@ export class Npc extends Phaser.GameObjects.Container {
     this.target = undefined;
     this.scriptPath = [];
     this.spot.dialogue = action?.dialogue ?? this.def.dialogue;
+    const height = this.labelHeight;
+    this.nameLabel.setY(-height - 10);
+    this.marker.setY(-height - 36);
+    this.activity.setY(-height - 38);
+    this.spot.markerHeight = height + 44 + (this.def.talkOffset ?? 0);
+    if (action?.activity) this.activity.setText(action.activity).setVisible(!this.questMarker);
+    else if (!this.def.duty && !this.recovering) this.activity.setVisible(false);
     this.showFrame(this.walk.idlePose);
     return true;
   }
 
   get currentStoryAction(): string | undefined { return this.storyActionName; }
+
+  get isRecovering(): boolean { return this.recovering; }
+
+  /** Recovery overrides work routes, while retaining dialogue and quest interaction. */
+  setRecovery(action?: string): void {
+    this.recovering = action !== undefined;
+    this.setStoryAction(action);
+    if (action) this.activity.setText(action === 'sentry' ? '부상 회복 · 남문 경계 중' : '부상 회복 중').setVisible(!this.questMarker);
+    if (!action) {
+      this.dutyIndex = 0;
+      this.atDuty = false;
+      this.restUntil = 0;
+    }
+  }
+
+  private get labelHeight(): number { return this.storyAction?.labelOffset ?? this.def.labelOffset ?? this.def.height; }
 
   /** Story-ready sleepwalking along a collision-checked path; no wall or water bypass. */
   startSleepwalk(path: { x: number; y: number }[]): void {
@@ -371,9 +397,9 @@ export class Npc extends Phaser.GameObjects.Container {
     canStand: (x: number, y: number) => boolean = () => true): void {
     if (this.sleeping && this.walking) this.sleepElapsed += dt * 1000;
     // 퀘스트 표시는 위아래로 천천히 흔들려 눈에 띈다.
-    if (this.questMarker) this.marker.setY(-(this.def.labelOffset ?? this.def.height) - 36 - Math.abs(Math.sin(now / 320)) * 8);
+    if (this.questMarker) this.marker.setY(-this.labelHeight - 36 - Math.abs(Math.sin(now / 320)) * 8);
     if (this.combatControlled) return;
-    if (this.storyAction && !this.def.duty) {
+    if (this.storyAction && (!this.def.duty || this.recovering)) {
       if (!(this.storyAction.onTalk === 'pause' && now < this.talkUntil)) this.storyElapsed += dt * 1000;
       this.showFrame(0);
       return;

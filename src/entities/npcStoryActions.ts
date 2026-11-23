@@ -10,14 +10,45 @@ import lineaRecoveryUrl from '../assets/characters/linea/recovery.webp?url';
 import lineaRecoveryData from '../assets/characters/linea/recovery-frames.json';
 import eilaTreatmentUrl from '../assets/characters/eila/treatment.webp?url';
 import eilaTreatmentData from '../assets/characters/eila/treatment-frames.json';
+import serenaNursingUrl from '../assets/characters/serena/nursing.webp?url';
+import serenaNursingData from '../assets/characters/serena/nursing-frames.json';
+import defenderRecoveryUrl from '../assets/characters/defender-recovery/recovery.webp?url';
+import defenderRecoveryData from '../assets/characters/defender-recovery/recovery-frames.json';
+import reliefUrl from '../assets/characters/village-relief/work.webp?url';
+import reliefData from '../assets/characters/village-relief/work-frames.json';
 
 export interface StoryFrame { name: string; x: number; y: number; w: number; h: number; originX: number; originY: number }
 export interface StoryAction {
   key: string; url: string; frames: StoryFrame[]; fps: number; bodyHeight: number;
   onTalk: 'stop' | 'pause' | 'keep'; dialogue?: DialogueId;
   flipX?: boolean;
+  labelOffset?: number;
+  activity?: string;
 }
 const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
+  ...Object.fromEntries(([
+    ['herman', 'record', '피해 상황 기록 중'], ['doran', 'file', '수리 부품 손질 중'],
+    ['merina', 'supplies', '구호 물품 정리 중'], ['rosetta', 'blankets', '담요 준비 중'],
+    ['vernel', 'inspect', '권속 흔적 조사 중'],
+  ] as const).map(([skin, name, activity]) => [skin, { [name]: {
+    key: 'npc-village-relief', url: reliefUrl,
+    frames: reliefData.frames.filter(f => f.name.startsWith(`${skin}-${name}-`)),
+    fps: skin === 'doran' ? 2 : 1, bodyHeight: skin === 'vernel' ? 380 : 304,
+    labelOffset: skin === 'vernel' ? 125 : undefined, onTalk: 'pause' as const, activity,
+  } }])),
+  ...Object.fromEntries((['ruan', 'teon', 'soldier'] as const).map(skin => [skin,
+    Object.fromEntries((skin === 'teon' ? ['sentry'] : skin === 'soldier' ? ['rest', 'repair'] : ['rest']).map(name => [name, {
+      key: 'npc-defender-recovery', url: defenderRecoveryUrl,
+      frames: defenderRecoveryData.frames.filter(f => f.name.startsWith(`${skin}-${name}-`)),
+      fps: name === 'repair' ? 2 : 1, bodyHeight: skin === 'teon' ? 304 : 380,
+      labelOffset: skin === 'teon' ? undefined : 125, onTalk: 'pause' as const,
+    }]))])),
+  serena: Object.fromEntries(['nurse-left', 'nurse-right', 'wring-cloth'].map(name => [name, {
+    key: 'npc-serena-nursing', url: serenaNursingUrl,
+    frames: serenaNursingData.frames.filter(f => f.name.startsWith(name === 'wring-cloth' ? 'cloth-' : 'nurse-')),
+    fps: 2, bodyHeight: name === 'wring-cloth' ? 304 : 380, onTalk: 'pause' as const,
+    flipX: name === 'nurse-right', labelOffset: name === 'wring-cloth' ? undefined : 125,
+  }])),
   eila: Object.fromEntries(['treat-left', 'treat-right', 'mix-herbs'].map(name => [name, {
     key: 'npc-eila-treatment', url: eilaTreatmentUrl,
     frames: eilaTreatmentData.frames.filter(f => f.name.startsWith(name === 'mix-herbs' ? 'mix-' : 'treat-')),
