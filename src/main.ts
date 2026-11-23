@@ -3,6 +3,7 @@ import { MAX_ASPECT, MIN_ASPECT, VIEW_HEIGHT } from './config';
 import { frameRate, shouldRunFrame } from './core/frameRate';
 import { stabilizeTextureSampling } from './core/textureSampling';
 import { GameScene } from './scenes/GameScene';
+import { PrologueScene } from './scenes/PrologueScene';
 import { TitleScene } from './scenes/TitleScene';
 
 /** 화면 높이는 720으로 고정하고, 기기 비율에 맞춰 너비만 정한다. */
@@ -12,7 +13,10 @@ function viewWidth(): number {
 }
 
 // 처음 화면(TitleScene)에서 시작한다. 개발 중 ?map=으로 특정 맵을 열면(브라우저 테스트 포함) 처음 화면을 건너뛴다.
-const skipTitle = import.meta.env.DEV && new URLSearchParams(window.location.search).has('map');
+// ?prologue로 열면 세계관 프롤로그 5컷 연출을 바로 재생한다.
+const query = import.meta.env.DEV ? new URLSearchParams(window.location.search) : undefined;
+const startPrologue = !!query?.has('prologue');
+const skipTitle = !!query?.has('map');
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -27,7 +31,9 @@ const game = new Phaser.Game({
   },
   // 동시에 누를 수 있는 터치 수: 조이스틱 + 공격 + 회피
   input: { activePointers: 3 },
-  scene: skipTitle ? [GameScene, TitleScene] : [TitleScene, GameScene],
+  scene: startPrologue ? [PrologueScene, TitleScene, GameScene]
+    : skipTitle ? [GameScene, TitleScene, PrologueScene]
+      : [TitleScene, PrologueScene, GameScene],
 });
 
 // 화면 갱신(requestAnimationFrame)마다 그리지 않고 frameRate.fps만큼만 그린다(core/frameRate.ts).

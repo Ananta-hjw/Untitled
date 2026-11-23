@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { VIEW_HEIGHT } from '../config';
 import backgroundUrl from '../assets/title/background.webp';
-import { browserStorage } from '../entities/saveData';
+import { browserStorage, loadProgress } from '../entities/saveData';
+import { PROLOGUE_SAVE_KEY, shouldPlayPrologue } from '../story/prologue';
 import { PauseMenu } from '../ui/PauseMenu';
 import { loadSettings, saveSettings } from '../ui/settingsData';
 
@@ -18,6 +19,7 @@ export class TitleScene extends Phaser.Scene {
   private tagline!: Phaser.GameObjects.Text;
   private startButton!: Phaser.GameObjects.Text;
   private settingsButton!: Phaser.GameObjects.Text;
+  private prologueLink!: Phaser.GameObjects.Text;
   private version!: Phaser.GameObjects.Text;
   private menu!: PauseMenu;
   private starting = false;
@@ -40,6 +42,11 @@ export class TitleScene extends Phaser.Scene {
     this.tagline = this.text('저 너머, 시온의 이야기가 시작됩니다.', 18, '#c7d4cd');
     this.startButton = this.button('시작하기', () => this.start());
     this.settingsButton = this.button('설정', () => this.menu.openSettings());
+    this.prologueLink = this.text('세계관 프롤로그 다시 보기 ▸', 16, '#d9c598')
+      .setInteractive({ useHandCursor: true })
+      .on('pointerover', () => this.prologueLink.setColor('#fff0c8'))
+      .on('pointerout', () => this.prologueLink.setColor('#d9c598'))
+      .on('pointerup', () => this.openPrologue());
     this.version = this.text(`프로토타입 v${__APP_VERSION__}`, 14, '#b9c8be');
     const storage = browserStorage();
     this.menu = new PauseMenu(this, {
@@ -62,9 +69,29 @@ export class TitleScene extends Phaser.Scene {
     this.starting = true;
     this.startButton.disableInteractive();
     this.settingsButton.disableInteractive();
+    this.prologueLink.disableInteractive();
+    const storage = browserStorage();
+    const hasProgress = loadProgress(storage) !== null;
+    let seen = false;
+    try { seen = storage?.getItem(PROLOGUE_SAVE_KEY) === 'seen'; } catch { seen = false; }
+    const playPrologue = shouldPlayPrologue({ hasProgress, seen });
     const camera = this.cameras.main;
-    camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('game', { fromTitle: true }));
+    camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      if (playPrologue) this.scene.start('prologue', { next: 'game' });
+      else this.scene.start('game', { fromTitle: true });
+    });
     camera.fadeOut(TITLE_FADE_MS, 0, 0, 0);
+  }
+
+  private openPrologue(): void {
+    if (this.starting || this.menu.isOpen) return;
+    this.starting = true;
+    this.startButton.disableInteractive();
+    this.settingsButton.disableInteractive();
+    this.prologueLink.disableInteractive();
+    const camera = this.cameras.main;
+    camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('prologue', { next: 'title' }));
+    camera.fadeOut(500, 0, 0, 0);
   }
 
   private layout(): void {
@@ -78,6 +105,7 @@ export class TitleScene extends Phaser.Scene {
     this.tagline.setPosition(left, 341);
     this.startButton.setPosition(left, 430);
     this.settingsButton.setPosition(left, 530);
+    this.prologueLink.setPosition(left + 4, 632);
     this.version.setPosition(left, VIEW_HEIGHT - 38);
     this.draw();
     this.menu.layout(width);
