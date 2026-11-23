@@ -3766,6 +3766,53 @@ test('2장 동쪽 고갯길 퀘스트: 떠날 채비 뒤 고갯길로 가서 딱
   assert.equal(result.done, 'done');
 });
 
+test('2장 고개의 쉼터: 까마귀 넷 뒤 도르와 하룻밤을 보내 쉼터가 시작 자리가 되고, 꼭대기를 살펴본 뒤 도르에게 인사한다', async () => {
+  await load('east-pass');
+  const result = await evaluate(`(async () => {
+    const { QUESTS } = await import('/src/story/quests.ts');
+    const g = window.__game;
+    let s = g.scene.getScene('game'), t = performance.now();
+    const seed = {};
+    const mains = QUESTS.filter(q => q.main);
+    for (const q of mains.slice(0, mains.findIndex(q => q.id === 'mountain-pass') + 1)) seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+    seed['pass-shelter'] = { status: 'active', count: 0 };
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+    localStorage.removeItem('untitled-rpg.rest');
+    const ready = () => s.sys.isActive() && s.minimap && !s.traveling;
+    s.scene.restart({ map: 'east-pass' }); g.step(t += 16, 16);
+    for (let i = 0; i < 300 && !(s.mapId === 'east-pass' && ready()); i++) { await new Promise(r => setTimeout(r, 10)); g.step(t += 16, 16); s = g.scene.getScene('game'); }
+    const tracker = s.questTracker.text.text;
+    for (let i = 0; i < 4; i++) s.questEvent({ type: 'kill', map: 'east-pass', monster: 'fog-crow' });
+    const before = s.interactables.some(i => i.id === 'story-pass-summit');
+    s.player.hp = 1;
+    const dor = s.npcs.find(n => n.def.id === 'dor');
+    s.openDialogue(dor.spot); while (s.dialogue.isOpen) s.dialogue.advance();
+    const sleeping = s.traveling;
+    for (let i = 0; i < 400 && s.traveling; i++) { await new Promise(r => setTimeout(r, 10)); g.step(t += 16, 16); }
+    const rest = JSON.parse(localStorage.getItem('untitled-rpg.rest') ?? 'null')?.point;
+    const healed = s.player.hp === s.player.maxHp;
+    const summit = s.interactables.find(i => i.id === 'story-pass-summit');
+    s.openDialogue(summit); while (s.dialogue.isOpen) s.dialogue.advance();
+    const step = s.quests['pass-shelter'].step;
+    s.openDialogue(dor.spot); while (s.dialogue.isOpen) s.dialogue.advance();
+    const done = s.quests['pass-shelter'].status;
+    s.openDialogue(dor.spot); while (s.dialogue.isOpen) s.dialogue.advance();
+    const offer = s.storyChoice?.isOpen;
+    s.storyChoice?.close?.();
+    localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.rest');
+    return { tracker, before, sleeping, rest, healed, summit: !!summit, step, done, offer };
+  })()`);
+  assert.match(result.tracker, /고개의 쉼터/);
+  assert.equal(result.before, false, '하룻밤 전에는 꼭대기 자리가 없다');
+  assert.equal(result.sleeping, true, '화면이 어두워지는 동안 게임이 멈춘다');
+  assert.equal(result.rest, 'shelter', '고개 쉼터가 다시 시작할 자리가 된다');
+  assert.equal(result.healed, true);
+  assert.equal(result.summit, true);
+  assert.equal(result.step, 3);
+  assert.equal(result.done, 'done');
+  assert.equal(result.offer, true, '끝낸 뒤 도르에게 말하면 쉬어 갈지 묻는다');
+});
+
 test('미연결 조연: 토비·종 사내·어머니는 전용 외형과 초상화, 풀무·종·고치 동작을 쓴다', async () => {
   await load('east-stream&npcs=support&companion=none');
   const result=await evaluate(`(()=>{

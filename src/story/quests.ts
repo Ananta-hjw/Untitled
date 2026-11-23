@@ -20,7 +20,7 @@ export type QuestId = 'ruan-training' | 'ruan-dodge' | 'ruan-parry' | 'ruan-fiel
   | 'watch-report' | 'festival-supplies' | 'sia-knot' | 'harvest-help' | 'evening-patrol' | 'moth-trail'
   | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter' | 'first-sword'
   // 2장 (docs/story-chapter2.md, story/chapterTwo.ts)
-  | 'fern-cart' | 'farewell' | 'mountain-pass';
+  | 'fern-cart' | 'farewell' | 'mountain-pass' | 'pass-shelter';
 
 /** 게임에서 일어나서 퀘스트 목표를 채우는 일 */
 export type QuestEvent =
@@ -35,7 +35,7 @@ export type QuestEvent =
   | { type: 'inspect'; spot: InspectSpot; map: MapId };
 
 /** 살펴보기 지점 (story/chapterOne.ts의 SPOTS) */
-export type InspectSpot = 'south-watch' | 'home-search' | 'moth-nest' | 'north-alley';
+export type InspectSpot = 'south-watch' | 'home-search' | 'moth-nest' | 'north-alley' | 'pass-summit';
 
 export interface QuestObjective {
   /** 추적 표시에 나오는 글 (예: "남쪽 들판의 슬라임") */
@@ -52,6 +52,8 @@ export interface QuestObjective {
   lines?: DialogueLine[];
   /** 이 단계를 마치면 배우는 기술 (예: 떠날 채비에서 루안에게 배우는 회전 베기) */
   rewardSkill?: SkillId;
+  /** 이 단계를 마친 대화 뒤 그 자리에서 하룻밤을 보낸다 (고개의 쉼터: 화면이 어두워졌다 밝아지고, 고개 쉼터가 다시 시작할 자리가 된다) */
+  night?: boolean;
 }
 
 export interface QuestDef {
@@ -430,6 +432,26 @@ export const QUESTS: QuestDef[] = [
     offer: [hero('동문으로 나가 개울을 따라가면 고갯길이랬지. …가자.')],
     reminder: [line('herman', '헤르만', '동문으로 나가 개울가 오른쪽 끝으로 가면 고갯길이다. 길을 막은 놈들이 있으면 조심하게.')],
     done: [dor('요즘 강 위 안개가 밤마다 짙어져. 사공들이 배를 묶었다더군. …오늘은 여기서 쉬어 가게. 날이 저물면 고개는 위험해.')],
+  },
+  {
+    id: 'pass-shelter', title: '고개의 쉼터', giver: 'dor', main: true, requires: 'mountain-pass', completeOnTarget: true,
+    objective: { label: '쉼터를 노리는 안개 까마귀 쫓기', need: 4, event: 'kill', map: 'east-pass', monster: 'fog-crow' },
+    steps: [
+      { label: '쉼터를 노리는 안개 까마귀 쫓기', need: 4, event: 'kill', map: 'east-pass', monster: 'fog-crow' },
+      { label: '도르의 쉼터에서 하룻밤 묵기', need: 1, event: 'talk', npc: 'dor', night: true, lines: [
+        dor('까마귀들이 잠잠해졌구먼. 고맙네. 저놈들은 안개를 타고 내려와. 강 위 안개가 짙어질수록 수가 늘지.'),
+        dor('자, 불가에 눕게. 산에서는 해가 지면 움직이는 게 아니야.'),
+        { speaker: '고개의 쉼터', text: '불가에 누워도 잠이 오지 않았다. 시온은 로웬 쪽 하늘을 오래 바라보았다.' },
+        hero('시아… 조금만 기다려. 금방 갈게.')] },
+      { label: '고개 꼭대기에서 강 내려다보기', need: 1, event: 'inspect', map: 'east-pass', spot: 'pass-summit' },
+      { label: '쉼터의 도르에게 인사하기', need: 1, event: 'talk', npc: 'dor', lines: [
+        hero('꼭대기에서 강을 봤어요. 낮인데도 안개가 걸려 있었어요.'),
+        dor('그게 요즘 나루 사람들 근심이야. 밤마다 짙어지고, 해가 떠도 다 걷히질 않아.')] },
+    ],
+    rewardXp: 50, rewardItems: [{ id: 'potion', count: 2 }],
+    offer: [dor('…그런데 하나 부탁하세. 해가 기울면 안개 까마귀들이 쉼터 둘레를 맴돌아. 불씨를 노리는 건지, 사람을 노리는 건지. 좀 쫓아 주겠나?')],
+    reminder: [dor('까마귀들은 동쪽 바위 쪽에 모여 있어. 날개 치는 소리가 들리면 몸을 낮추게.')],
+    done: [dor('나루까지는 내리막으로 반나절이야. 쉼터는 늘 비워 두마. 오가는 길에 쉬어 가게.')],
   },
   {
     id: 'doran-gel', title: '담금질 재료', giver: 'doran',

@@ -4,10 +4,11 @@ import { MAPS, findExit, walkable } from '../src/world/maps.ts';
 import { findInteractable } from '../src/world/interactables.ts';
 import { CLINIC_BED_SPOT, HERB_BONUS_RATIO, HOME_BED_SPOT, herbBonus, REST_POINTS, canRest, parseRestPoint, serializeRestPoint } from '../src/story/restPoints.ts';
 
-test('쉬는 곳(여관·시온의 집)에서 다시 시작하는 자리는 그 실내의 걸을 수 있는 곳이고, 나가기 버튼 바로 앞이 아니다', () => {
+test('쉬는 곳(여관·시온의 집·고개 쉼터)에서 다시 시작하는 자리는 걸을 수 있는 곳이고, 출구나 나가기 버튼 바로 앞이 아니다', () => {
   for (const point of Object.values(REST_POINTS)) {
     const map = MAPS[point.map];
-    assert.ok(map?.interior, point.id);
+    // 마을의 쉬는 곳은 실내, 2장의 고개 쉼터는 동쪽 고갯길 바깥
+    assert.ok(point.id === 'shelter' ? point.map === 'east-pass' : map?.interior, point.id);
     assert.equal(walkable(map, point.at.x, point.at.y), true, point.id);
     assert.equal(findExit(map, point.at.x, point.at.y), undefined, point.id);
     assert.notEqual(findInteractable(point.at.x, point.at.y, map.interactables)?.enter?.label, '나가기', point.id);
@@ -34,6 +35,7 @@ test('치유소 침대 옆 치료받기 자리는 걸어서 닿을 수 있고, �
 test('쉰 곳을 저장했다가 읽고, 모르는 값이나 깨진 값은 버린다', () => {
   assert.equal(parseRestPoint(serializeRestPoint('inn'))?.map, 'in-inn');
   assert.equal(parseRestPoint(serializeRestPoint('home'))?.map, 'in-home');
+  assert.equal(parseRestPoint(serializeRestPoint('shelter'))?.map, 'east-pass');
   assert.equal(parseRestPoint(null), undefined);
   assert.equal(parseRestPoint('{oops'), undefined);
   assert.equal(parseRestPoint(JSON.stringify({ version: 1, point: 'moon' })), undefined);

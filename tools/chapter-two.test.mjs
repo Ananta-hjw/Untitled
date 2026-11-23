@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoStarted, fernCartVisible, fernMothHunt, fernShopOpen } from '../src/story/chapterTwo.ts';
+import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoSpots, shelterRestOpen, chapterTwoNpcs, chapterTwoStarted, fernCartVisible, fernMothHunt, fernShopOpen } from '../src/story/chapterTwo.ts';
 import { QUESTS, continueMainQuest, parseQuests, recordEvent, serializeQuests, talkTo } from '../src/story/quests.ts';
-import { MAPS, walkable } from '../src/world/maps.ts';
+import { MAPS, findExit, walkable } from '../src/world/maps.ts';
+import { findInteractable } from '../src/world/interactables.ts';
+import { REST_POINTS } from '../src/story/restPoints.ts';
 import { chapterNpcs } from '../src/story/chapterOne.ts';
 import { guardsForMap } from '../src/world/guards.ts';
 import { insideObstacle } from '../src/world/obstacles.ts';
@@ -118,4 +120,50 @@ test('동쪽 고갯길에는 퀘스트에 필요한 서리 딱정벌레가 셋 �
   const pass = MAPS['east-pass'];
   assert.equal(pass.enemies.filter(e => e.key === 'frost-beetle').length, 3);
   assert.ok(pass.npcs.some(n => n.id === 'dor'));
+});
+
+test('고개의 쉼터: 동쪽 고갯길 뒤 이어지고, 안개 까마귀 넷 → 도르와 하룻밤 → 고개 꼭대기 살펴보기 → 도르에게 인사하면 끝난다', () => {
+  let state = { ...afterSword, 'fern-cart': { status: 'done', count: 1, step: 2 }, farewell: { status: 'done', count: 1, step: 4 },
+    'mountain-pass': { status: 'active', count: 0, step: 1 } };
+  const met = talkTo('dor', state);
+  assert.equal(met.completed?.id, 'mountain-pass');
+  assert.equal(met.next?.id, 'pass-shelter');
+  assert.ok(met.lines.some(l => l.text.includes('안개 까마귀')), '도르가 까마귀 이야기를 꺼낸다');
+  state = met.state;
+  assert.equal(state['pass-shelter'].status, 'active');
+  // 딱정벌레나 다른 맵의 까마귀는 세지 않는다
+  state = recordEvent(state, { type: 'kill', map: 'east-pass', monster: 'frost-beetle' }).state;
+  state = recordEvent(state, { type: 'kill', map: 'east-stream', monster: 'fog-crow' }).state;
+  assert.equal(state['pass-shelter'].count, 0);
+  for (let i = 0; i < 4; i++) state = recordEvent(state, { type: 'kill', map: 'east-pass', monster: 'fog-crow' }).state;
+  assert.equal(state['pass-shelter'].step, 1);
+  assert.deepEqual(chapterTwoSpots(state, 'east-pass'), [], '하룻밤을 묵기 전에는 꼭대기 자리가 없다');
+  const night = talkTo('dor', state);
+  assert.equal(night.stepDone?.night, true, '하룻밤을 보내는 단계');
+  state = night.state;
+  const [summit] = chapterTwoSpots(state, 'east-pass');
+  assert.equal(summit?.id, 'story-pass-summit');
+  assert.deepEqual(chapterTwoSpots(state, 'east-stream'), []);
+  assert.ok(CHAPTER_TWO_INSPECTIONS[summit.id].some(l => l.text.includes('안개')));
+  state = recordEvent(state, { type: 'inspect', spot: 'pass-summit', map: 'east-pass' }).state;
+  assert.equal(state['pass-shelter'].step, 3);
+  assert.equal(shelterRestOpen(state), false);
+  const bye = talkTo('dor', state);
+  assert.equal(bye.completed?.id, 'pass-shelter');
+  assert.equal(shelterRestOpen(bye.state), true);
+  // 저장했다 읽어도 같다
+  assert.deepEqual(parseQuests(serializeQuests(bye.state))['pass-shelter'], bye.state['pass-shelter']);
+});
+
+test('고개 꼭대기 살펴보기 자리와 고개 쉼터에서 다시 시작하는 자리는 걸을 수 있고, 출구와 도르의 말 거는 자리와 겹치지 않는다', () => {
+  const pass = MAPS['east-pass'];
+  const state = { 'pass-shelter': { status: 'active', count: 0, step: 2 } };
+  const [summit] = chapterTwoSpots(state, 'east-pass');
+  const at = { x: summit.x, y: summit.y + 30 };
+  assert.equal(walkable(pass, at.x, at.y), true);
+  assert.equal(findExit(pass, at.x, at.y), undefined);
+  assert.equal(findInteractable(at.x, at.y, [...pass.interactables, summit])?.id, summit.id);
+  const shelter = REST_POINTS.shelter;
+  assert.equal(walkable(pass, shelter.at.x, shelter.at.y), true);
+  assert.equal(findExit(pass, shelter.at.x, shelter.at.y), undefined);
 });

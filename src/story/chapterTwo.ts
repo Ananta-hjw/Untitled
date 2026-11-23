@@ -4,6 +4,7 @@ import type { NpcDef, NpcId } from '../world/npcs.ts';
 import type { DialogueLine } from './dialogues.ts';
 import type { Obstacle } from '../world/obstacles.ts';
 import { currentObjective, questDef, type QuestState } from './quests.ts';
+import type { Interactable } from '../world/interactables.ts';
 
 /**
  * 2장 "물안개 나루의 종소리"의 로웬 쪽 진행 (docs/story-chapter2.md).
@@ -71,4 +72,29 @@ export function fernMothHunt(state: QuestState): boolean {
   const progress = state['fern-cart'];
   if (progress?.status !== 'active') return false;
   return currentObjective(questDef('fern-cart'), progress).monster === 'ashen-moth';
+}
+
+/**
+ * 퀘스트 4 "고개의 쉼터"의 살펴보기 자리: 고갯길이 동쪽 절벽 모서리 아래로 사라지는 곳(고개 꼭대기).
+ * 그 단계일 때만 동쪽 고갯길에 나타난다.
+ */
+const SUMMIT: Interactable = { id: 'story-pass-summit', x: 4560, y: 990, radius: 110, markerHeight: 55 };
+
+export function chapterTwoSpots(state: QuestState, map: MapId): Interactable[] {
+  const progress = state['pass-shelter'];
+  if (map !== 'east-pass' || progress?.status !== 'active') return [];
+  return currentObjective(questDef('pass-shelter'), progress).spot === 'pass-summit' ? [SUMMIT] : [];
+}
+
+export const CHAPTER_TWO_INSPECTIONS: Record<string, DialogueLine[]> = {
+  'story-pass-summit': [
+    { speaker: '고개 꼭대기', text: '아침 해가 등 뒤에서 떠올랐다. 고개 너머로 넓은 강이 굽이쳐 흐른다.' },
+    { speaker: '시온', portrait: 'hero-neutral', text: '저 아래 지붕들… 저게 물안개 나루구나. 그런데 해가 떴는데도 강 위에 안개가 걸려 있어.' },
+    { speaker: '시온', portrait: 'hero-neutral', text: '배들이 전부 물가에 묶여 있어. 강에 떠 있는 배가 하나도 없네.' },
+  ],
+};
+
+/** 고개 쉼터에서 쉬어 갈 수 있는지: "고개의 쉼터"를 끝낸 뒤 도르에게 말하면 묻는다 */
+export function shelterRestOpen(state: QuestState): boolean {
+  return state['pass-shelter']?.status === 'done';
 }

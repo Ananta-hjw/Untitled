@@ -73,7 +73,7 @@ import { findInteractable, type Interactable } from '../world/interactables';
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
 import { chapterTwoPreviewNpcs, isCastPreviewGroup, previewCastNpcs, type CastPreviewGroup } from '../world/chapterTwoNpcs';
-import { FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen } from '../story/chapterTwo';
+import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
 import fernCartDamagedUrl from '../assets/village/rowen/fern-cart-damaged.webp?url';
 import fernCartRepairedUrl from '../assets/village/rowen/fern-cart-repaired.webp?url';
 import { PerfOverlay } from '../ui/PerfOverlay';
@@ -107,6 +107,9 @@ import {
   sell, serializeInventory, slimeDrop, useConsumable, type Inventory, type ItemId, type ShopId, type UseStatus,
 } from '../items/inventory';
 import { ProgressEffects } from '../ui/ProgressEffects';
+
+/** 고개의 쉼터에서 하룻밤을 보낼 때 화면이 어두워지고 밝아지는 시간 (ms, 연출만) */
+const NIGHT_FADE_MS = 900;
 
 /** Scale shared by all academy frames. */
 /** 기술 칸에 넣을 수 있는 기술 (배우는 방법은 아직 없다) */
@@ -1871,7 +1874,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (target.id.startsWith('story-')) {
-      this.dialogue.open(INSPECTION_LINES[target.id] ?? [], () => {
+      this.dialogue.open(INSPECTION_LINES[target.id] ?? CHAPTER_TWO_INSPECTIONS[target.id] ?? [], () => {
         const spot = target.id.slice('story-'.length) as InspectSpot;
         this.questEvent({ type: 'inspect', spot, map: this.mapId });
         this.onResume();
@@ -1900,6 +1903,8 @@ export class GameScene extends Phaser.Scene {
       }
       // 단계 보상: 이 대화로 마친 단계가 기술을 가르쳐 주면 배운다(떠날 채비의 루안).
       if (quest?.stepDone?.rewardSkill) this.learnSkill(quest.stepDone.rewardSkill);
+      // 그 자리에서 하룻밤을 보내는 단계(고개의 쉼터): 화면이 어두워졌다 밝아지며 쉰다.
+      if (quest?.stepDone?.night) this.spendNight('shelter');
       if (quest?.completed) {
         this.hud.showCallout(`퀘스트 완료: ${quest.completed.title}${quest.next ? ` → ${quest.next.title}` : ''}`);
         this.gainXp(quest.completed.rewardXp, player.x, player.y - 185);
@@ -1928,6 +1933,15 @@ export class GameScene extends Phaser.Scene {
           yes: '치료받기', no: '괜찮아요',
         });
       }
+      if (!quest && target.id === 'npc-dor' && shelterRestOpen(this.quests)) {
+        this.storyChoice?.open(() => this.rest('shelter'), {
+          title: '고개 쉼터에서 쉬어 가기',
+          text: '도르가 모닥불에 장작을 한 아름 더 얹는다.',
+          summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  동쪽 고갯길 고개 쉼터`,
+          hint: '휴식은 무료이며 퀘스트 진행과 시간대는 바뀌지 않습니다.',
+          yes: '쉬어 가기', no: '돌아가기',
+        });
+      }
       if (!quest && target.id === 'npc-rosetta' && canRest(this.quests)) {
         this.storyChoice?.open(() => this.rest('inn'), {
           title: '여관에서 쉬어 가기',
@@ -1953,8 +1967,25 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * 그 자리에서 하룻밤을 보낸다: 화면이 어두워지는 동안 게임을 멈추고(traveling), 쉬고(rest), 다시 밝힌다.
+   * 화면 페이드는 보이는 연출뿐이라 카메라의 실시간 효과를 쓴다(게임 시계와 상관없다).
+   */
+  private spendNight(id: RestPointId): void {
+    const camera = this.cameras.main;
+    this.traveling = true;
+    this.player.setMotion(false, 0);
+    camera.fadeOut(NIGHT_FADE_MS, 0, 0, 0);
+    camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      if (!this.scene.isActive()) return;
+      this.rest(id, '고개의 쉼터에서 하룻밤을 보냈다 · 다음 날 아침');
+      camera.fadeIn(NIGHT_FADE_MS, 0, 0, 0);
+      this.traveling = false;
+    });
+  }
+
   /** 쉬기: 체력을 채우고 다음 시작 자리로 저장한다. */
-  private rest(id: RestPointId): void {
+  private rest(id: RestPointId, callout?: string): void {
     if (!canRest(this.quests)) {
       this.hud.showCallout('지금은 쉴 때가 아니야');
       return;
@@ -1967,7 +1998,7 @@ export class GameScene extends Phaser.Scene {
     } catch {
       // 저장소를 쓸 수 없으면 쉬기만 한다.
     }
-    this.hud.showCallout(`푹 쉬었다 · 다음에는 ${REST_POINTS[id].name}에서 시작한다`);
+    this.hud.showCallout(callout ?? `푹 쉬었다 · 다음에는 ${REST_POINTS[id].name}에서 시작한다`);
   }
 
   /**
@@ -2038,7 +2069,7 @@ export class GameScene extends Phaser.Scene {
     this.interactables = this.interactables.filter(spot => !spot.id.startsWith('story-'));
     for (const marker of this.storyMarkers) marker.destroy();
     this.storyMarkers = [];
-    for (const spot of chapterSpots(this.quests, this.mapId)) {
+    for (const spot of [...chapterSpots(this.quests, this.mapId), ...chapterTwoSpots(this.quests, this.mapId)]) {
       this.interactables.push(spot);
       this.storyMarkers.push(this.add.text(spot.x, spot.y - spot.markerHeight, '◆ 살펴보기', {
         fontFamily: 'system-ui, sans-serif', fontSize: '22px', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 5,
@@ -2576,7 +2607,7 @@ export class GameScene extends Phaser.Scene {
     npcs: [
       ...[...this.npcs, ...(this.companion ? [this.companion] : [])].filter((n) => n.visible).map((n) => ({ x: n.x, y: n.y, marker: n.questMarker })),
       ...this.doorMarkers.filter((d) => d.marker).map((d) => ({ x: d.spot.x, y: d.spot.y, marker: d.marker })),
-      ...chapterSpots(this.quests, this.mapId).map(spot => ({ x: spot.x, y: spot.y, marker: 'target' as const })),
+      ...[...chapterSpots(this.quests, this.mapId), ...chapterTwoSpots(this.quests, this.mapId)].map(spot => ({ x: spot.x, y: spot.y, marker: 'target' as const })),
     ],
     enemies: this.enemies.filter((e) => e.character.alive).map((e) => ({ x: e.character.x, y: e.character.y })),
   });
