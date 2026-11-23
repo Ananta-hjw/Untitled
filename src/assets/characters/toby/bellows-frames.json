@@ -1,0 +1,22 @@
+{
+  "frames": [
+    {
+      "name": "bellows-open",
+      "x": 0,
+      "y": 0,
+      "w": 640,
+      "h": 512,
+      "originX": 0.5,
+      "originY": 0.8789
+    },
+    {
+      "name": "bellows-press",
+      "x": 640,
+      "y": 0,
+      "w": 640,
+      "h": 512,
+      "originX": 0.5,
+      "originY": 0.8789
+    }
+  ]
+}
