@@ -130,7 +130,7 @@ export class Npc extends Phaser.GameObjects.Container {
     this.def = def;
     this.rand = rand;
     const shadow = scene.add.image(0, 0, 'shadow').setAlpha(0.4).setDisplaySize(def.height * 0.5, def.height * 0.15);
-    this.add(shadow);
+    this.add(shadow.setVisible(def.shadow !== false));
 
     this.skin = npcSkin(def);
     registerNpcStoryActions(scene, this.skin);
@@ -158,28 +158,31 @@ export class Npc extends Phaser.GameObjects.Container {
       ? scene.add.image(0, 0, `npc-${this.skin}-idle`)
       : scene.add.image(0, 0, sheetKey(this.skin, 'walk_cardinal'), 'down-0');
     this.showFrame(this.walk.idlePose);
-    this.restUntil = rand() * 2000;
+    this.restUntil = def.duty?.[0].durationMs ?? rand() * 2000;
     this.add(this.figure);
 
-    const label = scene.add.text(0, -def.height - 10, def.name, {
+    const labelHeight = def.labelOffset ?? def.height;
+    const label = scene.add.text(0, -labelHeight - 10, def.name, {
       fontFamily: FONT, fontSize: '20px', fontStyle: 'bold',
       color: def.shop ? '#ffe09a' : '#f5ead2', stroke: '#1a1008', strokeThickness: 5,
     }).setOrigin(0.5, 1).setResolution(2);
     this.add(label);
-    this.marker = scene.add.text(0, -def.height - 36, '', {
+    this.marker = scene.add.text(0, -labelHeight - 36, '', {
       fontFamily: FONT, fontSize: '38px', fontStyle: 'bold', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 7,
     }).setOrigin(0.5, 1).setResolution(2).setVisible(false);
     this.add(this.marker);
-    this.activity = scene.add.text(0, -def.height - 38, def.duty?.[0].label ?? '', {
+    this.activity = scene.add.text(0, -labelHeight - 38, def.duty?.[0].label ?? '', {
       fontFamily: FONT, fontSize: '17px', color: '#d9f0c8', stroke: '#1a1008', strokeThickness: 4,
     }).setOrigin(0.5, 1).setResolution(2).setVisible(!!def.duty);
     this.add(this.activity);
 
     // 카운터 뒤의 사람은 카운터 앞에서 말을 건다. 말풍선은 그래도 그 사람 머리 위에 뜬다.
     const offset = def.talkOffset ?? 0;
-    this.spot = { id: `npc-${def.id}`, x: def.x, y: def.y + offset, radius: 110, markerHeight: def.height + 44 + offset, dialogue: def.dialogue };
+    this.spot = { id: `npc-${def.id}`, x: def.x + (def.talkOffsetX ?? 0), y: def.y + offset, radius: 110, markerHeight: labelHeight + 44 + offset, dialogue: def.dialogue };
+    const initialAction = def.storyAction ?? def.duty?.[0].action;
+    if (initialAction) this.setStoryAction(initialAction);
     scene.add.existing(this);
-    this.setDepth(def.y);
+    this.setDepth(def.y + (this.def.depthOffset ?? 0));
   }
 
   setQuestMarker(marker: QuestMarker | undefined): void {
@@ -198,8 +201,8 @@ export class Npc extends Phaser.GameObjects.Container {
     this.scripted = true;
     this.scriptPath = [];
     this.target = undefined;
-    this.setPosition(x, y).setDepth(y);
-    this.spot.x = x;
+    this.setPosition(x, y).setDepth(y + (this.def.depthOffset ?? 0));
+    this.spot.x = x + (this.def.talkOffsetX ?? 0);
     this.spot.y = y + (this.def.talkOffset ?? 0);
     this.showFrame(this.walk.idlePose);
   }
@@ -302,12 +305,12 @@ export class Npc extends Phaser.GameObjects.Container {
       const next = area.move(this.x, this.y, plan.moveX * distance, plan.moveY * distance, this.step);
       const moved = Math.hypot(next.x-this.x, next.y-this.y);
       if (canStand(next.x, next.y)) {
-        this.setPosition(next.x, next.y).setDepth(next.y);
+        this.setPosition(next.x, next.y).setDepth(next.y + (this.def.depthOffset ?? 0));
         this.walked += moved;
       }
       this.direction = direction8(plan.moveX, plan.moveY);
       this.showFrame(walkPose(this.walked, this.def.height, this.walk.walkPoses), true);
-      this.spot.x = this.x; this.spot.y = this.y + (this.def.talkOffset ?? 0);
+      this.spot.x = this.x + (this.def.talkOffsetX ?? 0); this.spot.y = this.y + (this.def.talkOffset ?? 0);
     } else this.showCombat(plan.pose);
     if (plan.strike !== undefined) strike(plan.strike, NPC_COMBAT.profiles[this.fighter.skin].damage);
   }
@@ -332,12 +335,12 @@ export class Npc extends Phaser.GameObjects.Container {
   followHero(hero: { x: number; y: number }, dt: number, speed: number, area: WalkArea,
     plan: FollowPlan, warpTo: { x: number; y: number }): void {
     if (plan.kind === 'warp') {
-      this.setPosition(warpTo.x, warpTo.y).setDepth(warpTo.y);
+      this.setPosition(warpTo.x, warpTo.y).setDepth(warpTo.y + (this.def.depthOffset ?? 0));
     } else if (plan.kind === 'move') {
       const distance = speed * plan.scale * dt;
       const next = area.move(this.x, this.y, plan.x * distance, plan.y * distance, this.step);
       this.walked += Math.hypot(next.x - this.x, next.y - this.y);
-      this.setPosition(next.x, next.y).setDepth(next.y);
+      this.setPosition(next.x, next.y).setDepth(next.y + (this.def.depthOffset ?? 0));
       this.direction = direction8(plan.x, plan.y, this.direction);
       this.showFrame(walkPose(this.walked, this.def.height, this.walk.walkPoses), true);
     }
@@ -345,7 +348,7 @@ export class Npc extends Phaser.GameObjects.Container {
       this.direction = direction8(hero.x - this.x, hero.y - this.y, this.direction);
       this.showFrame(this.walk.idlePose, true);
     }
-    this.spot.x = this.x;
+    this.spot.x = this.x + (this.def.talkOffsetX ?? 0);
     this.spot.y = this.y + (this.def.talkOffset ?? 0);
   }
 
@@ -368,9 +371,9 @@ export class Npc extends Phaser.GameObjects.Container {
     canStand: (x: number, y: number) => boolean = () => true): void {
     if (this.sleeping && this.walking) this.sleepElapsed += dt * 1000;
     // 퀘스트 표시는 위아래로 천천히 흔들려 눈에 띈다.
-    if (this.questMarker) this.marker.setY(-this.def.height - 36 - Math.abs(Math.sin(now / 320)) * 8);
+    if (this.questMarker) this.marker.setY(-(this.def.labelOffset ?? this.def.height) - 36 - Math.abs(Math.sin(now / 320)) * 8);
     if (this.combatControlled) return;
-    if (this.storyAction) {
+    if (this.storyAction && !this.def.duty) {
       if (!(this.storyAction.onTalk === 'pause' && now < this.talkUntil)) this.storyElapsed += dt * 1000;
       this.showFrame(0);
       return;
@@ -383,7 +386,7 @@ export class Npc extends Phaser.GameObjects.Container {
       const distance = Math.hypot(dx, dy);
       const travel = NPC_WALK_SPEED * this.scriptSpeed * dt;
       if (distance <= travel) {
-        this.setPosition(next.x, next.y).setDepth(next.y);
+        this.setPosition(next.x, next.y).setDepth(next.y + (this.def.depthOffset ?? 0));
         this.scriptPath.shift();
         if (this.scriptPath.length === 0) this.showFrame(idle);
       } else {
@@ -392,10 +395,10 @@ export class Npc extends Phaser.GameObjects.Container {
         if (Math.hypot(this.step.x - this.x, this.step.y - this.y) < travel * 0.2) this.scriptPath.shift();
         this.direction = direction8(dx, dy, this.direction);
         this.walked += Math.hypot(this.step.x - this.x, this.step.y - this.y);
-        this.setPosition(this.step.x, this.step.y).setDepth(this.step.y);
+        this.setPosition(this.step.x, this.step.y).setDepth(this.step.y + (this.def.depthOffset ?? 0));
         this.showFrame(walkPose(this.walked, this.def.height, this.walk.walkPoses));
       }
-      this.spot.x = this.x;
+      this.spot.x = this.x + (this.def.talkOffsetX ?? 0);
       this.spot.y = this.y + (this.def.talkOffset ?? 0);
       return;
     }
@@ -406,6 +409,7 @@ export class Npc extends Phaser.GameObjects.Container {
       return;
     }
     if (this.def.duty) {
+      if (this.storyAction) this.storyElapsed += dt * 1000;
       this.updateDuty(now, dt, area, this.def.duty);
       return;
     }
@@ -446,8 +450,8 @@ export class Npc extends Phaser.GameObjects.Container {
     area.move(this.x, this.y, (dx / distance) * travel, (dy / distance) * travel, this.step);
     this.direction = direction8(dx, dy, this.direction);
     this.walked += Math.hypot(this.step.x - this.x, this.step.y - this.y);
-    this.setPosition(this.step.x, this.step.y).setDepth(this.step.y);
-    this.spot.x = this.x;
+    this.setPosition(this.step.x, this.step.y).setDepth(this.step.y + (this.def.depthOffset ?? 0));
+    this.spot.x = this.x + (this.def.talkOffsetX ?? 0);
     this.spot.y = this.y + (this.def.talkOffset ?? 0);
     this.showFrame(walkPose(this.walked, this.def.height, this.walk.walkPoses));
   }
@@ -462,6 +466,7 @@ export class Npc extends Phaser.GameObjects.Container {
         return;
       }
       this.dutyIndex = (this.dutyIndex + 1) % points.length;
+      if (this.storyAction) this.setStoryAction();
       this.target = points[this.dutyIndex];
       this.walkStartedAt = now;
       this.walked = 0;
@@ -473,10 +478,17 @@ export class Npc extends Phaser.GameObjects.Container {
     const travel = NPC_WALK_SPEED * dt;
     if (distance <= travel || now - this.walkStartedAt > 14000) {
       const point = points[this.dutyIndex];
+      if (distance <= travel) {
+        const next = area.move(this.x, this.y, dx, dy, this.step);
+        this.setPosition(next.x, next.y).setDepth(next.y + (this.def.depthOffset ?? 0));
+        this.spot.x = this.x + (this.def.talkOffsetX ?? 0);
+        this.spot.y = this.y + (this.def.talkOffset ?? 0);
+      }
       this.target = undefined;
-      this.restUntil = now + dutyPauseMs(this.rand);
+      this.restUntil = now + (point.durationMs ?? dutyPauseMs(this.rand));
       this.atDuty = true;
       if (point.facing) this.direction = point.facing;
+      if (point.action !== this.storyActionName) this.setStoryAction(point.action);
       this.activity.setText(point.label);
       this.showFrame(idle);
       return;
@@ -484,8 +496,8 @@ export class Npc extends Phaser.GameObjects.Container {
     area.move(this.x, this.y, (dx / distance) * travel, (dy / distance) * travel, this.step);
     this.direction = direction8(dx, dy, this.direction);
     this.walked += Math.hypot(this.step.x - this.x, this.step.y - this.y);
-    this.setPosition(this.step.x, this.step.y).setDepth(this.step.y);
-    this.spot.x = this.x;
+    this.setPosition(this.step.x, this.step.y).setDepth(this.step.y + (this.def.depthOffset ?? 0));
+    this.spot.x = this.x + (this.def.talkOffsetX ?? 0);
     this.spot.y = this.y + (this.def.talkOffset ?? 0);
     this.showFrame(walkPose(this.walked, this.def.height, this.walk.walkPoses));
   }
@@ -493,7 +505,7 @@ export class Npc extends Phaser.GameObjects.Container {
   private showFrame(pose: number, combatWalk = false): void {
     if (this.storyAction) {
       const a = this.storyAction, f = a.frames[Math.floor(this.storyElapsed * a.fps / 1000) % a.frames.length];
-      this.figure.setTexture(a.key, f.name).setFlipX(false).setOrigin(f.originX, f.originY)
+      this.figure.setTexture(a.key, f.name).setFlipX(a.flipX ?? false).setOrigin(a.flipX ? 1 - f.originX : f.originX, f.originY)
         .setScale(this.def.height / a.bodyHeight);
       return;
     }

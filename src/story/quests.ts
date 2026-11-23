@@ -322,9 +322,9 @@ export const QUESTS: QuestDef[] = [
   {
     id: 'missing-sia', title: '돌아오지 않은 동생', giver: 'ruan', main: true, requires: 'village-raid',
     turnIn: 'eila', completeOnTarget: true,
-    objective: { label: '마을 북쪽의 세레나에게 시아의 행방 묻기', need: 1, event: 'talk', npc: 'serena' },
+    objective: { label: '치유소의 세레나에게 시아의 행방 묻기', need: 1, event: 'talk', npc: 'serena' },
     steps: [
-      { label: '마을 북쪽의 세레나에게 시아의 행방 묻기', need: 1, event: 'talk', npc: 'serena', lines: [line('serena', '세레나', '아직 돌아오지 않았어. 집에도 없더구나. 혹시 모르니 너도 한 번 봐 주겠니?')] },
+      { label: '치유소의 세레나에게 시아의 행방 묻기', need: 1, event: 'talk', npc: 'serena', lines: [line('serena', '세레나', '아직 돌아오지 않았어. 집에도 없더구나. 혹시 모르니 너도 한 번 봐 주겠니?')] },
       { label: '마을 북쪽 시온의 집 앞에서 시아의 흔적 살펴보기', need: 1, event: 'inspect', spot: 'home-search', map: 'village-north' },
       { label: '에일라에게 리네아의 상태 확인하기', need: 1, event: 'talk', npc: 'eila', lines: [line('eila', '에일라', '리네아가 눈은 떴지만, 몸속을 갉아먹는 기운이 남아 있어. 평범한 독도 아니고… 어떤 권능의 흔적 같구나. 상처를 치료해도 그 기운은 사라지지 않아.'), hero('그럼 고칠 방법을 찾아야겠네요. 시아도… 꼭 데려올 거예요.')] },
     ],
@@ -358,6 +358,7 @@ export const QUESTS: QuestDef[] = [
       line('doran', '도란', '왔냐. …앉아라, 아니 서 있어도 되고.'),
       line('doran', '도란', '앞으로도 그런 밤을 견디려면, 네 손에 맞는 검이 있어야지. 밤새 두들겼다. 받아라.'),
       hero('이걸… 저한테요?'),
+      line('doran', '도란', '에일라가 전해 달라더라. 리네아는 의식이 돌아와서 이제 자기 집에서 쉬게 할 거래. 세레나랑 함께 옮긴다더군.'),
       line('doran', '도란', '언젠가 네 검 한 자루 두들겨 주겠다고 했잖냐. 생각보다 일찍 오긴 했다만.'),
       line('doran', '도란', '시아 데려와라. 리네아도 고칠 방법 찾고. 날이 무뎌지면 언제든 돌아와서 맡겨.'),
     ],
@@ -398,13 +399,13 @@ export const QUESTS: QuestDef[] = [
         ruan('…그럴 줄 알았다. 앉은 채로라 미안하다만, 하나만 가르쳐 주마.'),
         ruan('둘러싸였을 때 몸을 돌려 둘레를 한 번에 베는 법이다. 발을 디딘 채 허리로 돌아라.'),
         ruan('혼자 짊어지지 마라. 길에서 만나는 사람들에게 기대는 것도 실력이다.')] },
-      { label: '마을 북쪽의 세레나에게 인사하기', need: 1, event: 'talk', npc: 'serena', lines: [
+      { label: '리네아의 집에 있는 세레나에게 인사하기', need: 1, event: 'talk', npc: 'serena', lines: [
         line('serena', '세레나', '…가는구나. 말려도 소용없다는 거, 엄마가 제일 잘 알지.'),
         line('serena', '세레나', '시아를 데려와. 너도 꼭 돌아오고.')] },
-      { label: '리네아에게 인사하기', need: 1, event: 'talk', npc: 'linea', lines: [
+      { label: '리네아의 집에서 리네아에게 인사하기', need: 1, event: 'talk', npc: 'linea', lines: [
         line('linea', '리네아', '오늘부터 일지를 쓰려고. 에일라 선생님이 보기 편하게.'),
         line('linea', '리네아', '…다녀와. 시아한테, 언니가 기다린다고 전해 줘.')] },
-      { label: '에일라에게 인사하기', need: 1, event: 'talk', npc: 'eila', lines: [
+      { label: '리네아의 집에 있는 에일라에게 인사하기', need: 1, event: 'talk', npc: 'eila', lines: [
         line('eila', '에일라', '창조의 권능을 가진 치유사라면 리네아의 시간을 늦출 수 있을지 몰라. 교단에 그런 사람들이 있어.'),
         line('eila', '에일라', '…하지만 네 몸에서 힘을 꺼내 보겠다는 검사에는 절대 응하지 마. 약속해.'),
         hero('약속할게요. 리네아를 부탁드려요.')] },

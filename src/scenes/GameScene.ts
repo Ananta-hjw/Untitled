@@ -81,7 +81,7 @@ import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
 import { StoryChoice } from '../ui/StoryChoice';
 import { CLINIC_BED_SPOT, HOME_BED_SPOT, REST_POINTS, herbBonus, REST_SAVE_KEY, canRest, parseRestPoint, serializeRestPoint, type RestPointId } from '../story/restPoints';
-import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, isDusk, raidSpawns, raidSpawnsAnyStep, INSPECTION_LINES, type RaidSpawn } from '../story/chapterOne';
+import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, chapterCanTalk, lineaRecovery, isDusk, raidSpawns, raidSpawnsAnyStep, INSPECTION_LINES, type RaidSpawn } from '../story/chapterOne';
 import { BOSS, entersPhaseTwo } from '../combat/bossPattern';
 import { COMPANION, COMPANION_SAVE_KEY, canEngage, companionDamage, companionNpcDef, followPlan, followSpot, isCompanionId, parseCompanion, type CompanionId } from '../entities/companion';
 import { ARENA, bossLanding, chooseArena, entryPoint, insideArena, pushTowardArena, type Arena } from '../combat/bossArena';
@@ -1838,7 +1838,8 @@ export class GameScene extends Phaser.Scene {
     const enter = target.enter;
     // 실내에서 바깥으로 나가는 문은 "나가기"
     const leaving = enter && !enter.to.startsWith('in-');
-    const action: ActionIcon = leaving ? 'exit' : enter ? 'enter' : target.id.startsWith('story-') ? 'inspect' : target.id.startsWith('rest-') ? 'rest' : target.id.startsWith('heal-') ? 'heal' : 'talk';
+    const observingPatient = target.id === 'npc-linea' && !chapterCanTalk('linea', this.quests);
+    const action: ActionIcon = leaving ? 'exit' : enter ? 'enter' : target.id.startsWith('story-') || observingPatient ? 'inspect' : target.id.startsWith('rest-') ? 'rest' : target.id.startsWith('heal-') ? 'heal' : 'talk';
     this.setPrimaryAction(action, leaving ? '나가기' : enter ? '들어가기' : action === 'inspect' ? '살펴보기' : action === 'rest' ? '쉬기' : action === 'heal' ? '치료받기' : '대화');
     marker.setText(leaving ? '▼ 나가기' : enter ? `▲ ${enter.label}` : '···');
 
@@ -1891,8 +1892,8 @@ export class GameScene extends Phaser.Scene {
     this.attackButton.setVisible(false);
     this.talkMarker.setVisible(false);
     // 마을 사람이면 퀘스트 대화를 먼저 본다. 퀘스트와 상관없으면 평소 대사.
-    const quest = target.id.startsWith('npc-') ? talkTo(target.id.slice(4) as NpcId, this.quests) : undefined;
     const npc = target.id.startsWith('npc-') ? target.id.slice(4) as NpcId : undefined;
+    const quest = npc && chapterCanTalk(npc, this.quests) ? talkTo(npc, this.quests) : undefined;
     const lines = quest?.lines.length ? quest.lines
       : (npc && (chapterTwoDialogue(npc, this.quests) ?? chapterDialogue(npc, this.quests))) || (target.dialogue ? DIALOGUES[target.dialogue] : []);
     this.dialogue.open(lines, () => {
@@ -2075,9 +2076,13 @@ export class GameScene extends Phaser.Scene {
         fontFamily: 'system-ui, sans-serif', fontSize: '22px', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 5,
       }).setOrigin(0.5, 1).setDepth(spot.y + 400).setResolution(2));
     }
-    for (const npc of this.npcs) npc.setQuestMarker(this.playFestival ? undefined : markerFor(npc.def.id, this.quests));
+    for (const npc of this.npcs) {
+      const recovery = npc.def.id === 'linea' ? lineaRecovery(this.quests) : undefined;
+      if (recovery && npc.currentStoryAction !== recovery) npc.setStoryAction(recovery);
+      npc.setQuestMarker(this.playFestival || !chapterCanTalk(npc.def.id, this.quests) ? undefined : markerFor(npc.def.id, this.quests));
+    }
     for (const door of this.doorMarkers) {
-      const markers = door.npcs.map((id) => markerFor(id, this.quests)).filter((m): m is QuestMarker => !!m);
+      const markers = door.npcs.filter(id => chapterCanTalk(id, this.quests)).map((id) => markerFor(id, this.quests)).filter((m): m is QuestMarker => !!m);
       door.marker = MARKER_PRIORITY.find((m) => markers.includes(m));
       if (door.marker) door.text.setText(MARKER_STYLE[door.marker].text).setColor(MARKER_STYLE[door.marker].color);
       door.text.setVisible(!!door.marker);

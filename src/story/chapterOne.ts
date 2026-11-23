@@ -22,7 +22,7 @@ export function chapterPhase(state: QuestState): ChapterPhase {
  * 습격의 밤에 마을 사람들이 있는 곳. 여관과 대장간은 남쪽 입구에 가까워, 사람들은 북쪽 마을로 피해
  * 치유소와 촌장의 집에 들어가 있다. 밖에도 몇 명 남아 있다: 광장에서는 세레나가 피하는 사람들을 이끌고
  * 에일라가 다친 사람을 살피며(습격 퀘스트의 대화 상대), 북쪽에서는 헤르만이 자기 집 앞, 도란이 치유소 문 앞을 지킨다.
- * 루안과 테온은 광장에서 싸운다. 시아와 리네아는 보이지 않는다(이야기). 실내는 원화 픽셀 좌표(room).
+ * 루안과 테온은 광장에서 싸운다. 시아는 보이지 않으며, 리네아는 북쪽 길 전투 이후 치유소 병상에 나타난다. 실내는 원화 픽셀 좌표(room).
  * 습격이 진행되면 자리를 옮긴다(RAID_MOVES): 시온이 안전을 확인하면 세레나는 북쪽 치유소로 피하고,
  * 북쪽 길의 무리를 막으면 에일라도 다친 사람들(골목에서 업어 온 리네아)과 함께 치유소로 간다.
  */
@@ -34,7 +34,7 @@ const RAID_PLACES: Partial<Record<NamedNpcId, RaidPlace>> = {
   eila: { map: 'village', x: mapLength(1540), y: mapLength(1200) },
   herman: { map: 'village-north', ...mapPoint({ x: 1290, y: 600 }), facing: 'down' },
   doran: { map: 'village-north', ...mapPoint({ x: 2090, y: 600 }), facing: 'down' },
-  rosetta: { map: 'in-clinic', room: 'clinic', x: 560, y: 640, facing: 'left' },
+  rosetta: { map: 'in-clinic', room: 'clinic', x: 790, y: 650, facing: 'left' },
   merina: { map: 'in-clinic', room: 'clinic', x: 930, y: 650, facing: 'down' },
   vernel: { map: 'in-chief', room: 'chief', x: 860, y: 540, facing: 'down' },
 };
@@ -45,6 +45,53 @@ const RAID_MOVES: Partial<Record<NamedNpcId, { fromStep: number; place: RaidPlac
   // 북쪽 길의 무리와 집행자(step 4)를 막으면
   eila: { fromStep: 5, place: { map: 'in-clinic', room: 'clinic', x: 850, y: 560, facing: 'left' } },
 };
+
+export type LineaRecovery = 'unconscious' | 'awake' | 'journal';
+
+/** Recovery follows story progress, so reloads cannot make a patient stand up or appear twice. */
+export function lineaRecovery(state: QuestState): LineaRecovery | undefined {
+  const phase = chapterPhase(state);
+  if (phase === 'day' || (phase === 'raid' && (state['village-raid']?.step ?? 0) < 5)) return undefined;
+  if (state['first-sword']?.status === 'done') return 'journal';
+  const search = state['missing-sia'];
+  return search && (search.status === 'done' || (search.step ?? 0) >= 2) ? 'awake' : 'unconscious';
+}
+
+export function chapterCanTalk(npc: NpcId, state: QuestState): boolean {
+  return npc !== 'linea' || lineaRecovery(state) !== 'unconscious';
+}
+
+function lineaCareNpcs(state: QuestState): NpcDef[] {
+  const action = lineaRecovery(state);
+  if (!action) return [];
+  const inside: InteriorId = action === 'journal' ? 'linea' : 'clinic';
+  const room = INTERIORS.find(i => i.id === inside)!;
+  const at = ([x, y]: readonly [number, number]) => interiorArtPoint(room, x, y);
+  const body = at(inside === 'clinic' ? [340, 432] : [1340, 650]);
+  const bedside = at(inside === 'clinic' ? [540, 615] : [1200, 750]);
+  const patient: NpcDef = {
+    ...NPCS.find(n => n.id === 'linea')!, ...body, inside, wander: undefined,
+    storyAction: action, shadow: false, labelOffset: inside === 'clinic' ? 75 : 200,
+    depthOffset: inside === 'clinic' ? at([340, 515]).y - body.y : 0,
+    talkOffsetX: bedside.x - body.x, talkOffset: bedside.y - body.y,
+  };
+  const carers = (['eila', 'serena'] as const).map(id => ({
+    ...NPCS.find(n => n.id === id)!, inside, wander: undefined, duty: undefined,
+    facing: (inside === 'clinic' ? id === 'eila' ? 'left' : 'up-left' : id === 'eila' ? 'right' : 'up-right') as Direction8,
+    ...at(inside === 'clinic'
+      ? id === 'eila' ? [505, 520] as const : [700, 650] as const
+      : id === 'eila' ? [1230, 640] as const : [1060, 730] as const),
+    talkOffset: 0,
+    ...(id === 'eila' ? { duty: [
+      { ...at(inside === 'clinic' ? [505, 520] : [1230, 640]), label: '리네아 치료 중',
+        facing: inside === 'clinic' ? 'left' as const : 'right' as const,
+        action: inside === 'clinic' ? 'treat-left' : 'treat-right', durationMs: 20000 },
+      { ...at(inside === 'clinic' ? [675, 520] : [1100, 600]), label: '약초와 붕대 준비 중',
+        facing: 'up-left' as const, action: 'mix-herbs', durationMs: 5000 },
+    ] } : {}),
+  }));
+  return [patient, ...carers];
+}
 
 function raidPlace(id: NamedNpcId, step: number): RaidPlace | undefined {
   const move = RAID_MOVES[id];
@@ -57,7 +104,8 @@ function raidNpcs(base: readonly NpcDef[], map: MapId, step: number): NpcDef[] {
   const people = NPCS.flatMap((n): NpcDef[] => {
     const place = raidPlace(n.id as NamedNpcId, step);
     if (!place || place.map !== map) return [];
-    const def: NpcDef = { ...n, x: place.x, y: place.y, wander: undefined, ...(place.facing ? { facing: place.facing } : {}) };
+    const def: NpcDef = { ...n, x: place.x, y: place.y, wander: undefined, ...(place.facing ? { facing: place.facing } : {}),
+      ...(n.id === 'eila' ? { storyAction: 'mix-herbs' } : {}) };
     if ('room' in place) {
       const at = interiorArtPoint(INTERIORS.find((i) => i.id === place.room)!, place.x, place.y);
       return [{ ...def, ...at, inside: place.room, talkOffset: 0 }];
@@ -71,14 +119,12 @@ function raidNpcs(base: readonly NpcDef[], map: MapId, step: number): NpcDef[] {
 
 /**
  * 습격 뒤 마을 사람들이 맡은 일: 복구·치료·경계. 자리들을 차례로 오가며 멈춘 동안 머리 위에 하는 일을 띄운다(NpcDef.duty).
- * 다친 루안과 기운이 없는 리네아는 제자리에 있고, 가게 주인들은 가게를 다시 연다. 좌표는 옛 배치 기준(mapPoint).
+ * 루안은 부상 자세로 쉬고, 리네아와 간호자는 병실에 있으며, 가게 주인들은 가게를 다시 연다. 좌표는 옛 배치 기준(mapPoint).
  */
 const duty = (label: string, ...points: Array<[number, number]>): DutyPoint[] =>
   points.map(([x, y]) => ({ ...mapPoint({ x, y }), label }));
 export const AFTERMATH_DUTIES: Partial<Record<NpcId, DutyPoint[]>> = {
   herman: [...duty('마을 살피는 중', [1290, 600]), ...duty('부서진 곳 살피는 중', [1150, 1080]), ...duty('사람들 다독이는 중', [1450, 1180])],
-  serena: [...duty('리네아 간호 중', [764, 1020]), ...duty('물 길어 오는 중', [740, 680]), ...duty('집 정리하는 중', [480, 650]), ...duty('널어 둔 이불 걷는 중', [700, 640])],
-  eila: [...duty('리네아 치료 중', [754, 930]), ...duty('다친 사람 살피는 중', [1300, 1000]), ...duty('약초 챙기는 중', [1930, 600])],
   'guard-homes-west': duty('경계 중', [980, 760], [900, 1200], [1350, 1250]),
   'guard-homes-east': duty('경계 중', [1900, 1160], [2300, 1100], [2250, 800], [1800, 800]),
   // 2장부터 남문 오른쪽 위에 페른의 수레가 서므로(story/chapterTwo.ts) 그 자리를 비켜 다닌다.
@@ -97,30 +143,20 @@ function withDuty(n: NpcDef): NpcDef {
 export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: MapId): NpcDef[] {
   const phase = chapterPhase(state);
   if (phase === 'day') return [...base];
-  if (phase === 'raid' && map !== undefined) return raidNpcs(base, map, state['village-raid']?.step ?? 0);
-  const evacuated = ['serena', 'eila', 'herman'];
-  let source = phase === 'raid' && map === 'village'
-    ? [...base, ...NPCS.filter(n => evacuated.includes(n.id) && !base.some(b => b.id === n.id))]
-    : phase === 'raid' && map === 'village-north' ? base.filter(n => !evacuated.includes(n.id)) : base;
-  // 에일라는 낮에는 치유소 안에 있지만, 습격 때는 광장, 습격 뒤에는 리네아 곁(마을 북쪽)에 있다.
-  if (map !== undefined) {
-    source = source.filter(n => n.id !== 'eila' || (phase === 'raid' && map === 'village'));
-    if (phase === 'aftermath' && map === 'village-north') source = [...source, NPCS.find(n => n.id === 'eila')!];
+  if (phase === 'raid') {
+    if (map === undefined) return base.filter(n => n.id !== 'sia' && n.id !== 'linea').map(n => ({ ...n, wander: undefined }));
+    const placed = raidNpcs(base, map, state['village-raid']?.step ?? 0);
+    // Her rescue happens after the north-road fight. Eila starts bedside care as soon as the patient arrives.
+    const care = lineaCareNpcs(state).filter(n => n.id === 'linea' || n.id === 'eila');
+    return map === 'in-clinic' && care.length
+      ? [...placed.filter(n => !care.some(c => c.id === n.id)), ...care] : placed;
   }
-  const placed = source.filter(n => n.id !== 'sia' && !(phase === 'raid' && n.id === 'linea')).map(n => {
-    if (n.id === 'eila') {
-      const outside: NpcDef = { ...n, area: phase === 'raid' ? 'village' : 'village-north', x: phase === 'raid' ? mapLength(1540) : LINEA_YARD.x + mapLength(130), y: phase === 'raid' ? mapLength(1200) : LINEA_YARD.y, wander: undefined };
-      delete outside.inside;
-      delete outside.talkOffset;
-      return outside;
-    }
-    if (n.inside) return { ...n };
+  const placed = base.filter(n => !['sia', 'linea', 'eila', 'serena'].includes(n.id)).map(n => {
     if (n.id === 'ruan') return { ...n, ...mapPoint({ x: 1080, y: 1150 }), wander: undefined };
-    if (n.id === 'serena') return { ...n, x: phase === 'raid' ? mapLength(1500) : LINEA_YARD.x + mapLength(140), y: phase === 'raid' ? mapLength(1100) : LINEA_YARD.y + mapLength(90), wander: undefined };
-    if (n.id === 'linea') return { ...n, ...LINEA_YARD, wander: undefined };
     return { ...n, wander: undefined };
-  });
-  return phase === 'aftermath' ? placed.map(withDuty) : placed;
+  }).map(withDuty);
+  const care = lineaCareNpcs(state).filter(n => map === undefined || map === `in-${n.inside}`);
+  return [...placed, ...care];
 }
 
 const SPOTS = {
@@ -231,6 +267,7 @@ export function raidSpawns(state: QuestState, map: MapId): RaidSpawn[] {
 export function chapterDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined {
   const phase = chapterPhase(state);
   if (phase === 'day') return undefined;
+  if (npc === 'linea' && !chapterCanTalk(npc, state)) return [{ speaker: '시온', portrait: 'hero-neutral', text: '리네아는 아직 의식을 되찾지 못했어. 숨은 고르게 쉬고 있어… 에일라에게 상태를 물어보자.' }];
   // 동료(entities/companion.ts)는 이 대사를 쓰지 않는다.
   if (npc.startsWith('companion-')) return undefined;
   if (isGuardId(npc)) {

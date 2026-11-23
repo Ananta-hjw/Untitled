@@ -1561,6 +1561,112 @@ test('마을 출구로 사냥터에 갔다가 돌아오고, 체력·레벨은 �
   assert.equal(result.restartedHere.hp, result.restartedHere.maxHp);
 });
 
+test('에일라는 병상 치료와 약품 준비를 반복하고, 대화·이동·재접속 뒤에도 올바른 동작을 유지한다', async () => {
+  await load('village');
+  for (const [through, map, treatment] of [['village-raid', 'in-clinic', 'treat-left'], ['first-sword', 'in-linea', 'treat-right']]) {
+    await evaluate(`(async () => {
+      const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
+      for (const q of QUESTS.filter(q => q.main)) {
+        seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+        if (q.id === ${JSON.stringify(through)}) break;
+      }
+      localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+      localStorage.setItem('untitled-rpg.festival', 'seen');
+    })()`);
+    await load(map);
+    const result = await evaluate(`(() => {
+      const s = window.__game.scene.getScene('game'), e = s.npcs.find(n => n.def.id === 'eila'), patient = s.npcs.find(n => n.def.id === 'linea');
+      const frames = new Set(), walking = new Set(); let blocked = false;
+      const step = () => {
+        const x = e.x, y = e.y;
+        s.update(0, 50); blocked ||= !s.walkArea.contains(e.x, e.y);
+        if (Math.hypot(e.x - x, e.y - y) > .001 && !e.currentStoryAction) walking.add(e.figure.texture.key);
+      };
+      const until = check => { for (let i = 0; i < 900 && !check(); i++) step(); return check(); };
+      const talk = () => {
+        s.player.placeAt(e.spot.x, e.spot.y); s.attackButton.pressed = true; s.updateInteraction(s.now);
+        const opened = s.dialogue.isOpen, ownPortrait = s.dialogue.lines.some(l => l.portrait === 'eila');
+        const before = e.currentStoryAction;
+        while (s.dialogue.isOpen) s.dialogue.advance();
+        if (s.storyChoice.isOpen) s.storyChoice.cancel();
+        const frame = e.figure.frame.name;
+        for (let i = 0; i < 5; i++) step();
+        const paused = frame === e.figure.frame.name;
+        s.player.placeAt(s.map.spawn.x, s.map.spawn.y);
+        return { opened, ownPortrait, before, after: e.currentStoryAction, paused };
+      };
+      const start = e.currentStoryAction;
+      for (let i = 0; i < 40; i++) { frames.add(e.figure.frame.name); step(); }
+      const treatingTalk = talk();
+      const startedWalking = until(() => e.currentStoryAction === undefined);
+      const walkingTalk = talk();
+      const reachedMedicine = until(() => e.currentStoryAction === 'mix-herbs');
+      const medicine = { x: e.x, y: e.y, frame: e.figure.frame.name };
+      for (let i = 0; i < 12; i++) step();
+      const medicineAnimates = medicine.frame !== e.figure.frame.name;
+      const medicineTalk = talk();
+      const returned = until(() => e.currentStoryAction === start);
+      return { start, frames: [...frames], treatingTalk, walkingTalk, startedWalking, medicineTalk, reachedMedicine, medicineAnimates,
+        returned, blocked, walking: [...walking], atBed: Math.hypot(e.x - e.def.duty[0].x, e.y - e.def.duty[0].y),
+        patientAction: patient.currentStoryAction, flipX: e.figure.flipX,
+        atMedicine: Math.hypot(medicine.x - e.def.duty[1].x, medicine.y - e.def.duty[1].y) };
+    })()`);
+    assert.equal(result.start, treatment); assert.equal(result.frames.length, 4);
+    assert.equal(result.startedWalking, true); assert.equal(result.reachedMedicine, true); assert.equal(result.medicineAnimates, true); assert.equal(result.returned, true);
+    assert.equal(result.blocked, false); assert.ok(result.walking.length > 0); assert.ok(result.atBed < .01); assert.ok(result.atMedicine < .01);
+    assert.equal(result.flipX, treatment === 'treat-right');
+    for (const talk of [result.treatingTalk, result.walkingTalk, result.medicineTalk]) {
+      assert.equal(talk.opened, true); assert.equal(talk.ownPortrait, true); assert.equal(talk.before, talk.after); assert.equal(talk.paused, true);
+    }
+    assert.equal(result.patientAction, map === 'in-clinic' ? 'unconscious' : 'journal');
+    await load(map);
+    assert.equal(await evaluate(`window.__game.scene.getScene('game').npcs.find(n => n.def.id === 'eila').currentStoryAction`), treatment);
+  }
+});
+
+test('리네아는 구조 후 병상에서 의식을 되찾고 출발 전 집에서 요양하며 대화해도 일어서지 않는다', async () => {
+  await load('village');
+  for (const [through, map, action, raidStep] of [
+    ['festival-eve', 'in-clinic', 'unconscious', 5],
+    ['village-raid', 'in-clinic', 'unconscious', undefined],
+    ['missing-sia', 'in-clinic', 'awake', undefined],
+    ['first-sword', 'in-linea', 'journal', undefined],
+  ]) {
+    await evaluate(`(async () => {
+      const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
+      for (const q of QUESTS.filter(q => q.main)) {
+        seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+        if (q.id === ${JSON.stringify(through)}) break;
+      }
+      if (${JSON.stringify(raidStep ?? null)} !== null) seed['village-raid'] = { status: 'active', step: 5, count: 0 };
+      localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+      localStorage.setItem('untitled-rpg.festival', 'seen');
+    })()`);
+    await load(map);
+    const result = await evaluate(`(() => {
+      const s = window.__game.scene.getScene('game'), n = s.npcs.find(n => n.def.id === 'linea');
+      const before = JSON.stringify(s.quests), frame = n.figure.frame.name, at = { x: n.x, y: n.y };
+      s.player.placeAt(n.spot.x, n.spot.y);
+      const reachable = s.walkArea.contains(n.spot.x, n.spot.y);
+      s.attackButton.pressed = true; s.updateInteraction(s.now);
+      const opened = s.dialogue.isOpen;
+      const lines = s.dialogue.lines.map(l => ({ speaker: l.speaker, portrait: l.portrait }));
+      while (s.dialogue.isOpen) s.dialogue.advance();
+      for (let i = 0; i < 100; i++) n.update(s.now + i * 50, .05, s.player, s.walkArea);
+      const bed = s.children.list.find(o => o.name?.startsWith('interior-furniture-') && o.getData('kind') === 'bed');
+      return { frame, afterFrame: n.figure.frame.name, action: n.currentStoryAction, at, after: { x: n.x, y: n.y },
+        reachable, opened, lines, unchanged: JSON.stringify(s.quests) === before, aboveBed: n.depth > bed.depth,
+        marker: n.questMarker, carers: s.npcs.filter(n => ['eila', 'serena'].includes(n.def.id)).map(n => n.def.id).sort() };
+    })()`);
+    assert.equal(result.action, action); assert.equal(result.frame, action); assert.equal(result.afterFrame, action);
+    assert.deepEqual(result.after, result.at); assert.equal(result.reachable, true); assert.equal(result.opened, true); assert.equal(result.aboveBed, true);
+    assert.deepEqual(result.carers, ['eila', 'serena']);
+    if (action === 'unconscious') {
+      assert.ok(result.lines.every(l => l.speaker !== '리네아')); assert.equal(result.unchanged, true); assert.equal(result.marker, undefined);
+    } else assert.ok(result.lines.some(l => l.portrait === 'linea'));
+  }
+});
+
 test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수색·서신이 재시작 후에도 이어진다', async () => {
   await load('village');
   const result = await evaluate(`(async () => {
@@ -1654,11 +1760,13 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     await restart('village'); talk('ruan'); settle();
     await restart('village-north');
     const aftermath = { sia: s.npcs.some(n => n.def.id === 'sia'), linea: s.npcs.some(n => n.def.id === 'linea'), shade: !!s.chapterShade };
-    talk('serena');
+    await restart('in-clinic'); talk('serena');
+    await restart('village-north');
     const searchMarker = s.storyMarkers.length;
     await restart('village-north');
     const searchRestored = s.interactables.some(p => p.id === 'story-home-search');
-    inspect('story-home-search'); talk('eila'); talk('herman');
+    inspect('story-home-search'); await restart('in-clinic'); talk('eila');
+    await restart('village-north'); talk('herman');
     await restart('village'); talk('vernel');
     // 도란의 검: 도란이 철검을 건넨다(가방에 들어온다).
     await restart('in-smithy'); talk('doran'); s.characterPanel.close();
@@ -1687,7 +1795,7 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
   assert.deepEqual([...result.wave3].sort(), [...Array(4).fill('ashen-moth'), ...Array(4).fill('corrosion-tracker')]);
   assert.equal(result.warned, true, '첫 떼를 다 잡으면 보스 등장 경고');
   assert.equal(result.boss, 'corrosion-executioner');
-  assert.deepEqual(result.aftermath, { sia: false, linea: true, shade: false });
+  assert.deepEqual(result.aftermath, { sia: false, linea: false, shade: false });
   assert.equal(result.searchMarker, 1);
   assert.equal(result.searchRestored, true);
   assert.equal(result.complete, true);
@@ -3607,7 +3715,9 @@ test('2장 떠날 채비: 루안에게 말하면 회전 베기가 기술 칸에 
     talk('ruan');
     const skill = { slots: s.skillSlots.slice(), label: s.skillButtons[0].text.text };
     await restart('village-north');
-    for (const id of ['serena', 'linea', 'eila', 'herman']) talk(id);
+    await restart('in-linea');
+    for (const id of ['serena', 'linea', 'eila']) talk(id);
+    await restart('village-north'); talk('herman');
     const done = s.quests.farewell?.status, gold = s.inventory.gold;
     localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.inventory'); localStorage.removeItem('untitled-rpg.skills');
     return { started, skill, done, gold };

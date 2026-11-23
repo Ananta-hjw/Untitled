@@ -6,13 +6,27 @@ import ringData from '../assets/characters/bell-ringer/ring-frames.json';
 import bellowsUrl from '../assets/characters/toby/bellows.webp?url';
 import bellowsData from '../assets/characters/toby/bellows-frames.json';
 import cocoonUrl from '../assets/characters/toby/cocoon-512.webp?url';
+import lineaRecoveryUrl from '../assets/characters/linea/recovery.webp?url';
+import lineaRecoveryData from '../assets/characters/linea/recovery-frames.json';
+import eilaTreatmentUrl from '../assets/characters/eila/treatment.webp?url';
+import eilaTreatmentData from '../assets/characters/eila/treatment-frames.json';
 
 export interface StoryFrame { name: string; x: number; y: number; w: number; h: number; originX: number; originY: number }
 export interface StoryAction {
   key: string; url: string; frames: StoryFrame[]; fps: number; bodyHeight: number;
   onTalk: 'stop' | 'pause' | 'keep'; dialogue?: DialogueId;
+  flipX?: boolean;
 }
 const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
+  eila: Object.fromEntries(['treat-left', 'treat-right', 'mix-herbs'].map(name => [name, {
+    key: 'npc-eila-treatment', url: eilaTreatmentUrl,
+    frames: eilaTreatmentData.frames.filter(f => f.name.startsWith(name === 'mix-herbs' ? 'mix-' : 'treat-')),
+    fps: 2, bodyHeight: 304, onTalk: 'pause' as const, flipX: name === 'treat-right',
+  }])),
+  linea: Object.fromEntries(lineaRecoveryData.frames.map(frame => [frame.name, {
+    key: 'npc-linea-recovery', url: lineaRecoveryUrl, frames: [frame], fps: 0,
+    bodyHeight: frame.name === 'journal' ? 480 : 370, onTalk: 'keep' as const,
+  }])),
   'bell-ringer': {
     ring: { key: 'npc-bell-ringer-ring', url: ringUrl, frames: ringData.frames, fps: ringData.fps, bodyHeight: 296, onTalk: 'stop' },
   },
@@ -27,7 +41,7 @@ export function npcStoryAction(skin: NpcSkin, name: string): StoryAction | undef
   return actions && Object.hasOwn(actions, name) ? actions[name] : undefined;
 }
 export function preloadNpcStoryActions(scene: Phaser.Scene, skin: NpcSkin): void {
-  for (const action of Object.values(ACTIONS[skin] ?? {})) {
+  for (const action of new Map(Object.values(ACTIONS[skin] ?? {}).map(a => [a.key, a])).values()) {
     if (!scene.textures.exists(action.key)) scene.load.image(action.key, action.url);
   }
 }

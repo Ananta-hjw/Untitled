@@ -52,6 +52,14 @@ export interface NpcDef {
   area?: VillageArea;
   /** 카운터 뒤처럼 바로 다가갈 수 없는 자리면, 말을 거는 자리를 이만큼 앞(아래)으로 옮긴다. */
   talkOffset?: number;
+  /** Bedside interaction can sit beside a stationary patient rather than on the mattress. */
+  talkOffsetX?: number;
+  /** A fixed story pose, restored from the quest-derived NPC definition. */
+  storyAction?: string;
+  labelOffset?: number;
+  shadow?: boolean;
+  /** Keep a patient above the bed art even when the torso pivot is behind its floor contact. */
+  depthOffset?: number;
   /**
    * 맡은 일 (습격 뒤 복구·치료·경계): 이 자리들을 차례로 오가며, 각 자리에 멈춰 있는 동안 머리 위에 하는 일을 띄운다.
    * 있으면 wander 대신 이것을 따른다. 첫 자리가 처음 서 있는 자리다.
@@ -59,7 +67,12 @@ export interface NpcDef {
   duty?: DutyPoint[];
 }
 
-export interface DutyPoint { x: number; y: number; label: string; facing?: Direction8 }
+export interface DutyPoint {
+  x: number; y: number; label: string; facing?: Direction8;
+  /** Character-specific work animation while stopped at this station. */
+  action?: string;
+  durationMs?: number;
+}
 
 /** 맡은 일 자리에 멈춰 일하는 시간(ms, 게임 시계) */
 export function dutyPauseMs(rand: () => number): number {

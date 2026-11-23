@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { QUESTS, currentObjective, continueMainQuest, markerFor, parseQuests, questDef, recordEvent, serializeQuests, talkTo, trackedQuests } from '../src/story/quests.ts';
-import { DUSK_MOTH_POINTS, RAID_WAVES, chapterPhase, chapterNpcs, chapterSpots, isDusk, raidSpawns, raidSpawnsAnyStep, raidWaveSize } from '../src/story/chapterOne.ts';
+import { DUSK_MOTH_POINTS, RAID_WAVES, chapterCanTalk, chapterDialogue, lineaRecovery, chapterPhase, chapterNpcs, chapterSpots, isDusk, raidSpawns, raidSpawnsAnyStep, raidWaveSize } from '../src/story/chapterOne.ts';
 import { NPCS } from '../src/world/npcs.ts';
 import { guardsForMap } from '../src/world/guards.ts';
 import { MAPS, fieldPoint, findExit, walkable } from '../src/world/maps.ts';
@@ -132,16 +132,36 @@ test('잿빛 나방은 해 질 무렵의 순찰을 받은 뒤부터 축제 전�
   }
 });
 
-test('에일라는 낮에는 치유소 안, 습격 때는 광장, 습격 뒤에는 마을 북쪽 리네아 곁에 있다', () => {
-  const where = (state) => Object.keys(MAPS).filter((map) => chapterNpcs(MAPS[map].npcs, state, map).some((n) => n.id === 'eila'));
-  const raid = { 'festival-eve': { status: 'done', count: 1 } };
-  const after = { ...raid, 'village-raid': { status: 'done', count: 3 } };
-  assert.deepEqual(where({}), ['in-clinic']);
-  assert.deepEqual(where(raid), ['village']);
-  assert.deepEqual(where(after), ['village-north']);
-  const outside = chapterNpcs(MAPS['village-north'].npcs, after, 'village-north').find((n) => n.id === 'eila');
-  assert.equal(outside.inside, undefined);
-  assert.equal(walkable(MAPS['village-north'], outside.x, outside.y), true);
+test('리네아와 간호자는 습격 뒤 치유소에, 출발 전에는 리네아의 집 안에 있다', () => {
+  const where = (state, id) => Object.keys(MAPS).filter(map => chapterNpcs(MAPS[map].npcs, state, map).some(n => n.id === id));
+  assert.deepEqual(where({}, 'eila'), ['in-clinic']);
+  assert.deepEqual(where(through('festival-eve'), 'eila'), ['village']);
+  for (const id of ['linea', 'eila', 'serena']) {
+    assert.deepEqual(where(through('village-raid'), id), ['in-clinic']);
+    assert.deepEqual(where(through('first-sword'), id), ['in-linea']);
+  }
+});
+
+test('리네아는 구조 전에는 숨고, 병상에서 깨어난 뒤 집에서 일지를 쓰며 저장으로 복원된다', () => {
+  const raid = step => ({ ...through('festival-eve'), 'village-raid': { status: 'active', count: 0, step } });
+  assert.equal(lineaRecovery(raid(4)), undefined);
+  assert.equal(chapterNpcs(MAPS['in-clinic'].npcs, raid(4), 'in-clinic').some(n => n.id === 'linea'), false);
+  for (const [state, expected, room] of [
+    [raid(5), 'unconscious', 'in-clinic'], [through('village-raid'), 'unconscious', 'in-clinic'],
+    [{ ...through('village-raid'), 'missing-sia': { status: 'active', count: 0, step: 2 } }, 'awake', 'in-clinic'],
+    [through('missing-sia'), 'awake', 'in-clinic'], [through('first-sword'), 'journal', 'in-linea'],
+  ]) {
+    const loaded = parseQuests(serializeQuests(state));
+    assert.equal(lineaRecovery(loaded), expected);
+    const people = Object.keys(MAPS).flatMap(map => chapterNpcs(MAPS[map].npcs, loaded, map).filter(n => n.id === 'linea').map(n => ({ ...n, map })));
+    assert.equal(people.length, 1);
+    const n = people[0]; assert.equal(n.map, room); assert.equal(n.storyAction, expected);
+    assert.equal(n.wander, undefined); assert.equal(n.shadow, false);
+    assert.equal(walkable(MAPS[room], n.x, n.y), false, '환자가 누운 침대는 계속 통행을 막는다');
+    assert.equal(walkable(MAPS[room], n.x + n.talkOffsetX, n.y + n.talkOffset), true, '침대를 밟지 않고 옆에서 대화한다');
+    assert.equal(chapterCanTalk('linea', loaded), expected !== 'unconscious');
+    if (expected === 'unconscious') assert.ok(chapterDialogue('linea', loaded).every(l => l.speaker !== '리네아'));
+  }
 });
 
 test('습격이 진행되면 세레나는 안전 확인 뒤, 에일라는 북쪽 길을 막은 뒤 치유소로 옮긴다', () => {
@@ -153,8 +173,8 @@ test('습격이 진행되면 세레나는 안전 확인 뒤, 에일라는 북쪽
   assert.deepEqual(where(at(5), 'eila'), ['in-clinic']);
   assert.deepEqual(where(at(6), 'eila'), ['in-clinic'], '리네아 상태를 묻는 마지막 단계도 치유소');
   const clinic = chapterNpcs(MAPS['in-clinic'].npcs, at(6), 'in-clinic');
-  assert.deepEqual(clinic.map((n) => n.id).sort(), ['eila', 'merina', 'rosetta', 'serena']);
-  for (const n of clinic) assert.equal(walkable(MAPS['in-clinic'], n.x, n.y), true, n.id);
+  assert.deepEqual(clinic.map((n) => n.id).sort(), ['eila', 'linea', 'merina', 'rosetta', 'serena']);
+  for (const n of clinic) assert.equal(walkable(MAPS['in-clinic'], n.x + (n.talkOffsetX ?? 0), n.y + (n.talkOffset ?? 0)), true, n.id);
   for (let i = 0; i < clinic.length; i++) for (let j = i + 1; j < clinic.length; j++) {
     assert.ok(Math.hypot(clinic[i].x - clinic[j].x, clinic[i].y - clinic[j].y) > 60, `${clinic[i].id}·${clinic[j].id} 겹침`);
   }
@@ -181,7 +201,7 @@ test('습격 뒤 마을 사람들은 복구·치료·경계로 맡은 자리들�
       });
     }
   }
-  for (const id of ['herman', 'serena', 'eila', 'teon', 'vernel', 'guard-homes-west', 'guard-homes-east', 'guard-plaza-west', 'guard-plaza-east']) {
+  for (const id of ['herman', 'teon', 'vernel', 'guard-homes-west', 'guard-homes-east', 'guard-plaza-west', 'guard-plaza-east']) {
     assert.ok(working.includes(id), id);
   }
   assert.equal(working.length, new Set(working).size);
