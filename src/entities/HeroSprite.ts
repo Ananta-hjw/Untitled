@@ -5,6 +5,8 @@ import type { Blade } from '../combat/blade';
 import data from '../assets/hero/academy/frames.json';
 import guardData from '../assets/hero/academy/guard/frames.json';
 import guardSheet from '../assets/hero/academy/guard/bodies.webp?url';
+import dodgeData from '../assets/hero/academy/dodge/frames.json';
+import dodgeSheet from '../assets/hero/academy/dodge/cardinal.webp?url';
 import attackFrontData from '../assets/hero/academy/combo-proto/attack-front_frames.json';
 import attackFrontSheet from '../assets/hero/academy/combo-proto/attack-front.png?url';
 import attackDownDiagData from '../assets/hero/academy/combo-proto/attack-down-diag_frames.json';
@@ -31,6 +33,7 @@ export const HERO_SPRITE_HEIGHT = data.height;
 interface SpriteFrame {
   name: string; texture: string; x: number; y: number; w: number; h: number;
   originX: number; originY: number; scale: number; blade: Blade | null;
+  sheathedBlade?: Blade;
   grip?: { x: number; y: number };
   supportGrip?: { x: number; y: number };
   supportCover?: { name: string; x: number; y: number; w: number; h: number };
@@ -41,12 +44,14 @@ interface SpriteFrame {
 const FRAMES = new Map<string, SpriteFrame>([
   ...data.frames,
   ...guardData.frames,
+  ...dodgeData.frames,
   ...attackFrontData.frames,
   ...attackDownDiagData.frames,
   ...attackCorrectionsData.frames,
 ].map((f) => [f.name, f]));
 
 export function preloadHeroSprite(scene: Phaser.Scene): void {
+  if (!scene.textures.exists('hero-academy-dodge-cardinal')) scene.load.image('hero-academy-dodge-cardinal', dodgeSheet);
   if (!scene.textures.exists('hero-academy-attack-corrections')) scene.load.image('hero-academy-attack-corrections', attackCorrectionsSheet);
   if (!scene.textures.exists('hero-weapons')) scene.load.image('hero-weapons', weaponSheet);
   if (!scene.textures.exists('hero-weapons-perspective')) scene.load.image('hero-weapons-perspective', perspectiveSheet);
@@ -237,7 +242,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     const frame = FRAMES.get(this.guarding ? guardFrame(this.facing)
       : heroFrame(this.animation, attacking ? this.attackFacing : this.facing, this.time))!;
     const mirrored = this.guarding ? this.facing.includes('left')
-      : attacking ? this.attackFacing.includes('left') : this.animation === 'dodge' && this.flipX;
+      : attacking ? this.attackFacing.includes('left') : this.animation === 'dodge' && this.facing.includes('left');
     this.frame = frame;
     this.setRotation(this.guarding ? guardMotion(this.guardTime, this.facing).bodyAngle : 0);
     this.image.setTexture(frame.texture, frame.name).setOrigin(frame.originX, frame.originY)

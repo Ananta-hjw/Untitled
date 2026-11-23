@@ -63,6 +63,12 @@ export function attackFacingFor(facing: Facing, _horizontalSide = 1): AttackFaci
   return facing;
 }
 
+/** Dodge follows the visible eight-way facing, including a released stick and minor analogue drift. */
+export function dodgeFacingFor(dx: number, dy: number, previous: Facing): Facing {
+  return Number.isFinite(dx) && Number.isFinite(dy) && dx * dx + dy * dy > 0.04
+    ? movementFacing(dx, dy, previous, false) : previous;
+}
+
 /** Unit direction on the ground plane; apply the vertical projection when moving in world space. */
 export function attackVector(facing: AttackFacing): { x: number; y: number } {
   if (facing === 'up') return { x: 0, y: -1 };
@@ -97,6 +103,7 @@ export function heroFrame(action: HeroAction, facing: Facing, elapsedMs: number)
   // Accumulated 30/60fps deltas can be a fraction below the scene clock at a pose boundary.
   while (column < 3 && time + 1e-6 >= starts[column + 1]) column++;
   const row = action === 'dodge' ? 3 : Number(action.at(-1)) - 1;
+  if (action === 'dodge' && (facing === 'up' || facing === 'down')) return `dodge-${facing}-${column}`;
   if (action !== 'dodge') {
     if (facing === 'down') return `attack-front-${row * 4 + column}`;
     if (facing === 'down-right' || facing === 'down-left') return `attack-down-diag-${row * 4 + column}`;

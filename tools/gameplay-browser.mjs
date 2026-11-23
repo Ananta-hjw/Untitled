@@ -4196,3 +4196,41 @@ test('습격 중 메리나와 로제타는 치유소에서 구호 물품과 담�
   })()`);
   for(const n of result){assert.equal(n.action,n.id==='merina'?'supplies':'blankets');assert.equal(n.frames.length,2);assert.equal(n.safe,true);assert.equal(n.texture,'npc-village-relief');}
 });
+
+test('위아래 회피는 입력을 놓거나 스틱이 조금 흔들려도 직진하고 전용 정면·뒷면 그림을 쓴다', async () => {
+  await load('south-field&companion=none');
+  const results=await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'),p=s.player,hero=p.sprite,out=[];
+    s.enemies=[];s.joystick.vector.set(0,0);
+    const dirs=['up','down','left','right','up-left','up-right','down-left','down-right'];
+    const vector=name=>({x:name==='up'||name==='down'?0:name.includes('left')?-1:1,y:name==='left'||name==='right'?0:name.startsWith('up')?-1:1});
+    let ground;
+    outer:for(let y=600;y<1700;y+=150)for(let x=600;x<2400;x+=150){
+      const safe=dirs.every(name=>{const v=vector(name),len=Math.hypot(v.x,v.y);for(let k=0;k<=25;k++)if(!s.walkArea.contains(x+v.x/len*k*10,y+v.y/len*k*7))return false;return true;});
+      if(safe){ground={x,y};break outer;}
+    }
+    if(!ground)throw Error('회피 테스트용 빈 바닥 없음');
+    for(const name of dirs)for(const mode of ['released','held',...(['up','down'].includes(name)?['drift']:[])]){
+      p.setDodging(false);p.revive(ground.x,ground.y);hero.play('idle');hero.setAttackFacing(name);
+      // The old left/right field deliberately disagrees with the eight-way visual facing.
+      p.face(name==='up'?-1:1);
+      const v=vector(name),input=mode==='released'?{x:0,y:0}:mode==='drift'?{x:.15,y:v.y}:v;
+      s.now+=1000;s.dodgeReadyAt=0;s.startDodge(s.now,new p.knockback.constructor(input.x,input.y));
+      const frames=new Set(),mirror=hero.image.scaleX<0;
+      for(let i=0;i<6;i++){hero.advance(50);frames.add(hero.image.frame.name);s.now+=50;s.updateDodge(s.now);}
+      const parts=hero.spawnGhost(p.x,p.y,p.y-1,0x9fc4ff,.35);const body=parts.getAt(1);
+      const ghost=body.texture.key===hero.image.texture.key&&body.frame.name===hero.image.frame.name;parts.destroy();
+      const len=Math.hypot(v.x,v.y);
+      out.push({name,mode,dx:p.x-ground.x,dy:p.y-ground.y,expectedX:v.x/len*250,expectedY:v.y/len*250*.7,
+        look:hero.lookDirection,frames:[...frames],mirror,ghost,finite:hero.parts.every(part=>Number.isFinite(part.x)&&Number.isFinite(part.y)&&Number.isFinite(part.scaleX))});
+      p.setDodging(false);
+    }
+    return out;
+  })()`);
+  assert.equal(results.length,18);
+  for(const r of results){
+    assert.ok(Math.abs(r.dx-r.expectedX)<1e-6,JSON.stringify(r));assert.ok(Math.abs(r.dy-r.expectedY)<1e-6,JSON.stringify(r));
+    assert.equal(r.look,r.name);assert.equal(r.ghost,true);assert.equal(r.finite,true);
+    if(r.name==='up'||r.name==='down'){assert.equal(r.frames.length,4);assert.ok(r.frames.every(f=>f.startsWith('dodge-'+r.name+'-')));assert.equal(r.mirror,false);}
+  }
+});

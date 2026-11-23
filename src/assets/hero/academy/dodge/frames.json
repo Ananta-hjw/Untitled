@@ -1,0 +1,180 @@
+{
+  "frames": [
+    {
+      "name": "dodge-down-0",
+      "texture": "hero-academy-dodge-cardinal",
+      "x": 4,
+      "y": 4,
+      "w": 174,
+      "h": 304,
+      "originX": 0.51931330472103,
+      "originY": 1,
+      "scale": 1,
+      "blade": null,
+      "sheathedBlade": {
+        "base": {
+          "x": 164.29184549356222,
+          "y": 227.6256157635468
+        },
+        "tip": {
+          "x": 197.8969957081545,
+          "y": 283.78325123152706
+        }
+      }
+    },
+    {
+      "name": "dodge-down-1",
+      "texture": "hero-academy-dodge-cardinal",
+      "x": 324,
+      "y": 11,
+      "w": 180,
+      "h": 297,
+      "originX": 0.41041666666666665,
+      "originY": 1,
+      "scale": 1,
+      "blade": null,
+      "sheathedBlade": {
+        "base": {
+          "x": 170.25,
+          "y": 213.75
+        },
+        "tip": {
+          "x": 204.0,
+          "y": 270.0
+        }
+      }
+    },
+    {
+      "name": "dodge-down-2",
+      "texture": "hero-academy-dodge-cardinal",
+      "x": 644,
+      "y": 38,
+      "w": 190,
+      "h": 270,
+      "originX": 0.5649606299212598,
+      "originY": 1,
+      "scale": 1,
+      "blade": null,
+      "sheathedBlade": {
+        "base": {
+          "x": 178.7795275590551,
+          "y": 204.0
+        },
+        "tip": {
+          "x": 212.44094488188975,
+          "y": 260.25
+        }
+      }
+    },
+    {
+      "name": "dodge-down-3",
+      "texture": "hero-academy-dodge-cardinal",
+      "x": 964,
+      "y": 17,
+      "w": 181,
+      "h": 291,
+      "originX": 0.5165289256198347,
+      "originY": 1,
+      "scale": 1,
+      "blade": null,
+      "sheathedBlade": {
+        "base": {
+          "x": 169.03305785123965,
+          "y": 218.25
+        },
+        "tip": {
+          "x": 202.6900826446281,
+          "y": 274.5
+        }
+      }
+    },
+    {
+      "name": "dodge-up-0",
+      "texture": "hero-academy-dodge-cardinal",
+      "x": 4,
+      "y": 328,
+      "w": 165,
+      "h": 300,
+      "originX": 0.48409090909090907,
+      "originY": 1,
+      "scale": 1,
+      "blade": null,
+      "sheathedBlade": {
+        "base": {
+          "x": 48.75,
+          "y": 199.5
+        },
+        "tip": {
+          "x": 15.0,
+          "y": 255.75
+        }
+      }
+    },
+    {
+      "name": "dodge-up-1",
+      "texture": "hero-academy-dodge-cardinal",
+      "x": 324,
+      "y": 336,
+      "w": 181,
+      "h": 292,
+      "originX": 0.3037190082644628,
+      "originY": 1,
+      "scale": 1,
+      "blade": null,
+      "sheathedBlade": {
+        "base": {
+          "x": 55.34710743801652,
+          "y": 187.17948717948718
+        },
+        "tip": {
+          "x": 21.69008264462809,
+          "y": 243.33333333333334
+        }
+      }
+    },
+    {
+      "name": "dodge-up-2",
+      "texture": "hero-academy-dodge-cardinal",
+      "x": 644,
+      "y": 363,
+      "w": 182,
+      "h": 265,
+      "originX": 0.45267489711934156,
+      "originY": 1,
+      "scale": 1,
+      "blade": null,
+      "sheathedBlade": {
+        "base": {
+          "x": 55.42386831275721,
+          "y": 174.42090395480227
+        },
+        "tip": {
+          "x": 21.720164609053505,
+          "y": 230.56497175141243
+        }
+      }
+    },
+    {
+      "name": "dodge-up-3",
+      "texture": "hero-academy-dodge-cardinal",
+      "x": 964,
+      "y": 334,
+      "w": 174,
+      "h": 294,
+      "originX": 0.5064377682403434,
+      "originY": 1,
+      "scale": 1,
+      "blade": null,
+      "sheathedBlade": {
+        "base": {
+          "x": 53.02145922746781,
+          "y": 194.25
+        },
+        "tip": {
+          "x": 19.416309012875537,
+          "y": 250.5
+        }
+      }
+    }
+  ]
+}

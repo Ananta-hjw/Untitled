@@ -46,7 +46,7 @@ import { ActionButton } from '../ui/ActionButton';
 import { actionIcon, createActionIcons, type ActionIcon } from '../ui/actionIcons';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { HERO_SPRITE_HEIGHT, HeroSprite, preloadHeroSprite } from '../entities/HeroSprite';
-import { attackFacingFor, attackVector, insideAttackLane, movementFacing, strikePoseStart } from '../entities/heroFrames';
+import { attackFacingFor, attackVector, dodgeFacingFor, insideAttackLane, movementFacing, strikePoseStart } from '../entities/heroFrames';
 import { createPlaceholderArt } from '../world/placeholderArt';
 import type { WalkArea } from '../world/walkArea';
 import { NavGrid } from '../world/navGrid';
@@ -1466,12 +1466,12 @@ export class GameScene extends Phaser.Scene {
     this.attackLunge = undefined;
     this.comboStage = 0;
 
-    if (input.lengthSq() > 0.04) {
-      this.dodgeDirection.copy(input).normalize();
-      player.face(input.x);
-    } else {
-      this.dodgeDirection.set(player.facing, 0);
-    }
+    const hero = player.sprite;
+    const facing = dodgeFacingFor(input.x, input.y, hero instanceof HeroSprite ? hero.lookDirection : player.facing < 0 ? 'left' : 'right');
+    const direction = attackVector(facing);
+    this.dodgeDirection.set(direction.x, direction.y);
+    player.face(direction.x);
+    if (hero instanceof HeroSprite) hero.setAttackFacing(facing);
 
     this.dodgeUntil = time + DODGE.durationMs;
     this.dodgeProgress = 0;

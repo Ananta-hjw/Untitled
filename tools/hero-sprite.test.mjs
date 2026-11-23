@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { ACTION_DURATION, attackVector, guardFrame, heroFrame, insideAttackLane, movementFacing } from '../src/entities/heroFrames.ts';
+import { ACTION_DURATION, attackVector, dodgeFacingFor, guardFrame, heroFrame, insideAttackLane, movementFacing } from '../src/entities/heroFrames.ts';
 import { PLAYER } from '../src/config.ts';
 import { attackPoseTime, isAttackFollowPause } from '../src/entities/attackTiming.ts';
 
@@ -10,7 +10,24 @@ const data = JSON.parse(readFileSync(new URL('frames.json', root)));
 const attackFrontData = JSON.parse(readFileSync(new URL('combo-proto/attack-front_frames.json', root)));
 const attackDownDiagData = JSON.parse(readFileSync(new URL('combo-proto/attack-down-diag_frames.json', root)));
 const correctionData = JSON.parse(readFileSync(new URL('combo-proto/attack-corrections_frames.json', root)));
-const allFrames = [...new Map([...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames, ...correctionData.frames].map(f => [f.name, f])).values()];
+const dodgeData = JSON.parse(readFileSync(new URL('dodge/frames.json', root)));
+const allFrames = [...new Map([...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames, ...correctionData.frames, ...dodgeData.frames].map(f => [f.name, f])).values()];
+
+test('상하 회피는 정면·뒷면 전용 네 자세를 쓰고 놓은 입력과 작은 좌우 흔들림에도 방향을 유지한다', () => {
+  for (const facing of ['up','down','left','right','up-left','up-right','down-left','down-right']) {
+    assert.equal(dodgeFacingFor(0,0,facing), facing);
+    const v=attackVector(facing);assert.equal(dodgeFacingFor(v.x,v.y,'right'),facing);
+  }
+  assert.equal(dodgeFacingFor(.15,-1,'right'),'up');
+  assert.equal(dodgeFacingFor(-.15,1,'left'),'down');
+  assert.equal(dodgeFacingFor(.1,.1,'up'),'up');
+  for(const facing of ['up','down'])for(const [col,elapsed] of [0,60,130,240].entries()) {
+    const name=heroFrame('dodge',facing,elapsed),f=dodgeData.frames.find(f=>f.name===name);
+    assert.equal(name,`dodge-${facing}-${col}`);assert.ok(f);assert.equal(f.blade,null);
+    assert.ok(f.sheathedBlade);assert.ok(f.originX>0&&f.originX<1);assert.equal(f.originY,1);
+    assert.ok(f.x+f.w<=1280&&f.y+f.h<=640);
+  }
+});
 
 test('원본 4방향 시트는 Unity 아래쪽 좌표를 Phaser 위쪽 좌표로 변환한다', () => {
   const original = JSON.parse(readFileSync(new URL('player_walk_atlas.json', root)));

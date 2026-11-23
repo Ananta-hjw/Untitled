@@ -25,10 +25,11 @@ const DIAGONAL = [
   [142, 147], [144, 148], [142, 147], [144, 148],
   [178, 157], [178, 157], [178, 157], [178, 157],
 ];
-interface PoseFrame { name: string; x: number; y: number; blade: Blade | null }
+interface PoseFrame { name: string; x: number; y: number; blade: Blade | null; sheathedBlade?: Blade }
 /** Held weapons retain the combat anchors; walking exposes only the hilt above the empty scabbard. */
 export function weaponPose(frame: PoseFrame): { blade: Blade; sheathed: boolean } {
   if (frame.blade) return { blade: frame.blade, sheathed: false };
+  if (frame.sheathedBlade) return { blade: frame.sheathedBlade, sheathed: true };
   const diagonal = frame.name.startsWith('diagonal-');
   const index = Number(frame.name.slice(frame.name.lastIndexOf('-') + 1));
   const row = Math.floor(index / 4), col = index % 4;
