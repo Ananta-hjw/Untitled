@@ -91,9 +91,9 @@ export class CombatEffects {
   }
 
   /** 손그림 검기(1·2타) 또는 찌르기 충격파(3타) 이펙트를 8방향에 맞춰 재생한다. */
-  spawnSlashSprite(stage: number, facing: AttackFacing, x: number, y: number, heroScale: number, depth: number, time: number): boolean {
+  spawnSlashSprite(stage: number, facing: AttackFacing, previous: Blade, current: Blade, depth: number, time: number): boolean {
     if (!this.scene.textures.exists('combat-slash-fx')) return false;
-    const p = slashFxPlacement(stage, facing);
+    const p = slashFxPlacement(stage, facing, previous, current);
     let entry = this.slashSpritePool.find((item) => !item.image.active);
     if (!entry) {
       const image = this.scene.add.image(0, 0, 'combat-slash-fx', p.frame)
@@ -102,10 +102,10 @@ export class CombatEffects {
       this.slashSpritePool.push(entry);
     }
     entry.startedAt = time;
-    entry.baseScaleX = p.scaleX * heroScale;
-    entry.baseScaleY = p.scaleY * heroScale;
-    entry.image.setTexture('combat-slash-fx', p.frame)
-      .setPosition(x + p.offsetX * heroScale, y + p.offsetY * heroScale)
+    entry.image.setTexture('combat-slash-fx', p.frame);
+    entry.baseScaleX = p.width / entry.image.width;
+    entry.baseScaleY = p.height / entry.image.height * (p.flipY ? -1 : 1);
+    entry.image.setPosition(p.x, p.y)
       .setRotation(p.rotation)
       .setScale(entry.baseScaleX * 0.72, entry.baseScaleY * 0.72)
       .setAlpha(0.95)

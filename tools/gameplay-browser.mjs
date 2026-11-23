@@ -50,8 +50,8 @@ function send(method, params = {}, timeoutMs = 10000) {
   });
 }
 
-async function evaluate(expression) {
-  const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }, 30000);
+async function evaluate(expression, timeoutMs = 30000) {
+  const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }, timeoutMs);
   if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
   return result.result.value;
 }
@@ -85,7 +85,10 @@ before(async () => {
   await until(async () => (await fetch(appUrl)).ok);
   chrome = spawn(process.env.CHROMIUM_PATH || 'chromium', ['--headless', '--no-sandbox', '--disable-dev-shm-usage', '--enable-unsafe-swiftshader', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' });
   chrome.on('error', () => {});
-  const tabs = await until(async () => (await fetch(`http://127.0.0.1:${debugPort}/json`)).json());
+  const tabs = await until(async () => {
+    const tabs = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json();
+    return tabs.length ? tabs : undefined;
+  });
   socket = new WebSocket(tabs[0].webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
   socket.onmessage = ({ data }) => {
@@ -646,15 +649,24 @@ test('새 공격 그림의 실제 검날은 20·30·60·120fps와 좌우 모든 
   for (const run of result) assert.equal(run.hits, 1, JSON.stringify(run));
 });
 
-test('대각선 4방향의 모든 콤보는 20·30·60·120fps에서 앞쪽만 명중하고 같은 방향으로 전진·넉백한다', async () => {
+test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 명중하고 같은 방향으로 전진·넉백한다', async () => {
   await load();
   const result = await evaluate(`(() => {
     const s = window.__game.scene.getScene('game'), p = s.player, hero = p.sprite, enemies = s.enemies.slice(0, 4), runs = [];
     s.joystick.vector.set(0, 0);
-    const directions = [['down-left', -1, 1], ['down-right', 1, 1], ['up-left', -1, -1], ['up-right', 1, -1]];
-    for (const fps of [20, 30, 60, 120]) for (const [facing, signX, signY] of directions) for (const stage of [0, 1, 2]) {
-      const x = signX * Math.SQRT1_2, y = signY * Math.SQRT1_2;
-      const worldX = x * 110, worldY = y * 110 * .7, length = Math.hypot(worldX, worldY);
+    const directions = [['right', 1, 0], ['down-right', 1, 1], ['down', 0, 1], ['down-left', -1, 1],
+      ['left', -1, 0], ['up-left', -1, -1], ['up', 0, -1], ['up-right', 1, -1]];
+    const originalSpawn = s.effects.spawnSlashSprite.bind(s.effects);
+    let fx;
+    s.effects.spawnSlashSprite = (...args) => {
+      const idle = s.effects.slashSpritePool.find(e => !e.image.active);
+      const played = originalSpawn(...args), image = (idle ?? s.effects.slashSpritePool.at(-1)).image;
+      fx = { frame: hero.image.frame.name, blade: hero.getBlade(), x: image.x, y: image.y, rotation: image.rotation };
+      return played;
+    };
+    for (const fps of [20, 30, 60, 120]) for (const [facing, signX, signY] of directions) for (const stage of [0, 1, 2]) for (const distance of [80, 110]) {
+      const magnitude = Math.hypot(signX, signY), x = signX / magnitude, y = signY / magnitude;
+      const worldX = x * distance, worldY = y * distance * .7, length = Math.hypot(worldX, worldY);
       const offsets = [[worldX, worldY], [-worldX, -worldY],
         [worldX - worldY / length * 100, worldY + worldX / length * 100], [worldX * 4, worldY * 4]];
       p.revive(1000, 640); s.enemies = enemies;
@@ -664,29 +676,42 @@ test('대각선 4방향의 모든 콤보는 20·30·60·120fps에서 앞쪽만 �
         enemy.character.hurt = () => { hits[i]++; return false; }; enemy.interrupt = () => {};
       });
       s.comboStage = stage; s.comboExpiresAt = 10000; s.now = 1000;
-      s.startAttack(1000, x, y);
+      fx = undefined; s.startAttack(1000, x, y);
       const texture = hero.image.texture.key, mirrored = hero.image.scaleX < 0;
       for (let i = 1; i <= Math.ceil(fps * .32); i++) {
         hero.advance(1000 / fps); s.now = 1000 + i * 1000 / fps;
         s.updateAttackLunge(s.now); s.updateAttackTrace(s.now);
       }
       const knockback = enemies[0].character.knockback;
-      runs.push({ fps, facing, stage, hits, texture, mirrored,
+      runs.push({ fps, facing, stage, distance, hits, texture, mirrored, fx, signX, signY,
         dx: p.x - 1000, dy: p.y - 640, kx: knockback.x, ky: knockback.y });
     }
     return runs;
   })()`);
-  assert.equal(result.length, 48);
+  assert.equal(result.length, 192);
   for (const run of result) {
     assert.deepEqual(run.hits, [1, 0, 0, 0], JSON.stringify(run));
-    assert.equal(run.texture, `hero-academy-attack-${run.facing.startsWith('up') ? 'up' : 'down'}`);
+    const corrected = run.facing === 'up' || (run.facing === 'down' ? run.stage === 1 : run.facing.startsWith('down') && run.stage > 0);
+    const texture = corrected ? 'hero-academy-attack-corrections' : `hero-academy-${run.facing === 'down' ? 'attack-front'
+      : run.facing.startsWith('up') ? 'attack-up' : run.facing.startsWith('down') ? 'attack-down-diag' : 'combat'}`;
+    assert.equal(run.texture, texture);
+    assert.ok(run.fx, JSON.stringify(run));
+    assert.equal(Number(run.fx.frame.slice(run.fx.frame.lastIndexOf('-') + 1)) % 4, 2, '검기는 타격 자세부터 나온다: ' + JSON.stringify(run));
+    const b = run.fx.blade, angle = Math.atan2(b.tip.y - b.base.y, b.tip.x - b.base.x);
+    assert.ok(Math.abs(run.fx.rotation - angle) < 1e-6, JSON.stringify(run));
+    if (run.stage === 2) {
+      assert.ok(Math.abs(run.fx.x - (b.base.x * .45 + b.tip.x * .55)) < .001);
+      assert.ok(Math.abs(run.fx.y - (b.base.y * .45 + b.tip.y * .55)) < .001);
+    }
     assert.equal(run.mirrored, run.facing.includes('left'));
-    assert.equal(Math.sign(run.dx), run.facing.includes('left') ? -1 : 1);
-    assert.equal(Math.sign(run.dy), run.facing.startsWith('up') ? -1 : 1);
-    assert.ok(Math.abs(Math.abs(run.dy / run.dx) - .7) < 0.001);
-    assert.equal(Math.sign(run.kx), Math.sign(run.dx));
-    assert.equal(Math.sign(run.ky), Math.sign(run.dy));
-    assert.ok(Math.abs(Math.abs(run.ky / run.kx) - .7) < 0.001);
+    assert.ok(Math.sign(run.dx) === run.signX);
+    assert.ok(Math.sign(run.dy) === run.signY);
+    assert.ok(Math.sign(run.kx) === run.signX);
+    assert.ok(Math.sign(run.ky) === run.signY);
+    if (run.signX && run.signY) {
+      assert.ok(Math.abs(Math.abs(run.dy / run.dx) - .7) < 0.001);
+      assert.ok(Math.abs(Math.abs(run.ky / run.kx) - .7) < 0.001);
+    }
   }
 });
 
@@ -709,7 +734,7 @@ test('마지막 대각선과 자동 조준을 사용하고 공격 도중 반대 
   assert.ok(result.before.frame.startsWith('attack-up-'));
   assert.ok(result.before.scale < 0);
   assert.deepEqual(result.after, result.before);
-  assert.equal(result.aimed, 'hero-academy-attack-down');
+  assert.equal(result.aimed, 'hero-academy-attack-down-diag');
   assert.ok(result.direction.x > 0 && result.direction.y > 0);
 });
 
@@ -1564,7 +1589,7 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     await restart('village');
     localStorage.removeItem('untitled-rpg.festival');
     return { sword, migrated, harvest, moths, patrolMarker, choice, frozen, cancelled, festival, raid, battle, noRespawn, wave2, wave3, warned, boss, aftermath, searchMarker, searchRestored, complete, tracker };
-  })()`);
+  })()`, 90000); // 여러 맵을 연속 재시작하며 원화를 읽는 긴 시나리오다.
   assert.equal(result.migrated, 'active');
   assert.equal(result.harvest, 'done');
   assert.equal(result.moths, 4);

@@ -9,7 +9,8 @@ const root = new URL('../src/assets/hero/academy/', import.meta.url);
 const data = JSON.parse(readFileSync(new URL('frames.json', root)));
 const attackFrontData = JSON.parse(readFileSync(new URL('combo-proto/attack-front_frames.json', root)));
 const attackDownDiagData = JSON.parse(readFileSync(new URL('combo-proto/attack-down-diag_frames.json', root)));
-const allFrames = [...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames];
+const correctionData = JSON.parse(readFileSync(new URL('combo-proto/attack-corrections_frames.json', root)));
+const allFrames = [...new Map([...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames, ...correctionData.frames].map(f => [f.name, f])).values()];
 
 test('원본 4방향 시트는 Unity 아래쪽 좌표를 Phaser 위쪽 좌표로 변환한다', () => {
   const original = JSON.parse(readFileSync(new URL('player_walk_atlas.json', root)));

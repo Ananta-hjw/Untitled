@@ -9,6 +9,8 @@ import attackFrontData from '../assets/hero/academy/combo-proto/attack-front_fra
 import attackFrontSheet from '../assets/hero/academy/combo-proto/attack-front.png?url';
 import attackDownDiagData from '../assets/hero/academy/combo-proto/attack-down-diag_frames.json';
 import attackDownDiagSheet from '../assets/hero/academy/combo-proto/attack-down-diag.png?url';
+import attackCorrectionsData from '../assets/hero/academy/combo-proto/attack-corrections_frames.json';
+import attackCorrectionsSheet from '../assets/hero/academy/combo-proto/attack-corrections.webp?url';
 import { isAttackFollowPause } from './attackTiming';
 import walkSheet from '../assets/hero/academy/unarmed/player_walk.webp?url';
 import combatSheet from '../assets/hero/academy/unarmed/player_combat.webp?url';
@@ -41,9 +43,11 @@ const FRAMES = new Map<string, SpriteFrame>([
   ...guardData.frames,
   ...attackFrontData.frames,
   ...attackDownDiagData.frames,
+  ...attackCorrectionsData.frames,
 ].map((f) => [f.name, f]));
 
 export function preloadHeroSprite(scene: Phaser.Scene): void {
+  if (!scene.textures.exists('hero-academy-attack-corrections')) scene.load.image('hero-academy-attack-corrections', attackCorrectionsSheet);
   if (!scene.textures.exists('hero-weapons')) scene.load.image('hero-weapons', weaponSheet);
   if (!scene.textures.exists('hero-weapons-perspective')) scene.load.image('hero-weapons-perspective', perspectiveSheet);
   if (!scene.textures.exists('combat-slash-fx')) scene.load.image('combat-slash-fx', slashFxSheet);

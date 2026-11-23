@@ -35,9 +35,14 @@ const PROTO_POSE_STARTS = {
   attack3: [0, 50, 168, 300],
 };
 
-/** 콤보 단계(0~2)에서 휘두르는 그림(타격 자세)이 나타나는 시각(ms). 이때 칼 궤적을 그린다. */
-export function strikePoseStart(stage: number): number {
-  return POSE_STARTS[`attack${stage + 1}` as 'attack1' | 'attack2' | 'attack3'][2];
+function usesFrontPoses(facing: Facing): boolean {
+  return facing === 'down' || facing === 'down-right' || facing === 'down-left';
+}
+
+/** 콤보 단계(0~2)와 방향에 맞는 타격 자세가 나타나는 시각(ms). */
+export function strikePoseStart(stage: number, facing: Facing = 'right'): number {
+  const starts = usesFrontPoses(facing) ? PROTO_POSE_STARTS : POSE_STARTS;
+  return starts[`attack${stage + 1}` as 'attack1' | 'attack2' | 'attack3'][2];
 }
 
 /** Phaser world Y grows downward; only actual displacement changes walking direction. */
@@ -84,16 +89,18 @@ export function heroFrame(action: HeroAction, facing: Facing, elapsedMs: number)
     const diagonal = DIAGONALS.indexOf(facing);
     return diagonal >= 0 ? `diagonal-${diagonal * 4 + column}` : `walk-${DIRECTIONS.indexOf(facing) * 4 + column}`;
   }
-  const useProto = action !== 'dodge' && (facing === 'down' || facing === 'down-right' || facing === 'down-left');
+  const useProto = action !== 'dodge' && usesFrontPoses(facing);
   const starts = useProto
     ? PROTO_POSE_STARTS[action as 'attack1' | 'attack2' | 'attack3']
     : POSE_STARTS[action];
   let column = 0;
-  while (column < 3 && time >= starts[column + 1]) column++;
+  // Accumulated 30/60fps deltas can be a fraction below the scene clock at a pose boundary.
+  while (column < 3 && time + 1e-6 >= starts[column + 1]) column++;
   const row = action === 'dodge' ? 3 : Number(action.at(-1)) - 1;
   if (action !== 'dodge') {
     if (facing === 'down') return `attack-front-${row * 4 + column}`;
     if (facing === 'down-right' || facing === 'down-left') return `attack-down-diag-${row * 4 + column}`;
+    if (facing === 'up') return `attack-back-${row * 4 + column}`;
     if (facing.startsWith('up')) return `attack-up-${row * 4 + column}`;
   }
   return `combat-${row * 4 + column}`;

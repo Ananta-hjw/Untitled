@@ -1,0 +1,628 @@
+{
+  "frames": [
+    {
+      "name": "attack-back-0",
+      "texture": "hero-academy-attack-corrections",
+      "x": 4,
+      "y": 4,
+      "w": 150,
+      "h": 304,
+      "originX": 0.5094666666666666,
+      "originY": 0.9969078947368422,
+      "scale": 1,
+      "grip": {
+        "x": 80.19,
+        "y": 150.11
+      },
+      "blade": {
+        "base": {
+          "x": 84.42,
+          "y": 141.05
+        },
+        "tip": {
+          "x": 145.7,
+          "y": 9.64
+        }
+      },
+      "weaponPerspective": "up"
+    },
+    {
+      "name": "attack-back-1",
+      "texture": "hero-academy-attack-corrections",
+      "x": 388,
+      "y": 4,
+      "w": 152,
+      "h": 304,
+      "originX": 0.5030263157894737,
+      "originY": 0.9939144736842105,
+      "scale": 1,
+      "grip": {
+        "x": 76.46,
+        "y": 48.05
+      },
+      "blade": {
+        "base": {
+          "x": 74.72,
+          "y": 38.2
+        },
+        "tip": {
+          "x": 49.54,
+          "y": -104.6
+        }
+      },
+      "weaponPerspective": "up"
+    },
+    {
+      "name": "attack-back-2",
+      "texture": "hero-academy-attack-corrections",
+      "x": 772,
+      "y": 4,
+      "w": 182,
+      "h": 304,
+      "originX": 0.5053846153846154,
+      "originY": 0.9935526315789475,
+      "scale": 1,
+      "grip": {
+        "x": 91.98,
+        "y": 125.52
+      },
+      "blade": {
+        "base": {
+          "x": 91.98,
+          "y": 115.52
+        },
+        "tip": {
+          "x": 91.98,
+          "y": -29.48
+        }
+      },
+      "weaponPerspective": "up"
+    },
+    {
+      "name": "attack-back-3",
+      "texture": "hero-academy-attack-corrections",
+      "x": 1156,
+      "y": 4,
+      "w": 149,
+      "h": 304,
+      "originX": 0.5,
+      "originY": 0.9969078947368422,
+      "scale": 1,
+      "grip": {
+        "x": 78.27,
+        "y": 150.11
+      },
+      "blade": {
+        "base": {
+          "x": 82.5,
+          "y": 141.05
+        },
+        "tip": {
+          "x": 143.78,
+          "y": 9.64
+        }
+      },
+      "weaponPerspective": "up"
+    },
+    {
+      "name": "attack-back-4",
+      "texture": "hero-academy-attack-corrections",
+      "x": 4,
+      "y": 388,
+      "w": 148,
+      "h": 304,
+      "originX": 0.506418918918919,
+      "originY": 0.99375,
+      "scale": 1,
+      "grip": {
+        "x": 78.74,
+        "y": 148.2
+      },
+      "blade": {
+        "base": {
+          "x": 82.97,
+          "y": 139.14
+        },
+        "tip": {
+          "x": 144.25,
+          "y": 7.73
+        }
+      },
+      "weaponPerspective": "up"
+    },
+    {
+      "name": "attack-back-5",
+      "texture": "hero-academy-attack-corrections",
+      "x": 388,
+      "y": 388,
+      "w": 187,
+      "h": 304,
+      "originX": 0.46909090909090906,
+      "originY": 0.9936842105263157,
+      "scale": 1,
+      "grip": {
+        "x": 170.61,
+        "y": 176.05
+      },
+      "blade": {
+        "base": {
+          "x": 177.68,
+          "y": 183.12
+        },
+        "tip": {
+          "x": 280.21,
+          "y": 285.65
+        }
+      },
+      "weaponPerspective": "up"
+    },
+    {
+      "name": "attack-back-6",
+      "texture": "hero-academy-attack-corrections",
+      "x": 772,
+      "y": 388,
+      "w": 165,
+      "h": 304,
+      "originX": 0.5238181818181818,
+      "originY": 0.990328947368421,
+      "scale": 1,
+      "grip": {
+        "x": 86.43,
+        "y": 149.06
+      },
+      "blade": {
+        "base": {
+          "x": 86.43,
+          "y": 139.06
+        },
+        "tip": {
+          "x": 86.43,
+          "y": -5.94
+        }
+      },
+      "weaponPerspective": "up"
+    },
+    {
+      "name": "attack-back-7",
+      "texture": "hero-academy-attack-corrections",
+      "x": 1156,
+      "y": 388,
+      "w": 153,
+      "h": 304,
+      "originX": 0.48764705882352943,
+      "originY": 0.9937828947368421,
+      "scale": 1,
+      "grip": {
+        "x": 130.33,
+        "y": 31.25
+      },
+      "blade": {
+        "base": {
+          "x": 126.91,
+          "y": 21.85
+        },
+        "tip": {
+          "x": 77.32,
+          "y": -114.41
+        }
+      },
+      "weaponPerspective": "up"
+    },
+    {
+      "name": "attack-back-8",
+      "texture": "hero-academy-attack-corrections",
+      "x": 4,
+      "y": 772,
+      "w": 151,
+      "h": 304,
+      "originX": 0.5126490066225166,
+      "originY": 0.996842105263158,
+      "scale": 1,
+      "grip": {
+        "x": 81.23,
+        "y": 149.13
+      },
+      "blade": {
+        "base": {
+          "x": 85.46,
+          "y": 140.07
+        },
+        "tip": {
+          "x": 146.74,
+          "y": 8.66
+        }
+      },
+      "weaponPerspective": "up"
+    },
+    {
+      "name": "attack-back-9",
+      "texture": "hero-academy-attack-corrections",
+      "x": 388,
+      "y": 772,
+      "w": 154,
+      "h": 304,
+      "originX": 0.5031168831168832,
+      "originY": 0.9937171052631578,
+      "scale": 1,
+      "grip": {
+        "x": 80.35,
+        "y": 152.0
+      },
+      "blade": {
+        "base": {
+          "x": 85.35,
+          "y": 143.34
+        },
+        "tip": {
+          "x": 157.85,
+          "y": 17.77
+        }
+      },
+      "weaponPerspective": "up"
+    },
+    {
+      "name": "attack-back-10",
+      "texture": "hero-academy-attack-corrections",
+      "x": 772,
+      "y": 772,
+      "w": 177,
+      "h": 304,
+      "originX": 0.5168361581920904,
+      "originY": 0.9934539473684211,
+      "scale": 1,
+      "grip": {
+        "x": 91.48,
+        "y": 133.12
+      },
+      "blade": {
+        "base": {
+          "x": 91.48,
+          "y": 123.12
+        },
+        "tip": {
+          "x": 91.48,
+          "y": -21.88
+        }
+      },
+      "weaponPerspective": "up"
+    },
+    {
+      "name": "attack-back-11",
+      "texture": "hero-academy-attack-corrections",
+      "x": 1156,
+      "y": 772,
+      "w": 150,
+      "h": 304,
+      "originX": 0.5,
+      "originY": 0.99375,
+      "scale": 1,
+      "grip": {
+        "x": 78.8,
+        "y": 148.2
+      },
+      "blade": {
+        "base": {
+          "x": 83.03,
+          "y": 139.14
+        },
+        "tip": {
+          "x": 144.31,
+          "y": 7.73
+        }
+      },
+      "weaponPerspective": "up"
+    },
+    {
+      "name": "attack-front-4",
+      "texture": "hero-academy-attack-corrections",
+      "x": 4,
+      "y": 1156,
+      "w": 168,
+      "h": 304,
+      "originX": 0.5907738095238095,
+      "originY": 1.0,
+      "scale": 1,
+      "grip": {
+        "x": 108.36,
+        "y": 158.39
+      },
+      "blade": {
+        "base": {
+          "x": 100.7,
+          "y": 151.96
+        },
+        "tip": {
+          "x": -10.38,
+          "y": 58.76
+        }
+      },
+      "weaponPerspective": "side"
+    },
+    {
+      "name": "attack-front-5",
+      "texture": "hero-academy-attack-corrections",
+      "x": 388,
+      "y": 1156,
+      "w": 173,
+      "h": 304,
+      "originX": 0.5923699421965318,
+      "originY": 1.0,
+      "scale": 1,
+      "grip": {
+        "x": 103.42,
+        "y": 209.56
+      },
+      "blade": {
+        "base": {
+          "x": 94.76,
+          "y": 214.56
+        },
+        "tip": {
+          "x": -30.81,
+          "y": 287.06
+        }
+      },
+      "weaponPerspective": "side"
+    },
+    {
+      "name": "attack-front-6",
+      "texture": "hero-academy-attack-corrections",
+      "x": 772,
+      "y": 1156,
+      "w": 175,
+      "h": 304,
+      "originX": 0.5865142857142858,
+      "originY": 1.0,
+      "scale": 1,
+      "grip": {
+        "x": 105.47,
+        "y": 211.33
+      },
+      "blade": {
+        "base": {
+          "x": 105.47,
+          "y": 221.33
+        },
+        "tip": {
+          "x": 105.47,
+          "y": 366.33
+        }
+      },
+      "weaponPerspective": "down"
+    },
+    {
+      "name": "attack-front-7",
+      "texture": "hero-academy-attack-corrections",
+      "x": 1156,
+      "y": 1156,
+      "w": 168,
+      "h": 304,
+      "originX": 0.5869642857142857,
+      "originY": 1.0,
+      "scale": 1,
+      "grip": {
+        "x": 110.02,
+        "y": 199.61
+      },
+      "blade": {
+        "base": {
+          "x": 114.25,
+          "y": 208.67
+        },
+        "tip": {
+          "x": 175.53,
+          "y": 340.08
+        }
+      },
+      "weaponPerspective": "side"
+    },
+    {
+      "name": "attack-down-diag-4",
+      "texture": "hero-academy-attack-corrections",
+      "x": 4,
+      "y": 1540,
+      "w": 197,
+      "h": 304,
+      "originX": 0.4887817258883249,
+      "originY": 1.0,
+      "scale": 1,
+      "grip": {
+        "x": 115.41,
+        "y": 212.73
+      },
+      "blade": {
+        "base": {
+          "x": 108.34,
+          "y": 205.66
+        },
+        "tip": {
+          "x": 5.81,
+          "y": 103.13
+        }
+      },
+      "weaponPerspective": "side"
+    },
+    {
+      "name": "attack-down-diag-5",
+      "texture": "hero-academy-attack-corrections",
+      "x": 388,
+      "y": 1540,
+      "w": 214,
+      "h": 304,
+      "originX": 0.5173831775700934,
+      "originY": 1.0,
+      "scale": 1,
+      "grip": {
+        "x": 72.82,
+        "y": 187.31
+      },
+      "blade": {
+        "base": {
+          "x": 63.76,
+          "y": 191.54
+        },
+        "tip": {
+          "x": -67.65,
+          "y": 252.82
+        }
+      },
+      "weaponPerspective": "side"
+    },
+    {
+      "name": "attack-down-diag-6",
+      "texture": "hero-academy-attack-corrections",
+      "x": 772,
+      "y": 1540,
+      "w": 235,
+      "h": 304,
+      "originX": 0.5791063829787234,
+      "originY": 1.0,
+      "scale": 1,
+      "grip": {
+        "x": 214.18,
+        "y": 228.19
+      },
+      "blade": {
+        "base": {
+          "x": 222.37,
+          "y": 233.93
+        },
+        "tip": {
+          "x": 341.15,
+          "y": 317.1
+        }
+      },
+      "weaponPerspective": "side"
+    },
+    {
+      "name": "attack-down-diag-7",
+      "texture": "hero-academy-attack-corrections",
+      "x": 1156,
+      "y": 1540,
+      "w": 219,
+      "h": 304,
+      "originX": 0.5506849315068493,
+      "originY": 1.0,
+      "scale": 1,
+      "grip": {
+        "x": 141.31,
+        "y": 192.78
+      },
+      "blade": {
+        "base": {
+          "x": 149.97,
+          "y": 197.78
+        },
+        "tip": {
+          "x": 275.54,
+          "y": 270.28
+        }
+      },
+      "weaponPerspective": "side"
+    },
+    {
+      "name": "attack-down-diag-8",
+      "texture": "hero-academy-attack-corrections",
+      "x": 4,
+      "y": 1924,
+      "w": 201,
+      "h": 304,
+      "originX": 0.4871641791044776,
+      "originY": 1.0,
+      "scale": 1,
+      "grip": {
+        "x": 118.54,
+        "y": 213.24
+      },
+      "blade": {
+        "base": {
+          "x": 126.73,
+          "y": 218.98
+        },
+        "tip": {
+          "x": 245.51,
+          "y": 302.15
+        }
+      },
+      "weaponPerspective": "side"
+    },
+    {
+      "name": "attack-down-diag-9",
+      "texture": "hero-academy-attack-corrections",
+      "x": 388,
+      "y": 1924,
+      "w": 215,
+      "h": 304,
+      "originX": 0.49655813953488376,
+      "originY": 1.0,
+      "scale": 1,
+      "grip": {
+        "x": 92.67,
+        "y": 197.49
+      },
+      "blade": {
+        "base": {
+          "x": 82.71,
+          "y": 198.36
+        },
+        "tip": {
+          "x": -61.74,
+          "y": 211.0
+        }
+      },
+      "weaponPerspective": "side"
+    },
+    {
+      "name": "attack-down-diag-10",
+      "texture": "hero-academy-attack-corrections",
+      "x": 772,
+      "y": 1924,
+      "w": 241,
+      "h": 304,
+      "originX": 0.5541908713692946,
+      "originY": 1.0,
+      "scale": 1,
+      "grip": {
+        "x": 219.36,
+        "y": 240.67
+      },
+      "blade": {
+        "base": {
+          "x": 227.55,
+          "y": 246.41
+        },
+        "tip": {
+          "x": 346.33,
+          "y": 329.58
+        }
+      },
+      "weaponPerspective": "side"
+    },
+    {
+      "name": "attack-down-diag-11",
+      "texture": "hero-academy-attack-corrections",
+      "x": 1156,
+      "y": 1924,
+      "w": 219,
+      "h": 304,
+      "originX": 0.5488127853881278,
+      "originY": 1.0,
+      "scale": 1,
+      "grip": {
+        "x": 139.36,
+        "y": 205.86
+      },
+      "blade": {
+        "base": {
+          "x": 147.55,
+          "y": 211.6
+        },
+        "tip": {
+          "x": 266.33,
+          "y": 294.77
+        }
+      },
+      "weaponPerspective": "side"
+    }
+  ]
+}

@@ -1573,9 +1573,9 @@ export class GameScene extends Phaser.Scene {
     trace.elapsed = elapsed;
     const end = combo.hitDelayMs + PLAYER.hitWindowMs;
     // 휘두르기 시작 시각에 손그림 검기·찌르기 이펙트를 재생하고, 없을 때만 벡터 초승달로 대체한다.
-    const strikeAt = strikePoseStart(trace.stage);
+    const strikeAt = strikePoseStart(trace.stage, rig.activeAttackFacing);
     if (lastElapsed < strikeAt && elapsed >= strikeAt) {
-      const played = this.effects.spawnSlashSprite(trace.stage, rig.activeAttackFacing, player.x, player.y, rig.scaleX, player.y, time);
+      const played = this.effects.spawnSlashSprite(trace.stage, rig.activeAttackFacing, previous, current, player.y, time);
       if (!played) {
         trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, combo.hitDelayMs, player.y + 2);
         this.effects.slash(trace.effect, previous, current, time, trace.direction.x, trace.direction.y);
