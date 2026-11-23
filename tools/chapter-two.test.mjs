@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoNpcs, chapterTwoStarted, fernCartVisible, fernMothHunt, fernShopOpen } from '../src/story/chapterTwo.ts';
+import { FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoStarted, fernCartVisible, fernMothHunt, fernShopOpen } from '../src/story/chapterTwo.ts';
 import { QUESTS, continueMainQuest, parseQuests, recordEvent, serializeQuests, talkTo } from '../src/story/quests.ts';
 import { MAPS, walkable } from '../src/world/maps.ts';
 import { chapterNpcs } from '../src/story/chapterOne.ts';
@@ -66,4 +66,35 @@ test('습격 뒤 광장에서 일하는 사람들의 길은 페른의 수레를 
       }
     });
   }
+});
+
+test('떠날 채비: 남문의 수레 뒤 이어지고, 루안에게 회전 베기를 배운 뒤 세레나·리네아·에일라에게 인사하고 헤르만에게 여비를 받는다', () => {
+  let state = { ...afterSword, 'fern-cart': { status: 'ready', count: 1, step: 2 } };
+  const shop = talkTo('fern', state);
+  assert.equal(shop.completed?.id, 'fern-cart');
+  assert.equal(shop.next?.id, 'farewell', '남문의 수레를 끝내면 떠날 채비가 이어진다');
+  state = shop.state;
+  const order = ['ruan', 'serena', 'linea', 'eila', 'herman'];
+  const skills = [];
+  let completed;
+  for (const npc of order) {
+    // 순서를 건너뛰어 말을 걸면 단계가 넘어가지 않는다
+    if (npc !== 'herman') assert.equal(talkTo('herman', state)?.stepDone, undefined);
+    const r = talkTo(npc, state);
+    assert.ok(r.stepDone, npc);
+    if (r.stepDone.rewardSkill) skills.push(r.stepDone.rewardSkill);
+    state = r.state;
+    completed = r.completed ?? completed;
+  }
+  assert.deepEqual(skills, ['spin'], '루안에게서 회전 베기 하나');
+  assert.equal(completed?.id, 'farewell');
+  assert.equal(completed.rewardGold, 100);
+  assert.equal(state.farewell.status, 'done');
+});
+
+test('2장의 베르넬과 테온은 떠나는 시온에게 한마디씩 한다(그 전에는 1장 대사)', () => {
+  assert.equal(chapterTwoDialogue('teon', {}), undefined);
+  assert.match(chapterTwoDialogue('teon', afterSword)[0].text, /여기 남을게/);
+  assert.match(chapterTwoDialogue('vernel', afterSword)[0].text, /유적 길/);
+  assert.equal(chapterTwoDialogue('doran', afterSword), undefined, '나머지는 1장 습격 뒤 대사를 그대로 쓴다');
 });

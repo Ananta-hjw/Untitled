@@ -68,3 +68,16 @@ test('사냥터는 종류별 다섯 마리이며 야외만 확대하고 실내 �
   const original = {home:1000,linea:900,chief:1100,clinic:1100,hall:1200,store:1000,smithy:1100,inn:1400};
   for(const interior of INTERIORS) assert.equal(interior.width, original[interior.id] * INTERIOR_SIZE_SCALE);
 });
+
+test('서리 딱정벌레의 얼음 껍질은 정면 공격만 막고, 옆·뒤와 반격은 막지 못한다', async () => {
+  const { shellBlocks, FROST_SHELL } = await import('../src/combat/monsterTypes.ts');
+  const facingRight = { x: 1, y: 0 };
+  assert.equal(shellBlocks('frost-beetle', facingRight, 100, 0), true, '정면');
+  assert.equal(shellBlocks('frost-beetle', facingRight, 100, 40), true, '정면 조금 비스듬히');
+  assert.equal(shellBlocks('frost-beetle', facingRight, 0, 100), false, '옆');
+  assert.equal(shellBlocks('frost-beetle', facingRight, -100, 0), false, '뒤');
+  assert.equal(shellBlocks('frost-beetle', facingRight, 100, 0, true), false, '패링·저스트 회피 뒤의 반격은 뚫는다');
+  assert.equal(shellBlocks('iron-scale-lizard', facingRight, 100, 0), false, '다른 몬스터는 껍질이 없다');
+  assert.ok(FROST_SHELL.frontDegrees > 0 && FROST_SHELL.frontDegrees < 90);
+  assert.ok(MONSTERS['frost-beetle'].speed < MONSTERS.slime.speed, '느리다');
+});

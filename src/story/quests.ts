@@ -20,7 +20,7 @@ export type QuestId = 'ruan-training' | 'ruan-dodge' | 'ruan-parry' | 'ruan-fiel
   | 'watch-report' | 'festival-supplies' | 'sia-knot' | 'harvest-help' | 'evening-patrol' | 'moth-trail'
   | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter' | 'first-sword'
   // 2장 (docs/story-chapter2.md, story/chapterTwo.ts)
-  | 'fern-cart';
+  | 'fern-cart' | 'farewell';
 
 /** 게임에서 일어나서 퀘스트 목표를 채우는 일 */
 export type QuestEvent =
@@ -50,6 +50,8 @@ export interface QuestObjective {
   encounter?: 'village-raid';
   monster?: MonsterKind;
   lines?: DialogueLine[];
+  /** 이 단계를 마치면 배우는 기술 (예: 떠날 채비에서 루안에게 배우는 회전 베기) */
+  rewardSkill?: SkillId;
 }
 
 export interface QuestDef {
@@ -385,6 +387,34 @@ export const QUESTS: QuestDef[] = [
     done: [fern('자, 이제 장사 시작이다. 물약, 건빵, 푸른 이슬, 해독 약초. 필요한 걸 골라 봐.')],
   },
   {
+    id: 'farewell', title: '떠날 채비', giver: 'ruan', main: true, requires: 'fern-cart', turnIn: 'herman', completeOnTarget: true,
+    objective: { label: '광장의 루안에게 떠난다고 말하기', need: 1, event: 'talk', npc: 'ruan' },
+    steps: [
+      { label: '광장의 루안에게 떠난다고 말하기', need: 1, event: 'talk', npc: 'ruan', rewardSkill: 'spin', lines: [
+        hero('루안 선생님, 동쪽으로 가 보려고요. 시아를 데려간 그 무리가 그쪽으로 갔대요.'),
+        ruan('…그럴 줄 알았다. 앉은 채로라 미안하다만, 하나만 가르쳐 주마.'),
+        ruan('둘러싸였을 때 몸을 돌려 둘레를 한 번에 베는 법이다. 발을 디딘 채 허리로 돌아라.'),
+        ruan('혼자 짊어지지 마라. 길에서 만나는 사람들에게 기대는 것도 실력이다.')] },
+      { label: '마을 북쪽의 세레나에게 인사하기', need: 1, event: 'talk', npc: 'serena', lines: [
+        line('serena', '세레나', '…가는구나. 말려도 소용없다는 거, 엄마가 제일 잘 알지.'),
+        line('serena', '세레나', '시아를 데려와. 너도 꼭 돌아오고.')] },
+      { label: '리네아에게 인사하기', need: 1, event: 'talk', npc: 'linea', lines: [
+        line('linea', '리네아', '오늘부터 일지를 쓰려고. 에일라 선생님이 보기 편하게.'),
+        line('linea', '리네아', '…다녀와. 시아한테, 언니가 기다린다고 전해 줘.')] },
+      { label: '에일라에게 인사하기', need: 1, event: 'talk', npc: 'eila', lines: [
+        line('eila', '에일라', '창조의 권능을 가진 치유사라면 리네아의 시간을 늦출 수 있을지 몰라. 교단에 그런 사람들이 있어.'),
+        line('eila', '에일라', '…하지만 네 몸에서 힘을 꺼내 보겠다는 검사에는 절대 응하지 마. 약속해.'),
+        hero('약속할게요. 리네아를 부탁드려요.')] },
+      { label: '촌장 헤르만에게 인사하기', need: 1, event: 'talk', npc: 'herman', lines: [
+        line('herman', '헤르만', '동쪽으로 간다고? 동문으로 나가 개울을 따라가면 고갯길이 나온다. 고개를 넘으면 큰 강가의 나루지.'),
+        line('herman', '헤르만', '빈손으로 보낼 수야 없지. 마을 사람들이 조금씩 모은 여비다. 받아 두게.')] },
+    ],
+    rewardXp: 40, rewardGold: 100, rewardItems: [{ id: 'potion', count: 3 }],
+    offer: [hero('…떠나기 전에, 다들에게 인사부터 해야겠어. 루안 선생님부터.')],
+    reminder: [ruan('인사는 다 했느냐? 북쪽 사람들도 네 얼굴을 보고 싶어 할 거다.')],
+    done: [line('herman', '헤르만', '로웬은 우리가 지키마. 너는 네 길을 가거라. 시아를 꼭 찾고.'), hero('다녀오겠습니다.')],
+  },
+  {
     id: 'doran-gel', title: '담금질 재료', giver: 'doran',
     objective: { label: '슬라임 처치 (점액 모으기)', need: 5, event: 'kill', monster: 'slime' },
     rewardXp: 20, rewardGold: 30,
@@ -482,6 +512,8 @@ export interface TalkResult {
   completed?: QuestDef;
   progressed?: QuestDef;
   next?: QuestDef;
+  /** 이 대화로 마친 단계 (단계 보상 rewardSkill을 준다) */
+  stepDone?: QuestObjective;
 }
 
 function finish(state: QuestState, def: QuestDef, lines: DialogueLine[]): TalkResult {
@@ -502,8 +534,8 @@ export function talkTo(npc: NpcId, state: QuestState): TalkResult | undefined {
     const objective = currentObjective(target, state[target.id]);
     const next = advance(state, target, 1);
     const lines = objective.lines ?? target.target ?? [];
-    if (target.completeOnTarget && next[target.id]?.status === 'ready') return finish(next, target, lines);
-    return { lines, state: next, progressed: target };
+    if (target.completeOnTarget && next[target.id]?.status === 'ready') return { ...finish(next, target, lines), stepDone: objective };
+    return { lines, state: next, progressed: target, stepDone: objective };
   }
   const offer = ordered.find(q => q.giver === npc && canStart(q, state));
   if (offer) return { lines: offer.offer, state: { ...state, [offer.id]: { status: 'active', count: 0 } }, accepted: offer };

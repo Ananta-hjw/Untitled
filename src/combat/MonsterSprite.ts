@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { MONSTERS, monsterKind, type EnemyKey, type MonsterKind } from './monsterTypes';
+import { FROST_SHELL, MONSTERS, monsterKind, type EnemyKey, type MonsterKind } from './monsterTypes';
 import { direction8, type Direction8 } from '../world/npcs';
 
 interface Frame {
@@ -36,6 +36,9 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   private motion: 'idle' | 'walk' = 'idle';
   private elapsed = 0;
   private attackPose?: number;
+  /** 서리 딱정벌레가 마지막으로 몸을 돌린 시각(이 스프라이트가 받은 게임 시간 누계) */
+  private turnedAt = -Infinity;
+  private clock = 0;
 
   constructor(scene: Phaser.Scene, readonly kind: MonsterKind) {
     super(scene, 0, 0);
@@ -66,15 +69,33 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     return this;
   }
   setMovement(dx: number, dy: number): void {
-    this.direction = direction8(dx, dy, this.direction);
+    const wanted = direction8(dx, dy, this.direction);
+    // 서리 딱정벌레는 무거워서 한 번에 8방향 한 칸씩, 천천히 몸을 돌린다(등 뒤를 잡을 틈).
+    if (this.kind === 'frost-beetle' && wanted !== this.direction) {
+      if (this.clock - this.turnedAt < FROST_SHELL.turnMs) return;
+      this.turnedAt = this.clock;
+      const order: Direction8[] = ['right', 'down-right', 'down', 'down-left', 'left', 'up-left', 'up', 'up-right'];
+      const from = order.indexOf(this.direction), to = order.indexOf(wanted);
+      const step = ((to - from + 8) % 8) <= 4 ? 1 : -1;
+      this.direction = order[(from + step + 8) % 8];
+    } else this.direction = wanted;
     this.showFrame();
+  }
+  /** 바라보는 방향 (화면 좌표의 단위 벡터에 가까운 값) */
+  facingVector(): { x: number; y: number } {
+    const v: Record<Direction8, [number, number]> = {
+      right: [1, 0], 'down-right': [0.707, 0.707], down: [0, 1], 'down-left': [-0.707, 0.707],
+      left: [-1, 0], 'up-left': [-0.707, -0.707], up: [0, -1], 'up-right': [0.707, -0.707],
+    };
+    const [x, y] = v[this.direction];
+    return { x, y };
   }
   // Character.face is horizontal compatibility; real direction comes from setMovement.
   setFlipX(_flip: boolean): this { return this; }
   setTint(color: number): this { this.image.setTint(color); return this; }
   setTintMode(mode: Phaser.TintModes): this { this.image.setTintMode(mode); return this; }
   clearTint(): this { this.image.clearTint(); return this; }
-  advance(deltaMs: number): void { this.elapsed += deltaMs * this.anims.timeScale; this.showFrame(); }
+  advance(deltaMs: number): void { this.elapsed += deltaMs * this.anims.timeScale; this.clock += deltaMs; this.showFrame(); }
   showAttack(elapsed: number, windup: number, strike: number, recovery: number): void {
     this.attackPose = elapsed < windup ? 1 : elapsed < windup + strike ? 2 : elapsed < windup + strike + recovery ? 3 : undefined;
     this.showFrame();

@@ -6,8 +6,8 @@ import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import { bladeHitsEllipse, clipBladeSweep, type Blade } from '../combat/blade';
 import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
-import { preloadMonsters } from '../combat/MonsterSprite';
-import { ASH_SLOW, MONSTERS, enemyHitReaches, type EnemyHit } from '../combat/monsterTypes';
+import { MonsterSprite, preloadMonsters } from '../combat/MonsterSprite';
+import { ASH_SLOW, MONSTERS, enemyHitReaches, shellBlocks, type EnemyHit, type EnemyKey } from '../combat/monsterTypes';
 import { isJustDodge, slowMotionScale, strikeReaches } from '../combat/justDodge';
 import { critMultiplier, gameTimeScale, heavierKind, hitStopMs, strikeKind, type HitKind } from '../combat/hitFeel';
 import { ImpactEffects } from '../combat/ImpactEffects';
@@ -73,7 +73,7 @@ import { findInteractable, type Interactable } from '../world/interactables';
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
 import { chapterTwoPreviewNpcs } from '../world/chapterTwoNpcs';
-import { FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoNpcs, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen } from '../story/chapterTwo';
+import { FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen } from '../story/chapterTwo';
 import fernCartDamagedUrl from '../assets/village/rowen/fern-cart-damaged.webp?url';
 import fernCartRepairedUrl from '../assets/village/rowen/fern-cart-repaired.webp?url';
 import { PerfOverlay } from '../ui/PerfOverlay';
@@ -551,7 +551,7 @@ export class GameScene extends Phaser.Scene {
     if (this.playFestival) preloadFestival(this);
     preloadIcons(this);
     // 습격 중에는 이 맵에 나올 모든 무리의 그림을 미리 읽는다(대화 뒤 다음 무리가 바로 나타난다).
-    preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...raidSpawnsAnyStep(this.quests, this.mapId)]);
+    preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...raidSpawnsAnyStep(this.quests, this.mapId), ...this.previewMonsters()]);
     preloadVillage(this, this.map);
     preloadNpcs(this, [...NPCS, FERN, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 })]);
     if (fernCartVisible(this.quests, this.mapId)) {
@@ -981,6 +981,18 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 월드
 
   /** ?map=east-stream&npcs=chapter2: 미구현 2장 인물의 그림·대화 확인용. 배포판에는 적용하지 않는다. */
+  /**
+   * 개발용: ?monsters=frost-beetle 이면 플레이어 둘레에 그 몬스터 셋을 더 세운다(아직 맵이 없는 2장 몬스터를 확인할 때).
+   * 배포판에는 적용하지 않는다.
+   */
+  private previewMonsters(): Array<{ key: EnemyKey; x: number; y: number }> {
+    if (!import.meta.env.DEV) return [];
+    const key = new URLSearchParams(location.search).get('monsters');
+    if (key !== 'frost-beetle') return [];
+    const s = this.map.spawn;
+    return [-260, 0, 260].map((dx) => ({ key, x: s.x + dx, y: s.y - 260 }));
+  }
+
   private get previewChapterTwo(): boolean {
     return import.meta.env.DEV && this.mapId === 'east-stream'
       && new URLSearchParams(location.search).get('npcs') === 'chapter2';
@@ -990,6 +1002,7 @@ export class GameScene extends Phaser.Scene {
     // 사냥터 몬스터는 그 맵의 권장 레벨 범위를 차례로 받는다. 해 질 무렵의 나방은 따로 정한 레벨.
     this.map.enemies.forEach((spawn, i) => this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, spawnLevel(this.mapId, i))));
     for (const spawn of this.duskSpawns()) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, DUSK_MOTH_LEVEL));
+    for (const spawn of this.previewMonsters()) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, 9));
     this.syncRaidEnemies(false);
     // 축제 연출 동안에는 마을 사람 모두가 광장의 잔치 자리에 있다.
     let defs = this.previewChapterTwo ? this.map.npcs
@@ -1569,6 +1582,8 @@ export class GameScene extends Phaser.Scene {
       if (!bladeHitsEllipse(sweep.previous, sweep.current, { x: bounds.centerX, y: bounds.centerY },
         bounds.width * 0.42 + PLAYER.bladeRadius, bounds.height * 0.42 + PLAYER.bladeRadius)) continue;
       trace.hit.add(enemy);
+      // 서리 딱정벌레의 얼음 껍질: 정면에서 벤 칼은 튕겨 나간다(반격은 껍질을 뚫는다).
+      if (this.shellBlocked(enemy, trace.counter, bounds.centerX, bounds.centerY)) continue;
 
       // 행운(LUK)만큼 치명타 확률이 오른다: 굴린 값을 그만큼 낮춘다.
       const strike = strikeKind(trace.counter, finisher, Math.random() - (this.derived.critChance - HIT_FEEL.critChance));
@@ -1594,6 +1609,19 @@ export class GameScene extends Phaser.Scene {
       if (heaviest === 'counter') this.impacts.screenFlash(0x9fdcff, 0.16);
       else if (heaviest !== 'normal') this.impacts.screenFlash(0xffffff, heaviest === 'finisher' ? 0.1 : 0.07);
     }
+  }
+
+  /**
+   * 서리 딱정벌레(monsterTypes의 shellBlocks)가 정면의 칼을 껍질로 막았으면 true. 막힌 자리에 차가운 불꽃과 "막힘"을 띄운다.
+   * 피해·마나·밀림은 없다.
+   */
+  private shellBlocked(enemy: Enemy, counter: boolean, x: number, y: number): boolean {
+    const c = enemy.character;
+    if (!(c.sprite instanceof MonsterSprite)) return false;
+    if (!shellBlocks(enemy.kind, c.sprite.facingVector(), this.player.x - c.x, this.player.y - c.y, counter)) return false;
+    this.impacts.impact(x, y, Math.sign(c.x - this.player.x) || 1, 0, 'normal', this.now, c.y);
+    this.progressEffects.showPopup(c.x, c.y - 140, '막힘', '#bfe8ff');
+    return true;
   }
 
   /** 맞은 적의 뒤처리: 쓰러졌으면 경험치·퀘스트·전리품, 아니면 밀려나고 움찔한다. */
@@ -1845,13 +1873,16 @@ export class GameScene extends Phaser.Scene {
     // 마을 사람이면 퀘스트 대화를 먼저 본다. 퀘스트와 상관없으면 평소 대사.
     const quest = target.id.startsWith('npc-') ? talkTo(target.id.slice(4) as NpcId, this.quests) : undefined;
     const npc = target.id.startsWith('npc-') ? target.id.slice(4) as NpcId : undefined;
-    const lines = quest?.lines.length ? quest.lines : (npc && chapterDialogue(npc, this.quests)) || (target.dialogue ? DIALOGUES[target.dialogue] : []);
+    const lines = quest?.lines.length ? quest.lines
+      : (npc && (chapterTwoDialogue(npc, this.quests) ?? chapterDialogue(npc, this.quests))) || (target.dialogue ? DIALOGUES[target.dialogue] : []);
     this.dialogue.open(lines, () => {
       if (quest) {
         this.quests = quest.state;
         this.saveQuests();
         this.refreshQuests();
       }
+      // 단계 보상: 이 대화로 마친 단계가 기술을 가르쳐 주면 배운다(떠날 채비의 루안).
+      if (quest?.stepDone?.rewardSkill) this.learnSkill(quest.stepDone.rewardSkill);
       if (quest?.completed) {
         this.hud.showCallout(`퀘스트 완료: ${quest.completed.title}${quest.next ? ` → ${quest.next.title}` : ''}`);
         this.gainXp(quest.completed.rewardXp, player.x, player.y - 185);
@@ -2159,6 +2190,8 @@ export class GameScene extends Phaser.Scene {
       const dx = c.x - player.x, dy = c.y - player.y;
       if (!inSpinRadius(dx, dy, SPIN_SLASH.radius, VERTICAL_SPEED_RATIO)) continue;
       hits++;
+      const spinBounds = c.sprite.getBounds(this.boundsScratch);
+      if (this.shellBlocked(enemy, false, spinBounds.centerX, spinBounds.centerY)) continue;
       const length = Math.hypot(dx, dy / VERTICAL_SPEED_RATIO) || 1;
       const dirX = dx / length, dirY = dy / VERTICAL_SPEED_RATIO / length;
       const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * SPIN_SLASH.damage * this.derived.skillDamage * this.resonanceDamage());

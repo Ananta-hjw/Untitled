@@ -1,6 +1,7 @@
 import { mapLength, mapPoint } from '../world/mapScale.ts';
 import type { MapId } from '../world/maps.ts';
-import type { NpcDef } from '../world/npcs.ts';
+import type { NpcDef, NpcId } from '../world/npcs.ts';
+import type { DialogueLine } from './dialogues.ts';
 import type { Obstacle } from '../world/obstacles.ts';
 import { currentObjective, questDef, type QuestState } from './quests.ts';
 
@@ -50,6 +51,19 @@ export function fernCartState(_state: QuestState): 'damaged' | 'repaired' {
 /** 페른의 수레(상점)가 열렸는지: 퀘스트 1 "남문의 수레"를 끝냈다 */
 export function fernShopOpen(state: QuestState): boolean {
   return state['fern-cart']?.status === 'done';
+}
+
+/**
+ * 2장의 로웬에서 바뀌는 평소 대사. 퀘스트와 상관없이 말을 걸 때 나온다(1장 습격 뒤 대사보다 먼저).
+ * 퀘스트 2 "떠날 채비"의 필수 인사(루안·세레나·리네아·에일라·헤르만)는 퀘스트 대사가 맡고, 여기는 덤으로 들르는 사람들이다.
+ */
+export function chapterTwoDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined {
+  if (!chapterTwoStarted(state)) return undefined;
+  const lines: Partial<Record<NpcId, DialogueLine[]>> = {
+    vernel: [{ speaker: '베르넬', portrait: 'vernel', text: '유적 길을 다 치우려면 한참 걸려. 네가 돌아올 때쯤엔 들어갈 수 있게 해 둘게.' }],
+    teon: [{ speaker: '테온', portrait: 'teon', text: '이번엔 여기 남을게. 남은 사람들은 내가 지킨다. …그러니까 너는 뒤돌아보지 말고 가.' }],
+  };
+  return lines[npc];
 }
 
 /** 퀘스트 1의 나방 쫓기 단계인지 (남쪽 들판에 잿빛 나방 넷이 남아 있다) */

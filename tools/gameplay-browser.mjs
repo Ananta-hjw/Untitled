@@ -3469,3 +3469,80 @@ test('2장 남문의 수레: 광장에 페른과 삭은 수레가 서고, 들판
   assert.equal(result.herbs, 2, '보상 해독 약초 둘');
   assert.equal(result.again, true, '그 뒤 평소 대화 뒤에도 수레가 열린다');
 });
+
+test('2장 떠날 채비: 루안에게 말하면 회전 베기가 기술 칸에 들어오고, 북쪽 사람들에게 인사하면 헤르만이 여비를 준다', async () => {
+  await load('village');
+  const result = await evaluate(`(async () => {
+    const { QUESTS } = await import('/src/story/quests.ts');
+    const g = window.__game;
+    let s = g.scene.getScene('game'), t = performance.now();
+    const seed = {};
+    const mains = QUESTS.filter(q => q.main);
+    for (const q of mains.slice(0, mains.findIndex(q => q.id === 'fern-cart') + 1)) seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+    localStorage.setItem('untitled-rpg.inventory', JSON.stringify({ version: 1, gold: 0, items: {} }));
+    localStorage.removeItem('untitled-rpg.skills');
+    const restart = async map => {
+      s.scene.restart({ map }); g.step(t += 16, 16);
+      for (let i = 0; i < 300; i++) {
+        s = g.scene.getScene('game');
+        if (s.mapId === map && s.sys.isActive() && s.minimap && !s.traveling) return;
+        await new Promise(resolve => setTimeout(resolve, 10)); g.step(t += 16, 16);
+      }
+      throw Error('맵 재시작 시간 초과: ' + map);
+    };
+    const flush = () => { while (s.dialogue.isOpen) s.dialogue.advance(); };
+    const talk = id => { const n = s.npcs.find(n => n.def.id === id); s.openDialogue(n.spot); flush(); };
+    await restart('village');
+    const started = s.quests.farewell?.status;
+    const ruanMarker = s.npcs.find(n => n.def.id === 'ruan').questMarker?.text ?? null;
+    talk('ruan');
+    const skill = { slots: s.skillSlots.slice(), label: s.skillButtons[0].text.text };
+    await restart('village-north');
+    for (const id of ['serena', 'linea', 'eila', 'herman']) talk(id);
+    const done = s.quests.farewell?.status, gold = s.inventory.gold;
+    localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.inventory'); localStorage.removeItem('untitled-rpg.skills');
+    return { started, skill, done, gold };
+  })()`);
+  assert.equal(result.started, 'active');
+  assert.deepEqual(result.skill, { slots: ['spin', null, null, null, null], label: '회전베기' });
+  assert.equal(result.done, 'done');
+  assert.ok(result.gold >= 100, '여비 100 G');
+});
+
+test('서리 딱정벌레는 그림과 전투가 연결되고, 정면의 칼은 껍질에 막히고 등 뒤에서는 베인다', async () => {
+  await load('south-field&monsters=frost-beetle');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    const beetles = s.enemies.filter(e => e.kind === 'frost-beetle');
+    const b = beetles[0], c = b.character;
+    for (const other of s.enemies) if (other !== b) { other.character.alive = false; other.character.setVisible(false); }
+    const facing = c.sprite.facingVector();
+    const p = s.player;
+    // 정면: 딱정벌레가 바라보는 쪽에 선다
+    p.placeAt(c.x + facing.x * 90, c.y + facing.y * 50);
+    const hp0 = c.hp;
+    const front = s.shellBlocked(b, false, c.x, c.y - 40);
+    // 반격은 뚫는다
+    const counter = s.shellBlocked(b, true, c.x, c.y - 40);
+    // 등 뒤
+    p.placeAt(c.x - facing.x * 90, c.y - facing.y * 50);
+    const back = s.shellBlocked(b, false, c.x, c.y - 40);
+    // 몸은 한 번에 한 칸씩 천천히 돈다
+    const sprite = c.sprite, before = sprite.facingVector();
+    sprite.setMovement(-before.x, -before.y);
+    const step1 = sprite.facingVector();
+    sprite.setMovement(-before.x, -before.y);
+    const step2 = sprite.facingVector();
+    return { count: beetles.length, name: b.stats.name, texture: c.sprite.list[0].texture.key, front, counter, back, hp: c.hp === hp0,
+      turnedOneStep: Math.abs(step1.x * before.x + step1.y * before.y - 0.707) < 0.01, waited: step2.x === step1.x && step2.y === step1.y };
+  })()`);
+  assert.equal(result.count, 3);
+  assert.equal(result.name, '서리 딱정벌레');
+  assert.match(result.texture, /^monster-frost-beetle-/);
+  assert.equal(result.front, true, '정면은 막힌다');
+  assert.equal(result.counter, false, '반격은 뚫는다');
+  assert.equal(result.back, false, '등 뒤는 베인다');
+  assert.equal(result.turnedOneStep, true, '반대쪽을 봐도 한 칸만 돈다');
+  assert.equal(result.waited, true, '다음 칸은 조금 기다렸다 돈다');
+});

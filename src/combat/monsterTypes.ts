@@ -1,7 +1,7 @@
 import { ENEMY, PROGRESSION } from '../config.ts';
 
-export type MonsterKind = 'slime' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'corrosion-tracker' | 'corrosion-executioner';
-export type EnemyKey = 'slime-green' | 'slime-blue' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'corrosion-tracker' | 'corrosion-executioner' | 'retainer-ash';
+export type MonsterKind = 'slime' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'corrosion-tracker' | 'corrosion-executioner' | 'frost-beetle';
+export type EnemyKey = 'slime-green' | 'slime-blue' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'corrosion-tracker' | 'corrosion-executioner' | 'frost-beetle' | 'retainer-ash';
 export function monsterKind(key: EnemyKey): MonsterKind | undefined {
   return key.startsWith('slime-') ? 'slime' : key === 'retainer-ash' ? undefined : key as MonsterKind;
 }
@@ -19,6 +19,9 @@ export const MONSTERS = {
   // 습격의 권속 (소멸·네이룬 계열 중급). 추적자는 낮게 달려들어 할퀴고, 집행자는 길게 준비한 뒤 무겁게 돌진한다.
   'corrosion-tracker': { name: '부식의 추적자', hp: 30, damage: 7, xp: 12, height: 100, speed: 150,
     windupMs: 420, strikeMs: 120, returnMs: 200, recoverMs: 850, color: 0x6d6278 },
+  // 수호(바르덴)의 하급 권속. 2장 동쪽 고갯길. 느리고 단단하며 얼음 껍질이 정면 공격을 막는다(FROST_SHELL).
+  'frost-beetle': { name: '서리 딱정벌레', hp: 70, damage: 12, xp: 22, height: 105, speed: 70,
+    windupMs: 720, strikeMs: 200, returnMs: 240, recoverMs: 1400, color: 0x9fd8ee },
   // 1장 보스. 레벨 7에서 체력 500·공격력 34 (combat/bossPattern.ts의 패턴을 쓴다)
   'corrosion-executioner': { name: '부식의 집행자', hp: 200, damage: 18, xp: 80, height: 150, speed: 95,
     windupMs: 950, strikeMs: 340, returnMs: 260, recoverMs: 1300, color: 0x5e5468 },
@@ -27,6 +30,21 @@ export const MONSTERS = {
 /** 길게 준비했다가 잠근 방향으로 돌진하는 몬스터 */
 export function isCharger(kind: MonsterKind | undefined): boolean {
   return kind === 'iron-scale-lizard' || kind === 'corrosion-executioner';
+}
+
+/**
+ * 서리 딱정벌레의 얼음 껍질: 바라보는 쪽에서 frontDegrees 안으로 들어온 공격은 막힌다(피해 없음).
+ * 옆과 뒤로 돌아가 베거나, 패링·저스트 회피 뒤의 반격(counter)으로 친다. 몸을 천천히 돌려서(turnMs마다 8방향 한 칸)
+ * 빠르게 돌면 등을 잡을 수 있다.
+ */
+export const FROST_SHELL = { frontDegrees: 60, turnMs: 260 };
+
+/** 이 몬스터가 attacker 쪽에서 온 공격을 껍질로 막는지. facing은 몬스터가 바라보는 방향(화면 좌표). */
+export function shellBlocks(kind: MonsterKind | undefined, facing: { x: number; y: number }, toAttackerX: number, toAttackerY: number, counter = false): boolean {
+  if (kind !== 'frost-beetle' || counter) return false;
+  const a = Math.hypot(facing.x, facing.y), b = Math.hypot(toAttackerX, toAttackerY);
+  if (!a || !b) return false;
+  return (facing.x * toAttackerX + facing.y * toAttackerY) / (a * b) >= Math.cos(FROST_SHELL.frontDegrees * Math.PI / 180);
 }
 
 /** 몬스터 한 마리의 능력치 (레벨을 반영한 값) */
