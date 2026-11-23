@@ -35,12 +35,23 @@ const PROTO_POSE_STARTS = {
   attack3: [0, 50, 168, 300],
 };
 
+/**
+ * 옆(좌우) 1타는 칼까지 그린 6자세 원화를 쓴다(attack-six/, 준비→예비→최대 들어 올림→타격→마무리→복귀).
+ * 타격 자세(3번)가 명중 구간(hitDelayMs ~ +hitWindowMs)을 덮고, 들어 올린 자세(2번)를 길게 보여 힘을 모은다.
+ */
+const SIDE_SIX_STARTS = [0, 40, 110, 200, 280, 350];
+
+function usesSideSix(action: HeroAction, facing: Facing): boolean {
+  return action === 'attack1' && (facing === 'right' || facing === 'left');
+}
+
 function usesFrontPoses(facing: Facing): boolean {
   return facing === 'down' || facing === 'down-right' || facing === 'down-left';
 }
 
 /** 콤보 단계(0~2)와 방향에 맞는 타격 자세가 나타나는 시각(ms). */
 export function strikePoseStart(stage: number, facing: Facing = 'right'): number {
+  if (usesSideSix(`attack${stage + 1}` as HeroAction, facing)) return SIDE_SIX_STARTS[3];
   const starts = usesFrontPoses(facing) ? PROTO_POSE_STARTS : POSE_STARTS;
   return starts[`attack${stage + 1}` as 'attack1' | 'attack2' | 'attack3'][2];
 }
@@ -94,6 +105,11 @@ export function heroFrame(action: HeroAction, facing: Facing, elapsedMs: number)
     const column = action === 'walk' ? WALK_CYCLE[Math.floor(time * WALK_FPS / 1000) % 4] : 0;
     const diagonal = DIAGONALS.indexOf(facing);
     return diagonal >= 0 ? `diagonal-${diagonal * 4 + column}` : `walk-${DIRECTIONS.indexOf(facing) * 4 + column}`;
+  }
+  if (usesSideSix(action, facing)) {
+    let pose = 0;
+    while (pose < SIDE_SIX_STARTS.length - 1 && time + 1e-6 >= SIDE_SIX_STARTS[pose + 1]) pose++;
+    return `attack-side6-${pose}`;
   }
   const useProto = action !== 'dodge' && usesFrontPoses(facing);
   const starts = useProto

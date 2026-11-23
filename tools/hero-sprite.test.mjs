@@ -11,7 +11,8 @@ const attackFrontData = JSON.parse(readFileSync(new URL('combo-proto/attack-fron
 const attackDownDiagData = JSON.parse(readFileSync(new URL('combo-proto/attack-down-diag_frames.json', root)));
 const correctionData = JSON.parse(readFileSync(new URL('combo-proto/attack-corrections_frames.json', root)));
 const dodgeData = JSON.parse(readFileSync(new URL('dodge/frames.json', root)));
-const allFrames = [...new Map([...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames, ...correctionData.frames, ...dodgeData.frames].map(f => [f.name, f])).values()];
+const sideSixData = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/attack-six/attack-side_frames.json', import.meta.url)));
+const allFrames = [...new Map([...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames, ...correctionData.frames, ...dodgeData.frames, ...sideSixData.frames].map(f => [f.name, f])).values()];
 
 test('상하 회피는 정면·뒷면 전용 네 자세를 쓰고 놓은 입력과 작은 좌우 흔들림에도 방향을 유지한다', () => {
   for (const facing of ['up','down','left','right','up-left','up-right','down-left','down-right']) {
@@ -96,8 +97,9 @@ test('각 콤보의 실제 타격 그림은 명중 구간 안에 표시되고 3�
   for (let stage = 0; stage < 3; stage++) {
     const action = `attack${stage + 1}`;
     const frame = heroFrame(action, 'right', PLAYER.combo[stage].hitDelayMs + 30);
-    assert.equal(frame, `combat-${stage * 4 + 2}`);
-    assert.ok(data.frames.find((f) => f.name === frame).blade);
+    // 옆 1타는 칼까지 그린 6자세의 타격 자세(3번)
+    assert.equal(frame, stage === 0 ? 'attack-side6-3' : `combat-${stage * 4 + 2}`);
+    assert.ok(allFrames.find((f) => f.name === frame).blade);
     assert.ok(ACTION_DURATION[action] >= PLAYER.combo[stage].intervalMs);
   }
   assert.equal(ACTION_DURATION.attack3, PLAYER.combo[2].intervalMs);
@@ -179,4 +181,27 @@ test('검 막기는 50도 기울인 칼날 중간을 왼손으로 받치고 오�
     assert.ok(Math.abs(Math.hypot(tip.x-base.x,tip.y-base.y)-150)<1e-6);
     assert.ok(Math.abs(Math.hypot(base.x-f.grip.x,base.y-f.grip.y)-12)<1e-6);
   }
+});
+
+test('옆 1타 6자세: 타격 자세가 명중 구간 전체를 덮고, 칼은 잰 코등이·칼끝에 무기 레이어로 붙는다', () => {
+  const combo = PLAYER.combo[0];
+  for (const facing of ['right', 'left']) {
+    for (let t = combo.hitDelayMs; t <= combo.hitDelayMs + PLAYER.hitWindowMs; t += 5) {
+      assert.equal(heroFrame('attack1', facing, t), 'attack-side6-3', `${facing} ${t}`);
+    }
+    // 준비 → 예비 → 최대 들어 올림 → 타격 → 마무리 → 복귀를 차례로 모두 보여 준다
+    const seen = new Set();
+    for (let t = 0; t < ACTION_DURATION.attack1; t += 5) seen.add(heroFrame('attack1', facing, t));
+    assert.deepEqual([...seen], [0, 1, 2, 3, 4, 5].map(i => `attack-side6-${i}`));
+  }
+  for (const f of sideSixData.frames) {
+    // 칼을 지운 몸이라 무기 레이어를 쓴다 (예전 칼 포함 그림의 bakedWeapon은 없다)
+    assert.equal(f.bakedWeapon, undefined);
+    // 칼 길이는 원근 없이 그린 자세(4번 제외)에서 거의 같다
+    const length = Math.hypot(f.blade.tip.x - f.blade.base.x, f.blade.tip.y - f.blade.base.y);
+    assert.ok(length > 100 && length < 145, `${f.name} ${length}`);
+  }
+  // 타격 자세의 칼은 앞(오른쪽)을 수평으로 향한다
+  const strike = sideSixData.frames[3].blade;
+  assert.ok(strike.tip.x > strike.base.x + 100 && Math.abs(strike.tip.y - strike.base.y) < 10);
 });

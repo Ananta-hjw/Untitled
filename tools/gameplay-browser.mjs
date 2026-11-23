@@ -693,13 +693,16 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
   for (const run of result) {
     assert.deepEqual(run.hits, [1, 0, 0, 0], JSON.stringify(run));
     const corrected = run.facing === 'up' || (run.facing === 'down' ? run.stage === 1 : run.facing.startsWith('down') && run.stage > 0);
-    const texture = corrected ? 'hero-academy-attack-corrections' : `hero-academy-${run.facing === 'down' ? 'attack-front'
+    const sideSix = run.stage === 0 && (run.facing === 'right' || run.facing === 'left');
+    const texture = sideSix ? 'hero-academy-attack-side6' : corrected ? 'hero-academy-attack-corrections' : `hero-academy-${run.facing === 'down' ? 'attack-front'
       : run.facing.startsWith('up') ? 'attack-up' : run.facing.startsWith('down') ? 'attack-down-diag' : 'combat'}`;
     assert.equal(run.texture, texture);
     assert.ok(run.fx, JSON.stringify(run));
-    assert.equal(Number(run.fx.frame.slice(run.fx.frame.lastIndexOf('-') + 1)) % 4, 2, '검기는 타격 자세부터 나온다: ' + JSON.stringify(run));
+    // 옆 1타의 6자세에서는 3번이 타격 자세
+    assert.equal(Number(run.fx.frame.slice(run.fx.frame.lastIndexOf('-') + 1)) % (sideSix ? 6 : 4), sideSix ? 3 : 2, '검기는 타격 자세부터 나온다: ' + JSON.stringify(run));
     const b = run.fx.blade, angle = Math.atan2(b.tip.y - b.base.y, b.tip.x - b.base.x);
-    assert.ok(Math.abs(run.fx.rotation - angle) < 1e-6, JSON.stringify(run));
+    // 정확히 수평 왼쪽인 칼은 -π와 π가 같은 각도다
+    assert.ok(Math.abs(Math.sin(run.fx.rotation - angle)) < 1e-6 && Math.cos(run.fx.rotation - angle) > 0, JSON.stringify(run));
     if (run.stage === 2) {
       assert.ok(Math.abs(run.fx.x - (b.base.x * .45 + b.tip.x * .55)) < .001);
       assert.ok(Math.abs(run.fx.y - (b.base.y * .45 + b.tip.y * .55)) < .001);
