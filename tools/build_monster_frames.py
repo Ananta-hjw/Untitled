@@ -86,6 +86,6 @@ def build(name):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--monsters', nargs='+', choices=MONSTERS + WALK_ONLY, default=MONSTERS + WALK_ONLY)
+    parser.add_argument('--monsters', nargs='+', choices=MONSTERS + WALK_ONLY + ['fog-crow'], default=MONSTERS + WALK_ONLY)
     for monster in parser.parse_args().monsters:
         build(monster)

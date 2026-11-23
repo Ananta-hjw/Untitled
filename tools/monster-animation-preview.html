@@ -14,7 +14,8 @@ body{margin:24px;background:#19251f;color:#f3ebd8;font:16px system-ui}h1{font-si
 const root = window.MONSTER_ROOT ?? '../src/assets/monsters/';
 const baseNames = { slime: '슬라임 · 탄성 돌진', 'waterdrop-mushroom': '물방울 버섯 · 물방울 발사', 'iron-scale-lizard': '쇠비늘 도마뱀 · 낮은 돌진', 'frost-beetle': '서리 딱정벌레 · 껍질 밀치기' };
 const raidNames = { 'ashen-moth': '잿빛 나방 · 날갯짓', 'corrosion-tracker': '부식의 추적자 · 낮은 보행', 'corrosion-executioner': '부식의 집행자 · 무거운 걸음' };
-const names = window.MONSTER_NAMES ?? (new URLSearchParams(location.search).get('group') === 'raid' ? raidNames : { ...baseNames, ...raidNames });
+const group = new URLSearchParams(location.search).get('group');
+const names = window.MONSTER_NAMES ?? (group === 'chapter2' ? { 'fog-crow': '안개 까마귀 · 날갯짓 / 급강하' } : group === 'raid' ? raidNames : { ...baseNames, ...raidNames });
 const directions = { up: '위', 'up-right': '오른쪽 위', right: '오른쪽', 'down-right': '오른쪽 아래', down: '아래', 'down-left': '왼쪽 아래', left: '왼쪽', 'up-left': '왼쪽 위' };
 const items = [];
 let paused = false, elapsed = 0, previous;
