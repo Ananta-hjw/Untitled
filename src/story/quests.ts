@@ -18,7 +18,9 @@ import type { SkillId } from '../entities/skills.ts';
 export type QuestId = 'ruan-training' | 'ruan-dodge' | 'ruan-parry' | 'ruan-field' | 'eila-potion' | 'vernel-resonance'
   | 'ruan-forest' | 'doran-gel' | 'teon-lunch'
   | 'watch-report' | 'festival-supplies' | 'sia-knot' | 'harvest-help' | 'evening-patrol' | 'moth-trail'
-  | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter' | 'first-sword';
+  | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter' | 'first-sword'
+  // 2장 (docs/story-chapter2.md, story/chapterTwo.ts)
+  | 'fern-cart';
 
 /** 게임에서 일어나서 퀘스트 목표를 채우는 일 */
 export type QuestEvent =
@@ -92,6 +94,7 @@ export interface QuestDef {
 const hero = (text: string): DialogueLine => ({ speaker: HERO_NAME, portrait: 'hero-neutral', text });
 const line = (npc: NamedNpcId, speaker: string, text: string): DialogueLine => ({ speaker, portrait: npc, text });
 const ruan = (text: string) => line('ruan', '루안', text);
+const fern = (text: string) => line('fern', '페른', text);
 
 export const QUESTS: QuestDef[] = [
   {
@@ -354,6 +357,32 @@ export const QUESTS: QuestDef[] = [
       line('doran', '도란', '시아 데려와라. 리네아도 고칠 방법 찾고. 날이 무뎌지면 언제든 돌아와서 맡겨.'),
     ],
     done: [line('doran', '도란', '장비 창에서 무기 칸에 끼워라. 손에 익을 때까지 휘둘러 보고.')],
+  },
+  // ---------------------------------------------------------------- 2장: 물안개 나루의 종소리
+  {
+    id: 'fern-cart', title: '남문의 수레', giver: 'fern', main: true, requires: 'first-sword', completeOnTarget: true,
+    objective: { label: '남문 안쪽 수레의 행상인 만나기', need: 1, event: 'talk', npc: 'fern' },
+    steps: [
+      { label: '남문 안쪽 수레의 행상인 만나기', need: 1, event: 'talk', npc: 'fern', lines: [
+        fern('어이, 로웬 사람이지? 수레 좀 봐 주게. 어젯밤 고개를 내려오다 잿빛 나방 떼한테 덮개를 다 뜯겼어.'),
+        fern('나는 페른. 이 길 저 길 다니며 물건 파는 행상인이야. …마을 꼴을 보니 여기도 험한 밤이었구먼.'),
+        hero('어제 습격이 있었어요. 그 나방들, 아직 남쪽 들판에 남아 있나요?'),
+        fern('넷쯤 들판 쪽으로 날아가더군. 저것들이 남아 있으면 또 수레로 몰려와. 쫓아 주면 장사부터 열어 주지.')] },
+      { label: '남쪽 들판에 남은 잿빛 나방 쫓기', need: 4, event: 'kill', map: 'south-field', monster: 'ashen-moth' },
+      { label: '페른에게 돌아가기', need: 1, event: 'talk', npc: 'fern', lines: [
+        fern('벌써? 하, 칼솜씨가 제법이구먼. 덕분에 오늘 밤은 짐 걱정 없이 자겠어.'),
+        fern('답례로 소식 하나 주지. 요즘 신의 물건을 물려받았다는 사람들 소문이 돌아. 계승자라던가.'),
+        fern('그보다 너, 동쪽으로 갈 거면 큰일이다. 고개 너머 나루가 멈췄어. 밤마다 강에서 종이 울리는데, 그걸 들은 사람이 강으로 걸어 들어간대.'),
+        fern('…그리고 올라오다 검은 짐승 무리를 봤어. 누굴 호위하듯 줄을 맞춰 동쪽으로 가더라.'),
+        hero('동쪽으로요…?'),
+        fern('어디로 가든, 빈손으로는 가지 마라. 내 수레에 길 떠나는 사람한테 필요한 건 다 있으니까.')] },
+    ],
+    turnIn: 'fern',
+    rewardXp: 30, rewardGold: 40, rewardItems: [{ id: 'antidote-herb', count: 2 }],
+    offer: [line('doran', '도란', '그러고 보니 아침에 남문 쪽이 시끄럽더라. 행상인 수레가 들어왔다던데, 덮개가 다 찢겼다더군. 한번 가 봐라.')],
+    reminder: [fern('잿빛 나방은 남쪽 들판에 있어. 넷이야. 그것들만 없어지면 장사를 열지.')],
+    target: [],
+    done: [fern('자, 이제 장사 시작이다. 물약, 건빵, 푸른 이슬, 해독 약초. 필요한 걸 골라 봐.')],
   },
   {
     id: 'doran-gel', title: '담금질 재료', giver: 'doran',

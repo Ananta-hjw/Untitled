@@ -73,6 +73,9 @@ import { findInteractable, type Interactable } from '../world/interactables';
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
 import { chapterTwoPreviewNpcs } from '../world/chapterTwoNpcs';
+import { FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoNpcs, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen } from '../story/chapterTwo';
+import fernCartDamagedUrl from '../assets/village/rowen/fern-cart-damaged.webp?url';
+import fernCartRepairedUrl from '../assets/village/rowen/fern-cart-repaired.webp?url';
 import { PerfOverlay } from '../ui/PerfOverlay';
 import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
@@ -413,9 +416,12 @@ export class GameScene extends Phaser.Scene {
     this.playFestival = !this.playOpening && shouldPlayFestival({ map: this.mapId, quests: this.quests, saved: festival });
   }
 
-  /** 해 질 무렵(chapterOne.isDusk)에는 남쪽 들판에 잿빛 나방이 더 나온다. */
+  /**
+   * 해 질 무렵(chapterOne.isDusk)에는 남쪽 들판에 잿빛 나방이 더 나온다. 2장 "남문의 수레"의 나방 쫓기 동안에도
+   * 습격 뒤 남은 나방 넷이 같은 자리에 있다(story/chapterTwo.ts).
+   */
   private duskSpawns(): Array<{ key: 'ashen-moth'; x: number; y: number }> {
-    if (this.mapId !== 'south-field' || !isDusk(this.quests)) return [];
+    if (this.mapId !== 'south-field' || (!isDusk(this.quests) && !fernMothHunt(this.quests))) return [];
     return DUSK_MOTH_POINTS.map(([x, y]) => ({ key: 'ashen-moth', ...fieldPoint(x, y) }));
   }
 
@@ -546,7 +552,11 @@ export class GameScene extends Phaser.Scene {
     // 습격 중에는 이 맵에 나올 모든 무리의 그림을 미리 읽는다(대화 뒤 다음 무리가 바로 나타난다).
     preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...raidSpawnsAnyStep(this.quests, this.mapId)]);
     preloadVillage(this, this.map);
-    preloadNpcs(this, [...NPCS, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 })]);
+    preloadNpcs(this, [...NPCS, FERN, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 })]);
+    if (fernCartVisible(this.quests, this.mapId)) {
+      this.load.image('fern-cart-damaged', fernCartDamagedUrl);
+      this.load.image('fern-cart-repaired', fernCartRepairedUrl);
+    }
     preloadDialogue(this);
     preloadItemIcons(this);
   }
@@ -554,6 +564,7 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     createPlaceholderArt(this);
     this.walkArea = buildMap(this, this.map);
+    this.placeFernCart();
     const bounds = this.walkArea.bounds;
     this.nav = new NavGrid(bounds.left, bounds.top, bounds.right, bounds.bottom, NAV_CELL,
       (x, y) => this.walkArea.contains(x, y));
@@ -981,7 +992,7 @@ export class GameScene extends Phaser.Scene {
     this.syncRaidEnemies(false);
     // 축제 연출 동안에는 마을 사람 모두가 광장의 잔치 자리에 있다.
     let defs = this.previewChapterTwo ? this.map.npcs
-      : this.playFestival ? festivalNpcs() : chapterNpcs([...this.map.npcs, ...guardsForMap(this.mapId)], this.quests, this.mapId);
+      : this.playFestival ? festivalNpcs() : [...chapterNpcs([...this.map.npcs, ...guardsForMap(this.mapId)], this.quests, this.mapId), ...chapterTwoNpcs(this.quests, this.mapId)];
     if (this.stressCount > 0 && this.mapId === 'village' && chapterPhase(this.quests) === 'day') {
       const area = this.walkArea, b = this.map.bounds;
       defs = [...defs, ...stressNpcs(this.stressCount, defs, Math.random, b, (x, y) => area.contains(x, y) && !findExit(this.map, x, y))];
@@ -1133,7 +1144,8 @@ export class GameScene extends Phaser.Scene {
     const raid = chapterPhase(this.quests) === 'raid';
     this.hud = new Hud(this, raid && this.mapId === 'village' ? '마을 습격 · 권속을 저지하고 주민들의 안전을 확인하세요'
       : raid && this.mapId === 'village-north' ? '습격당한 마을 북쪽 · 길을 막은 권속을 물리치고 시아와 리네아를 찾으세요'
-      : (this.duskSpawns().length ? '해 질 무렵의 남쪽 들판 · 처음 보는 잿빛 나방이 날아다닙니다' : this.map.hint) + levelHint(this.mapId));
+      : (fernMothHunt(this.quests) && this.mapId === 'south-field' ? '남쪽 들판 · 습격 뒤 남은 잿빛 나방이 날아다닙니다'
+        : this.duskSpawns().length ? '해 질 무렵의 남쪽 들판 · 처음 보는 잿빛 나방이 날아다닙니다' : this.map.hint) + levelHint(this.mapId));
     this.drawHud();
   }
 
@@ -1852,6 +1864,8 @@ export class GameScene extends Phaser.Scene {
       }
       // 메리나와의 평소 대화가 끝나면 잡화점을 연다.
       if (!quest && target.id === 'npc-merina') this.openItemPanel('shop');
+      // 페른: "남문의 수레"를 끝낸 대화 뒤, 그리고 그 뒤의 평소 대화 뒤에 수레(상점)를 연다.
+      if (target.id === 'npc-fern' && fernShopOpen(this.quests) && (!quest || quest.completed?.id === 'fern-cart')) this.openItemPanel('shop', 'fern');
       // 도란과 대화가 끝나면 대장간(장비 구매·판매)을 연다. 퀘스트를 막 받거나 끝낸 대화 뒤에는 열지 않는다
       // (진행 중인 퀘스트를 다시 일러 주는 대화 뒤에는 연다. 그러지 않으면 퀘스트 동안 장비를 못 산다).
       if (!quest?.accepted && !quest?.completed && target.id === 'npc-doran') this.openCharacterPanel('items', true);
@@ -2788,6 +2802,19 @@ export class GameScene extends Phaser.Scene {
     this.impacts.screenFlash(0xffffff, 0.2, 300);
     this.cameras.main.shake(420, 0.01);
     this.hud.showCallout(`${enemy.stats.name}를 쓰러뜨렸다!`);
+  }
+
+  // ---------------------------------------------------------------- 2장
+
+  /** 광장 남문 안쪽에 페른의 수레를 세우고, 바퀴와 짐칸 자리는 지나가지 못하게 막는다(story/chapterTwo.ts). */
+  private placeFernCart(): void {
+    if (!fernCartVisible(this.quests, this.mapId)) return;
+    const key = `fern-cart-${fernCartState(this.quests)}`;
+    if (this.textures.exists(key)) {
+      const image = this.add.image(FERN_CART.x, FERN_CART.y, key).setOrigin(0.5, 1).setDepth(FERN_CART.y);
+      image.setScale(FERN_CART.width / image.width);
+    }
+    this.walkArea.obstacles.push({ ...FERN_CART_FOOTPRINT });
   }
 
   // ---------------------------------------------------------------- 기술

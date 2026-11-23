@@ -60,6 +60,9 @@ export const DIALOGUES = {
   'npc-finn': [
     { speaker: '핀', portrait: 'finn', text: '어른들은 내 말을 잘 안 믿어. 하지만 난 봤어. 밤에 강가에서.' },
   ],
+  'npc-fern': [
+    { speaker: '페른', portrait: 'fern', text: '어서 와. 길 떠나는 사람한테 필요한 건 다 있어. 천천히 골라 봐.' },
+  ],
   'npc-dor': [
     { speaker: '도르', portrait: 'dor', text: '고개를 넘을 참인가? 물부터 한 모금 마시게. 산길에서는 쉬어 가는 것도 일이야.' },
   ],

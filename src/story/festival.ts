@@ -63,7 +63,7 @@ export const FESTIVAL_RAIDERS: ReadonlyArray<{ key: 'corrosion-tracker'; level: 
 export const RAIDER_ENTRY_MS = 4200;
 
 /** 잔치 자리: 모두 모닥불 쪽을 본다. 테온은 남문을 지킨다. */
-const SEATS: Record<NamedNpcId, Point> = {
+const SEATS: Record<Exclude<NamedNpcId, 'fern'>, Point> = {
   herman: P(1180, 1010),
   rosetta: P(1340, 1060),
   doran: P(1360, 1160),
@@ -86,7 +86,7 @@ export const FESTIVAL_HERO_START = P(1460, 960);
  */
 export function festivalNpcs(): NpcDef[] {
   const people = NPCS.map((n): NpcDef => {
-    const seat = SEATS[n.id as NamedNpcId];
+    const seat = SEATS[n.id as keyof typeof SEATS];
     const facing = n.id === 'teon' ? 'down' : direction8(BONFIRE.x - seat.x, BONFIRE.y - seat.y);
     const def: NpcDef = { ...n, ...seat, area: 'village', facing, wander: undefined };
     delete def.inside;

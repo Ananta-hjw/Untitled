@@ -1557,7 +1557,8 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     await restart('in-smithy'); talk('doran'); s.characterPanel.close();
     const sword = s.character.gear.bag['iron-sword'] ?? 0;
     await restart('village');
-    const complete = QUESTS.filter(q => q.main).every(q => s.quests[q.id]?.status === 'done');
+    // 1장의 메인 퀘스트는 모두 끝나고, 2장의 첫 퀘스트(남문의 수레)가 이어진다.
+    const complete = mains.slice(0, mains.findIndex(q => q.id === 'first-sword') + 1).every(q => s.quests[q.id]?.status === 'done');
     const tracker = s.questTracker.text.text;
     localStorage.removeItem('untitled-rpg.quests');
     await restart('village');
@@ -1584,7 +1585,7 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
   assert.equal(result.searchRestored, true);
   assert.equal(result.complete, true);
   assert.equal(result.sword, 1);
-  assert.equal(result.tracker, '');
+  assert.match(result.tracker, /남문의 수레/);
 });
 
 test('원화가 있는 실내 여덟 곳과 남쪽 들판은 해당 그림만 읽고, 전경·충돌·출입을 유지한다', async () => {
@@ -3406,4 +3407,65 @@ test('페른의 수레는 여행 물품만 팔고, 푸른 이슬은 마나를, �
   assert.deepEqual(result.tileIds, ['potion', 'lunch', 'travel-biscuit', 'blue-dew', 'antidote-herb']);
   assert.equal(result.overlap, false);
   assert.equal(result.inside, true);
+});
+
+test('2장 남문의 수레: 광장에 페른과 삭은 수레가 서고, 들판의 나방 넷을 쫓으면 페른의 수레가 열린다', async () => {
+  await load('village');
+  const result = await evaluate(`(async () => {
+    const { QUESTS } = await import('/src/story/quests.ts');
+    const g = window.__game;
+    let s = g.scene.getScene('game'), t = performance.now();
+    const seed = {};
+    const mains = QUESTS.filter(q => q.main);
+    for (const q of mains.slice(0, mains.findIndex(q => q.id === 'first-sword') + 1)) seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+    localStorage.setItem('untitled-rpg.inventory', JSON.stringify({ version: 1, gold: 200, items: {} }));
+    const restart = async map => {
+      s.scene.restart({ map }); g.step(t += 16, 16);
+      for (let i = 0; i < 300; i++) {
+        s = g.scene.getScene('game');
+        if (s.mapId === map && s.sys.isActive() && s.minimap && !s.traveling) return;
+        await new Promise(resolve => setTimeout(resolve, 10)); g.step(t += 16, 16);
+      }
+      throw Error('맵 재시작 시간 초과: ' + map);
+    };
+    const flush = () => { while (s.dialogue.isOpen) s.dialogue.advance(); };
+    await restart('village');
+    const fern = s.npcs.find(n => n.def.id === 'fern');
+    const cart = s.children.list.find(o => o.texture?.key === 'fern-cart-damaged');
+    const quest = s.quests['fern-cart']?.status;
+    const marker = s.npcs.find(n => n.def.id === 'fern')?.questMarker?.text ?? null;
+    const blocked = !s.walkArea.contains(cart.x, cart.y - 30);
+    s.openDialogue(fern.spot); const firstSpeaker = s.dialogue.lines?.[0]?.speaker ?? null; flush();
+    const afterTalk = s.quests['fern-cart'];
+    await restart('south-field');
+    const moths = s.enemies.filter(e => e.kind === 'ashen-moth');
+    const hint = s.hud.hint?.text ?? s.children.list.find(o => o.text?.includes?.('잿빛 나방'))?.text ?? '';
+    // 나방 넷을 쓰러뜨린 것으로 친다(전투 자체는 다른 테스트가 본다).
+    for (const m of moths) s.questEvent({ type: 'kill', map: 'south-field', monster: 'ashen-moth' });
+    const afterHunt = s.quests['fern-cart'];
+    await restart('village');
+    const fern2 = s.npcs.find(n => n.def.id === 'fern');
+    s.openDialogue(fern2.spot); flush();
+    const shop = { open: s.itemPanel.isOpen, title: s.itemPanel.title.text };
+    s.itemPanel.close();
+    const done = s.quests['fern-cart']?.status, herbs = s.inventory.items['antidote-herb'] ?? 0;
+    s.openDialogue(fern2.spot); flush();
+    const again = s.itemPanel.isOpen; s.itemPanel.close();
+    localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.inventory');
+    return { hint, hasFern: !!fern, fernName: fern?.def.name, cart: !!cart, blocked, quest, firstSpeaker, afterTalk, moths: moths.length, afterHunt, shop, done, herbs, again };
+  })()`);
+  assert.equal(result.hasFern, true);
+  assert.equal(result.fernName, '페른');
+  assert.equal(result.cart, true, '삭은 수레 그림');
+  assert.equal(result.blocked, true, '수레 바퀴 자리는 지나갈 수 없다');
+  assert.equal(result.quest, 'active', '도란의 검 다음에 이어진다');
+  assert.equal(result.afterTalk.step, 1, '이야기를 들으면 나방 쫓기');
+  assert.equal(result.moths, 4);
+  assert.match(result.hint, /남은 잿빛 나방/);
+  assert.equal(result.afterHunt.step, 2);
+  assert.deepEqual(result.shop, { open: true, title: '페른의 수레' });
+  assert.equal(result.done, 'done');
+  assert.equal(result.herbs, 2, '보상 해독 약초 둘');
+  assert.equal(result.again, true, '그 뒤 평소 대화 뒤에도 수레가 열린다');
 });

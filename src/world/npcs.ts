@@ -16,7 +16,9 @@ import { LINEA_YARD, type VillageArea } from './villageLayout.ts';
 
 export type NamedNpcId =
   | 'serena' | 'sia' | 'linea' | 'ruan' | 'herman' | 'eila'
-  | 'merina' | 'doran' | 'rosetta' | 'vernel' | 'teon';
+  | 'merina' | 'doran' | 'rosetta' | 'vernel' | 'teon'
+  // 2장부터 광장 남문 안쪽에 수레를 세우는 떠돌이 행상인 (story/chapterTwo.ts)
+  | 'fern';
 
 export type ChapterTwoNpcId = 'evan' | 'joan' | 'marta' | 'morgan' | 'finn' | 'dor';
 export type NpcSkin = NamedNpcId | ChapterTwoNpcId | 'soldier';
