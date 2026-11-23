@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { RESONANCE } from '../src/config.ts';
-import { resonanceTaken, canResonate, chargeOnParry, maxCharge, orbFill, parseCharge } from '../src/combat/resonance.ts';
+import { resonanceSpeed, resonanceTaken, canResonate, chargeOnParry, maxCharge, orbFill, parseCharge } from '../src/combat/resonance.ts';
 
 test('패링 한 번에 구슬이 1/3씩 차고, 다섯 개(15번)가 가득 차면 더 늘지 않는다', () => {
   let charge = 0;
@@ -25,6 +25,9 @@ test('공명 중 받는 피해는 80%(최소 1), 아니면 그대로', () => {
   assert.equal(resonanceTaken(10, true, RESONANCE), 8);
   assert.equal(resonanceTaken(1, true, RESONANCE), 1);
   assert.equal(resonanceTaken(10, false, RESONANCE), 10);
+  // 공명 중에는 이동 속도가 20% 빨라진다
+  assert.equal(resonanceSpeed(true, RESONANCE), 1.2);
+  assert.equal(resonanceSpeed(false, RESONANCE), 1);
   assert.equal(RESONANCE.damageScale, 1.2);
   assert.equal(RESONANCE.durationMs, 10000);
 });

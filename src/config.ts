@@ -246,7 +246,7 @@ export const ATTRIBUTES = {
 
 /**
  * 공명: 패링에 성공할 때마다 체력 옆의 구슬이 1/3씩 찬다(orbs개, 칸 하나는 parts조각).
- * 구슬 cost조각(=다섯 개 전부)을 쓰면 durationMs(게임 시간) 동안 주는 피해가 damageScale배, 받는 피해가 takenScale배가 된다.
+ * 구슬 cost조각(=다섯 개 전부)을 쓰면 durationMs(게임 시간) 동안 주는 피해가 damageScale배, 받는 피해가 takenScale배, 이동 속도가 speedScale배가 된다.
  * 이야기를 진행하며 perParry·durationMs·damageScale·takenScale을 하나씩 늘려 줄 예정이다.
  */
 export const RESONANCE = {
@@ -257,6 +257,7 @@ export const RESONANCE = {
   durationMs: 10000,
   damageScale: 1.2,
   takenScale: 0.8,
+  speedScale: 1.2,
 };
 
 /**

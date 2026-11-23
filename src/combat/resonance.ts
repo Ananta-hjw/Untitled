@@ -16,6 +16,8 @@ export interface ResonancePower {
   /** 주는 피해 배율, 받는 피해 배율 */
   damageScale: number;
   takenScale: number;
+  /** 이동 속도 배율 (걷기·달리기) */
+  speedScale: number;
 }
 
 export const RESONANCE_SAVE_KEY = 'untitled-rpg.resonance';
@@ -41,6 +43,11 @@ export function orbFill(charge: number, power: ResonancePower): number[] {
 /** 공명 중 받는 피해: 방어력으로 줄인 피해에 배율을 곱하되 최소 1 */
 export function resonanceTaken(damage: number, active: boolean, power: ResonancePower): number {
   return active ? Math.max(1, Math.round(damage * power.takenScale)) : damage;
+}
+
+/** 공명 중 이동 속도 배율 (공명이 아니면 1) */
+export function resonanceSpeed(active: boolean, power: ResonancePower): number {
+  return active ? power.speedScale : 1;
 }
 
 /** 저장된 게이지 읽기: 숫자가 아니거나 범위를 벗어나면 0 */

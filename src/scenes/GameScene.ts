@@ -58,7 +58,7 @@ import { DialogueBox, preloadDialogue } from '../ui/DialogueBox';
 import { PauseMenu } from '../ui/PauseMenu';
 import { TITLE_FADE_MS } from './TitleScene';
 import { IDLE_FPS, PLAY_FPS, frameRate } from '../core/frameRate';
-import { RESONANCE_SAVE_KEY, resonanceTaken, canResonate, chargeOnParry, orbFill, parseCharge } from '../combat/resonance';
+import { RESONANCE_SAVE_KEY, resonanceSpeed, resonanceTaken, canResonate, chargeOnParry, orbFill, parseCharge } from '../combat/resonance';
 import { BUTTON_RADIUS, JOYSTICK_REST, SKILL_SLOT_COUNT, combatButtonLayout, joystickZone } from '../ui/buttonLayout';
 import { SKILLS, SKILL_SAVE_KEY, learnSkill, parseSkills, serializeSkills, type SkillId, type SkillState } from '../entities/skills';
 import { OpeningDirector } from './OpeningDirector';
@@ -1357,7 +1357,7 @@ export class GameScene extends Phaser.Scene {
     // 공격 중에는 조이스틱으로 움직이지 않는다. 앞으로 나가는 것은 공격 자체의 전진(lunge)뿐이다.
     if (force > 0 && !player.isAttacking) {
       const speed = PLAYER_SPEED * (this.now < this.slowedUntil ? ASH_SLOW.speedScale : 1)
-        * (this.blocking ? BLOCK.moveScale : 1);
+        * (this.blocking ? BLOCK.moveScale : 1) * resonanceSpeed(this.resonating, RESONANCE);
       const next = this.walkArea.move(
         player.x,
         player.y,
