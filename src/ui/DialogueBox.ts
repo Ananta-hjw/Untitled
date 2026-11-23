@@ -1,4 +1,12 @@
 import Phaser from 'phaser';
+import razenPortrait from '../assets/characters/razen/dialogue-768.webp?url';
+import velkaPortrait from '../assets/characters/velka/dialogue-768.webp?url';
+import kairenPortrait from '../assets/characters/kairen/dialogue-768.webp?url';
+import mirelPortrait from '../assets/characters/mirel/dialogue-768.webp?url';
+import bramPortrait from '../assets/characters/bram/dialogue-768.webp?url';
+import bellRingerMotherPortrait from '../assets/characters/bell-ringer-mother/dialogue-768.webp?url';
+import bellRingerPortrait from '../assets/characters/bell-ringer/dialogue-768.webp?url';
+import tobyPortrait from '../assets/characters/toby/dialogue-768.webp?url';
 import heroNeutral from '../assets/hero/dialogue/neutral-768.png?url';
 import serenaPortrait from '../assets/characters/serena/dialogue-768.webp?url';
 import siaPortrait from '../assets/characters/sia/dialogue-768.webp?url';
@@ -33,6 +41,14 @@ import type { DialogueLine, Portrait } from '../story/dialogues';
 
 const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 const PORTRAITS: Record<Portrait, { key: string; url: string }> = {
+  'toby': { key: 'portrait-toby', url: tobyPortrait },
+  'bell-ringer': { key: 'portrait-bell-ringer', url: bellRingerPortrait },
+  'bell-ringer-mother': { key: 'portrait-bell-ringer-mother', url: bellRingerMotherPortrait },
+  'bram': { key: 'portrait-bram', url: bramPortrait },
+  'mirel': { key: 'portrait-mirel', url: mirelPortrait },
+  'kairen': { key: 'portrait-kairen', url: kairenPortrait },
+  'velka': { key: 'portrait-velka', url: velkaPortrait },
+  'razen': { key: 'portrait-razen', url: razenPortrait },
   'hero-neutral': { key: 'portrait-hero-neutral', url: heroNeutral },
   serena: { key: 'portrait-serena', url: serenaPortrait },
   sia: { key: 'portrait-sia', url: siaPortrait },

@@ -72,7 +72,7 @@ import { DIALOGUES, HERO_NAME } from '../story/dialogues';
 import { findInteractable, type Interactable } from '../world/interactables';
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
-import { chapterTwoPreviewNpcs, FOG_INNKEEPER } from '../world/chapterTwoNpcs';
+import { chapterTwoPreviewNpcs, isCastPreviewGroup, previewCastNpcs, type CastPreviewGroup } from '../world/chapterTwoNpcs';
 import { FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen } from '../story/chapterTwo';
 import fernCartDamagedUrl from '../assets/village/rowen/fern-cart-damaged.webp?url';
 import fernCartRepairedUrl from '../assets/village/rowen/fern-cart-repaired.webp?url';
@@ -361,11 +361,11 @@ export class GameScene extends Phaser.Scene {
     if (isMapId(data.map)) this.mapId = data.map;
     else if (isMapId(fromUrl)) this.mapId = fromUrl;
     this.map = MAPS[this.mapId];
-    if (this.previewChapterTwo || this.previewInnkeeper) {
+    if (this.previewNpcGroup) {
       // 본편의 1장 배치나 진행 조건을 바꾸지 않고 같은 NPC·대화 시스템으로 새 원화를 확인한다.
       const at = mapPoint({ x: 1400, y: 1250 });
       this.map = { ...this.map, name: '2장 인물 확인', hint: '2장 인물 확인 · 가까이 가서 대화해 보세요',
-        spawn: { x: at.x, y: at.y + 170 }, npcs: this.previewInnkeeper ? [{ ...FOG_INNKEEPER, ...at }] : chapterTwoPreviewNpcs(at), enemies: [], exits: [],
+        spawn: { x: at.x, y: at.y + 170 }, npcs: previewCastNpcs(this.previewNpcGroup, at), enemies: [], exits: [],
         props: [], buildings: [], interactables: [], obstacles: [] };
     }
     if (data.stress !== undefined) this.stressCount = data.stress;
@@ -555,7 +555,7 @@ export class GameScene extends Phaser.Scene {
     // 습격 중에는 이 맵에 나올 모든 무리의 그림을 미리 읽는다(대화 뒤 다음 무리가 바로 나타난다).
     preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...raidSpawnsAnyStep(this.quests, this.mapId), ...this.previewMonsters()]);
     preloadVillage(this, this.map);
-    preloadNpcs(this, [...NPCS, FERN, FOG_INNKEEPER, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 })]);
+    preloadNpcs(this, [...NPCS, FERN, ...this.map.npcs, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 })]);
     if (fernCartVisible(this.quests, this.mapId)) {
       this.load.image('fern-cart-damaged', fernCartDamagedUrl);
       this.load.image('fern-cart-repaired', fernCartRepairedUrl);
@@ -997,14 +997,10 @@ export class GameScene extends Phaser.Scene {
     return [-260, 0, 260].map((dx) => ({ key, x: s.x + dx, y: s.y - 260 }));
   }
 
-  private get previewInnkeeper(): boolean {
-    return import.meta.env.DEV && this.mapId === 'east-stream'
-      && new URLSearchParams(location.search).get('npcs') === 'innkeeper';
-  }
-
-  private get previewChapterTwo(): boolean {
-    return import.meta.env.DEV && this.mapId === 'east-stream'
-      && new URLSearchParams(location.search).get('npcs') === 'chapter2';
+  private get previewNpcGroup(): CastPreviewGroup | undefined {
+    if (!import.meta.env.DEV || this.mapId !== 'east-stream') return undefined;
+    const group = new URLSearchParams(location.search).get('npcs');
+    return isCastPreviewGroup(group) ? group : undefined;
   }
 
   private buildCharacters(): void {
@@ -1014,7 +1010,7 @@ export class GameScene extends Phaser.Scene {
     for (const spawn of this.previewMonsters()) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, 9));
     this.syncRaidEnemies(false);
     // 축제 연출 동안에는 마을 사람 모두가 광장의 잔치 자리에 있다.
-    let defs = this.previewChapterTwo || this.previewInnkeeper ? this.map.npcs
+    let defs = this.previewNpcGroup ? this.map.npcs
       : this.playFestival ? festivalNpcs() : [...chapterNpcs([...this.map.npcs, ...guardsForMap(this.mapId)], this.quests, this.mapId), ...chapterTwoNpcs(this.quests, this.mapId)];
     if (this.stressCount > 0 && this.mapId === 'village' && chapterPhase(this.quests) === 'day') {
       const area = this.walkArea, b = this.map.bounds;
@@ -1026,9 +1022,16 @@ export class GameScene extends Phaser.Scene {
       npc.setBattle(phase === 'raid' && !this.playFestival, phase === 'aftermath' && def.id === 'ruan');
       return npc;
     });
-    if (this.previewInnkeeper && new URLSearchParams(location.search).get('sleepwalk') === '1') {
+    if (this.previewNpcGroup === 'innkeeper' && new URLSearchParams(location.search).get('sleepwalk') === '1') {
       const innkeeper = this.npcs[0];
       innkeeper.startSleepwalk([{ x: innkeeper.x + 260, y: innkeeper.y + 65 }]);
+    }
+    if (this.previewNpcGroup === 'support' || this.previewNpcGroup === 'all') {
+      const action = new URLSearchParams(location.search).get('action');
+      for (const npc of this.npcs) {
+        if (npc.def.id === 'toby') npc.setStoryAction(action === 'cocoon' ? 'cocoon' : action === 'idle' ? undefined : 'bellows');
+        if (npc.def.id === 'bell-ringer' && action !== 'idle') npc.setStoryAction('ring');
+      }
     }
     this.interactables = [...this.map.interactables, ...this.npcs.map((npc) => npc.spot),
       // 시온의 집 침대 앞: 쉬기 (저장)

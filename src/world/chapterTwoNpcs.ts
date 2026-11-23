@@ -1,4 +1,4 @@
-import type { ChapterTwoNpcId, NpcDef } from './npcs.ts';
+import type { ChapterTwoNpcId, NpcDef, SuccessorNpcId } from './npcs.ts';
 
 /** 2장 배치를 위한 인물 정의. 실제 지역·구출 단계는 2장 맵을 구현할 때 지정한다. */
 export const CHAPTER_TWO_CAST: ReadonlyArray<{
@@ -26,3 +26,34 @@ export const FOG_INNKEEPER: NpcDef = {
   id: 'fog-innkeeper', name: '여관 주인', role: '핀의 아버지',
   x: 1820, y: 1540, height: 148, dialogue: 'npc-fog-innkeeper', facing: 'down',
 };
+
+/** Supporting cast whose ferry village/events have not yet been implemented. */
+export const SUPPORTING_CAST: readonly NpcDef[] = [
+  FOG_INNKEEPER,
+  { id: 'toby', name: '토비', role: '마르타의 견습생', x: 0, y: 0, height: 128, dialogue: 'npc-toby' },
+  { id: 'bell-ringer', name: '종을 울리던 사내', role: '모르간의 부하', x: 0, y: 0, height: 146, dialogue: 'npc-bell-ringer' },
+  { id: 'bell-ringer-mother', name: '사내의 어머니', role: '약값 의뢰의 대상', x: 0, y: 0, height: 118, dialogue: 'npc-bell-ringer-mother' },
+];
+
+/** Future-story appearances are available to the engine, without early story placement. */
+export const SUCCESSOR_CAST: ReadonlyArray<{ id: SuccessorNpcId; name: string; role: string; height: number }> = [
+  { id: 'bram', name: '브람', role: '피난민의 보호자', height: 158 },
+  { id: 'mirel', name: '미렐', role: '치유자', height: 144 },
+  { id: 'kairen', name: '카이렌', role: '기사단장', height: 158 },
+  { id: 'velka', name: '벨카', role: '여행자', height: 150 },
+  { id: 'razen', name: '라젠', role: '정보상', height: 152 },
+];
+export type CastPreviewGroup = 'chapter2' | 'support' | 'successors' | 'all' | 'innkeeper';
+export function isCastPreviewGroup(value: string | null): value is CastPreviewGroup {
+  return value !== null && ['chapter2', 'support', 'successors', 'all', 'innkeeper'].includes(value);
+}
+export function previewCastNpcs(group: CastPreviewGroup, at: { x: number; y: number }): NpcDef[] {
+  if (group === 'chapter2') return chapterTwoPreviewNpcs(at);
+  if (group === 'innkeeper') return [{ ...FOG_INNKEEPER, ...at }];
+  const successors: NpcDef[] = SUCCESSOR_CAST.map(n => ({ ...n, x: 0, y: 0, dialogue: `npc-${n.id}`, wander: 60 }));
+  const base = group === 'support' ? SUPPORTING_CAST : group === 'successors' ? successors
+    : [...chapterTwoPreviewNpcs(at), ...SUPPORTING_CAST, ...successors];
+  const columns = group === 'all' ? 5 : 3;
+  return base.map((n, i) => ({ ...n, x: at.x + (i % columns - (columns - 1) / 2) * 290,
+    y: at.y - 270 + Math.floor(i / columns) * 270 }));
+}

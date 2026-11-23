@@ -3658,3 +3658,48 @@ test('2장 동쪽 고갯길 퀘스트: 떠날 채비 뒤 고갯길로 가서 딱
   assert.equal(result.step, 1, '딱정벌레 셋 뒤 도르를 찾아간다');
   assert.equal(result.done, 'done');
 });
+
+test('미연결 조연: 토비·종 사내·어머니는 전용 외형과 초상화, 풀무·종·고치 동작을 쓴다', async () => {
+  await load('east-stream&npcs=support&companion=none');
+  const result=await evaluate(`(()=>{
+    const s=window.__game.scene.getScene('game'),t=s.npcs.find(n=>n.def.id==='toby'),r=s.npcs.find(n=>n.def.id==='bell-ringer'),m=s.npcs.find(n=>n.def.id==='bell-ringer-mother');
+    const start=t.figure.frame.name;t.update(s.now,.35,s.player,s.walkArea);const bellows=t.figure.frame.name!==start;
+    const clock=t.storyElapsed;t.update(s.now,0,s.player,s.walkArea);const frozen=t.storyElapsed===clock;
+    const ring=r.figure.frame.name;r.update(s.now,.26,s.player,s.walkArea);const ringing=r.figure.frame.name!==ring;
+    const portraits=[];
+    for(const n of [r,m,t]){s.openDialogue(n.spot);portraits.push(s.dialogue.portrait.texture.key);while(s.dialogue.isOpen)s.dialogue.advance();}
+    const stopped=r.currentStoryAction===undefined&&r.figure.texture.key==='npc-bell-ringer-idle';
+    const paused=t.storyElapsed;t.update(s.now,.3,s.player,s.walkArea);const talkPause=t.storyElapsed===paused;
+    t.update(s.now+10000,.35,s.player,s.walkArea);const resumed=t.storyElapsed>paused;
+    const set=t.setStoryAction('cocoon'),cocoon=t.figure.texture.key;
+    s.openDialogue(t.spot);const hero=s.dialogue.portrait.texture.key,asleep=t.currentStoryAction==='cocoon';while(s.dialogue.isOpen)s.dialogue.advance();
+    t.setStoryAction();const idle=t.figure.texture.key,normalTalk=t.spot.dialogue;
+    return {ids:s.npcs.map(n=>n.def.id).sort(),bellows,frozen,ringing,portraits,stopped,talkPause,resumed,set,cocoon,hero,asleep,idle,normalTalk,
+      mother:m.figure.texture.key,motherHeight:m.figure.displayHeight,unsupported:m.setStoryAction('ring'),unknown:r.setStoryAction('toString')};
+  })()`);
+  assert.deepEqual(result.ids,['bell-ringer','bell-ringer-mother','fog-innkeeper','toby']);
+  for(const key of ['bellows','frozen','ringing','stopped','talkPause','resumed','set','asleep'])assert.equal(result[key],true,key);
+  assert.deepEqual(result.portraits,['portrait-bell-ringer','portrait-bell-ringer-mother','portrait-toby']);
+  assert.equal(result.cocoon,'npc-toby-cocoon');assert.equal(result.hero,'portrait-hero-neutral');assert.equal(result.idle,'npc-toby-idle');assert.equal(result.normalTalk,'npc-toby');
+  assert.equal(result.mother,'npc-bell-ringer-mother-idle');assert.equal(result.motherHeight,118);assert.equal(result.unsupported,false);assert.equal(result.unknown,false);
+  await load('east-stream&npcs=support&companion=none');
+  assert.equal(await evaluate(`window.__game.scene.getScene('game').textures.get('npc-bell-ringer-ring').getFrameNames().length`),4);
+});
+
+test('미연결 계승자 다섯은 각자의 8방향 이동·초상화를 쓰며 본편에 일찍 배치되지 않는다', async () => {
+  await load('east-stream&npcs=successors&companion=none');
+  const result=await evaluate(`(()=>{
+    const s=window.__game.scene.getScene('game');
+    return s.npcs.map(n=>{
+      const dirs=[[0,1],[-1,0],[1,0],[0,-1],[-1,1],[1,1],[-1,-1],[1,-1]];
+      const frames=dirs.map(([x,y])=>{n.faceTowards(n.x+x*100,n.y+y*100);return n.figure.frame.name;});
+      const start={x:n.x,y:n.y};n.walkTo([{x:n.x+80,y:n.y}],1);n.update(s.now,.25,s.player,s.walkArea);const moved=n.x>start.x&&n.spot.x===n.x;
+      n.release();s.openDialogue(n.spot);const portrait=s.dialogue.portrait.texture.key;while(s.dialogue.isOpen)s.dialogue.advance();
+      return {id:n.def.id,frames:new Set(frames).size,moved,portrait,own:n.figure.texture.key.startsWith('npc-'+n.def.id+'-'),safe:s.walkArea.contains(n.x,n.y)};
+    });
+  })()`);
+  assert.deepEqual(result.map(n=>n.id),['bram','mirel','kairen','velka','razen']);
+  for(const n of result){assert.equal(n.frames,8,n.id);assert.equal(n.moved,true,n.id);assert.equal(n.own,true,n.id);assert.equal(n.safe,true,n.id);assert.equal(n.portrait,'portrait-'+n.id);}
+  await load('east-stream&companion=none');
+  assert.equal(await evaluate(`window.__game.scene.getScene('game').npcs.some(n=>['bram','mirel','kairen','velka','razen','toby','bell-ringer','bell-ringer-mother'].includes(n.def.id))`),false);
+});

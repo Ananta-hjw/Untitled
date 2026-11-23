@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { npcStoryAction, preloadNpcStoryActions, registerNpcStoryActions, type StoryAction } from './npcStoryActions';
 import innSleepUrl from '../assets/characters/fog-innkeeper/sleepwalk.webp?url';
 import innSleepFrames from '../assets/characters/fog-innkeeper/sleepwalk-frames.json';
 import { NPC_COMBAT } from '../config';
@@ -48,6 +49,7 @@ const walkData = (id: NpcSkin) => FRAME_DATA[`../assets/characters/${id}/walk_fr
 
 export function preloadNpcs(scene: Phaser.Scene, npcs: readonly NpcDef[]): void {
   for (const id of new Set(npcs.map(npcSkin))) {
+    preloadNpcStoryActions(scene, id);
     if (id === 'fog-innkeeper' && !scene.textures.exists('npc-fog-innkeeper-sleepwalk')) {
       scene.load.image('npc-fog-innkeeper-sleepwalk', innSleepUrl);
     }
@@ -119,6 +121,9 @@ export class Npc extends Phaser.GameObjects.Container {
   private storyInjured = false;
   private sleeping = false;
   private sleepElapsed = 0;
+  private storyAction?: StoryAction;
+  private storyActionName?: string;
+  private storyElapsed = 0;
 
   constructor(scene: Phaser.Scene, def: NpcDef, rand: () => number = Math.random) {
     super(scene, def.x, def.y);
@@ -128,6 +133,7 @@ export class Npc extends Phaser.GameObjects.Container {
     this.add(shadow);
 
     this.skin = npcSkin(def);
+    registerNpcStoryActions(scene, this.skin);
     const combatSkin = def.skin ?? this.skin;
     if (isFighterSkin(combatSkin)) this.fighter = new NpcFighter(combatSkin);
     if (isFighterSkin(this.skin)) {
@@ -207,6 +213,22 @@ export class Npc extends Phaser.GameObjects.Container {
     this.walked = 0;
   }
 
+  /** Prepared character-specific event poses. Unsupported actions leave the current pose intact. */
+  setStoryAction(name?: string): boolean {
+    const action = name === undefined ? undefined : npcStoryAction(this.skin, name);
+    if (name !== undefined && !action) return false;
+    this.storyAction = action;
+    this.storyActionName = name;
+    this.storyElapsed = 0;
+    this.target = undefined;
+    this.scriptPath = [];
+    this.spot.dialogue = action?.dialogue ?? this.def.dialogue;
+    this.showFrame(this.walk.idlePose);
+    return true;
+  }
+
+  get currentStoryAction(): string | undefined { return this.storyActionName; }
+
   /** Story-ready sleepwalking along a collision-checked path; no wall or water bypass. */
   startSleepwalk(path: { x: number; y: number }[]): void {
     if (this.skin !== 'fog-innkeeper') return;
@@ -235,6 +257,7 @@ export class Npc extends Phaser.GameObjects.Container {
   /** 플레이어가 말을 걸었다: 걷던 것을 멈추고 플레이어 쪽을 본다. 대화가 끝나도 잠깐 그대로 있다가 다시 걷는다. */
   talkedTo(now: number, player: { x: number; y: number }): void {
     this.wake();
+    if (this.storyAction?.onTalk === 'stop') this.setStoryAction();
     if (this.scripted) return;
     // 일하러 가던 길이면 대화 뒤에 같은 자리로 다시 간다.
     const points = this.def.duty;
@@ -347,6 +370,11 @@ export class Npc extends Phaser.GameObjects.Container {
     // 퀘스트 표시는 위아래로 천천히 흔들려 눈에 띈다.
     if (this.questMarker) this.marker.setY(-this.def.height - 36 - Math.abs(Math.sin(now / 320)) * 8);
     if (this.combatControlled) return;
+    if (this.storyAction) {
+      if (!(this.storyAction.onTalk === 'pause' && now < this.talkUntil)) this.storyElapsed += dt * 1000;
+      this.showFrame(0);
+      return;
+    }
     const idle = this.walk.idlePose;
     if (this.scripted) {
       const next = this.scriptPath[0];
@@ -463,6 +491,12 @@ export class Npc extends Phaser.GameObjects.Container {
   }
 
   private showFrame(pose: number, combatWalk = false): void {
+    if (this.storyAction) {
+      const a = this.storyAction, f = a.frames[Math.floor(this.storyElapsed * a.fps / 1000) % a.frames.length];
+      this.figure.setTexture(a.key, f.name).setFlipX(false).setOrigin(f.originX, f.originY)
+        .setScale(this.def.height / a.bodyHeight);
+      return;
+    }
     if (this.sleeping) {
       const f = innSleepFrames.frames[Math.floor(this.sleepElapsed * innSleepFrames.fps / 1000) % innSleepFrames.frames.length];
       this.figure.setTexture('npc-fog-innkeeper-sleepwalk', f.name).setFlipX(false)

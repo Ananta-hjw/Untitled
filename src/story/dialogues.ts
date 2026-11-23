@@ -22,6 +22,15 @@ export const HERO_NAME = '시온';
 const hero = (text: string): DialogueLine => ({ speaker: HERO_NAME, portrait: 'hero-neutral', text });
 
 export const DIALOGUES = {
+  'toby-cocoon': [{ speaker: '시온', portrait: 'hero-neutral', text: '토비가 안에서 잠들어 있어. 숨은 쉬고 있어… 서둘러야 해.' }],
+  'npc-toby': [{ speaker: '토비', portrait: 'toby', text: '풀무는 제가 맡을게요. 불이 약해지면 마르타 선생님이 바로 아시거든요.' }],
+  'npc-bell-ringer': [{ speaker: '종을 울리던 사내', portrait: 'bell-ringer', text: '…시키는 대로 했을 뿐이야. 더는 묻지 마.' }],
+  'npc-bell-ringer-mother': [{ speaker: '사내의 어머니', portrait: 'bell-ringer-mother', text: '우리 아들이 자꾸 늦게 오는구나. 내 약 때문에 무리하는 건 아닌지….' }],
+  'npc-bram': [{ speaker: '브람', portrait: 'bram', text: '앞서 가라. 뒤에 남은 사람은 내가 챙기겠다.' }],
+  'npc-mirel': [{ speaker: '미렐', portrait: 'mirel', text: '잠깐 쉬어 가세요. 상처부터 살펴볼게요.' }],
+  'npc-kairen': [{ speaker: '카이렌', portrait: 'kairen', text: '길을 지키는 것이 우리의 임무다. 목적지를 말해라.' }],
+  'npc-velka': [{ speaker: '벨카', portrait: 'velka', text: '내 앞길은 내가 정해. 너도 남의 말만 듣고 걷지는 마.' }],
+  'npc-razen': [{ speaker: '라젠', portrait: 'razen', text: '어떤 소식을 찾나? 듣고 싶은 말과 필요한 말은 다를 수 있지.' }],
   'east-pass-sign': [{ speaker: '이정표', text: '동쪽 고갯길 · 서쪽: 동쪽 개울가\n고개 쉼터에서 쉬어 가세요. 안개 까마귀 무리를 조심하세요.' }],
   'npc-fog-innkeeper': [{ speaker: '여관 주인', portrait: 'fog-innkeeper', text: '잠깐 눈을 붙였을 뿐인데… 어머니가 부르는 소리가 들렸어. 분명 강 건너에서.' }],
   'village-sign': [
