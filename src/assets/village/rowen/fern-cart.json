@@ -1,0 +1,20 @@
+{
+  "frames": [
+    {
+      "state": "damaged",
+      "file": "fern-cart-damaged.webp",
+      "width": 768,
+      "height": 768,
+      "originX": 0.5,
+      "originY": 1
+    },
+    {
+      "state": "repaired",
+      "file": "fern-cart-repaired.webp",
+      "width": 768,
+      "height": 768,
+      "originX": 0.5,
+      "originY": 1
+    }
+  ]
+}

@@ -8,6 +8,10 @@ ROOT = Path(__file__).resolve().parents[1] / 'src/assets/items'
 SOURCES = [
     ('icons-source.png', [('potion', 0, .30), ('lunch', .30, .67), ('slime-gel', .67, 1)]),
     ('gear-source.png', [('iron-sword', 0, .5), ('leather-armor', .5, 1)]),
+    ('fern/travel-biscuit-source.png', [('travel-biscuit', 0, 1)]),
+    ('fern/blue-dew-source.png', [('blue-dew', 0, 1)]),
+    ('fern/antidote-herb-source.png', [('antidote-herb', 0, 1)]),
+    ('fern/travel-cloak-source.png', [('travel-cloak', 0, 1)]),
 ]
 
 
