@@ -7,8 +7,8 @@ import { NPCS } from '../src/world/npcs.ts';
 import { MAPS } from '../src/world/maps.ts';
 import { FERN } from '../src/story/chapterTwo.ts';
 
-// 2장의 페른은 처음부터 마을에 있지 않고 story/chapterTwo.ts가 더한다.
-const names = Object.fromEntries([...NPCS, FERN].map((n) => [n.id, n.name]));
+// 2장의 페른은 처음부터 마을에 있지 않고 story/chapterTwo.ts가 더한다. 도르는 동쪽 고갯길 맵의 사람이다.
+const names = Object.fromEntries([...NPCS, FERN, ...MAPS['east-pass'].npcs].map((n) => [n.id, n.name]));
 
 test('퀘스트는 마을 사람이 주고, 대사의 화자와 그림이 그 사람이다', () => {
   assert.equal(new Set(QUESTS.map((q) => q.id)).size, QUESTS.length);

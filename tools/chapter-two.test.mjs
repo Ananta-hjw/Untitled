@@ -98,3 +98,24 @@ test('2장의 베르넬과 테온은 떠나는 시온에게 한마디씩 한다(
   assert.match(chapterTwoDialogue('vernel', afterSword)[0].text, /유적 길/);
   assert.equal(chapterTwoDialogue('doran', afterSword), undefined, '나머지는 1장 습격 뒤 대사를 그대로 쓴다');
 });
+
+test('동쪽 고갯길: 떠날 채비 뒤 이어지고, 고갯길의 서리 딱정벌레 셋을 쫓은 뒤 쉼터의 도르를 만나면 끝난다', () => {
+  let state = { ...afterSword, 'fern-cart': { status: 'done', count: 1, step: 2 }, farewell: { status: 'ready', count: 1, step: 4 } };
+  const bye = talkTo('herman', state);
+  assert.equal(bye.completed?.id, 'farewell');
+  assert.equal(bye.next?.id, 'mountain-pass');
+  state = bye.state;
+  // 다른 몬스터는 세지 않는다
+  state = recordEvent(state, { type: 'kill', map: 'east-pass', monster: 'fog-crow' }).state;
+  for (let i = 0; i < 3; i++) state = recordEvent(state, { type: 'kill', map: 'east-pass', monster: 'frost-beetle' }).state;
+  assert.equal(state['mountain-pass'].step, 1);
+  const met = talkTo('dor', state);
+  assert.equal(met.completed?.id, 'mountain-pass');
+  assert.ok(met.lines.some(l => l.text.includes('안개가 밤마다 짙어져')));
+});
+
+test('동쪽 고갯길에는 퀘스트에 필요한 서리 딱정벌레가 셋 있고, 도르가 맵에 서 있다', () => {
+  const pass = MAPS['east-pass'];
+  assert.equal(pass.enemies.filter(e => e.key === 'frost-beetle').length, 3);
+  assert.ok(pass.npcs.some(n => n.id === 'dor'));
+});

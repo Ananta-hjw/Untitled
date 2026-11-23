@@ -3623,3 +3623,38 @@ test('나루 여관 주인은 전용 SD·잠든 걸음·대화 초상화를 사�
   assert.deepEqual(result,{sleeping:true,texture:'npc-fog-innkeeper-sleepwalk',poses:4,moved:true,safe:true,paused:true,
     portrait:'portrait-fog-innkeeper',awake:true,idle:'npc-fog-innkeeper-idle'});
 });
+
+test('2장 동쪽 고갯길 퀘스트: 떠날 채비 뒤 고갯길로 가서 딱정벌레 셋을 쫓고 쉼터의 도르를 만난다', async () => {
+  await load('east-stream');
+  const result = await evaluate(`(async () => {
+    const { QUESTS } = await import('/src/story/quests.ts');
+    const g = window.__game;
+    let s = g.scene.getScene('game'), t = performance.now();
+    const seed = {};
+    const mains = QUESTS.filter(q => q.main);
+    for (const q of mains.slice(0, mains.findIndex(q => q.id === 'farewell') + 1)) seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+    const ready = () => s.sys.isActive() && s.minimap && !s.traveling;
+    s.scene.restart({ map: 'east-stream' }); g.step(t += 16, 16);
+    for (let i = 0; i < 300 && !(s.mapId === 'east-stream' && ready()); i++) { await new Promise(r => setTimeout(r, 10)); g.step(t += 16, 16); s = g.scene.getScene('game'); }
+    const started = s.quests['mountain-pass']?.status;
+    const toPass = s.map.exits.find(e => e.to === 'east-pass');
+    s.player.placeAt((toPass.zone.left + toPass.zone.right) / 2, (toPass.zone.top + toPass.zone.bottom) / 2);
+    for (let i = 0; i < 300 && !(s.mapId === 'east-pass' && ready()); i++) { await new Promise(r => setTimeout(r, 10)); g.step(t += 16, 16); s = g.scene.getScene('game'); }
+    const arrived = s.mapId, beetles = s.enemies.filter(e => e.kind === 'frost-beetle').length;
+    const tracker = s.questTracker.text.text;
+    for (let i = 0; i < 3; i++) s.questEvent({ type: 'kill', map: 'east-pass', monster: 'frost-beetle' });
+    const step = s.quests['mountain-pass']?.step;
+    const dor = s.npcs.find(n => n.def.id === 'dor');
+    s.openDialogue(dor.spot); while (s.dialogue.isOpen) s.dialogue.advance();
+    const done = s.quests['mountain-pass']?.status;
+    localStorage.removeItem('untitled-rpg.quests');
+    return { started, arrived, beetles, tracker, step, done };
+  })()`);
+  assert.equal(result.started, 'active', '떠날 채비 뒤 이어진다');
+  assert.equal(result.arrived, 'east-pass');
+  assert.equal(result.beetles, 3);
+  assert.match(result.tracker, /동쪽 고갯길/);
+  assert.equal(result.step, 1, '딱정벌레 셋 뒤 도르를 찾아간다');
+  assert.equal(result.done, 'done');
+});

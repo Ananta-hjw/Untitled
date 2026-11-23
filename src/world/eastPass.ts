@@ -37,7 +37,8 @@ export const EAST_PASS: GameMap = {
   enemies: [
     { key: 'fog-crow', x: 2900, y: 1620 }, { key: 'fog-crow', x: 3040, y: 1680 }, { key: 'fog-crow', x: 3160, y: 1560 },
     { key: 'fog-crow', x: 3920, y: 2120 }, { key: 'fog-crow', x: 4050, y: 2210 }, { key: 'fog-crow', x: 4170, y: 2080 },
-    { key: 'frost-beetle', x: 1150, y: 2280 }, { key: 'frost-beetle', x: 2470, y: 2450 },
+    // 서리 딱정벌레 셋이 흙길을 막고 있다(퀘스트 "동쪽 고갯길", docs/story-chapter2.md).
+    { key: 'frost-beetle', x: 1150, y: 2280 }, { key: 'frost-beetle', x: 1800, y: 2200 }, { key: 'frost-beetle', x: 2470, y: 2450 },
   ],
   exits: [{ to: 'east-stream', zone: { left: 0, top: 2010, right: 170, bottom: 2320 }, arrive: { x: 3040, y: 1420 },
     label: '◀ 동쪽 개울가', labelAt: { x: 250, y: 2340 } }],

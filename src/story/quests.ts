@@ -20,7 +20,7 @@ export type QuestId = 'ruan-training' | 'ruan-dodge' | 'ruan-parry' | 'ruan-fiel
   | 'watch-report' | 'festival-supplies' | 'sia-knot' | 'harvest-help' | 'evening-patrol' | 'moth-trail'
   | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter' | 'first-sword'
   // 2장 (docs/story-chapter2.md, story/chapterTwo.ts)
-  | 'fern-cart' | 'farewell';
+  | 'fern-cart' | 'farewell' | 'mountain-pass';
 
 /** 게임에서 일어나서 퀘스트 목표를 채우는 일 */
 export type QuestEvent =
@@ -97,6 +97,7 @@ const hero = (text: string): DialogueLine => ({ speaker: HERO_NAME, portrait: 'h
 const line = (npc: NamedNpcId, speaker: string, text: string): DialogueLine => ({ speaker, portrait: npc, text });
 const ruan = (text: string) => line('ruan', '루안', text);
 const fern = (text: string) => line('fern', '페른', text);
+const dor = (text: string): DialogueLine => ({ speaker: '도르', portrait: 'dor', text });
 
 export const QUESTS: QuestDef[] = [
   {
@@ -413,6 +414,22 @@ export const QUESTS: QuestDef[] = [
     offer: [hero('…떠나기 전에, 다들에게 인사부터 해야겠어. 루안 선생님부터.')],
     reminder: [ruan('인사는 다 했느냐? 북쪽 사람들도 네 얼굴을 보고 싶어 할 거다.')],
     done: [line('herman', '헤르만', '로웬은 우리가 지키마. 너는 네 길을 가거라. 시아를 꼭 찾고.'), hero('다녀오겠습니다.')],
+  },
+  {
+    id: 'mountain-pass', title: '동쪽 고갯길', giver: 'herman', main: true, requires: 'farewell', turnIn: 'dor', completeOnTarget: true,
+    objective: { label: '고갯길을 막은 서리 딱정벌레 쫓기', need: 3, event: 'kill', map: 'east-pass', monster: 'frost-beetle' },
+    steps: [
+      { label: '고갯길을 막은 서리 딱정벌레 쫓기', need: 3, event: 'kill', map: 'east-pass', monster: 'frost-beetle' },
+      { label: '고개 중턱의 돌 쉼터 찾아가기', need: 1, event: 'talk', npc: 'dor', lines: [
+        dor('허, 이 길로 사람이 올라오다니 오랜만이구먼. 딱정벌레들을 쫓은 게 자네였나?'),
+        dor('로웬 아이로구먼. 그쪽 하늘이 어젯밤 시뻘겋더니… 고생했겠어.'),
+        hero('네. 동쪽 나루로 가는 길이에요. 시아… 동생을 찾고 있어요.'),
+        dor('나는 도르. 이 고개에서 약초를 캐며 사네. 앉게, 불 좀 쬐고 가.')] },
+    ],
+    rewardXp: 45, rewardItems: [{ id: 'travel-biscuit', count: 3 }],
+    offer: [hero('동문으로 나가 개울을 따라가면 고갯길이랬지. …가자.')],
+    reminder: [line('herman', '헤르만', '동문으로 나가 개울가 오른쪽 끝으로 가면 고갯길이다. 길을 막은 놈들이 있으면 조심하게.')],
+    done: [dor('요즘 강 위 안개가 밤마다 짙어져. 사공들이 배를 묶었다더군. …오늘은 여기서 쉬어 가게. 날이 저물면 고개는 위험해.')],
   },
   {
     id: 'doran-gel', title: '담금질 재료', giver: 'doran',
