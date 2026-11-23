@@ -1,0 +1,94 @@
+{
+  "ground": {
+    "sourceWidth": 1536,
+    "sourceHeight": 1024,
+    "file": "ground.webp",
+    "containsSolidObjects": false
+  },
+  "objects": {
+    "dead-tree": {
+      "file": "dead-tree.webp",
+      "width": 325,
+      "height": 512,
+      "sourceCrop": [
+        70,
+        30,
+        979,
+        1464
+      ],
+      "originX": 0.49,
+      "originY": 0.98,
+      "suggestedDisplayWidth": 250,
+      "collisionStatus": "requires layout-specific footprint; not gameplay collision data"
+    },
+    "cliff-straight": {
+      "file": "cliff-straight.webp",
+      "width": 1024,
+      "height": 359,
+      "sourceCrop": [
+        32,
+        56,
+        1950,
+        729
+      ],
+      "originX": 0.5,
+      "originY": 0.98,
+      "suggestedDisplayWidth": 740,
+      "collisionStatus": "requires layout-specific footprint; not gameplay collision data"
+    },
+    "cliff-corner": {
+      "file": "cliff-corner.webp",
+      "width": 1024,
+      "height": 637,
+      "sourceCrop": [
+        48,
+        70,
+        1486,
+        964
+      ],
+      "originX": 0.5,
+      "originY": 0.98,
+      "suggestedDisplayWidth": 680,
+      "collisionStatus": "requires layout-specific footprint; not gameplay collision data"
+    },
+    "stone-shelter": {
+      "file": "stone-shelter.webp",
+      "width": 1024,
+      "height": 837,
+      "sourceCrop": [
+        230,
+        77,
+        1307,
+        957
+      ],
+      "originX": 0.5,
+      "originY": 0.98,
+      "suggestedDisplayWidth": 520,
+      "collisionStatus": "requires layout-specific footprint; not gameplay collision data"
+    }
+  },
+  "proposedWorld": {
+    "width": 4800,
+    "height": 3200,
+    "status": "proposal; not connected"
+  },
+  "reuse": {
+    "texture": "village-props",
+    "frames": [
+      "pine",
+      "boulders",
+      "rock",
+      "shrub",
+      "stump",
+      "sign"
+    ],
+    "fireTexture": "festival-props",
+    "fireFrames": [
+      "bonfire-base",
+      "flame-0",
+      "flame-1",
+      "flame-2",
+      "flame-3"
+    ]
+  }
+}
