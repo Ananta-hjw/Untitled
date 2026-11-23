@@ -2,9 +2,9 @@ import Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 import { STAT_IDS, STAT_INFO, statGain, type DerivedStats, type StatBlock, type StatId } from '../entities/attributes';
 import {
-  GEAR, GEAR_IDS, SLOT_IDS, SLOT_INFO, fits, gearCount, type Gear, type GearId, type SlotId,
+  GEAR, GEAR_IDS, SLOT_IDS, SLOT_INFO, fits, gearCount, gearForSale, type Gear, type GearId, type SlotId,
 } from '../items/equipment';
-import { ITEMS, ITEM_IDS, countOf, type Inventory, type ItemId } from '../items/inventory';
+import { ITEMS, ITEM_IDS, canUse, countOf, itemEffectText, type Inventory, type ItemId } from '../items/inventory';
 import { IconView, type IconFallback } from './icons';
 
 /**
@@ -28,6 +28,8 @@ export interface CharacterView {
   level: number;
   hp: number;
   mp: number;
+  /** 잿빛 가루·부식 웅덩이로 느려져 있는지 (해독 약초를 쓸 수 있는지) */
+  slowed: boolean;
   pointsLeft: number;
   /** 최종 능력치(기본 + 분배 + 장비)와 그중 장비 몫 */
   stats: StatBlock;
@@ -237,7 +239,7 @@ export class CharacterPanel {
       ids.map((id): Entry => ({ type: 'gear', id, count: counts(id) }));
     if (this.mode === 'smithy') {
       return this.shopTab === 'buy'
-        ? gearEntries(GEAR_IDS.filter((id) => GEAR[id].price !== undefined), (id) => gearCount(view.gear, id))
+        ? gearEntries(gearForSale('doran'), (id) => gearCount(view.gear, id))
         : gearEntries(GEAR_IDS.filter((id) => gearCount(view.gear, id) > 0), (id) => gearCount(view.gear, id));
     }
     if (this.tab === 'equip') {
@@ -397,7 +399,7 @@ export class CharacterPanel {
     if (shown.type === 'item') {
       const def = ITEMS[shown.id];
       this.detailName.setText(def.name);
-      lines.push(def.description, def.kind === 'consumable' ? `체력 ${def.heal} 회복` : '재료 · 잡화점에 팔 수 있다', `보유 ${shown.count}개`);
+      lines.push(def.description, itemEffectText(shown.id), `보유 ${shown.count}개`);
     } else {
       const def = GEAR[shown.id];
       this.detailName.setText(def.name);
@@ -418,7 +420,7 @@ export class CharacterPanel {
       return;
     }
     if (entry?.type === 'item') {
-      const usable = ITEMS[entry.id].kind === 'consumable' && view.hp < view.derived.maxHp;
+      const usable = canUse(entry.id, { hp: view.hp, maxHp: view.derived.maxHp, mp: view.mp, maxMp: view.derived.maxMp, slowed: view.slowed });
       this.actionButton.setText(ITEMS[entry.id].kind === 'consumable' ? '사용' : '재료');
       this.placeButton(this.actionButton, x + 95, buttonY, usable);
     } else if (entry?.type === 'gear') {

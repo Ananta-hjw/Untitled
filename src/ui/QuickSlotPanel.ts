@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
-import { ITEMS, ITEM_IDS, countOf, type Inventory, type ItemId } from '../items/inventory';
+import { ITEMS, ITEM_IDS, countOf, itemEffectText, type Inventory, type ItemId } from '../items/inventory';
 import type { QuickSlots } from '../items/quickSlots';
 import { itemIcon } from './itemIcons';
 
@@ -26,8 +26,9 @@ export class QuickSlotPanel {
     this.clear = this.button('등록 해제', () => { this.onAssign(this.slot, null); this.close(); });
     this.cancel = this.button('취소', () => this.close());
     for (const id of ITEM_IDS.filter(id => ITEMS[id].kind === 'consumable')) {
-      this.rows.push({ id, icon: itemIcon(scene, id).setDepth(DEPTH + 2), text: this.text('', 24, '#f4e7ca'),
-        button: this.button('등록', () => { this.onAssign(this.slot, id); this.close(); }) });
+      // 소모품이 늘어 한 줄짜리 목록 대신 가로로 늘어선 칸으로 보여 준다.
+      this.rows.push({ id, icon: itemIcon(scene, id).setDepth(DEPTH + 2), text: this.text('', 18, '#f4e7ca').setOrigin(0.5, 0).setAlign('center'),
+        button: this.button('등록', () => { this.onAssign(this.slot, id); this.close(); }, 140, 60) });
     }
     this.visible(false);
   }
@@ -39,7 +40,7 @@ export class QuickSlotPanel {
     this.hint.setText('버튼을 길게 누르거나 가방에서 언제든 변경할 수 있어요.');
     for (const row of this.rows) {
       const count = countOf(inventory, row.id), def = ITEMS[row.id];
-      row.text.setText(`${def.name}\n체력 ${def.heal} 회복 · 보유 ${count}개`).setLineSpacing(10);
+      row.text.setText(`${def.name}\n${itemEffectText(row.id)}\n보유 ${count}개`).setLineSpacing(6);
       row.button.setText(slots[slot] === row.id ? '선택됨' : '등록').setAlpha(count > 0 ? 1 : .45);
       if (count > 0) row.button.setInteractive({ useHandCursor: true });
       else row.button.disableInteractive();
@@ -57,12 +58,13 @@ export class QuickSlotPanel {
     g.fillStyle(0x10271f, .99).fillRoundedRect(x, y, w, 568, 18);
     g.lineStyle(1, 0xcbb17c, .95).strokeRoundedRect(x, y, w, 568, 18);
     this.title.setPosition(x + 36, y + 34);
+    const gap = 10, tile = (w - 48 - gap * (this.rows.length - 1)) / Math.max(1, this.rows.length);
     this.rows.forEach((r, i) => {
-      const cy = y + 190 + i * 116;
-      g.fillStyle(0x20392d, 1).fillRoundedRect(x + 24, cy - 50, w - 48, 104, 10);
-      r.icon.setPosition(x + 80, cy);
-      r.text.setPosition(x + 142, cy - 34);
-      r.button.setPosition(x + w - 132, cy);
+      const tx = x + 24 + i * (tile + gap), cx = tx + tile / 2;
+      g.fillStyle(0x20392d, 1).fillRoundedRect(tx, y + 96, tile, 300, 10);
+      r.icon.setPosition(cx, y + 150).setDisplaySize(76, 76);
+      r.text.setPosition(cx, y + 196).setWordWrapWidth(tile - 12);
+      r.button.setPosition(cx, y + 356).setFixedSize(Math.min(140, tile - 16), 60);
     });
     this.hint.setPosition(x + 36, y + 410).setWordWrapWidth(w - 72);
     this.clear.setPosition(x + 132, y + 494);
@@ -76,8 +78,8 @@ export class QuickSlotPanel {
     return this.scene.add.text(0, 0, label, { fontFamily: 'system-ui, "Noto Sans KR", sans-serif', fontSize: `${size}px`, fontStyle: 'bold', color })
       .setScrollFactor(0).setDepth(DEPTH + 2).setResolution(2);
   }
-  private button(label: string, onTap: () => void): Phaser.GameObjects.Text {
-    return this.text(label, 24, '#1a302a').setOrigin(.5).setFixedSize(192, 84).setAlign('center').setPadding(0, 26, 0, 0)
+  private button(label: string, onTap: () => void, width = 192, height = 84): Phaser.GameObjects.Text {
+    return this.text(label, 24, '#1a302a').setOrigin(.5).setFixedSize(width, height).setAlign('center').setPadding(0, (height - 32) / 2, 0, 0)
       .setBackgroundColor('#dfc18a').setInteractive({ useHandCursor: true }).on('pointerup', onTap);
   }
 }

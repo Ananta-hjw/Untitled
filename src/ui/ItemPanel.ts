@@ -1,7 +1,11 @@
 import Phaser from 'phaser';
 import { itemIcon } from './itemIcons';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
-import { ITEMS, ITEM_IDS, MAX_STACK, MAX_GOLD, countOf, type Inventory, type ItemId } from '../items/inventory';
+import { ITEMS, ITEM_IDS, MAX_STACK, MAX_GOLD, SHOP_STOCK, countOf, itemEffectText, type Inventory, type ItemId, type ShopId } from '../items/inventory';
+
+/** 한 쪽에 보여 주는 줄 수. 물건이 더 많으면 ◀ ▶로 넘긴다. */
+const ROWS_PER_PAGE = 3;
+const SHOP_TITLE: Record<ShopId, string> = { merina: '메리나의 잡화점', fern: '페른의 수레' };
 
 const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 interface ItemRow {
@@ -28,7 +32,12 @@ export class ItemPanel {
   private readonly buyTab: Phaser.GameObjects.Text;
   private readonly sellTab: Phaser.GameObjects.Text;
   private readonly status: Phaser.GameObjects.Text;
+  private readonly prevButton: Phaser.GameObjects.Text;
+  private readonly nextButton: Phaser.GameObjects.Text;
   private readonly rows: ItemRow[] = [];
+  private shop: ShopId = 'merina';
+  private page = 0;
+  private pages = 1;
   private open = false;
   private mode: 'bag' | 'shop' = 'bag';
   private tab: 'buy' | 'sell' = 'buy';
@@ -50,7 +59,9 @@ export class ItemPanel {
     this.closeButton = this.button('닫기', 170, () => this.close());
     this.buyTab = this.button('구매', 190, () => this.mode === 'bag' ? this.onConfigureSlot?.(0) : this.switchTab('buy'));
     this.sellTab = this.button('판매', 190, () => this.mode === 'bag' ? this.onConfigureSlot?.(1) : this.switchTab('sell'));
-    for (let i = 0; i < ITEM_IDS.length; i++) {
+    this.prevButton = this.button('◀', 96, () => this.turnPage(-1));
+    this.nextButton = this.button('▶', 96, () => this.turnPage(1));
+    for (let i = 0; i < ROWS_PER_PAGE; i++) {
       const row: ItemRow = {
         icon: itemIcon(scene, 'potion').setDepth(DEPTH_UI + 42),
         name: this.text('', 26, '#f7ecd2').setOrigin(0, 0.5),
@@ -65,9 +76,12 @@ export class ItemPanel {
 
   get isOpen(): boolean { return this.open; }
 
-  show(mode: 'bag' | 'shop', inventory: Inventory): void {
+  /** 가방 또는 상점을 연다. 상점마다 파는 물건이 다르다(SHOP_STOCK). */
+  show(mode: 'bag' | 'shop', inventory: Inventory, shop: ShopId = 'merina'): void {
     this.mode = mode;
+    this.shop = shop;
     this.tab = 'buy';
+    this.page = 0;
     this.open = true;
     this.setVisible(true);
     this.setStatus(mode === 'shop' ? '한 번 누를 때마다 1개씩 거래합니다.' : '사용할 물품을 선택하세요.');
@@ -85,9 +99,17 @@ export class ItemPanel {
     this.status.setText(message).setColor(error ? '#f0b5a0' : '#d9e8c6');
   }
 
+  private turnPage(by: number): void {
+    const page = Math.max(0, Math.min(this.pages - 1, this.page + by));
+    if (!this.open || page === this.page) return;
+    this.page = page;
+    this.refresh(this.inventory);
+  }
+
   private switchTab(tab: 'buy' | 'sell'): void {
     if (!this.open || tab === this.tab) return;
     this.tab = tab;
+    this.page = 0;
     this.setStatus(tab === 'buy' ? '한 번 누를 때마다 1개씩 구매합니다.' : '한 번 누를 때마다 1개씩 판매합니다.');
     this.refresh(this.inventory);
   }
@@ -95,8 +117,11 @@ export class ItemPanel {
   refresh(inventory: Inventory): void {
     if (!this.open) return;
     this.inventory = inventory;
-    const ids = ITEM_IDS.filter(id => this.mode === 'shop' && this.tab === 'buy'
-      ? ITEMS[id].price !== undefined : countOf(inventory, id) > 0);
+    const all = this.mode === 'shop' && this.tab === 'buy'
+      ? SHOP_STOCK[this.shop] : ITEM_IDS.filter(id => countOf(inventory, id) > 0);
+    this.pages = Math.max(1, Math.ceil(all.length / ROWS_PER_PAGE));
+    this.page = Math.min(this.page, this.pages - 1);
+    const ids = all.slice(this.page * ROWS_PER_PAGE, (this.page + 1) * ROWS_PER_PAGE);
     this.visibleRows = ids.length;
     this.rows.forEach((row, i) => {
       const id = ids[i];
@@ -110,9 +135,9 @@ export class ItemPanel {
       const capped = type === 'sell' && inventory.gold + def.sellPrice > MAX_GOLD;
       const usable = type !== 'use' || def.kind === 'consumable';
       const enabled = usable && !full && !short && !capped;
-      row.icon.setFrame(id);
+      row.icon.setFrame(id).setDisplaySize(88, 88);
       row.name.setText(def.name);
-      row.note.setText(def.kind === 'consumable' ? `체력 ${def.heal} 회복` : '잡화점에 판매할 수 있는 재료');
+      row.note.setText(itemEffectText(id));
       row.stock.setText(full ? `보유 ${count} / ${MAX_STACK}개 · 가방이 가득 찼어요`
         : short ? `보유 ${count}개 · 골드 ${(def.price! - inventory.gold).toLocaleString()} G 부족`
         : capped ? `보유 ${count}개 · 골드 보관 한도에 도달해요`
@@ -125,9 +150,12 @@ export class ItemPanel {
         row.button.setInteractive({ useHandCursor: true });
       } else row.button.disableInteractive();
     });
-    this.title.setText(this.mode === 'bag' ? '가방' : '메리나의 잡화점');
+    this.title.setText(this.mode === 'bag' ? '가방' : SHOP_TITLE[this.shop]);
     this.gold.setText(`보유 골드  ${inventory.gold.toLocaleString()} G`);
     this.empty.setText(this.mode === 'shop' ? '판매할 물품이 없어요.\n모험에서 얻은 재료를 가져와 주세요.' : '가방이 비어 있어요.\n잡화점에서 필요한 물품을 준비해 보세요.').setVisible(ids.length === 0);
+    const paged = this.pages > 1;
+    this.prevButton.setVisible(paged).setAlpha(this.page > 0 ? 1 : 0.4);
+    this.nextButton.setVisible(paged).setAlpha(this.page < this.pages - 1 ? 1 : 0.4);
     this.buyTab.setVisible(true).setText(this.mode === 'shop' ? '구매' : '슬롯 1 설정');
     this.sellTab.setVisible(true).setText(this.mode === 'shop' ? '판매' : '슬롯 2 설정');
     for (const [button, selected] of [[this.buyTab, this.tab === 'buy'], [this.sellTab, this.tab === 'sell']] as const) {
@@ -155,6 +183,8 @@ export class ItemPanel {
     this.buyTab.setPosition(left + 127, top + 122);
     this.sellTab.setPosition(left + 329, top + 122);
     this.empty.setPosition(width / 2, top + 330);
+    this.prevButton.setPosition(left + panelWidth - 172, top + 122);
+    this.nextButton.setPosition(left + panelWidth - 64, top + 122);
     this.rows.forEach((row, i) => {
       const y = top + 232 + i * 116;
       if (i < this.visibleRows) {
@@ -178,6 +208,8 @@ export class ItemPanel {
     if (!visible) {
       this.buyTab.setVisible(false);
       this.sellTab.setVisible(false);
+      this.prevButton.setVisible(false);
+      this.nextButton.setVisible(false);
       this.empty.setVisible(false);
       for (const row of this.rows) for (const o of [row.icon, row.name, row.note, row.stock, row.button]) o.setVisible(false);
     }

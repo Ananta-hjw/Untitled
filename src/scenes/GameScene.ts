@@ -60,6 +60,7 @@ import { TITLE_FADE_MS } from './TitleScene';
 import { IDLE_FPS, PLAY_FPS, frameRate } from '../core/frameRate';
 import { RESONANCE_SAVE_KEY, resonanceTaken, canResonate, chargeOnParry, orbFill, parseCharge } from '../combat/resonance';
 import { BUTTON_RADIUS, JOYSTICK_REST, SKILL_SLOT_COUNT, combatButtonLayout, joystickZone } from '../ui/buttonLayout';
+import { SKILLS, SKILL_SAVE_KEY, learnSkill, parseSkills, serializeSkills, type SkillId, type SkillState } from '../entities/skills';
 import { OpeningDirector } from './OpeningDirector';
 import { OPENING, OPENING_HINT, OPENING_SAVE_KEY, OPENING_WALK_SCALE, shouldPlayOpening, type OpeningStep } from '../story/opening';
 import { FESTIVAL, FESTIVAL_RAIDERS, FESTIVAL_SAVE_KEY, FESTIVAL_WALK_SCALE, RAIDER_ENTRY_MS, festivalNpcs, shouldPlayFestival } from '../story/festival';
@@ -99,14 +100,13 @@ import { WorldMap } from '../ui/WorldMap';
 import { ExitHint } from '../ui/ExitHint';
 import { VISITED_SAVE_KEY, parseVisited, regionOf, serializeVisited, type RegionId } from '../world/worldMap';
 import {
-  INVENTORY_SAVE_KEY, ITEMS, USE_COOLDOWN_MS, addGold, addItem, applyDrop, buy, countOf, parseInventory,
-  sell, serializeInventory, slimeDrop, useItem, type Inventory, type ItemId,
+  INVENTORY_SAVE_KEY, ITEMS, USE_COOLDOWN_MS, addGold, addItem, applyDrop, buy, canUse, countOf, parseInventory,
+  sell, serializeInventory, slimeDrop, useConsumable, type Inventory, type ItemId, type ShopId, type UseStatus,
 } from '../items/inventory';
 import { ProgressEffects } from '../ui/ProgressEffects';
 
 /** Scale shared by all academy frames. */
 /** 기술 칸에 넣을 수 있는 기술 (배우는 방법은 아직 없다) */
-type SkillId = 'spin';
 
 const HERO_SCALE = 0.5;
 const NAV_CELL = 32;
@@ -292,6 +292,10 @@ export class GameScene extends Phaser.Scene {
   /** 공격 버튼 둘레의 기술 칸 다섯. 기술은 배우면 칸에 넣는다(지금은 모두 비어 있다). 키 1~5. */
   private skillButtons: ActionButton[] = [];
   private skillSlots: (SkillId | null)[] = [];
+  /** 배운 기술 (저장). skillSlots는 그 칸 배치를 그대로 쓴다. */
+  private learnedSkills: SkillId[] = [];
+  /** 지금 연 상점 (물품 창의 구매가 이 상점의 물건만 산다) */
+  private shopId: ShopId = 'merina';
   private skillKeys: Phaser.Input.Keyboard.Key[] = [];
   /** 다른 맵으로 옮겨 가는 중(화면이 어두워지는 동안). 그동안 게임은 멈춘다. */
   private traveling = false;
@@ -532,6 +536,7 @@ export class GameScene extends Phaser.Scene {
     this.resonanceAura = undefined;
     this.skillButtons = [];
     this.skillSlots = Array<SkillId | null>(SKILL_SLOT_COUNT).fill(null);
+    this.learnedSkills = [];
     this.skillKeys = [];
   }
 
@@ -565,6 +570,7 @@ export class GameScene extends Phaser.Scene {
     this.guideCard = new GuideCard(this);
     try { this.seenLessons = parseSeenLessons(this.storage?.getItem(GUIDE_SAVE_KEY) ?? null); } catch { this.seenLessons = new Set(); }
     this.loadCompanion();
+    this.loadSkills();
     this.spawnCompanion();
     if (chapterPhase(this.quests) === 'raid') {
       this.chapterShade = this.add.graphics().setScrollFactor(0).setDepth(DEPTH_LIGHTING);
@@ -1837,6 +1843,7 @@ export class GameScene extends Phaser.Scene {
         this.hud.showCallout(`퀘스트 완료: ${quest.completed.title}${quest.next ? ` → ${quest.next.title}` : ''}`);
         this.gainXp(quest.completed.rewardXp, player.x, player.y - 185);
         this.giveRewards(quest.completed.rewardGold ?? 0, quest.completed.rewardItems ?? [], quest.completed.rewardGear ?? []);
+        if (quest.completed.rewardSkill) this.learnSkill(quest.completed.rewardSkill);
       } else if (quest?.accepted) {
         this.hud.showCallout(`새 퀘스트: ${quest.accepted.title}`);
       } else if (quest?.progressed) {
@@ -2102,7 +2109,7 @@ export class GameScene extends Phaser.Scene {
   private refreshSkillButtons(): void {
     this.skillButtons.forEach((button, i) => {
       const skill = this.skillSlots[i];
-      button.setLabel(skill === 'spin' ? '회전베기' : '');
+      button.setLabel(skill ? SKILLS[skill].label : '');
       if (!skill) button.setEnabled(false);
     });
   }
@@ -2169,7 +2176,7 @@ export class GameScene extends Phaser.Scene {
     for (const key of keys) if (Phaser.Input.Keyboard.JustDown(key)) pressed = true;
     if (this.opening) pressed = false;
     const player = this.player;
-    const ready = time >= this.nextUseAt && player.alive && player.hp < player.maxHp && !!id && countOf(this.inventory, id) > 0;
+    const ready = time >= this.nextUseAt && player.alive && !!id && countOf(this.inventory, id) > 0 && canUse(id, this.useStatus());
     button.setEnabled(!id || ready);
     button.setCooldown(id ? Math.max(0, this.nextUseAt - time) : 0, USE_COOLDOWN_MS);
     if (pressed && !id) this.openQuickSlot(slot);
@@ -2206,14 +2213,30 @@ export class GameScene extends Phaser.Scene {
     for (const key of this.lunchKeys) Phaser.Input.Keyboard.JustDown(key);
   }
 
+  /** 아이템을 쓸 때의 몸 상태 (체력·마나·느려짐) */
+  private useStatus(): UseStatus {
+    const player = this.player;
+    return { hp: player.hp, maxHp: player.maxHp, mp: this.mp, maxMp: this.maxMp, slowed: this.now < this.slowedUntil };
+  }
+
+  /** 소모품을 쓴다: 체력·마나를 채우고 느려짐을 푼다. 효과가 없으면 쓰지 않는다. */
   private useHealItem(id: ItemId): boolean {
     const player = this.player;
-    const result = useItem(this.inventory, id, player.hp, player.maxHp);
+    const result = useConsumable(this.inventory, id, this.useStatus());
     if (!result || this.now < this.nextUseAt) return false;
     this.inventory = result.inventory;
     this.nextUseAt = this.now + USE_COOLDOWN_MS;
     player.hp += result.heal;
-    this.showDamage(player.x, player.y - 190, result.heal, '#7dff8a', 38);
+    if (result.heal > 0) this.showDamage(player.x, player.y - 190, result.heal, '#7dff8a', 38);
+    if (result.mana > 0) {
+      this.mp = Math.min(this.maxMp, this.mp + result.mana);
+      this.showDamage(player.x, player.y - (result.heal > 0 ? 230 : 190), result.mana, '#7fc8ff', 38);
+      this.drawMp();
+    }
+    if (result.cured) {
+      this.slowedUntil = 0;
+      this.hud.showCallout('몸이 가벼워졌다');
+    }
     this.impacts.dust(player.x, player.y, 3, this.now, 30);
     this.drawHud();
     this.saveInventory();
@@ -2356,6 +2379,7 @@ export class GameScene extends Phaser.Scene {
       level: this.progress.level,
       hp: this.player?.hp ?? this.stats.maxHp,
       mp: this.mp,
+      slowed: this.now < this.slowedUntil,
       pointsLeft: pointsLeft(this.progress.level, this.character.alloc),
       stats: totalStats(this.character.alloc, bonus),
       bonus,
@@ -2397,7 +2421,9 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private openItemPanel(mode: 'bag' | 'shop'): void {
+  /** 가방이나 상점을 연다. 상점이면 shop이 파는 물건을 보여 준다. */
+  private openItemPanel(mode: 'bag' | 'shop', shop: ShopId = 'merina'): void {
+    this.shopId = shop;
     this.setQuickButtonsVisible(false);
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
@@ -2405,7 +2431,7 @@ export class GameScene extends Phaser.Scene {
     this.talkMarker.setVisible(false);
     this.pauseButton.setVisible(false);
     this.characterButton?.setVisible(false);
-    this.itemPanel?.show(mode, this.inventory);
+    this.itemPanel?.show(mode, this.inventory, shop);
   }
 
   private onItemAction(action: PanelAction): void {
@@ -2417,19 +2443,24 @@ export class GameScene extends Phaser.Scene {
         this.characterPanel?.setStatus(message, true);
         return;
       }
-      const before = this.player.hp;
+      const before = this.useStatus();
       const used = this.useHealItem(action.id);
-      this.itemPanel?.setStatus(used ? `${ITEMS[action.id].name} 사용 · 체력 +${this.player.hp - before}`
-        : this.player.hp >= this.player.maxHp ? '체력이 가득 차 있어요. 물품은 사용하지 않았습니다.' : '지금은 이 물품을 사용할 수 없어요.', !used);
+      const def = ITEMS[action.id];
+      const gained = [this.player.hp > before.hp ? `체력 +${this.player.hp - before.hp}` : '',
+        this.mp > before.mp ? `마나 +${Math.round(this.mp - before.mp)}` : '', before.slowed && this.now >= this.slowedUntil ? '느려짐 해소' : ''].filter(Boolean).join(' · ');
+      // 효과가 없어 쓰지 않았을 때: 체력 회복 물건이면 체력이 가득하다고, 아니면 지금은 효과가 없다고 알린다.
+      const full = def.heal && !def.mana && !def.cures && before.hp >= before.maxHp;
+      this.itemPanel?.setStatus(used ? `${def.name} 사용 · ${gained}`
+        : full ? '체력이 가득 차 있어요. 물품은 사용하지 않았습니다.' : '지금은 이 물품을 사용할 수 없어요.', !used);
       this.itemPanel?.refresh(this.inventory);
       if (this.characterPanel?.isOpen) {
-        this.characterPanel.setStatus(used ? `${ITEMS[action.id].name} 사용 · 체력 +${this.player.hp - before}`
-          : this.player.hp >= this.player.maxHp ? '체력이 가득 차 있어요.' : '지금은 사용할 수 없어요.', !used);
+        this.characterPanel.setStatus(used ? `${def.name} 사용 · ${gained}`
+          : full ? '체력이 가득 차 있어요.' : '지금은 사용할 수 없어요.', !used);
         this.characterPanel.refresh(this.characterView());
       }
       return;
     }
-    if (action.type === 'buy') next = buy(this.inventory, action.id);
+    if (action.type === 'buy') next = buy(this.inventory, action.id, 1, this.shopId);
     if (action.type === 'sell') next = sell(this.inventory, action.id);
     if (!next) {
       this.itemPanel?.setStatus('거래할 수 없어요. 골드와 보유 수량을 확인해 주세요.', true);
@@ -2757,6 +2788,27 @@ export class GameScene extends Phaser.Scene {
     this.impacts.screenFlash(0xffffff, 0.2, 300);
     this.cameras.main.shake(420, 0.01);
     this.hud.showCallout(`${enemy.stats.name}를 쓰러뜨렸다!`);
+  }
+
+  // ---------------------------------------------------------------- 기술
+
+  /** 저장된 배운 기술과 기술 칸을 읽는다. 버튼을 만들기 전에 부른다. */
+  private loadSkills(): void {
+    let state: SkillState;
+    try { state = parseSkills(this.storage?.getItem(SKILL_SAVE_KEY) ?? null, SKILL_SLOT_COUNT); } catch { state = parseSkills(null, SKILL_SLOT_COUNT); }
+    this.learnedSkills = state.learned;
+    this.skillSlots = state.slots;
+  }
+
+  /** 기술을 배운다(퀘스트 보상). 비어 있는 첫 칸에 넣고 저장한다. */
+  learnSkill(id: SkillId): void {
+    const result = learnSkill({ learned: this.learnedSkills, slots: this.skillSlots }, id);
+    if (!result.learned) return;
+    this.learnedSkills = result.state.learned;
+    this.skillSlots = result.state.slots;
+    try { this.storage?.setItem(SKILL_SAVE_KEY, serializeSkills(result.state)); } catch { /* 저장소가 막히면 이번 실행 동안만 */ }
+    this.refreshSkillButtons();
+    this.progressEffects.showPopup(this.player.x, this.player.y - 220, `새 기술: ${SKILLS[id].name}`, '#ffe08a');
   }
 
   // ---------------------------------------------------------------- 동료

@@ -75,3 +75,16 @@ test('무기 칸에 낄 수 있는 모든 검은 주인공 그림의 무기 모�
   const { weaponId } = await import('../src/entities/weaponPose.ts');
   for (const id of GEAR_IDS.filter((id) => GEAR[id].kind === 'weapon')) assert.ok(weaponId(id), id);
 });
+
+test('여행자의 망토는 페른이 팔고 도란의 대장간에는 없다', async () => {
+  const { GEAR, gearForSale, buyGear } = await import('../src/items/equipment.ts');
+  const { emptyInventory, addGold } = await import('../src/items/inventory.ts');
+  assert.deepEqual(gearForSale('fern'), ['travel-cloak']);
+  assert.ok(!gearForSale('doran').includes('travel-cloak'));
+  assert.ok(gearForSale('doran').includes('short-sword'));
+  assert.deepEqual(GEAR['travel-cloak'].stats, { def: 2, dex: 2 });
+  const gear = { equipped: {}, bag: {} };
+  const rich = addGold(emptyInventory(), 500);
+  assert.equal(buyGear(rich, gear, 'travel-cloak'), null, '대장간에서는 못 산다');
+  assert.equal(buyGear(rich, gear, 'travel-cloak', 'fern').inventory.gold, 280);
+});

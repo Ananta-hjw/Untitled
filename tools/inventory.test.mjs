@@ -67,3 +67,34 @@ test('가방은 저장했다가 그대로 불러오고, 깨진 값은 버린다'
   assert.deepEqual(parseInventory(JSON.stringify({ version: 1, gold: -5, items: { potion: 1000, sword: 1, lunch: 0, 'slime-gel': 1.5 } })),
     { gold: 0, items: { potion: MAX_STACK } });
 });
+
+test('페른의 여행 물품: 건빵은 체력, 푸른 이슬은 마나를 채우고 해독 약초는 느려짐을 푼다', async () => {
+  const { useConsumable, canUse, itemEffectText } = await import('../src/items/inventory.ts');
+  const bag = addItem(addItem(addItem(emptyInventory(), 'travel-biscuit'), 'blue-dew'), 'antidote-herb');
+  const status = { hp: 50, maxHp: 100, mp: 10, maxMp: 40, slowed: true };
+  assert.deepEqual(useConsumable(bag, 'travel-biscuit', status), { inventory: removeItem(bag, 'travel-biscuit'), heal: 30, mana: 0, cured: false });
+  assert.deepEqual(useConsumable(bag, 'blue-dew', status), { inventory: removeItem(bag, 'blue-dew'), heal: 0, mana: 30, cured: false }, '최대 마나를 넘지 않는다');
+  assert.deepEqual(useConsumable(bag, 'antidote-herb', status), { inventory: removeItem(bag, 'antidote-herb'), heal: 0, mana: 0, cured: true });
+  // 효과가 없으면 쓰지 않는다.
+  assert.equal(canUse('blue-dew', { ...status, mp: 40 }), false, '마나가 가득하면');
+  assert.equal(canUse('antidote-herb', { ...status, slowed: false }), false, '느려지지 않았으면');
+  assert.equal(useConsumable(bag, 'antidote-herb', { ...status, slowed: false }), null);
+  assert.equal(canUse('blue-dew', { ...status, hp: 0 }), false, '쓰러진 뒤에는');
+  assert.equal(canUse('slime-gel', status), false, '재료는 못 쓴다');
+  assert.equal(useItem(bag, 'blue-dew', 10, 100), null, '체력 회복이 아닌 물건은 useItem으로 쓰지 않는다');
+  assert.equal(itemEffectText('blue-dew'), '마나 40 회복');
+  assert.equal(itemEffectText('antidote-herb'), '느려짐 해소');
+  assert.equal(itemEffectText('potion'), '체력 50 회복');
+});
+
+test('상점마다 파는 물건이 다르다: 메리나는 일상 물건, 페른은 여행 물품. 남의 상점 물건은 못 산다', async () => {
+  const { SHOP_STOCK } = await import('../src/items/inventory.ts');
+  assert.deepEqual(SHOP_STOCK.merina, ['potion', 'lunch']);
+  assert.deepEqual(SHOP_STOCK.fern, ['potion', 'travel-biscuit', 'blue-dew', 'antidote-herb']);
+  for (const ids of Object.values(SHOP_STOCK)) for (const id of ids) assert.ok(ITEMS[id].price > 0, id);
+  const rich = addGold(emptyInventory(), 500);
+  assert.equal(buy(rich, 'lunch', 1, 'fern'), null, '도시락은 페른이 팔지 않는다');
+  assert.equal(buy(rich, 'blue-dew', 1, 'merina'), null);
+  assert.equal(countOf(buy(rich, 'blue-dew', 2, 'fern'), 'blue-dew'), 2);
+  assert.equal(buy(rich, 'blue-dew', 2, 'fern').gold, 440);
+});

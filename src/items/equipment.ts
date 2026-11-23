@@ -24,7 +24,7 @@ export const SLOT_INFO: Record<SlotId, { name: string; kind: GearKind }> = {
 
 export type GearId =
   | 'wooden-sword' | 'short-sword' | 'long-sword' | 'iron-sword' | 'cloth-hood' | 'worn-tunic' | 'leather-armor'
-  | 'leather-gloves' | 'light-boots' | 'clover-charm' | 'blue-bead';
+  | 'leather-gloves' | 'light-boots' | 'clover-charm' | 'blue-bead' | 'travel-cloak';
 
 export interface GearDef {
   id: GearId;
@@ -32,8 +32,10 @@ export interface GearDef {
   description: string;
   kind: GearKind;
   stats: Partial<StatBlock>;
-  /** 도란의 대장간에서 살 때 값. 없으면 팔지 않는다 */
+  /** 살 때 값. 없으면 팔지 않는다 */
   price?: number;
+  /** 파는 곳. 없으면 도란의 대장간 */
+  shop?: 'doran' | 'fern';
   sellPrice: number;
 }
 
@@ -51,6 +53,8 @@ export const GEAR: Record<GearId, GearDef> = {
   'light-boots': { id: 'light-boots', name: '가벼운 장화', description: '발이 가벼워 몸을 빨리 뺄 수 있다.', kind: 'feet', stats: { dex: 3 }, price: 120, sellPrice: 45 },
   'clover-charm': { id: 'clover-charm', name: '네잎 부적', description: '행운을 부른다는 작은 부적.', kind: 'accessory', stats: { luk: 3 }, price: 150, sellPrice: 60 },
   'blue-bead': { id: 'blue-bead', name: '푸른 구슬 목걸이', description: '마음이 맑아지는 푸른 구슬.', kind: 'accessory', stats: { int: 3 }, price: 150, sellPrice: 60 },
+  // 페른의 수레에서 판다. 서브 퀘스트 "행상인의 짐"을 끝내면 수레에 들어온다(docs/story-chapter2.md).
+  'travel-cloak': { id: 'travel-cloak', name: '여행자의 망토', description: '바람과 비를 막는 두꺼운 망토. 몸놀림을 해치지 않는다.', kind: 'body', stats: { def: 2, dex: 2 }, price: 220, sellPrice: 85, shop: 'fern' },
 };
 export const GEAR_IDS = Object.keys(GEAR) as GearId[];
 export const MAX_GEAR_STACK = 9;
@@ -123,10 +127,15 @@ export function addGear(gear: Gear, id: GearId, count = 1): Gear {
   return addBag(gear, id, count);
 }
 
-/** 산다. 골드가 모자라거나 팔지 않거나 가득하면 null */
-export function buyGear(inv: Inventory, gear: Gear, id: GearId): { inventory: Inventory; gear: Gear } | null {
+/** 이 상점이 파는 장비 (도란의 대장간이 기본) */
+export function gearForSale(shop: 'doran' | 'fern' = 'doran'): GearId[] {
+  return (Object.keys(GEAR) as GearId[]).filter((id) => GEAR[id].price !== undefined && (GEAR[id].shop ?? 'doran') === shop);
+}
+
+/** 산다. 골드가 모자라거나 팔지 않거나(그 상점에 없거나) 가득하면 null */
+export function buyGear(inv: Inventory, gear: Gear, id: GearId, shop: 'doran' | 'fern' = 'doran'): { inventory: Inventory; gear: Gear } | null {
   const price = GEAR[id].price;
-  if (price === undefined || inv.gold < price || gearCount(gear, id) >= MAX_GEAR_STACK) return null;
+  if (price === undefined || (GEAR[id].shop ?? 'doran') !== shop || inv.gold < price || gearCount(gear, id) >= MAX_GEAR_STACK) return null;
   return { inventory: { ...inv, gold: inv.gold - price }, gear: addBag(gear, id, 1) };
 }
 

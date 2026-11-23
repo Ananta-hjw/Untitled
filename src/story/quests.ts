@@ -4,6 +4,7 @@ import type { NpcId, NamedNpcId } from '../world/npcs.ts';
 import type { MapId } from '../world/maps.ts';
 import type { ItemId } from '../items/inventory.ts';
 import type { GearId } from '../items/equipment.ts';
+import type { SkillId } from '../entities/skills.ts';
 
 /**
  * 퀘스트 (docs/story-chapter1.md).
@@ -76,6 +77,8 @@ export interface QuestDef {
   rewardItems?: Array<{ id: ItemId; count: number }>;
   /** 보상 장비 (가방에 들어간다) */
   rewardGear?: GearId[];
+  /** 보상 기술 (entities/skills.ts). 비어 있는 첫 기술 칸에 들어간다. */
+  rewardSkill?: SkillId;
   offer: DialogueLine[];
   /** 진행 중에 퀘스트를 준 사람에게 말을 걸면 */
   reminder: DialogueLine[];

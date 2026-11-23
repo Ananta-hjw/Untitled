@@ -3337,3 +3337,73 @@ test('습격의 적 AI는 가까운 경비병을 추격하고 실시간 교전�
   for (const key of ['enemyHurt','npcHurt','onGround']) assert.equal(result[key],true,JSON.stringify(result));
   for (const pose of ['attack','guard','hit']) assert.ok(result.poses.includes(pose),JSON.stringify(result));
 });
+
+test('퀘스트로 배운 기술은 빈 첫 칸에 들어가 쓸 수 있고, 맵을 다시 열어도 남는다', async () => {
+  await load('south-field');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    localStorage.removeItem('untitled-rpg.skills');
+    const before = s.skillSlots.slice();
+    s.learnSkill('spin'); s.learnSkill('spin');
+    const learned = { slots: s.skillSlots.slice(), label: s.skillButtons[0].text.text, saved: JSON.parse(localStorage.getItem('untitled-rpg.skills')) };
+    s.scene.restart(); g.step(performance.now(), 16); g.step(performance.now() + 16, 16);
+    const r = g.scene.getScene('game');
+    const restarted = { slots: r.skillSlots.slice(), label: r.skillButtons[0].text.text };
+    r.mp = r.maxMp; r.nextSpinAt = 0; r.skillButtons[0].pressed = true; r.update(r.now, 16);
+    const cast = r.spinHitAt !== undefined;
+    localStorage.removeItem('untitled-rpg.skills');
+    return { before, learned, restarted, cast };
+  })()`);
+  assert.deepEqual(result.before, [null, null, null, null, null]);
+  assert.deepEqual(result.learned.slots, ['spin', null, null, null, null], '두 번 배워도 한 칸');
+  assert.equal(result.learned.label, '회전베기');
+  assert.deepEqual(result.learned.saved, { version: 1, learned: ['spin'], slots: ['spin', null, null, null, null] });
+  assert.deepEqual(result.restarted, { slots: ['spin', null, null, null, null], label: '회전베기' });
+  assert.equal(result.cast, true, '배운 칸을 누르면 회전 베기가 나간다');
+});
+
+test('페른의 수레는 여행 물품만 팔고, 푸른 이슬은 마나를, 해독 약초는 느려짐을 푼다', async () => {
+  await load('south-field');
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game');
+    s.inventory = { gold: 500, items: {} };
+    s.openItemPanel('shop', 'fern');
+    const m = s.itemPanel;
+    const shown = m.rows.filter(r => r.name.visible).map(r => r.name.text);
+    const title = m.title.text;
+    const paged = m.nextButton.visible;
+    m.nextButton.emit('pointerup');
+    const second = m.rows.filter(r => r.name.visible).map(r => r.name.text);
+    m.prevButton.emit('pointerup');
+    s.onItemAction({ type: 'buy', id: 'blue-dew' }); s.onItemAction({ type: 'buy', id: 'antidote-herb' }); s.onItemAction({ type: 'buy', id: 'lunch' });
+    const bought = { ...s.inventory.items }, gold = s.inventory.gold;
+    m.close();
+    s.nextUseAt = 0; s.mp = 0; s.drawMp();
+    const usedDew = s.useHealItem('blue-dew'), mpAfter = s.mp, maxMp = s.maxMp;
+    s.nextUseAt = 0; s.slowedUntil = s.now + 5000;
+    const usedHerb = s.useHealItem('antidote-herb'), slowedAfter = s.now < s.slowedUntil;
+    s.nextUseAt = 0;
+    const unused = s.useHealItem('antidote-herb');
+    // 빠른 칸 선택 창: 소모품 다섯이 한 줄로 겹치지 않게 늘어선다
+    s.openQuickSlot(0);
+    const tiles = s.quickSlotPanel.rows.map(r => ({ id: r.id, b: r.button.getBounds() }));
+    s.quickSlotPanel.close();
+    const overlap = tiles.some((a, i) => tiles.some((b, j) => i < j && a.b.right > b.b.left && b.b.right > a.b.left));
+    return { title, shown, paged, second, bought, gold, usedDew, mpAfter, maxMp, usedHerb, slowedAfter, unused, tileIds: tiles.map(t => t.id), overlap,
+      inside: tiles.every(t => t.b.left >= 0 && t.b.right <= s.scale.gameSize.width) };
+  })()`);
+  assert.equal(result.title, '페른의 수레');
+  assert.deepEqual(result.shown, ['회복 물약', '여행용 건빵', '푸른 이슬']);
+  assert.equal(result.paged, true, '네 가지라 두 쪽으로 넘긴다');
+  assert.deepEqual(result.second, ['해독 약초']);
+  assert.deepEqual(result.bought, { 'blue-dew': 1, 'antidote-herb': 1 }, '도시락은 페른에게 살 수 없다');
+  assert.equal(result.gold, 455);
+  assert.equal(result.usedDew, true);
+  assert.equal(result.mpAfter, Math.min(40, result.maxMp), '마나 40, 최대 마나를 넘지 않는다');
+  assert.equal(result.usedHerb, true);
+  assert.equal(result.slowedAfter, false);
+  assert.equal(result.unused, false, '느려지지 않았으면 해독 약초를 쓰지 않는다');
+  assert.deepEqual(result.tileIds, ['potion', 'lunch', 'travel-biscuit', 'blue-dew', 'antidote-herb']);
+  assert.equal(result.overlap, false);
+  assert.equal(result.inside, true);
+});

@@ -4,11 +4,14 @@
  * - 회복 물약: 체력을 조금 채운다. 메리나의 잡화점에서 산다.
  * - 도시락: 체력을 많이 채운다. 지금은 상점에서도 판다(세레나의 도시락 퀘스트가 생기면 보상으로 바꿀 수 있다).
  * - 슬라임 점액: 슬라임이 가끔 떨어뜨리는 재료. 잡화점에 판다.
+ * - 여행용 건빵·푸른 이슬·해독 약초: 2장의 떠돌이 행상인 페른이 파는 여행 물품(docs/story-chapter2.md).
+ *   건빵은 싸고 약한 회복, 푸른 이슬은 마나 회복, 해독 약초는 잿빛 나방의 느려짐을 푼다.
+ * 상점마다 파는 물건이 다르다(SHOP_STOCK). 파는 쪽은 어느 상점이든 sellPrice로 사 준다.
  * 골드는 슬라임과 퀘스트 보상으로 얻는다. 쓰러져도 잃지 않는다.
  * 이 파일은 Phaser를 쓰지 않아 tools/inventory.test.mjs가 직접 불러 검사한다.
  */
 
-export type ItemId = 'potion' | 'lunch' | 'slime-gel';
+export type ItemId = 'potion' | 'lunch' | 'slime-gel' | 'travel-biscuit' | 'blue-dew' | 'antidote-herb';
 
 export interface ItemDef {
   id: ItemId;
@@ -17,6 +20,10 @@ export interface ItemDef {
   kind: 'consumable' | 'material';
   /** 쓰면 채우는 체력 */
   heal?: number;
+  /** 쓰면 채우는 마나 */
+  mana?: number;
+  /** 쓰면 푸는 상태 (slow: 잿빛 나방·부식 웅덩이의 느려짐) */
+  cures?: 'slow';
   /** 잡화점에서 살 때 값. 없으면 팔지 않는다 */
   price?: number;
   /** 잡화점에 팔 때 받는 값 */
@@ -27,7 +34,26 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   potion: { id: 'potion', name: '회복 물약', description: '체력을 50 채운다.', kind: 'consumable', heal: 50, price: 20, sellPrice: 8 },
   lunch: { id: 'lunch', name: '도시락', description: '든든한 한 끼. 체력을 150 채운다.', kind: 'consumable', heal: 150, price: 55, sellPrice: 20 },
   'slime-gel': { id: 'slime-gel', name: '슬라임 점액', description: '끈적한 재료. 잡화점에서 사 준다.', kind: 'material', sellPrice: 4 },
+  'travel-biscuit': { id: 'travel-biscuit', name: '여행용 건빵', description: '딱딱하지만 오래 가는 건빵. 체력을 30 채운다.', kind: 'consumable', heal: 30, price: 10, sellPrice: 4 },
+  'blue-dew': { id: 'blue-dew', name: '푸른 이슬', description: '새벽 약초에서 받은 푸른 물. 마나를 40 채운다.', kind: 'consumable', mana: 40, price: 30, sellPrice: 12 },
+  'antidote-herb': { id: 'antidote-herb', name: '해독 약초', description: '씹으면 몸이 가벼워진다. 잿빛 가루의 느려짐을 푼다.', kind: 'consumable', cures: 'slow', price: 15, sellPrice: 6 },
 };
+
+/** 상점 */
+export type ShopId = 'merina' | 'fern';
+/** 상점마다 파는 물건 (보여 주는 순서) */
+export const SHOP_STOCK: Record<ShopId, ItemId[]> = {
+  merina: ['potion', 'lunch'],
+  fern: ['potion', 'travel-biscuit', 'blue-dew', 'antidote-herb'],
+};
+
+/** 물품 창에 보여 줄 효과 한 줄 (예: "체력 50 회복") */
+export function itemEffectText(id: ItemId): string {
+  const def = ITEMS[id];
+  if (def.kind !== 'consumable') return '재료 · 상점에 팔 수 있다';
+  return [def.heal ? `체력 ${def.heal} 회복` : '', def.mana ? `마나 ${def.mana} 회복` : '', def.cures === 'slow' ? '느려짐 해소' : '']
+    .filter(Boolean).join(' · ');
+}
 
 export const ITEM_IDS = Object.keys(ITEMS) as ItemId[];
 /** 한 칸에 들고 다닐 수 있는 최대 개수 */
@@ -69,16 +95,39 @@ export function removeItem(inv: Inventory, id: ItemId, count = 1): Inventory | n
   return { ...inv, items };
 }
 
-/**
- * 아이템을 쓴다. 없거나, 쓸 수 없는 아이템이거나, 체력이 가득하면 null.
- * heal은 실제로 채워지는 양(최대 체력을 넘지 않는다).
- */
-export function useItem(inv: Inventory, id: ItemId, hp: number, maxHp: number): { inventory: Inventory; heal: number } | null {
+/** 아이템을 쓸 때의 몸 상태 */
+export interface UseStatus { hp: number; maxHp: number; mp: number; maxMp: number; slowed: boolean }
+export interface UseResult { inventory: Inventory; heal: number; mana: number; cured: boolean }
+
+/** 지금 쓰면 효과가 있는지 (체력·마나가 모자라거나 느려져 있을 때). 쓰러진 뒤에는 못 쓴다. */
+export function canUse(id: ItemId, status: UseStatus): boolean {
   const def = ITEMS[id];
-  if (def.kind !== 'consumable' || !def.heal || hp >= maxHp || hp <= 0) return null;
+  if (def.kind !== 'consumable' || status.hp <= 0) return false;
+  return (!!def.heal && status.hp < status.maxHp) || (!!def.mana && status.mp < status.maxMp) || (def.cures === 'slow' && status.slowed);
+}
+
+/**
+ * 아이템을 쓴다. 없거나, 재료이거나, 써도 아무 효과가 없으면 null(가방은 그대로).
+ * heal·mana는 실제로 채워지는 양(최대치를 넘지 않는다).
+ */
+export function useConsumable(inv: Inventory, id: ItemId, status: UseStatus): UseResult | null {
+  if (!canUse(id, status)) return null;
   const inventory = removeItem(inv, id);
   if (!inventory) return null;
-  return { inventory, heal: Math.min(def.heal, maxHp - hp) };
+  const def = ITEMS[id];
+  return {
+    inventory,
+    heal: def.heal ? Math.max(0, Math.min(def.heal, status.maxHp - status.hp)) : 0,
+    mana: def.mana ? Math.max(0, Math.min(def.mana, status.maxMp - status.mp)) : 0,
+    cured: def.cures === 'slow' && status.slowed,
+  };
+}
+
+/** 체력 회복 아이템을 쓴다. 없거나, 체력 회복이 아니거나, 체력이 가득하면 null. */
+export function useItem(inv: Inventory, id: ItemId, hp: number, maxHp: number): { inventory: Inventory; heal: number } | null {
+  if (!ITEMS[id].heal) return null;
+  const result = useConsumable(inv, id, { hp, maxHp, mp: 0, maxMp: 0, slowed: false });
+  return result && { inventory: result.inventory, heal: result.heal };
 }
 
 /** 체력이 모자랄 때 마실 물약: 모자란 만큼에 가장 알맞은 것 (작은 것부터) */
@@ -88,10 +137,10 @@ export function bestHealItem(inv: Inventory, missing: number): ItemId | undefine
   return owned.find((id) => ITEMS[id].heal! >= missing) ?? owned[owned.length - 1];
 }
 
-/** 산다. 골드가 모자라거나 팔지 않는 물건이거나 가방이 가득하면 null. */
-export function buy(inv: Inventory, id: ItemId, count = 1): Inventory | null {
+/** 산다. 골드가 모자라거나 팔지 않는 물건(그 상점에 없는 물건)이거나 가방이 가득하면 null. */
+export function buy(inv: Inventory, id: ItemId, count = 1, shop?: ShopId): Inventory | null {
   const price = ITEMS[id].price;
-  if (price === undefined || count < 1) return null;
+  if (price === undefined || count < 1 || (shop && !SHOP_STOCK[shop].includes(id))) return null;
   if (countOf(inv, id) + count > MAX_STACK) return null;
   const cost = price * count;
   if (inv.gold < cost) return null;
