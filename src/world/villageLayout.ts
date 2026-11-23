@@ -106,7 +106,8 @@ export const LINEA_HOME = BUILDINGS.find((b) => b.frame === 'linea-house')!;
 export const LINEA_YARD = { x: LINEA_HOME.door.x + mapLength(220), y: LINEA_HOME.door.y };
 
 export interface VillageProp {
-  frame: 'oak' | 'pine' | 'boulders' | 'shrub' | 'rock' | 'flowers' | 'sign' | 'stump';
+  frame: 'oak' | 'pine' | 'boulders' | 'shrub' | 'rock' | 'flowers' | 'sign' | 'stump' | 'dead-tree' | 'cliff-straight' | 'cliff-corner' | 'stone-shelter';
+  texture?: string;
   x: number;
   y: number;
   width: number;

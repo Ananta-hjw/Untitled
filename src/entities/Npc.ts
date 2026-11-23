@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import innSleepUrl from '../assets/characters/fog-innkeeper/sleepwalk.webp?url';
+import innSleepFrames from '../assets/characters/fog-innkeeper/sleepwalk-frames.json';
 import { NPC_COMBAT } from '../config';
 import { isFighterSkin, NpcFighter, type NpcCombatPose, type NpcCombatTarget } from './npcCombat';
 import type { Interactable } from '../world/interactables';
@@ -46,6 +48,9 @@ const walkData = (id: NpcSkin) => FRAME_DATA[`../assets/characters/${id}/walk_fr
 
 export function preloadNpcs(scene: Phaser.Scene, npcs: readonly NpcDef[]): void {
   for (const id of new Set(npcs.map(npcSkin))) {
+    if (id === 'fog-innkeeper' && !scene.textures.exists('npc-fog-innkeeper-sleepwalk')) {
+      scene.load.image('npc-fog-innkeeper-sleepwalk', innSleepUrl);
+    }
     if (isFighterSkin(id) && !scene.textures.exists(`npc-${id}-combat`)) {
       scene.load.image(`npc-${id}-combat`, COMBAT_URLS[`../assets/characters/${id}/combat.webp`]);
     }
@@ -112,6 +117,8 @@ export class Npc extends Phaser.GameObjects.Container {
   private fighter?: NpcFighter;
   private battle = false;
   private storyInjured = false;
+  private sleeping = false;
+  private sleepElapsed = 0;
 
   constructor(scene: Phaser.Scene, def: NpcDef, rand: () => number = Math.random) {
     super(scene, def.x, def.y);
@@ -128,6 +135,10 @@ export class Npc extends Phaser.GameObjects.Container {
       for (const f of COMBAT_DATA[`../assets/characters/${this.skin}/combat-frames.json`].frames) {
         if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
       }
+    }
+    if (this.skin === 'fog-innkeeper') {
+      const texture = scene.textures.get('npc-fog-innkeeper-sleepwalk');
+      for (const f of innSleepFrames.frames) if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
     }
     this.direction = def.facing ?? 'down';
     this.idle = walkData(this.skin) ? undefined : IDLE_DATA[`../assets/characters/${this.skin}/sd_idle.json`];
@@ -196,6 +207,25 @@ export class Npc extends Phaser.GameObjects.Container {
     this.walked = 0;
   }
 
+  /** Story-ready sleepwalking along a collision-checked path; no wall or water bypass. */
+  startSleepwalk(path: { x: number; y: number }[]): void {
+    if (this.skin !== 'fog-innkeeper') return;
+    this.sleeping = true;
+    this.sleepElapsed = 0;
+    this.walkTo(path, 0.45);
+    this.showFrame(0);
+  }
+
+  wake(): void {
+    if (!this.sleeping) return;
+    this.sleeping = false;
+    this.scripted = false;
+    this.scriptPath = [];
+    this.showFrame(0);
+  }
+
+  get sleepwalking(): boolean { return this.sleeping; }
+
   /** 연출: (x, y) 쪽을 본다. */
   faceTowards(x: number, y: number): void {
     this.direction = direction8(x - this.x, y - this.y, this.direction);
@@ -204,6 +234,7 @@ export class Npc extends Phaser.GameObjects.Container {
 
   /** 플레이어가 말을 걸었다: 걷던 것을 멈추고 플레이어 쪽을 본다. 대화가 끝나도 잠깐 그대로 있다가 다시 걷는다. */
   talkedTo(now: number, player: { x: number; y: number }): void {
+    this.wake();
     if (this.scripted) return;
     // 일하러 가던 길이면 대화 뒤에 같은 자리로 다시 간다.
     const points = this.def.duty;
@@ -312,6 +343,7 @@ export class Npc extends Phaser.GameObjects.Container {
   /** canStand: 목적지로 고를 수 있는 곳인지(맵 출구 같은 곳은 씬이 뺀다) */
   update(now: number, dt: number, player: { x: number; y: number }, area: WalkArea,
     canStand: (x: number, y: number) => boolean = () => true): void {
+    if (this.sleeping && this.walking) this.sleepElapsed += dt * 1000;
     // 퀘스트 표시는 위아래로 천천히 흔들려 눈에 띈다.
     if (this.questMarker) this.marker.setY(-this.def.height - 36 - Math.abs(Math.sin(now / 320)) * 8);
     if (this.combatControlled) return;
@@ -431,6 +463,12 @@ export class Npc extends Phaser.GameObjects.Container {
   }
 
   private showFrame(pose: number, combatWalk = false): void {
+    if (this.sleeping) {
+      const f = innSleepFrames.frames[Math.floor(this.sleepElapsed * innSleepFrames.fps / 1000) % innSleepFrames.frames.length];
+      this.figure.setTexture('npc-fog-innkeeper-sleepwalk', f.name).setFlipX(false)
+        .setOrigin(f.originX, f.originY).setScale(this.def.height / (f.h - 24));
+      return;
+    }
     // 방향·전투 시트가 아직 없는 인물은 정면 SD를 유지한다. 다른 인물의 그림으로 바뀌지 않는다.
     if (this.idle) {
       this.figure.setTexture(`npc-${this.skin}-idle`).setFlipX(false)

@@ -10,7 +10,7 @@ import type { MapId } from './maps.ts';
  * 이 파일은 Phaser를 쓰지 않아 tools/world-map.test.mjs가 직접 불러 검사한다.
  */
 
-export type RegionId = 'village' | 'south-field' | 'west-forest' | 'east-stream' | 'north-ruins';
+export type RegionId = 'village' | 'south-field' | 'west-forest' | 'east-stream' | 'north-ruins' | 'east-pass';
 
 export interface Region {
   id: RegionId;
@@ -28,6 +28,7 @@ export const REGIONS: Region[] = [
   { id: 'south-field', name: '남쪽 들판', mapId: 'south-field', gx: 0, gy: 1, tint: 0xf2ecc8 },
   { id: 'west-forest', name: '서쪽 숲길', mapId: 'west-forest', gx: -1, gy: 0, tint: 0xb9cfa4 },
   { id: 'east-stream', name: '동쪽 개울가', mapId: 'east-stream', gx: 1, gy: 0, tint: 0xd6e8da },
+  { id: 'east-pass', name: '동쪽 고갯길', mapId: 'east-pass', gx: 2, gy: 0 },
   // 헤르만의 서신 뒤에 열리는 베르넬의 유적 (docs/story-chapter1.md). 아직 맵이 없다.
   { id: 'north-ruins', name: '북쪽 유적', gx: 0, gy: -1 },
 ];
@@ -38,6 +39,7 @@ export const ROUTES: Array<[RegionId, RegionId]> = [
   ['village', 'west-forest'],
   ['village', 'east-stream'],
   ['village', 'north-ruins'],
+  ['east-stream', 'east-pass'],
 ];
 
 /** 맵이 속한 지역. 건물 실내와 마을 북쪽도 로웬 마을이다. */

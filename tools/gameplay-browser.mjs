@@ -1772,15 +1772,16 @@ test('도마뱀은 준비 중 멈추고 잠근 방향으로 돌진하며 한 번
 });
 
 test('새 몬스터도 실제 검날에 맞아 쓰러지고 종류별 경험치를 주며 버섯 물방울은 일시정지 중 멈춘다', async () => {
+  await load('south-field');
   const kills=[];
-  for(const [map,kind] of [['south-field','slime'],['west-forest','waterdrop-mushroom'],['west-forest','iron-scale-lizard']]) {
+  for(const [map,kind] of [['south-field','slime'],['west-forest','waterdrop-mushroom'],['west-forest','iron-scale-lizard'],['east-pass','fog-crow']]) {
     // 레벨 1로 시작해야 경험치가 줄지 않는다(앞선 테스트가 남긴 레벨을 지운다).
     await evaluate(`localStorage.removeItem('untitled-rpg.save'); true`);
     await load(map);
     kills.push(await evaluate(`(() => {
       const s=window.__game.scene.getScene('game'),p=s.player,e=s.enemies.find(e=>e.kind==='${kind}');
       for(const other of s.enemies) { other.character.placeAt(200,1400);other.state='recover';other.timer=1e12; }
-      p.revive(1000,700);e.character.revive(1110,700);e.character.hp=1;
+      const y=e.kind==='fog-crow'?1200:700;p.revive(1000,y);e.character.revive(1110,y);e.character.hp=1;
       s.wantsAttack=()=>false;s.now=0;s.nextAttackAt=0;s.comboStage=0;
       let xp=0;s.gainXp=(amount)=>{xp+=amount;};
       s.startAttack(0,1,0);
@@ -1789,7 +1790,7 @@ test('새 몬스터도 실제 검날에 맞아 쓰러지고 종류별 경험치�
     })()`));
   }
   // 레벨 1 주인공은 경험치 감소 없이 몬스터 레벨에 맞춘 경험치를 다 받는다.
-  assert.deepEqual(kills,[{kind:'slime',dead:true,xp:true,level:true},{kind:'waterdrop-mushroom',dead:true,xp:true,level:true},{kind:'iron-scale-lizard',dead:true,xp:true,level:true}]);
+  assert.deepEqual(kills,[{kind:'slime',dead:true,xp:true,level:true},{kind:'waterdrop-mushroom',dead:true,xp:true,level:true},{kind:'iron-scale-lizard',dead:true,xp:true,level:true},{kind:'fog-crow',dead:true,xp:true,level:true}]);
   await load('west-forest');
   const paused=await evaluate(`(() => {
     const s=window.__game.scene.getScene('game'),e=s.enemies.find(e=>e.kind==='waterdrop-mushroom');
@@ -3545,4 +3546,80 @@ test('서리 딱정벌레는 그림과 전투가 연결되고, 정면의 칼은 
   assert.equal(result.back, false, '등 뒤는 베인다');
   assert.equal(result.turnedOneStep, true, '반대쪽을 봐도 한 칸만 돈다');
   assert.equal(result.waited, true, '다음 칸은 조금 기다렸다 돈다');
+});
+
+test('안개 까마귀는 고갯길에서 무리로 날고 덮치며, 피격 잔상과 안전한 이동·재사용 대기·사망 정리를 처리한다', async () => {
+  await load('east-pass&companion=none');
+  const result = await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'), flock=s.enemies.filter(e=>e.kind==='fog-crow');
+    const e=flock[0], c=e.character, p=s.player, sprite=c.sprite;
+    for(const other of s.enemies) if(other!==e) other.kill();
+    c.placeAt(2900,1620); p.placeAt(3040,1620);
+    const poses=new Set();
+    for(let i=0;i<4;i++){sprite.advance(100);poses.add(sprite.list[0].frame.name);}
+    const flight={count:flock.length, poses:poses.size, height:sprite.list[0].y, texture:sprite.list[0].texture.key};
+    let t=s.now+1000, strikes=0;
+    const strike=()=>{strikes++;return true;};
+    e.state='chase'; e.update(t,0,p,s.walkArea,s.nav,strike);
+    const windup=e.state==='windup';
+    e.update(t+e.stats.windupMs+e.stats.strikeMs,0,p,s.walkArea,s.nav,strike);
+    const swooped=c.x>3000 && sprite.list[0].frame.name.startsWith('attack-right-');
+    s.now=t+1000; const old={x:c.x,y:c.y}, hp=c.hp;
+    c.hurt(1);s.resolveEnemyHit(e,false,1,0,100);
+    const moved=Math.hypot(c.x-old.x,c.y-old.y)>100, safe=s.walkArea.contains(c.x,c.y), decoy=e.decoy?.image;
+    const at={x:c.x,y:c.y};
+    c.hurt(1);s.resolveEnemyHit(e,false,1,0,100);
+    const cooldown=c.x===at.x&&c.y===at.y, single=e.decoy?.image===decoy;
+    e.updateDecoy(s.now+700);
+    const expired=!e.decoy&&!decoy.active;
+    s.now+=2500;c.hurt(1);s.resolveEnemyHit(e,false,1,0,100);
+    const next=e.decoy?.image;
+    const died=c.hurt(c.hp);s.resolveEnemyHit(e,died,1,0,0);
+    return {flight,windup,strikes,swooped,moved,safe,cooldown,single,expired,damage:hp-c.hp>0,
+      killed:e.state==='dead'&&!e.decoy&&(!next||!next.active)};
+  })()`);
+  assert.equal(result.flight.count,6);
+  assert.equal(result.flight.poses,4,'hovering still flaps');
+  assert.ok(result.flight.height<0);
+  assert.match(result.flight.texture,/^monster-fog-crow-/);
+  for(const key of ['windup','swooped','moved','safe','cooldown','single','expired','damage','killed']) assert.equal(result[key],true,key);
+  assert.equal(result.strikes,1,'one swept strike');
+});
+
+test('동쪽 고갯길은 개울가에서 왕복하며 큰 카메라·지도·개별 소품·쉼터 가림·불을 연결한다', async () => {
+  await load('east-stream&companion=none');
+  await evaluate(`(() => {const s=window.__game.scene.getScene('game');s.player.placeAt(3280,1400);window.__passTime=performance.now();})()`);
+  await until(()=>evaluate(`(() => {const g=window.__game;g.step(window.__passTime+=16,16);const s=g.scene.getScene('game');return s.mapId==='east-pass'&&s.sys.isActive()&&!!s.passScenery&&s.minimap&&!s.traveling;})()`));
+  const result=await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game');
+    const props=s.map.props.filter(p=>p.texture);
+    const painted=props.every(p=>s.children.list.some(o=>o.name==='village-prop-'+p.frame&&o.texture?.key===p.texture));
+    const shelter=s.children.getByName('village-prop-stone-shelter');
+    s.passScenery.update(s.now,{x:1800,y:1380});const faded=shelter.alpha<1;
+    s.passScenery.update(s.now,{x:1800,y:1500});const restored=shelter.alpha===1;
+    const fire=s.children.getByName('pass-fire'), before=fire.frame.name;s.passScenery.update(s.now+110,s.player);
+    return {painted,faded,restored,fire:fire.frame.name!==before,camera:s.cameras.main.getBounds().width,
+      map:s.minimap.preview.bounds.right,dor:s.npcs.some(n=>n.def.id==='dor'),ground:s.children.getByName('map-art-background').displayWidth};
+  })()`);
+  assert.deepEqual(result,{painted:true,faded:true,restored:true,fire:true,camera:4800,map:4800,dor:true,ground:4800});
+  await evaluate(`window.__game.scene.getScene('game').player.placeAt(120,2150)`);
+  await until(()=>evaluate(`(() => {const g=window.__game;g.step(window.__passTime+=16,16);const s=g.scene.getScene('game');return s.mapId==='east-stream'&&s.sys.isActive()&&!s.passScenery&&s.minimap&&!s.traveling;})()`));
+  assert.equal(await evaluate(`window.__game.scene.getScene('game').walkArea.contains(3040,1420)`),true);
+});
+
+test('나루 여관 주인은 전용 SD·잠든 걸음·대화 초상화를 사용하고 대화하면 깨어난다', async () => {
+  await load('east-stream&npcs=innkeeper&sleepwalk=1&companion=none');
+  const result=await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'), n=s.npcs[0], start={x:n.x,y:n.y}, poses=new Set();
+    const sleeping=n.sleepwalking, texture=n.figure.texture.key;
+    for(let i=0;i<6;i++){n.update(s.now+i*250,.25,s.player,s.walkArea);poses.add(n.figure.frame.name);}
+    const moved=n.x>start.x&&n.y>start.y, safe=s.walkArea.contains(n.x,n.y);
+    const x=n.x,y=n.y;n.update(s.now,0,s.player,s.walkArea);const paused=x===n.x&&y===n.y;
+    s.openDialogue(n.spot);
+    const portrait=s.dialogue.portrait.texture.key, awake=!n.sleepwalking, idle=n.figure.texture.key;
+    while(s.dialogue.isOpen)s.dialogue.advance();
+    return {sleeping,texture,poses:poses.size,moved,safe,paused,portrait,awake,idle};
+  })()`);
+  assert.deepEqual(result,{sleeping:true,texture:'npc-fog-innkeeper-sleepwalk',poses:4,moved:true,safe:true,paused:true,
+    portrait:'portrait-fog-innkeeper',awake:true,idle:'npc-fog-innkeeper-idle'});
 });

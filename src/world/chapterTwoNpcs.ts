@@ -20,3 +20,9 @@ export function chapterTwoPreviewNpcs(at: { x: number; y: number }): NpcDef[] {
     y: at.y - 240 + Math.floor(i / 3) * 240,
   }));
 }
+
+/** Unnamed supporting character; kept out of the story until the ferry village exists. */
+export const FOG_INNKEEPER: NpcDef = {
+  id: 'fog-innkeeper', name: '여관 주인', role: '핀의 아버지',
+  x: 1820, y: 1540, height: 148, dialogue: 'npc-fog-innkeeper', facing: 'down',
+};

@@ -6,7 +6,7 @@ interface Frame {
   name: string; animation: string; direction: string; pose: number; sheet: string;
   x: number; y: number; w: number; h: number; originX: number; originY: number; scale: number;
 }
-interface FrameData { frames: Frame[]; bounds: { top: number; bottom: number }; sheets: Record<string, { width: number; height: number }> }
+interface FrameData { animations?: { walk: { fps: number; poses: number[] } }; frames: Frame[]; bounds: { top: number; bottom: number }; sheets: Record<string, { width: number; height: number }> }
 const DATA = import.meta.glob<FrameData>('../assets/monsters/*/animation_frames.json', { eager: true, import: 'default' });
 const URLS = import.meta.glob<string>('../assets/monsters/*/*.webp', { eager: true, query: '?url', import: 'default' });
 const keyFor = (kind: MonsterKind, sheet: string) => `monster-${kind}-${sheet.replace('.png', '')}`;
@@ -19,6 +19,9 @@ export function preloadMonsters(scene: Phaser.Scene, spawns: readonly { key: Ene
     for (const sheet of Object.keys(frameData(kind).sheets)) {
       const key = keyFor(kind, sheet);
       if (!scene.textures.exists(key)) scene.load.image(key, URLS[`../assets/monsters/${kind}/${sheet.replace('.png', '.webp')}`]);
+    }
+    if (kind === 'fog-crow' && !scene.textures.exists('monster-fog-afterimage')) {
+      scene.load.image('monster-fog-afterimage', URLS['../assets/monsters/fog-crow/afterimage-512.webp']);
     }
     if (kind === 'waterdrop-mushroom' && !scene.textures.exists('monster-water-shot')) {
       scene.load.image('monster-water-shot', URLS['../assets/monsters/waterdrop-mushroom/projectile.webp']);
@@ -57,6 +60,7 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     this.image = scene.add.image(0, 0, keyFor(kind, 'walk_cardinal.png'));
     // 나방은 땅에서 조금 떠서 난다. 그림자는 바닥(컨테이너 원점)에 그대로 남는다.
     if (kind === 'ashen-moth') this.image.setY(-28);
+    if (kind === 'fog-crow') this.image.setY(-12);
     this.add(this.image);
     this.showFrame();
   }
@@ -102,8 +106,24 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   }
   endStrike(): void { this.attackPose = undefined; this.showFrame(); }
 
+  /** A visual decoy only: no Character, HP, collision or ground shadow. */
+  createAfterimage(x: number, y: number): Phaser.GameObjects.Image {
+    if (this.direction === 'down-right') {
+      return this.scene.add.image(x, y + this.image.y, 'monster-fog-afterimage').setOrigin(0.5, 0.85)
+        .setDisplaySize(MONSTERS[this.kind].height * 1.8, MONSTERS[this.kind].height * 1.2).setDepth(y);
+    }
+    return this.scene.add.image(x + this.image.x, y + this.image.y, this.image.texture.key, this.image.frame.name)
+      .setOrigin(this.image.originX, this.image.originY).setScale(this.image.scaleX, this.image.scaleY)
+      .setTint(0xbacbe0).setDepth(y);
+  }
+
   private showFrame(): void {
-    const pose = this.attackPose ?? (this.motion === 'walk' ? [1, 2, 3, 2][Math.floor(this.elapsed / 125) % 4] : 0);
+    const flight = this.kind === 'fog-crow';
+    const cycle = frameData(this.kind).animations?.walk;
+    const poses = flight ? (cycle?.poses ?? [0, 1, 2, 3]) : [1, 2, 3, 2];
+    const animate = this.motion === 'walk' || flight;
+    const fps = flight ? (cycle?.fps ?? 10) : 8;
+    const pose = this.attackPose ?? (animate ? poses[Math.floor(this.elapsed * fps / 1000) % poses.length] : 0);
     // 공격 그림이 없는 종류(잿빛 나방)는 같은 자세의 이동(날갯짓) 그림으로 공격한다.
     const f = this.frames.get(`${this.attackPose === undefined ? 'walk' : 'attack'}-${this.direction}-${pose}`)
       ?? this.frames.get(`walk-${this.direction}-${pose}`)!;

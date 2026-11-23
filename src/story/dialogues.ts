@@ -22,6 +22,8 @@ export const HERO_NAME = '시온';
 const hero = (text: string): DialogueLine => ({ speaker: HERO_NAME, portrait: 'hero-neutral', text });
 
 export const DIALOGUES = {
+  'east-pass-sign': [{ speaker: '이정표', text: '동쪽 고갯길 · 서쪽: 동쪽 개울가\n고개 쉼터에서 쉬어 가세요. 안개 까마귀 무리를 조심하세요.' }],
+  'npc-fog-innkeeper': [{ speaker: '여관 주인', portrait: 'fog-innkeeper', text: '잠깐 눈을 붙였을 뿐인데… 어머니가 부르는 소리가 들렸어. 분명 강 건너에서.' }],
   'village-sign': [
     { speaker: '표지판', text: '로웬 마을 광장\n북쪽: 집들 · 남쪽: 들판 · 서쪽: 숲길 · 동쪽: 개울가' },
     { speaker: HERO_NAME, portrait: 'hero-neutral', text: '표지판에 누가 수확제 리본을 묶어 놨네. 리네아 솜씨다.' },

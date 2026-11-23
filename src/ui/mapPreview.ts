@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import { WORLD_HEIGHT, WORLD_WIDTH } from '../config';
+import { outdoorArtBounds } from '../world/maps';
 import type { GameMap, Rect } from '../world/maps';
 import { interiorArtRect } from '../world/interiors';
 import { PERIMETER_TEXTURE, perimeterPieces } from '../world/villagePerimeter';
@@ -14,7 +14,7 @@ const cache = new WeakMap<Phaser.Scene, { map: GameMap; preview: MapPreview }>()
 export function mapPreview(scene: Phaser.Scene, map: GameMap): MapPreview {
   const old = cache.get(scene);
   if (old?.map === map && scene.textures.exists(KEY)) return old.preview;
-  const bounds = map.interior ? interiorArtRect(map.interior) : { left: 0, top: 0, right: WORLD_WIDTH, bottom: WORLD_HEIGHT };
+  const bounds = map.interior ? interiorArtRect(map.interior) : outdoorArtBounds(map);
   const scale = SIZE / Math.max(bounds.right - bounds.left, bounds.bottom - bounds.top);
   const width = Math.round((bounds.right - bounds.left) * scale), height = Math.round((bounds.bottom - bounds.top) * scale);
   const texture = (scene.textures.exists(KEY) ? scene.textures.get(KEY) : scene.textures.createCanvas(KEY, SIZE, SIZE)) as Phaser.Textures.CanvasTexture;
@@ -39,13 +39,12 @@ export function mapPreview(scene: Phaser.Scene, map: GameMap): MapPreview {
   if (!map.interior) {
     const objects = [
       ...perimeterPieces(map.id).map(p => ({ ...p, texture: PERIMETER_TEXTURE, frame: p.frame as string })),
-      ...map.props.map(p => ({ ...p, texture: 'village-props', frame: p.frame as string })),
+      ...map.props.map(p => ({ ...p, texture: p.texture ?? 'village-props', frame: p.frame as string })),
       ...map.buildings.map(b => ({ ...b, texture: 'village-buildings', frame: b.frame as string })),
     ].sort((a, b) => a.y - b.y);
     for (const object of objects) {
       const source = scene.textures.get(object.texture);
-      if (!source.has(object.frame)) continue;
-      const frame = source.get(object.frame), w = object.width * scale, h = 'height' in object ? object.height * scale : w * frame.cutHeight / frame.cutWidth;
+      const frame = source.get(source.has(object.frame) ? object.frame : '__BASE'), w = object.width * scale, h = 'height' in object ? object.height * scale : w * frame.cutHeight / frame.cutWidth;
       ctx.drawImage(source.getSourceImage() as CanvasImageSource, frame.cutX, frame.cutY, frame.cutWidth, frame.cutHeight,
         (object.x - bounds.left) * scale - w / 2, (object.y - bounds.top) * scale - h, w, h);
     }

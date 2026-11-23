@@ -18,6 +18,7 @@ import martaPortrait from '../assets/characters/marta/dialogue-768.webp?url';
 import morganPortrait from '../assets/characters/morgan/dialogue-768.webp?url';
 import finnPortrait from '../assets/characters/finn/dialogue-768.webp?url';
 import dorPortrait from '../assets/characters/dor/dialogue-768.webp?url';
+import fogInnkeeperPortrait from '../assets/characters/fog-innkeeper/dialogue-768.webp?url';
 import fernPortrait from '../assets/characters/fern/dialogue-768.webp?url';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 import type { DialogueLine, Portrait } from '../story/dialogues';
@@ -51,6 +52,7 @@ const PORTRAITS: Record<Portrait, { key: string; url: string }> = {
   morgan: { key: 'portrait-morgan', url: morganPortrait },
   finn: { key: 'portrait-finn', url: finnPortrait },
   dor: { key: 'portrait-dor', url: dorPortrait },
+  'fog-innkeeper': { key: 'portrait-fog-innkeeper', url: fogInnkeeperPortrait },
   fern: { key: 'portrait-fern', url: fernPortrait },
 };
 /** 초당 나오는 글자 수 (38자는 읽기 전에 지나가서 조금 늦췄다) */

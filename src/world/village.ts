@@ -3,6 +3,7 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from '../config';
 import perimeter from '../assets/village/rowen/perimeter.webp?url';
 import perimeterFrames from '../assets/village/rowen/perimeter.json';
 import { PERIMETER_TEXTURE, perimeterPieces } from './villagePerimeter';
+import { preloadEastPass } from './eastPassArt';
 import ground from '../assets/village/ground.png?url';
 import buildings from '../assets/village/rowen/buildings.webp?url';
 import buildingFrames from '../assets/village/rowen/buildings.json';
@@ -17,6 +18,7 @@ const FONT = 'system-ui, "Noto Sans KR", sans-serif';
 
 export function preloadVillage(scene: Phaser.Scene, map: GameMap): void {
   preloadMapArt(scene, map);
+  if (map.id === 'east-pass') preloadEastPass(scene);
   if (perimeterPieces(map.id).length && !scene.textures.exists(PERIMETER_TEXTURE)) scene.load.image(PERIMETER_TEXTURE, perimeter);
   for (const [key, url] of [['village-ground', ground], ['village-buildings', buildings], ['village-props', props]]) {
     if (!scene.textures.exists(key)) scene.load.image(key, url);
@@ -44,7 +46,7 @@ export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
       if (!buildingTexture.has(f.name)) buildingTexture.add(f.name, 0, f.x, f.y, f.w, f.h);
     }
   }
-  if (map.id === 'south-field') drawFieldArt(scene);
+  if (map.id === 'south-field' || map.id === 'east-pass') drawFieldArt(scene, map);
   else {
     const floor = scene.add.image(0, 0, 'village-ground').setOrigin(0).setDisplaySize(WORLD_WIDTH, WORLD_HEIGHT).setDepth(-100);
     if (map.groundTint !== undefined) floor.setTint(map.groundTint);
@@ -58,7 +60,8 @@ export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
       .setOrigin(.5, 1).setDisplaySize(p.width, p.height).setDepth(p.y).setName(p.name);
   }
   for (const p of map.props) {
-    const image = scene.add.image(p.x, p.y, 'village-props', p.frame).setOrigin(.5, 1).setDepth(p.y).setName(`village-prop-${p.frame}`);
+    const texture = scene.textures.get(p.texture ?? 'village-props');
+    const image = scene.add.image(p.x, p.y, texture.key, texture.has(p.frame) ? p.frame : '__BASE').setOrigin(.5, 1).setDepth(p.y).setName(`village-prop-${p.frame}`);
     image.setScale(p.width / image.width);
   }
   for (const b of map.buildings) {

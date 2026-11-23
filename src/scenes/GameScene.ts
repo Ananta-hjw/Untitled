@@ -1,3 +1,5 @@
+import { outdoorArtBounds } from '../world/maps';
+import { EastPassScenery } from '../world/eastPassArt';
 import { mapPoint } from '../world/mapScale';
 import { interiorArtRect } from '../world/interiors';
 import Phaser from 'phaser';
@@ -22,8 +24,6 @@ import {
   PLAYER_SPEED,
   VERTICAL_SPEED_RATIO,
   VIEW_HEIGHT,
-  WORLD_HEIGHT,
-  WORLD_WIDTH,
   HIT_FEEL,
   HERO_WALK_NATURAL_SPEED,
   MANA,
@@ -72,7 +72,7 @@ import { DIALOGUES, HERO_NAME } from '../story/dialogues';
 import { findInteractable, type Interactable } from '../world/interactables';
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
-import { chapterTwoPreviewNpcs } from '../world/chapterTwoNpcs';
+import { chapterTwoPreviewNpcs, FOG_INNKEEPER } from '../world/chapterTwoNpcs';
 import { FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen } from '../story/chapterTwo';
 import fernCartDamagedUrl from '../assets/village/rowen/fern-cart-damaged.webp?url';
 import fernCartRepairedUrl from '../assets/village/rowen/fern-cart-repaired.webp?url';
@@ -262,6 +262,7 @@ export class GameScene extends Phaser.Scene {
   private playFestival = false;
   /** 지금 연출의 걷는 빠르기 (오프닝·축제가 다르다) */
   private cutsceneWalkScale = OPENING_WALK_SCALE;
+  private passScenery?: EastPassScenery;
   private festivalStage?: FestivalStage;
   /** 축제 연출 끝에 남문으로 걸어 들어오는 권속 (싸우지 않는 그림뿐. 연출이 끝나면 광장을 다시 열어 진짜 무리가 나온다) */
   private festivalRaiders: Array<{ enemy: Enemy; path: readonly Point[]; startedAt: number }> = [];
@@ -360,11 +361,11 @@ export class GameScene extends Phaser.Scene {
     if (isMapId(data.map)) this.mapId = data.map;
     else if (isMapId(fromUrl)) this.mapId = fromUrl;
     this.map = MAPS[this.mapId];
-    if (this.previewChapterTwo) {
+    if (this.previewChapterTwo || this.previewInnkeeper) {
       // 본편의 1장 배치나 진행 조건을 바꾸지 않고 같은 NPC·대화 시스템으로 새 원화를 확인한다.
       const at = mapPoint({ x: 1400, y: 1250 });
       this.map = { ...this.map, name: '2장 인물 확인', hint: '2장 인물 확인 · 가까이 가서 대화해 보세요',
-        spawn: { x: at.x, y: at.y + 170 }, npcs: chapterTwoPreviewNpcs(at), enemies: [], exits: [],
+        spawn: { x: at.x, y: at.y + 170 }, npcs: this.previewInnkeeper ? [{ ...FOG_INNKEEPER, ...at }] : chapterTwoPreviewNpcs(at), enemies: [], exits: [],
         props: [], buildings: [], interactables: [], obstacles: [] };
     }
     if (data.stress !== undefined) this.stressCount = data.stress;
@@ -527,6 +528,7 @@ export class GameScene extends Phaser.Scene {
     this.playFestival = false;
     this.cutsceneWalkScale = OPENING_WALK_SCALE;
     this.festivalStage = undefined;
+    this.passScenery = undefined;
     this.festivalRaiders = [];
     this.mp = 0;
     this.maxMp = 0;
@@ -553,7 +555,7 @@ export class GameScene extends Phaser.Scene {
     // 습격 중에는 이 맵에 나올 모든 무리의 그림을 미리 읽는다(대화 뒤 다음 무리가 바로 나타난다).
     preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...raidSpawnsAnyStep(this.quests, this.mapId), ...this.previewMonsters()]);
     preloadVillage(this, this.map);
-    preloadNpcs(this, [...NPCS, FERN, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 })]);
+    preloadNpcs(this, [...NPCS, FERN, FOG_INNKEEPER, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 })]);
     if (fernCartVisible(this.quests, this.mapId)) {
       this.load.image('fern-cart-damaged', fernCartDamagedUrl);
       this.load.image('fern-cart-repaired', fernCartRepairedUrl);
@@ -565,6 +567,7 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     createPlaceholderArt(this);
     this.walkArea = buildMap(this, this.map);
+    if (this.mapId === 'east-pass') this.passScenery = new EastPassScenery(this);
     this.placeFernCart();
     const bounds = this.walkArea.bounds;
     this.nav = new NavGrid(bounds.left, bounds.top, bounds.right, bounds.bottom, NAV_CELL,
@@ -804,6 +807,7 @@ export class GameScene extends Phaser.Scene {
     this.effects.update(time);
     this.opening?.update(time);
     this.festivalStage?.update(time);
+    this.passScenery?.update(time, this.player);
     this.updateFestivalRaiders(time);
     this.updateRespawns(time);
     this.updateBoss(time, dt);
@@ -982,15 +986,20 @@ export class GameScene extends Phaser.Scene {
 
   /** ?map=east-stream&npcs=chapter2: 미구현 2장 인물의 그림·대화 확인용. 배포판에는 적용하지 않는다. */
   /**
-   * 개발용: ?monsters=frost-beetle 이면 플레이어 둘레에 그 몬스터 셋을 더 세운다(아직 맵이 없는 2장 몬스터를 확인할 때).
+   * 개발용: ?monsters=frost-beetle 또는 fog-crow 이면 플레이어 둘레에 그 몬스터 셋을 더 세운다(아직 맵이 없는 2장 몬스터를 확인할 때).
    * 배포판에는 적용하지 않는다.
    */
   private previewMonsters(): Array<{ key: EnemyKey; x: number; y: number }> {
     if (!import.meta.env.DEV) return [];
     const key = new URLSearchParams(location.search).get('monsters');
-    if (key !== 'frost-beetle') return [];
+    if (key !== 'frost-beetle' && key !== 'fog-crow') return [];
     const s = this.map.spawn;
     return [-260, 0, 260].map((dx) => ({ key, x: s.x + dx, y: s.y - 260 }));
+  }
+
+  private get previewInnkeeper(): boolean {
+    return import.meta.env.DEV && this.mapId === 'east-stream'
+      && new URLSearchParams(location.search).get('npcs') === 'innkeeper';
   }
 
   private get previewChapterTwo(): boolean {
@@ -1005,7 +1014,7 @@ export class GameScene extends Phaser.Scene {
     for (const spawn of this.previewMonsters()) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, 9));
     this.syncRaidEnemies(false);
     // 축제 연출 동안에는 마을 사람 모두가 광장의 잔치 자리에 있다.
-    let defs = this.previewChapterTwo ? this.map.npcs
+    let defs = this.previewChapterTwo || this.previewInnkeeper ? this.map.npcs
       : this.playFestival ? festivalNpcs() : [...chapterNpcs([...this.map.npcs, ...guardsForMap(this.mapId)], this.quests, this.mapId), ...chapterTwoNpcs(this.quests, this.mapId)];
     if (this.stressCount > 0 && this.mapId === 'village' && chapterPhase(this.quests) === 'day') {
       const area = this.walkArea, b = this.map.bounds;
@@ -1017,6 +1026,10 @@ export class GameScene extends Phaser.Scene {
       npc.setBattle(phase === 'raid' && !this.playFestival, phase === 'aftermath' && def.id === 'ruan');
       return npc;
     });
+    if (this.previewInnkeeper && new URLSearchParams(location.search).get('sleepwalk') === '1') {
+      const innkeeper = this.npcs[0];
+      innkeeper.startSleepwalk([{ x: innkeeper.x + 260, y: innkeeper.y + 65 }]);
+    }
     this.interactables = [...this.map.interactables, ...this.npcs.map((npc) => npc.spot),
       // 시온의 집 침대 앞: 쉬기 (저장)
       ...(this.mapId === 'in-home' ? [{ ...HOME_BED_SPOT }] : []),
@@ -1187,7 +1200,8 @@ export class GameScene extends Phaser.Scene {
     const camera = this.cameras.main;
     const interior = this.map.interior;
     if (!interior) {
-      camera.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+      const b = outdoorArtBounds(this.map);
+      camera.setBounds(b.left, b.top, b.right - b.left, b.bottom - b.top);
       return;
     }
     const { left, right, top, bottom } = interiorArtRect(interior);
@@ -1640,12 +1654,12 @@ export class GameScene extends Phaser.Scene {
     } else if (enemy.boss) {
       // 보스는 보통 공격에 움찔하지 않고 조금만 밀린다. 체력이 절반 아래로 떨어지면 포효하며 2페이즈.
       c.knockback.set(dirX * push * BOSS.knockbackScale, dirY * push * BOSS.knockbackScale * VERTICAL_SPEED_RATIO);
-      enemy.onHit(this.now);
+      enemy.onHit(this.now, this.walkArea, this.player);
       if (entersPhaseTwo(enemy.phase, c.hp, c.maxHp)) this.startBossRoar(enemy);
     } else {
       c.knockback.set(dirX * push, dirY * push * VERTICAL_SPEED_RATIO);
       enemy.interrupt(this.now);
-      enemy.onHit(this.now);
+      enemy.onHit(this.now, this.walkArea, this.player);
     }
   }
 

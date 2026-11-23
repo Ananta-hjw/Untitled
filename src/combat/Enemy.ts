@@ -7,6 +7,7 @@ import type { NavGrid } from '../world/navGrid';
 import type { WalkArea } from '../world/walkArea';
 import { MonsterSprite } from './MonsterSprite';
 import { MONSTERS, WATER_SHOT, isCharger, monsterKind, enemyHitReaches, type EnemyHit, type EnemyKey, type MonsterKind, type MonsterStats } from './monsterTypes';
+import { FOG_CROW, fogEscape } from './fogCrow';
 import { scaleMonster } from './monsterLevel';
 import { BOSS, fanDirections, insideEllipse, retreatDone, shouldVeil, wantsVolley, type BossPhase } from './bossPattern';
 import { BossHazards } from './BossHazards';
@@ -46,6 +47,8 @@ export class Enemy {
   private strikeLanded = false;
   /** 마지막으로 맞은 시각(게임 시계). 맞은 뒤 잠깐 몸이 출렁인다. */
   private hitAt?: number;
+  private escapedAt = -Infinity;
+  private decoy?: { image: Phaser.GameObjects.Image; born: number };
 
   /** 쓰러질 때 흩어지는 파편의 색 */
   readonly color: number;
@@ -74,11 +77,11 @@ export class Enemy {
     this.character = new Character(scene, x, y, {
       key,
       monster: this.kind,
-      shadowWidth: 100,
+      shadowWidth: this.kind === 'fog-crow' ? 54 : 100,
       maxHp: this.stats.hp,
       showHpBar: true,
       levelTag: level,
-      labelOffset: this.kind ? this.stats.height + 8 : 96,
+      labelOffset: this.kind ? this.stats.height + (this.kind === 'fog-crow' ? 36 : 8) : 96,
     });
     this.target.set(x, y);
     this.wanderSpeed = Phaser.Math.Between(50, 80);
@@ -102,6 +105,7 @@ export class Enemy {
       strike: (hit) => onStrike(this, hit) === true,
       pool: () => onHazard?.(this, 'pool', true, 0, 0),
     });
+    this.updateDecoy(time);
     this.updateHitSquash(time);
     this.updateProjectile(time, dt, player, area, onStrike);
     if (c.sprite instanceof MonsterSprite) c.sprite.advance(dt * 1000);
@@ -147,7 +151,7 @@ export class Enemy {
         const ranged = this.kind === 'waterdrop-mushroom';
         const charge = isCharger(this.kind);
         const inRange = ranged ? Math.hypot(dx, dy) <= 350 && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
-          : charge ? Math.hypot(dx, dy) <= 250 && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
+          : charge ? Math.hypot(dx, dy) <= (this.kind === 'fog-crow' ? 165 : 250) && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
           : Math.abs(dx) < ENEMY.attackRangeX && Math.abs(dy) < ENEMY.attackRangeY;
         if (inRange) {
           // 보스는 돌진을 BOSS.chain번 잇달아 한다.
@@ -264,11 +268,38 @@ export class Enemy {
   }
 
   /** 칼에 맞았을 때: 그 자리에서 납작해졌다가 출렁이며 돌아온다 (게임 시계 기준). */
-  onHit(time: number): void {
+  onHit(time: number, area?: WalkArea, threat?: { x: number; y: number }): void {
+    if (this.kind === 'fog-crow' && this.character.alive && area && threat && time - this.escapedAt >= FOG_CROW.cooldownMs) {
+      const c = this.character;
+      const point = fogEscape(c, threat, (x, y) => area.hasClearPath(c.x, c.y, x, y)
+        && [[0, 0], [-18, 0], [18, 0], [0, -12], [0, 12]].every(([dx, dy]) => area.contains(x + dx, y + dy)));
+      if (point && c.sprite instanceof MonsterSprite) {
+        this.clearDecoy();
+        this.decoy = { image: c.sprite.createAfterimage(c.x, c.y).setAlpha(0.48), born: time };
+        this.escapedAt = time;
+        this.interrupt(time, FOG_CROW.recoverMs);
+        c.knockback.set(0, 0);
+        c.placeAt(point.x, point.y);
+        this.hitAt = undefined;
+        return;
+      }
+    }
     if (this.state === 'roar') return;
     this.hitAt = time;
     const { scaleX, scaleY } = hitSquash(0);
     this.character.sprite.setScale(scaleX, scaleY);
+  }
+
+  private updateDecoy(time: number): void {
+    if (!this.decoy) return;
+    const age = (time - this.decoy.born) / FOG_CROW.decoyMs;
+    if (age >= 1) this.clearDecoy();
+    else this.decoy.image.setAlpha(0.48 * (1 - Math.max(0, age)));
+  }
+
+  private clearDecoy(): void {
+    this.decoy?.image.destroy();
+    this.decoy = undefined;
   }
 
   private updateHitSquash(time: number): void {
@@ -322,6 +353,7 @@ export class Enemy {
   }
 
   kill(): void {
+    this.clearDecoy();
     this.hazards?.clear();
     this.hitAt = undefined;
     this.state = 'dead';
@@ -331,6 +363,8 @@ export class Enemy {
   }
 
   respawn(x: number, y: number): void {
+    this.clearDecoy();
+    this.escapedAt = -Infinity;
     this.hitAt = undefined;
     this.clearProjectile();
     this.cancelStrike();
@@ -377,14 +411,14 @@ export class Enemy {
         const progress = Math.min(1, (elapsed - windupMs) / strikeMs);
         if (progress > this.chargeProgress) {
           const c = this.character, fromX = c.x, fromY = c.y;
-          const distance = (progress - this.chargeProgress) * 260;
+          const distance = (progress - this.chargeProgress) * (this.kind === 'fog-crow' ? FOG_CROW.swoopDistance : 260);
           area.move(c.x, c.y, this.aim.x * distance, this.aim.y * distance, this.scratch);
           c.placeAt(this.scratch.x, this.scratch.y);
           this.chargeProgress = progress;
           if (!this.strikeLanded) {
             this.lastStrikeAt = time;
             this.strikeLanded = onStrike(this, { fromX, fromY, toX: c.x, toY: c.y,
-              radiusX: 65, radiusY: 38, dx: this.aim.x, dy: this.aim.y }) === true;
+              radiusX: this.kind === 'fog-crow' ? 42 : 65, radiusY: this.kind === 'fog-crow' ? 28 : 38, dx: this.aim.x, dy: this.aim.y }) === true;
             if (this.state !== 'windup') return;
           }
         }

@@ -1,3 +1,4 @@
+import { EAST_PASS } from './eastPass.ts';
 import { mapLength, mapPoint, mapRect, mapProp } from './mapScale.ts';
 import { VILLAGE_GATES, perimeterObstacles } from './villagePerimeter.ts';
 import type { EnemyKey } from '../combat/monsterTypes.ts';
@@ -26,7 +27,7 @@ import {
  * 이 파일은 Phaser를 쓰지 않아 tools/maps.test.mjs가 직접 불러 검사한다.
  */
 
-export type MapId = 'village' | 'village-north' | 'south-field' | 'west-forest' | 'east-stream' | `in-${InteriorId}`;
+export type MapId = 'village' | 'village-north' | 'south-field' | 'west-forest' | 'east-stream' | 'east-pass' | `in-${InteriorId}`;
 
 export interface Rect { left: number; top: number; right: number; bottom: number }
 export interface Point { x: number; y: number }
@@ -50,6 +51,8 @@ export interface GameMap {
   /** 맵에 들어설 때 화면 아래에 잠깐 띄우는 안내 */
   hint: string;
   bounds: Rect;
+  /** Full painted world extent, independent of walkable bounds. */
+  artBounds?: Rect;
   walkPolygon?: number[];
   obstacles?: Obstacle[];
   props: VillageProp[];
@@ -230,6 +233,8 @@ const EAST_STREAM: GameMap = {
     { to: 'village', zone: mapRect({ left: 0, top: 820, right: 110, bottom: 1000 }),
       // 동문 기둥과 문지기 둘 사이가 아니라, 문 안쪽으로 조금 들어온 곳에 선다.
       arrive: { x: VILLAGE_GATES.east.x - mapLength(290), y: mapLength(1050) }, label: '◀ 로웬 마을', labelAt: mapPoint({ x: 160, y: 1010 }) },
+    { to: 'east-pass', zone: { left: 3220, top: 1280, right: WORLD_WIDTH, bottom: 1550 },
+      arrive: { x: 350, y: 2150 }, label: '동쪽 고갯길 ▶', labelAt: { x: 3100, y: 1570 } },
   ],
   interactables: [streamSign.spot],
 };
@@ -277,6 +282,7 @@ export const MAPS = {
   'south-field': SOUTH_FIELD,
   'west-forest': WEST_FOREST,
   'east-stream': EAST_STREAM,
+  'east-pass': EAST_PASS,
   ...Object.fromEntries(INTERIORS.map((i) => [`in-${i.id}`, interiorMap(i)])),
 } as Record<MapId, GameMap>;
 
@@ -314,4 +320,9 @@ export function findExit(map: GameMap, x: number, y: number): MapExit | undefine
 /** Phaser 없이 걸을 수 있는지 판단한다 (테스트용, WalkArea와 같은 규칙). */
 export function walkable(map: GameMap, x: number, y: number, obstacles: readonly Obstacle[] = mapObstacles(map)): boolean {
   return insideRect(map.bounds, x, y) && (!map.walkPolygon || insidePolygon(map.walkPolygon, x, y)) && !obstacles.some((o) => insideObstacle(o, x, y));
+}
+
+/** The camera, painted ground and maps share this extent. */
+export function outdoorArtBounds(map: GameMap): Rect {
+  return map.artBounds ?? { left: 0, top: 0, right: WORLD_WIDTH, bottom: WORLD_HEIGHT };
 }

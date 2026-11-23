@@ -20,7 +20,7 @@ export type NamedNpcId =
   // 2장부터 광장 남문 안쪽에 수레를 세우는 떠돌이 행상인 (story/chapterTwo.ts)
   | 'fern';
 
-export type ChapterTwoNpcId = 'evan' | 'joan' | 'marta' | 'morgan' | 'finn' | 'dor';
+export type ChapterTwoNpcId = 'evan' | 'joan' | 'marta' | 'morgan' | 'finn' | 'dor' | 'fog-innkeeper';
 export type NpcSkin = NamedNpcId | ChapterTwoNpcId | 'soldier';
 export type NpcId = NamedNpcId | ChapterTwoNpcId | `guard-${string}` | `companion-${string}`;
 

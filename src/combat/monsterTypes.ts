@@ -1,7 +1,7 @@
 import { ENEMY, PROGRESSION } from '../config.ts';
 
-export type MonsterKind = 'slime' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'corrosion-tracker' | 'corrosion-executioner' | 'frost-beetle';
-export type EnemyKey = 'slime-green' | 'slime-blue' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'corrosion-tracker' | 'corrosion-executioner' | 'frost-beetle' | 'retainer-ash';
+export type MonsterKind = 'slime' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'corrosion-tracker' | 'corrosion-executioner' | 'frost-beetle' | 'fog-crow';
+export type EnemyKey = 'slime-green' | 'slime-blue' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'corrosion-tracker' | 'corrosion-executioner' | 'frost-beetle' | 'fog-crow' | 'retainer-ash';
 export function monsterKind(key: EnemyKey): MonsterKind | undefined {
   return key.startsWith('slime-') ? 'slime' : key === 'retainer-ash' ? undefined : key as MonsterKind;
 }
@@ -22,14 +22,16 @@ export const MONSTERS = {
   // 수호(바르덴)의 하급 권속. 2장 동쪽 고갯길. 느리고 단단하며 얼음 껍질이 정면 공격을 막는다(FROST_SHELL).
   'frost-beetle': { name: '서리 딱정벌레', hp: 70, damage: 12, xp: 22, height: 105, speed: 70,
     windupMs: 720, strikeMs: 200, returnMs: 240, recoverMs: 1400, color: 0x9fd8ee },
+  'fog-crow': { name: '안개 까마귀', hp: 22, damage: 5, xp: 12, height: 76, speed: 205,
+    windupMs: 360, strikeMs: 180, returnMs: 180, recoverMs: 900, color: 0x9daac7 },
   // 1장 보스. 레벨 7에서 체력 500·공격력 34 (combat/bossPattern.ts의 패턴을 쓴다)
   'corrosion-executioner': { name: '부식의 집행자', hp: 200, damage: 18, xp: 80, height: 150, speed: 95,
     windupMs: 950, strikeMs: 340, returnMs: 260, recoverMs: 1300, color: 0x5e5468 },
 } as const;
 
-/** 길게 준비했다가 잠근 방향으로 돌진하는 몬스터 */
+/** 잠근 방향으로 실제 위치를 옮겨 돌진·덮치기 공격을 하는 몬스터 */
 export function isCharger(kind: MonsterKind | undefined): boolean {
-  return kind === 'iron-scale-lizard' || kind === 'corrosion-executioner';
+  return kind === 'fog-crow' || kind === 'iron-scale-lizard' || kind === 'corrosion-executioner';
 }
 
 /**

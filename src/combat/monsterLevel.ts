@@ -15,6 +15,7 @@ export const AREA_LEVELS: Partial<Record<MapId, LevelRange>> = {
   'south-field': { min: 1, max: 3 },
   'west-forest': { min: 4, max: 6 },
   'east-stream': { min: 7, max: 9 },
+  'east-pass': { min: 8, max: 10 },
 };
 
 /** 해 질 무렵 남쪽 들판의 잿빛 나방, 습격의 권속 */
