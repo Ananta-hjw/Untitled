@@ -64,7 +64,7 @@ import { SKILLS, SKILL_SAVE_KEY, learnSkill, parseSkills, serializeSkills, type 
 import { OpeningDirector } from './OpeningDirector';
 import { OPENING, OPENING_HINT, OPENING_SAVE_KEY, OPENING_WALK_SCALE, shouldPlayOpening, type OpeningStep } from '../story/opening';
 import { FESTIVAL, FESTIVAL_RAIDERS, FESTIVAL_SAVE_KEY, FESTIVAL_WALK_SCALE, RAIDER_ENTRY_MS, festivalNpcs, shouldPlayFestival } from '../story/festival';
-import { FestivalStage } from './FestivalStage';
+import { FestivalStage, preloadFestival } from './FestivalStage';
 import { DeathPanel } from '../ui/DeathPanel';
 import { deathReport, emptyDamageLog, recordDamage, type DamageLog } from '../combat/damageLog';
 import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings } from '../ui/settingsData';
@@ -542,6 +542,7 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     preloadHeroSprite(this);
+    if (this.playFestival) preloadFestival(this);
     preloadIcons(this);
     // 습격 중에는 이 맵에 나올 모든 무리의 그림을 미리 읽는다(대화 뒤 다음 무리가 바로 나타난다).
     preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...raidSpawnsAnyStep(this.quests, this.mapId)]);
