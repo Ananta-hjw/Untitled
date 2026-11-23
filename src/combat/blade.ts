@@ -22,6 +22,22 @@ export function clipBladeSweep(previous: Blade, current: Blade, from: number, to
   };
 }
 
+/** A stepped attack pose moves the whole blade at strikeAt, rather than over the preceding frame. */
+export function attackBladeSweep(previous: Blade, current: Blade, from: number, to: number,
+  strikeAt: number, windowEnd: number): BladeSweep | undefined {
+  if (to <= from || from >= windowEnd) return;
+  // Match the pose clock's tolerance so floating point deltas cannot lose or repeat the transition.
+  const entersStrike = from + 1e-6 < strikeAt && to + 1e-6 >= strikeAt;
+  if (!entersStrike) return clipBladeSweep(previous, current, from, to, strikeAt, windowEnd);
+  const end = Math.min(to, windowEnd);
+  return {
+    previous,
+    current: end < to ? interpolateBlade(previous, current, (end - from) / (to - from)) : current,
+    start: Math.min(strikeAt, to),
+    end,
+  };
+}
+
 function segmentDistanceSq(a: Point, b: Point): number {
   const dx = b.x - a.x;
   const dy = b.y - a.y;

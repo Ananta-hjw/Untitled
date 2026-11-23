@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bladeHitsEllipse, clipBladeSweep } from '../src/combat/blade.ts';
+import { attackBladeSweep, bladeHitsEllipse, clipBladeSweep } from '../src/combat/blade.ts';
 
 const blade = (x, y) => ({ base: { x, y }, tip: { x: x + 50, y } });
 
@@ -42,4 +42,34 @@ test('유효 구간 밖의 프레임과 중복 시간은 무시하고 정확한 
   assert.equal(clipBladeSweep(a, b, 30, 30, 25, 75), undefined);
   assert.deepEqual(clipBladeSweep(a, b, 0, 25, 25, 75).current, b);
   assert.deepEqual(clipBladeSweep(a, b, 25, 75, 25, 75).current, b);
+});
+
+test('찌르는 자세로 바뀌는 순간의 근거리 궤적을 늦은 명중 시각으로 잘라 버리지 않는다', () => {
+  const before = blade(0, -30), after = blade(0, 30);
+  assert.equal(clipBladeSweep(before, after, 166, 175, 180, 235), undefined);
+  const sweep = attackBladeSweep(before, after, 166, 175, 168, 235);
+  assert.equal(sweep.start, 168);
+  assert.equal(bladeHitsEllipse(sweep.previous, sweep.current, { x: 25, y: 0 }, 5, 5), true);
+});
+
+test('올려 베기의 전환 시각과 프레임 끝이 같아도 검이 지나간 몸통을 한 번 판정한다', () => {
+  const before = blade(0, -30), after = blade(0, 30);
+  const sweep = attackBladeSweep(before, after, 100, 105, 105, 160);
+  assert.equal(bladeHitsEllipse(sweep.previous, sweep.current, { x: 25, y: 0 }, 5, 5), true);
+  const next = attackBladeSweep(after, after, 105, 110, 105, 160);
+  assert.equal(bladeHitsEllipse(next.previous, next.current, { x: 25, y: 0 }, 5, 5), false);
+  assert.equal(attackBladeSweep(before, after, 105, 105, 105, 160), undefined);
+});
+
+test('자세 전환 보정은 타격 전이나 종료 후로 번지지 않고 부동소수점 경계를 놓치지 않는다', () => {
+  const before = blade(0, -100), after = blade(0, 100);
+  assert.equal(attackBladeSweep(before, after, 80, 104, 105, 160), undefined);
+  assert.equal(attackBladeSweep(before, after, 160, 180, 105, 160), undefined);
+  const clipped = attackBladeSweep(before, after, 100, 200, 105, 160);
+  assert.equal(clipped.end, 160);
+  assert.equal(bladeHitsEllipse(clipped.previous, clipped.current, { x: 25, y: 90 }, 5, 5), false);
+  const edge = attackBladeSweep(blade(0, -30), blade(0, 30), 100, 105 - 1e-8, 105, 160);
+  assert.equal(bladeHitsEllipse(edge.previous, edge.current, { x: 25, y: 0 }, 5, 5), true);
+  const next = attackBladeSweep(blade(0, 30), blade(0, 30), 105 - 1e-8, 110, 105, 160);
+  assert.equal(bladeHitsEllipse(next.previous, next.current, { x: 25, y: 0 }, 5, 5), false);
 });

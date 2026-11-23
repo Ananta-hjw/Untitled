@@ -5,7 +5,7 @@ import { interiorArtRect } from '../world/interiors';
 import Phaser from 'phaser';
 import { App } from '@capacitor/app';
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
-import { bladeHitsEllipse, clipBladeSweep, type Blade } from '../combat/blade';
+import { attackBladeSweep, bladeHitsEllipse, type Blade } from '../combat/blade';
 import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
 import { MonsterSprite, preloadMonsters } from '../combat/MonsterSprite';
@@ -1574,18 +1574,18 @@ export class GameScene extends Phaser.Scene {
     const end = combo.hitDelayMs + PLAYER.hitWindowMs;
     // 휘두르기 시작 시각에 손그림 검기·찌르기 이펙트를 재생하고, 없을 때만 벡터 초승달로 대체한다.
     const strikeAt = strikePoseStart(trace.stage, rig.activeAttackFacing);
-    if (lastElapsed < strikeAt && elapsed >= strikeAt) {
+    if (lastElapsed + 1e-6 < strikeAt && elapsed + 1e-6 >= strikeAt) {
       const played = this.effects.spawnSlashSprite(trace.stage, rig.activeAttackFacing, previous, current, player.y, time);
       if (!played) {
-        trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, combo.hitDelayMs, player.y + 2);
+        trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, strikeAt, player.y + 2);
         this.effects.slash(trace.effect, previous, current, time, trace.direction.x, trace.direction.y);
       }
     }
-    const sweep = clipBladeSweep(previous, current, lastElapsed, elapsed, combo.hitDelayMs, end);
+    const sweep = attackBladeSweep(previous, current, lastElapsed, elapsed, strikeAt, end);
     if (elapsed >= end) this.attackTrace = undefined;
     if (!sweep) return;
     const finisher = trace.stage === PLAYER.combo.length - 1;
-    trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, combo.hitDelayMs, player.y + 2);
+    trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, strikeAt, player.y + 2);
     this.effects.drawAttack(trace.effect, sweep, time);
 
     let heaviest: Exclude<HitKind, 'hurt'> | undefined;

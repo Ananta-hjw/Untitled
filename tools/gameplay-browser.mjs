@@ -498,7 +498,7 @@ test('프레임이 타격 시간 경계를 넘을 때 유효 구간 밖 접촉�
     const line = (y) => ({ base: { x: 1060, y }, tip: { x: 1150, y } });
     const blade = rig.getBlade, results = [];
     for (const [name, from, to, y0, y1] of [
-      ['before', 160, 190, 605, 800], ['after', 230, 250, 700, 605],
+      ['before', 130, 160, 605, 800], ['after', 230, 250, 700, 605],
       ['inside', 170, 200, 700, 560], ['both', 100, 300, 700, 500]
     ]) {
       p.revive(1000, 650); e.character.revive(1100, 650); s.comboStage = 2; s.comboExpiresAt = 10000;
@@ -540,7 +540,8 @@ test('공격 효과는 프레임 속도와 무관하게 한 객체와 일정한 
   assert.equal(result.results.length, 12);
   for (const run of result.results) {
     assert.equal(run.begun, 1, JSON.stringify(run));
-    assert.equal(run.samples, 6, JSON.stringify(run));
+    assert.equal(run.samples, result.results.find(r => r.stage === run.stage).samples, JSON.stringify(run));
+    assert.ok(run.samples >= 6, JSON.stringify(run));
     assert.equal(run.pool, 1);
     assert.equal(run.active, false);
     assert.equal(run.visible, false);
@@ -712,6 +713,87 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
       assert.ok(Math.abs(Math.abs(run.dy / run.dx) - .7) < 0.001);
       assert.ok(Math.abs(Math.abs(run.ky / run.kx) - .7) < 0.001);
     }
+  }
+});
+
+test('근거리 찌르기와 좌우 올려 베기는 프레임 경계·변동·느린 시간에서도 앞의 적만 한 번 맞힌다', async () => {
+  await load('south-field&companion=none');
+  const runs = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player, hero = p.sprite;
+    const enemies = [s.enemies.find(e => e.kind === 'slime'), s.enemies.find(e => e.kind === 'waterdrop-mushroom')];
+    s.joystick.vector.set(0, 0);
+    // Keep the actual attack/lunge/lane/body collision path; omit visual allocation and knockback between samples.
+    s.showDamage = () => {}; s.impacts.impact = () => {}; s.resolveEnemyHit = () => {};
+    s.effects.spawnSlashSprite = () => true; s.effects.beginAttack = () => ({}); s.effects.drawAttack = () => {};
+    const patterns = [
+      ...[20, 30, 50, 1000 / 17.5, 60, 1000 / 15, 75, 100, 120, 200, 240, 1000]
+        .map(fps => ({ name: fps + 'fps', steps: [1000 / fps] })),
+      { name: 'variable', steps: [13, 21, 17, 19, 14, 16] },
+      { name: 'slow-variable', steps: [3, 6, 4, 5] },
+    ];
+    const attacks = [
+      ['up-right', Math.SQRT1_2, -Math.SQRT1_2, 2, 70],
+      ['up-left', -Math.SQRT1_2, -Math.SQRT1_2, 2, 70],
+      ['right', 1, 0, 1, 110], ['left', -1, 0, 1, 110],
+      ['right', 1, 0, 1, 120], ['left', -1, 0, 1, 120],
+    ];
+    const runs = [];
+    for (const e of enemies) for (const pattern of patterns) for (const [facing, dx, dy, stage, distance] of attacks) {
+      const x = dx * distance, y = dy * distance * .7, length = Math.hypot(x, y);
+      const positions = [[x, y], [-x, -y], [x - y / length * 100, y + x / length * 100], [dx * 440, dy * 440 * .7]];
+      const hits = [], firstHit = [];
+      for (const [tx, ty] of positions) {
+        p.revive(1000, 850); e.character.revive(1000 + tx, 850 + ty);
+        e.character.sprite.setMovement(0, 1); e.character.sprite.advance(0);
+        s.enemies = [e]; s.comboStage = stage; s.comboExpiresAt = 10000; s.now = 1000;
+        let count = 0, hitAt;
+        e.character.hurt = () => { count++; hitAt ??= s.now - 1000; return false; };
+        e.interrupt = () => {};
+        s.startAttack(1000, dx, dy);
+        let elapsed = 0, index = 0;
+        while (elapsed < 330) {
+          const delta = pattern.steps[index++ % pattern.steps.length]; elapsed += delta;
+          hero.advance(delta); s.now = 1000 + elapsed;
+          s.updateAttackLunge(s.now); s.updateAttackTrace(s.now); s.updateAttackTrace(s.now);
+        }
+        hits.push(count); firstHit.push(hitAt);
+      }
+      runs.push({ kind: e.kind, pattern: pattern.name, facing, stage, distance, hits, firstHit });
+    }
+    return runs;
+  })()`);
+  assert.equal(runs.length, 168);
+  for (const run of runs) {
+    assert.deepEqual(run.hits, [1, 0, 0, 0], JSON.stringify(run));
+    assert.ok(run.firstHit[0] + 1e-6 >= (run.stage === 1 ? 105 : 168), '준비 자세에서는 맞히지 않는다: ' + JSON.stringify(run));
+  }
+});
+
+test('실제 느린 화면과 정상 속도의 장면 갱신에서도 70px 위 찌르기와 110px 좌우 2타가 맞는다', async () => {
+  await load('south-field&companion=none');
+  const runs = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player, e = s.enemies.find(e => e.kind === 'slime'), runs = [];
+    s.enemies = [e]; s.joystick.vector.set(0, 0); e.update = () => {}; e.interrupt = () => {};
+    s.showDamage = () => {}; s.impacts.impact = () => {}; s.resolveEnemyHit = () => {};
+    for (const slow of [false, true]) for (const [facing, dx, dy, stage, distance] of [
+      ['up-right', Math.SQRT1_2, -Math.SQRT1_2, 2, 70],
+      ['up-left', -Math.SQRT1_2, -Math.SQRT1_2, 2, 70],
+      ['right', 1, 0, 1, 110], ['left', -1, 0, 1, 110],
+    ]) {
+      p.revive(1000, 850); e.character.revive(1000 + dx * distance, 850 + dy * distance * .7);
+      s.comboStage = stage; s.comboExpiresAt = 10000; s.now = 1000;
+      s.hitStopLeft = 0; s.slowMotionLeft = slow ? 10000 : 0; s.counterUntil = 0;
+      let hits = 0; e.character.hurt = () => { hits++; return false; };
+      s.startAttack(1000, dx, dy);
+      for (let i = 0; i < 400 && s.now < 1330; i++) s.update(0, 1000 / 60);
+      runs.push({ slow, facing, hits, elapsed: s.now - 1000 });
+    }
+    return runs;
+  })()`);
+  assert.equal(runs.length, 8);
+  for (const run of runs) {
+    assert.ok(run.elapsed >= 330, JSON.stringify(run));
+    assert.equal(run.hits, 1, JSON.stringify(run));
   }
 });
 

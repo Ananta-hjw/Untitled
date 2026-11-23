@@ -45,7 +45,7 @@ export const PLAYER = {
    * 콤보 단계별 설정. 버튼을 누르고 있거나 연타하면 1 → 2 → 3타로 이어진다.
    *  - intervalMs: 다음 공격으로 연결 가능한 시간(1·2타는 복귀 동작 전)
    *  - followPauseAtMs / followPauseMs: 타격 후 자세를 유지하는 시작 시각·길이
-   *  - hitDelayMs: 동작 시작 후 실제로 타격이 들어가는 시점
+   *  - hitDelayMs: 기본 명중 시각. 실제 검날 판정은 타격 자세 전환부터 이 값 + hitWindowMs까지
    *  - damage / knockback: 기본값에 곱하는 배율
    *  - lungeDistance: 휘두르는 구간에서 전진할 거리(px)
    *  - lungeStartMs / lungeEndMs: 전진 구간(공격 시작 기준)
@@ -59,7 +59,7 @@ export const PLAYER = {
   comboWindowMs: 380,
   /** 다음 공격이 가능해지기 직전의 짧은 입력을 기억할 시간(ms) */
   attackBufferMs: 150,
-  /** 타격 자세 이후 검날 추적 시간(ms), 검날 두께(px), 공격 방향을 기준으로 한 레인 반폭(px) */
+  /** 기본 명중 시각 이후 검날 추적 시간(ms), 검날 두께(px), 공격 방향을 기준으로 한 레인 반폭(px) */
   hitWindowMs: 55,
   bladeRadius: 6,
   attackLane: 52,
