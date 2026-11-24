@@ -1596,15 +1596,22 @@ export class GameScene extends Phaser.Scene {
     trace.elapsed = elapsed;
     const end = combo.hitDelayMs + PLAYER.hitWindowMs;
     const strikeAt = strikePoseStart(trace.stage, rig.activeAttackFacing);
+    // Keep updating the trail briefly through follow-through after the hit window closes.
+    const visualEnd = end + 36;
+    const visualSweep = attackBladeSweep(previous, current, lastElapsed, elapsed, strikeAt, visualEnd);
+    if (elapsed >= visualEnd) this.attackTrace = undefined;
+    if (visualSweep) {
+      const behind = rig.activeAttackFacing.startsWith('up') || (trace.stage === 0
+        && (rig.activeAttackFacing === 'left' || rig.activeAttackFacing === 'right'));
+      trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + strikeAt, trace.startedAt + visualEnd,
+        strikeAt, player.y + (behind ? -4 : 4));
+      // The samples stop at visualEnd, but the visible end must meet the displayed sword on that render.
+      this.effects.drawAttack(trace.effect, visualSweep, time, current);
+    }
+
     const sweep = attackBladeSweep(previous, current, lastElapsed, elapsed, strikeAt, end);
-    if (elapsed >= end) this.attackTrace = undefined;
     if (!sweep) return;
     const finisher = trace.stage === PLAYER.combo.length - 1;
-    const behind = rig.activeAttackFacing.startsWith('up') || (trace.stage === 0
-      && (rig.activeAttackFacing === 'left' || rig.activeAttackFacing === 'right'));
-    trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, strikeAt, player.y + (behind ? -4 : 4));
-    this.effects.drawAttack(trace.effect, sweep, time);
-
     let heaviest: Exclude<HitKind, 'hurt'> | undefined;
     for (const enemy of this.enemies) {
       const c = enemy.character;

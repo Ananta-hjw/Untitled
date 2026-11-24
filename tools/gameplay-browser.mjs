@@ -658,21 +658,40 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
     const directions = [['right', 1, 0], ['down-right', 1, 1], ['down', 0, 1], ['down-left', -1, 1],
       ['left', -1, 0], ['up-left', -1, -1], ['up', 0, -1], ['up-right', 1, -1]];
     const drawAttack = s.effects.drawAttack.bind(s.effects);
-    let fx, maxTrailError, samples;
-    s.effects.drawAttack = (effect, sweep, time) => {
+    let fx, maxTrailError, samples, longestPath, followThrough, maxFinishTurn, lastTip, maxFinishGap;
+    s.effects.drawAttack = (effect, sweep, time, displayed) => {
       const graphic = effect.graphic, moveTo = graphic.moveTo, lineTo = graphic.lineTo;
       const path = [];
       graphic.moveTo = (x,y) => { path.push({ x, y }); return moveTo.call(graphic, x, y); };
       graphic.lineTo = (x,y) => { path.push({ x, y }); return lineTo.call(graphic, x, y); };
-      try { drawAttack(effect, sweep, time); }
+      try { drawAttack(effect, sweep, time, displayed); }
       finally { graphic.moveTo = moveTo; graphic.lineTo = lineTo; }
-      const { base, tip } = sweep.current;
+      const { base, tip } = hero.getBlade();
       const distance = (p, q) => p ? Math.hypot(p.x - q.x, p.y - q.y) : Infinity;
       const error = effect.stage === 2
         ? Math.max(distance(path[0], base), distance(path[2], { x: tip.x + (tip.x - base.x) * .06, y: tip.y + (tip.y - base.y) * .06 }))
         : Math.min(...path.map(p => distance(p, tip)));
       maxTrailError = Math.max(maxTrailError, error);
-      fx ??= { frame: hero.image.frame.name, startError: distance(path[0], effect.stage === 2 ? base : sweep.previous.tip) };
+      const frame = hero.image.frame.name;
+      fx ??= { frame, pathSize: path.length };
+      longestPath = Math.max(longestPath, path.length);
+      if (frame !== fx.frame) followThrough = true;
+      if (frame === 'attack-side6-4' || frame === 'attack2-side6-4') {
+        // Two filled ribbons, each with an outward and return edge. Measure the visible tip edge.
+        const edge = path.slice(0, path.length / 4);
+        lastTip = edge.at(-1);
+        let heading;
+        for (let i = 1; i < edge.length; i++) {
+          const dx = edge[i].x - edge[i - 1].x, dy = edge[i].y - edge[i - 1].y;
+          if (Math.hypot(dx, dy) <= 2) continue;
+          const next = Math.atan2(dy, dx);
+          if (heading !== undefined) {
+            const turn = Math.atan2(Math.sin(next - heading), Math.cos(next - heading));
+            maxFinishTurn = Math.max(maxFinishTurn ?? 0, Math.abs(turn));
+          }
+          heading = next;
+        }
+      }
       samples++;
     };
     for (const fps of [20, 30, 60, 120]) for (const [facing, signX, signY] of directions) for (const stage of [0, 1, 2]) for (const distance of [80, 110]) {
@@ -687,14 +706,19 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
         enemy.character.hurt = () => { hits[i]++; return false; }; enemy.interrupt = () => {};
       });
       s.comboStage = stage; s.comboExpiresAt = 10000; s.now = 1000;
-      fx = undefined; maxTrailError = 0; samples = 0; s.startAttack(1000, x, y);
+      fx = undefined; maxTrailError = 0; samples = 0; longestPath = 0; followThrough = false; maxFinishTurn = undefined; lastTip = undefined; maxFinishGap = 0;
+      s.startAttack(1000, x, y);
       const texture = hero.image.texture.key, mirrored = hero.image.scaleX < 0;
       for (let i = 1; i <= Math.ceil(fps * .32); i++) {
         hero.advance(1000 / fps); s.now = 1000 + i * 1000 / fps;
         s.updateAttackLunge(s.now); s.updateAttackTrace(s.now);
+        if (lastTip && hero.image.frame.name === 'attack2-side6-4') {
+          const { tip } = hero.getBlade();
+          maxFinishGap = Math.max(maxFinishGap, Math.hypot(lastTip.x - tip.x, lastTip.y - tip.y));
+        }
       }
       const knockback = enemies[0].character.knockback;
-      runs.push({ fps, facing, stage, distance, hits, texture, mirrored, fx, maxTrailError, samples, signX, signY,
+      runs.push({ fps, facing, stage, distance, hits, texture, mirrored, fx, maxTrailError, samples, longestPath, followThrough, maxFinishTurn, maxFinishGap, signX, signY,
         dx: p.x - 1000, dy: p.y - 640, kx: knockback.x, ky: knockback.y });
     }
     return runs;
@@ -712,7 +736,13 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
     // 옆 1타의 6자세에서는 3번이 타격 자세
     assert.equal(Number(run.fx.frame.slice(run.fx.frame.lastIndexOf('-') + 1)) % (sideSix || frontSix ? 6 : 4), sideSix || frontSix ? 3 : 2, '검기는 타격 자세부터 나온다: ' + JSON.stringify(run));
     assert.ok(run.samples >= 2, JSON.stringify(run));
-    assert.ok(run.fx.startError < 1e-6 && run.maxTrailError < 1e-6, JSON.stringify(run));
+    assert.ok(run.maxTrailError < 1e-6, JSON.stringify(run));
+    if (run.stage !== 2) assert.ok(run.longestPath > run.fx.pathSize, '베기 궤적이 점차 드러난다: ' + JSON.stringify(run));
+    if ((sideSix || frontSix) && run.fps >= 30) assert.equal(run.followThrough, true, '마무리 자세까지 검기를 갱신한다: ' + JSON.stringify(run));
+    if (sideSix && run.stage < 2) {
+      assert.ok(run.maxFinishTurn < Math.PI / 4, '좌우 베기 검기의 접합부가 꺾이지 않는다: ' + JSON.stringify(run));
+      assert.ok(run.maxFinishGap < 1e-6, '올려 베기 검기가 사라질 때 칼끝에서 떨어지지 않는다: ' + JSON.stringify(run));
+    }
     assert.equal(run.mirrored, run.facing.includes('left'));
     assert.ok(Math.sign(run.dx) === run.signX);
     assert.ok(Math.sign(run.dy) === run.signY);
@@ -3337,11 +3367,31 @@ test('네 검의 외형이 서로 다르고 정면 찌르기의 손잡이는 주
       const end=sample('attack2',800), start=sample('attack3',0), thrust=sample('attack3',180);
       h.setAttackFacing('right');
       const side=sample('attack1',200);
+      const raised = ['right', 'left'].flatMap(facing => {
+        h.setAttackFacing(facing);
+        return [50, 120].map(time => {
+          sample('attack1', time);
+          const fist = h.supportHand, grip = h.weaponBack, cover = h.frame.gripCover;
+          const pm = grip.getWorldTransformMatrix(), hm = fist.getWorldTransformMatrix();
+          const center = hm.transformPoint(cover.w / 2, cover.h / 2);
+          const a = pm.transformPoint(-grip.displayOriginX, 0), b = pm.transformPoint(-grip.displayOriginX + grip.width, 0);
+          const span = Math.hypot(b.x - a.x, b.y - a.y), dx = (b.x - a.x) / span, dy = (b.y - a.y) / span;
+          return { visible: fist.visible && grip.visible, mirrored: fist.scaleX < 0,
+            depth: h.list.indexOf(h.image) < h.list.indexOf(grip) && h.list.indexOf(grip) < h.list.indexOf(fist),
+            throughFist: Math.abs((center.x - a.x) * dy - (center.y - a.y) * dx),
+            alongGrip: ((center.x - a.x) * dx + (center.y - a.y) * dy) / span };
+        });
+      });
       h.setAttackFacing('down');
-      return {id,end,start,thrust,side};
+      return {id,end,start,thrust,side,raised};
     });
   })()`);
-  for (const {id,end,start,thrust,side} of results) {
+  for (const {id,end,start,thrust,side,raised} of results) {
+    for (const [i, pose] of raised.entries()) {
+      assert.ok(pose.visible && pose.depth, JSON.stringify(pose));
+      assert.equal(pose.mirrored, i >= 2);
+      assert.ok(pose.throughFist < 2 && pose.alongGrip > .2 && pose.alongGrip < .7, JSON.stringify(pose));
+    }
     assert.equal(end.body,'attack2-front6-5');
     assert.equal(start.body,'attack3-front6-0');
     assert.equal(thrust.body,'attack3-front6-3');

@@ -40,14 +40,16 @@ import type { GearId } from '../items/equipment';
 import { ACTION_DURATION, attackFacingFor, guardFrame, heroFrame, movementFacing, type AttackFacing, type Facing, type HeroAction } from './heroFrames';
 
 export const HERO_SPRITE_HEIGHT = data.height;
+interface CoverFrame { name: string; x: number; y: number; w: number; h: number }
 interface SpriteFrame {
   name: string; texture: string; x: number; y: number; w: number; h: number;
   originX: number; originY: number; scale: number; blade: Blade | null;
   sheathedBlade?: Blade;
   grip?: { x: number; y: number };
+  gripCover?: CoverFrame & { atlasX: number; atlasY: number };
   supportGrip?: { x: number; y: number };
-  supportCover?: { name: string; x: number; y: number; w: number; h: number };
-  supportBackCover?: { name: string; x: number; y: number; w: number; h: number };
+  supportCover?: CoverFrame;
+  supportBackCover?: CoverFrame;
   weaponBehind?: boolean;
   weaponPerspective?: string;
 }
@@ -112,6 +114,8 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     for (const f of [...FRAMES.values(), ...guardData.covers]) {
       const texture = scene.textures.get(f.texture);
       if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
+      const cover = FRAMES.get(f.name)?.gripCover;
+      if (cover && !texture.has(cover.name)) texture.add(cover.name, 0, cover.atlasX, cover.atlasY, cover.w, cover.h);
     }
     const weapons = scene.textures.get('hero-weapons');
     for (const f of weaponAtlas.frames) if (!weapons.has(f.name)) weapons.add(f.name, 0, f.x, f.y, f.w, f.h);
@@ -188,6 +192,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     return this.guarding && (this.facing === 'up-left' || this.facing === 'up-right');
   }
   private get parts(): Phaser.GameObjects.Image[] {
+    if (!this.guarding && this.frame?.gripCover) return [this.image, this.weaponBack, this.supportHand, this.weaponFront];
     if (this.guardWeaponBehind || this.attackWeaponBehind) return [this.weaponBack, this.weaponFront, this.image, this.supportHand];
     return this.supportHandInFront ? [this.weaponBack, this.image, this.weaponFront, this.supportHand]
       : [this.weaponBack, this.image, this.supportHand, this.weaponFront];
@@ -317,13 +322,22 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     apply(this.weaponFront, pose.sheathed ? 'hilt' : 'blade');
     if (!pose.sheathed) this.weaponFront.setScale(scale * lengthScale, scale * HERO_BLADE_WIDTH_SCALE);
     apply(this.weaponBack, 'grip');
+    if (attacking && f.gripCover) {
+      // The painted fist covers the middle of the grip while the neck and pommel remain above the hair.
+      this.weaponBack.setScale(scale * 1.2, scale);
+      this.showHandCover(f, f.gripCover);
+    }
     if (this.guarding) this.weaponBack.setScale(30 / weaponAtlas.guardX, scale);
     if (this.guarding && f.supportCover) {
       const c = this.supportHandInFront ? f.supportBackCover ?? f.supportCover : f.supportCover;
-      this.supportHand.setTexture(f.texture, c.name).setOrigin(0, 0)
-        .setScale(this.image.scaleX, this.image.scaleY)
-        .setPosition((c.x - f.originX * f.w) * this.image.scaleX, (c.y - f.originY * f.h) * this.image.scaleY)
-        .setVisible(true);
+      this.showHandCover(f, c);
     }
+  }
+
+  private showHandCover(f: SpriteFrame, cover: CoverFrame): void {
+    this.supportHand.setTexture(f.texture, cover.name).setOrigin(0, 0)
+      .setScale(this.image.scaleX, this.image.scaleY)
+      .setPosition((cover.x - f.originX * f.w) * this.image.scaleX, (cover.y - f.originY * f.h) * this.image.scaleY)
+      .setVisible(true);
   }
 }
