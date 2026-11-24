@@ -36,13 +36,21 @@ const PROTO_POSE_STARTS = {
 };
 
 /**
- * 옆(좌우) 1타는 칼까지 그린 6자세 원화를 쓴다(attack-six/, 준비→예비→최대 들어 올림→타격→마무리→복귀).
- * 타격 자세(3번)가 명중 구간(hitDelayMs ~ +hitWindowMs)을 덮고, 들어 올린 자세(2번)를 길게 보여 힘을 모은다.
+ * 옆(좌우) 1·2타는 6자세 원화를 쓴다(attack-six/). 각 공격의 타격 자세(3번)가 명중 구간
+ * (hitDelayMs ~ +hitWindowMs)을 덮는다.
+ * - 1타 내려 베기: 준비→예비→최대 들어 올림(길게, 힘을 모음)→타격→마무리→복귀
+ * - 2타 올려 베기: 시작(1타의 끝)→낮게 뒤로 당김→휘두르기 시작→타격→마무리(위로)→자세 정리(3타의 시작)
+ *   가장 빠른 공격이라 예비 동작을 짧게 둔다.
+ * - 3타 찌르기: 시작(2타의 끝)→당김→깊이 웅크림→찌르기→유지(마무리 멈춤 동안)→복귀(1타의 시작)
  */
-const SIDE_SIX_STARTS = [0, 40, 110, 200, 280, 350];
+const SIDE_SIX = {
+  attack1: { frame: 'attack-side6', starts: [0, 40, 110, 200, 280, 350] },
+  attack2: { frame: 'attack2-side6', starts: [0, 25, 65, 105, 170, 250] },
+  attack3: { frame: 'attack3-side6', starts: [0, 40, 100, 170, 245, 330] },
+} as const;
 
-function usesSideSix(action: HeroAction, facing: Facing): boolean {
-  return action === 'attack1' && (facing === 'right' || facing === 'left');
+function sideSix(action: HeroAction, facing: Facing) {
+  return (facing === 'right' || facing === 'left') && action !== 'idle' && action !== 'walk' && action !== 'dodge' ? SIDE_SIX[action] : undefined;
 }
 
 function usesFrontPoses(facing: Facing): boolean {
@@ -51,7 +59,8 @@ function usesFrontPoses(facing: Facing): boolean {
 
 /** 콤보 단계(0~2)와 방향에 맞는 타격 자세가 나타나는 시각(ms). */
 export function strikePoseStart(stage: number, facing: Facing = 'right'): number {
-  if (usesSideSix(`attack${stage + 1}` as HeroAction, facing)) return SIDE_SIX_STARTS[3];
+  const six = sideSix(`attack${stage + 1}` as HeroAction, facing);
+  if (six) return six.starts[3];
   const starts = usesFrontPoses(facing) ? PROTO_POSE_STARTS : POSE_STARTS;
   return starts[`attack${stage + 1}` as 'attack1' | 'attack2' | 'attack3'][2];
 }
@@ -106,10 +115,11 @@ export function heroFrame(action: HeroAction, facing: Facing, elapsedMs: number)
     const diagonal = DIAGONALS.indexOf(facing);
     return diagonal >= 0 ? `diagonal-${diagonal * 4 + column}` : `walk-${DIRECTIONS.indexOf(facing) * 4 + column}`;
   }
-  if (usesSideSix(action, facing)) {
+  const six = sideSix(action, facing);
+  if (six) {
     let pose = 0;
-    while (pose < SIDE_SIX_STARTS.length - 1 && time + 1e-6 >= SIDE_SIX_STARTS[pose + 1]) pose++;
-    return `attack-side6-${pose}`;
+    while (pose < six.starts.length - 1 && time + 1e-6 >= six.starts[pose + 1]) pose++;
+    return `${six.frame}-${pose}`;
   }
   const useProto = action !== 'dodge' && usesFrontPoses(facing);
   const starts = useProto

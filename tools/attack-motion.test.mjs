@@ -95,8 +95,8 @@ test('검기 시작 시각에 해당 방향의 타격 자세가 처음 표시된
   for (const facing of EIGHT_DIRS) for (const stage of [0, 1, 2]) {
     const action = `attack${stage + 1}`, at = strikePoseStart(stage, facing);
     const index = frame => Number(frame.slice(frame.lastIndexOf('-') + 1));
-    // 옆 1타는 6자세(attack-side6-0..5): 최대 들어 올림(2) 다음이 타격(3)
-    const six = heroFrame(action, facing, at).startsWith('attack-side6-');
+    // 옆 1·2·3타는 6자세(attack-side6-, attack2-side6-, attack3-side6-0..5): 2번 다음이 타격(3)
+    const six = /^attack[23]?-side6-/.test(heroFrame(action, facing, at));
     assert.equal(six ? index(heroFrame(action, facing, at - .001)) : index(heroFrame(action, facing, at - .001)) % 4, six ? 2 : 1, `${facing} ${stage}`);
     assert.equal(six ? index(heroFrame(action, facing, at)) : index(heroFrame(action, facing, at)) % 4, six ? 3 : 2, `${facing} ${stage}`);
   }

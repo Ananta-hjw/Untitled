@@ -693,8 +693,8 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
   for (const run of result) {
     assert.deepEqual(run.hits, [1, 0, 0, 0], JSON.stringify(run));
     const corrected = run.facing === 'up' || (run.facing === 'down' ? run.stage === 1 : run.facing.startsWith('down') && run.stage > 0);
-    const sideSix = run.stage === 0 && (run.facing === 'right' || run.facing === 'left');
-    const texture = sideSix ? 'hero-academy-attack-side6' : corrected ? 'hero-academy-attack-corrections' : `hero-academy-${run.facing === 'down' ? 'attack-front'
+    const sideSix = run.facing === 'right' || run.facing === 'left';
+    const texture = sideSix ? `hero-academy-attack${run.stage ? run.stage + 1 : ''}-side6` : corrected ? 'hero-academy-attack-corrections' : `hero-academy-${run.facing === 'down' ? 'attack-front'
       : run.facing.startsWith('up') ? 'attack-up' : run.facing.startsWith('down') ? 'attack-down-diag' : 'combat'}`;
     assert.equal(run.texture, texture);
     assert.ok(run.fx, JSON.stringify(run));

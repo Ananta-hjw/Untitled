@@ -12,7 +12,9 @@ const attackDownDiagData = JSON.parse(readFileSync(new URL('combo-proto/attack-d
 const correctionData = JSON.parse(readFileSync(new URL('combo-proto/attack-corrections_frames.json', root)));
 const dodgeData = JSON.parse(readFileSync(new URL('dodge/frames.json', root)));
 const sideSixData = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/attack-six/attack-side_frames.json', import.meta.url)));
-const allFrames = [...new Map([...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames, ...correctionData.frames, ...dodgeData.frames, ...sideSixData.frames].map(f => [f.name, f])).values()];
+const sideSix2Data = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/attack-six/attack2-side_frames.json', import.meta.url)));
+const sideSix3Data = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/attack-six/attack3-side_frames.json', import.meta.url)));
+const allFrames = [...new Map([...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames, ...correctionData.frames, ...dodgeData.frames, ...sideSixData.frames, ...sideSix2Data.frames, ...sideSix3Data.frames].map(f => [f.name, f])).values()];
 
 test('상하 회피는 정면·뒷면 전용 네 자세를 쓰고 놓은 입력과 작은 좌우 흔들림에도 방향을 유지한다', () => {
   for (const facing of ['up','down','left','right','up-left','up-right','down-left','down-right']) {
@@ -97,8 +99,8 @@ test('각 콤보의 실제 타격 그림은 명중 구간 안에 표시되고 3�
   for (let stage = 0; stage < 3; stage++) {
     const action = `attack${stage + 1}`;
     const frame = heroFrame(action, 'right', PLAYER.combo[stage].hitDelayMs + 30);
-    // 옆 1타는 칼까지 그린 6자세의 타격 자세(3번)
-    assert.equal(frame, stage === 0 ? 'attack-side6-3' : `combat-${stage * 4 + 2}`);
+    // 옆 1·2·3타는 6자세의 타격 자세(3번)
+    assert.equal(frame, `attack${stage ? stage + 1 : ''}-side6-3`);
     assert.ok(allFrames.find((f) => f.name === frame).blade);
     assert.ok(ACTION_DURATION[action] >= PLAYER.combo[stage].intervalMs);
   }
@@ -204,4 +206,49 @@ test('옆 1타 6자세: 타격 자세가 명중 구간 전체를 덮고, 칼은 
   // 타격 자세의 칼은 앞(오른쪽)을 수평으로 향한다
   const strike = sideSixData.frames[3].blade;
   assert.ok(strike.tip.x > strike.base.x + 100 && Math.abs(strike.tip.y - strike.base.y) < 10);
+});
+
+test('옆 2타 6자세: 타격 자세(올려 베기)가 명중 구간 전체를 덮고, 1타의 끝·3타의 시작과 칼 방향이 이어진다', () => {
+  const combo = PLAYER.combo[1];
+  for (const facing of ['right', 'left']) {
+    for (let t = combo.hitDelayMs; t <= combo.hitDelayMs + PLAYER.hitWindowMs; t += 5) {
+      assert.equal(heroFrame('attack2', facing, t), 'attack2-side6-3', `${facing} ${t}`);
+    }
+    const seen = new Set();
+    for (let t = 0; t < ACTION_DURATION.attack2; t += 5) seen.add(heroFrame('attack2', facing, t));
+    assert.deepEqual([...seen], [0, 1, 2, 3, 4, 5].map(i => `attack2-side6-${i}`));
+  }
+  const angle = f => Math.atan2(f.blade.tip.y - f.blade.base.y, f.blade.tip.x - f.blade.base.x) * 180 / Math.PI;
+  const [start, load, , strike, follow] = sideSix2Data.frames;
+  // 시작 자세는 1타의 마지막 자세처럼 칼이 앞 아래(4시)를 향한다
+  assert.ok(Math.abs(angle(start) - angle(sideSixData.frames[5])) < 15);
+  assert.ok(angle(load) > 120, '낮게 뒤로 당긴 칼은 뒤 아래(8시)');
+  assert.ok(angle(strike) < -20 && angle(strike) > -60, '타격은 앞 위(2시)로 올려 벤다');
+  assert.ok(angle(follow) < -90, '마무리는 위(12시)');
+  for (const f of sideSix2Data.frames) {
+    const length = Math.hypot(f.blade.tip.x - f.blade.base.x, f.blade.tip.y - f.blade.base.y);
+    assert.ok(length > 110 && length < 150, `${f.name} ${length}`);
+  }
+});
+
+test('옆 3타 6자세: 찌르기 자세가 명중 구간 전체를 덮고, 2타의 끝에서 시작해 1타의 시작으로 돌아온다', () => {
+  const combo = PLAYER.combo[2];
+  for (const facing of ['right', 'left']) {
+    for (let t = combo.hitDelayMs; t <= combo.hitDelayMs + PLAYER.hitWindowMs; t += 5) {
+      assert.equal(heroFrame('attack3', facing, t), 'attack3-side6-3', `${facing} ${t}`);
+    }
+    const seen = new Set();
+    for (let t = 0; t < ACTION_DURATION.attack3; t += 5) seen.add(heroFrame('attack3', facing, t));
+    assert.deepEqual([...seen], [0, 1, 2, 3, 4, 5].map(i => `attack3-side6-${i}`));
+  }
+  const angle = f => Math.atan2(f.blade.tip.y - f.blade.base.y, f.blade.tip.x - f.blade.base.x) * 180 / Math.PI;
+  const frames = sideSix3Data.frames;
+  // 2타의 끝(칼 2시)에서 시작하고, 1타의 시작(칼 4시)으로 끝나 콤보가 다시 돈다
+  assert.ok(Math.abs(angle(frames[0]) - angle(sideSix2Data.frames[5])) < 15);
+  assert.ok(Math.abs(angle(frames[5]) - angle(sideSixData.frames[0])) < 15);
+  // 당김·웅크림·찌르기·유지는 칼이 수평으로 앞(3시)을 향한다
+  for (const f of frames.slice(1, 5)) assert.ok(Math.abs(angle(f)) < 8, f.name);
+  // 찌르기 자세에서 코등이가 당긴 자세보다 훨씬 앞에 있다 (발 기준점에서 잰 거리)
+  const reach = f => f.blade.base.x - f.originX * f.w;
+  assert.ok(reach(frames[3]) - reach(frames[1]) > 60);
 });

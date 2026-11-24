@@ -15,6 +15,10 @@ import attackCorrectionsData from '../assets/hero/academy/combo-proto/attack-cor
 import attackCorrectionsSheet from '../assets/hero/academy/combo-proto/attack-corrections.webp?url';
 import attackSideData from '../assets/hero/academy/attack-six/attack-side_frames.json';
 import attackSideSheet from '../assets/hero/academy/attack-six/attack-side.webp?url';
+import attack2SideData from '../assets/hero/academy/attack-six/attack2-side_frames.json';
+import attack2SideSheet from '../assets/hero/academy/attack-six/attack2-side.webp?url';
+import attack3SideData from '../assets/hero/academy/attack-six/attack3-side_frames.json';
+import attack3SideSheet from '../assets/hero/academy/attack-six/attack3-side.webp?url';
 import { isAttackFollowPause } from './attackTiming';
 import walkSheet from '../assets/hero/academy/unarmed/player_walk.webp?url';
 import combatSheet from '../assets/hero/academy/unarmed/player_combat.webp?url';
@@ -51,11 +55,15 @@ const FRAMES = new Map<string, SpriteFrame>([
   ...attackDownDiagData.frames,
   ...attackCorrectionsData.frames,
   ...attackSideData.frames,
+  ...attack2SideData.frames,
+  ...attack3SideData.frames,
 ].map((f) => [f.name, f]));
 
 export function preloadHeroSprite(scene: Phaser.Scene): void {
   if (!scene.textures.exists('hero-academy-dodge-cardinal')) scene.load.image('hero-academy-dodge-cardinal', dodgeSheet);
   if (!scene.textures.exists('hero-academy-attack-side6')) scene.load.image('hero-academy-attack-side6', attackSideSheet);
+  if (!scene.textures.exists('hero-academy-attack2-side6')) scene.load.image('hero-academy-attack2-side6', attack2SideSheet);
+  if (!scene.textures.exists('hero-academy-attack3-side6')) scene.load.image('hero-academy-attack3-side6', attack3SideSheet);
   if (!scene.textures.exists('hero-academy-attack-corrections')) scene.load.image('hero-academy-attack-corrections', attackCorrectionsSheet);
   if (!scene.textures.exists('hero-weapons')) scene.load.image('hero-weapons', weaponSheet);
   if (!scene.textures.exists('hero-weapons-perspective')) scene.load.image('hero-weapons-perspective', perspectiveSheet);
