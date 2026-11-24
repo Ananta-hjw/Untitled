@@ -1,44 +1,164 @@
 {
-    "frames":  [
-                   {
-                       "name":  "iron-sword-down",
-                       "x":  4,
-                       "y":  4,
-                       "w":  82,
-                       "h":  220,
-                       "originX":  0.4943,
-                       "originY":  0.2388,
-                       "bladeLength":  167
-                   },
-                   {
-                       "name":  "iron-sword-up",
-                       "x":  90,
-                       "y":  4,
-                       "w":  86,
-                       "h":  220,
-                       "originX":  0.4973,
-                       "originY":  0.629,
-                       "bladeLength":  138
-                   },
-                   {
-                       "name":  "wooden-sword-down",
-                       "x":  180,
-                       "y":  4,
-                       "w":  79,
-                       "h":  220,
-                       "originX":  0.4911,
-                       "originY":  0.2175,
-                       "bladeLength":  172
-                   },
-                   {
-                       "name":  "wooden-sword-up",
-                       "x":  263,
-                       "y":  4,
-                       "w":  87,
-                       "h":  220,
-                       "originX":  0.4973,
-                       "originY":  0.6111,
-                       "bladeLength":  134
-                   }
-               ]
+  "frames": [
+    {
+      "name": "iron-sword-down",
+      "x": 4,
+      "y": 4,
+      "w": 82,
+      "h": 220,
+      "originX": 0.4943,
+      "originY": 0.2388,
+      "bladeLength": 167
+    },
+    {
+      "name": "iron-sword-down-grip",
+      "x": 4,
+      "y": 228,
+      "w": 82,
+      "h": 220,
+      "originX": 0.4943,
+      "originY": 0.2388,
+      "bladeLength": 167
+    },
+    {
+      "name": "iron-sword-up",
+      "x": 90,
+      "y": 4,
+      "w": 86,
+      "h": 220,
+      "originX": 0.4973,
+      "originY": 0.629,
+      "bladeLength": 138
+    },
+    {
+      "name": "iron-sword-up-grip",
+      "x": 90,
+      "y": 228,
+      "w": 86,
+      "h": 220,
+      "originX": 0.4973,
+      "originY": 0.629,
+      "bladeLength": 138
+    },
+    {
+      "name": "wooden-sword-down",
+      "x": 180,
+      "y": 4,
+      "w": 79,
+      "h": 220,
+      "originX": 0.4911,
+      "originY": 0.2175,
+      "bladeLength": 172
+    },
+    {
+      "name": "wooden-sword-down-grip",
+      "x": 180,
+      "y": 228,
+      "w": 79,
+      "h": 220,
+      "originX": 0.4911,
+      "originY": 0.2175,
+      "bladeLength": 172
+    },
+    {
+      "name": "wooden-sword-up",
+      "x": 263,
+      "y": 4,
+      "w": 87,
+      "h": 220,
+      "originX": 0.4973,
+      "originY": 0.6111,
+      "bladeLength": 134
+    },
+    {
+      "name": "wooden-sword-up-grip",
+      "x": 263,
+      "y": 228,
+      "w": 87,
+      "h": 220,
+      "originX": 0.4973,
+      "originY": 0.6111,
+      "bladeLength": 134
+    },
+    {
+      "name": "short-sword-down",
+      "x": 354,
+      "y": 4,
+      "w": 96,
+      "h": 220,
+      "originX": 0.5,
+      "originY": 0.23046875,
+      "bladeLength": 167.578125
+    },
+    {
+      "name": "short-sword-down-grip",
+      "x": 354,
+      "y": 228,
+      "w": 96,
+      "h": 220,
+      "originX": 0.5,
+      "originY": 0.23046875,
+      "bladeLength": 167.578125
+    },
+    {
+      "name": "short-sword-up",
+      "x": 454,
+      "y": 4,
+      "w": 96,
+      "h": 220,
+      "originX": 0.5,
+      "originY": 0.76953125,
+      "bladeLength": 167.578125
+    },
+    {
+      "name": "short-sword-up-grip",
+      "x": 454,
+      "y": 228,
+      "w": 96,
+      "h": 220,
+      "originX": 0.5,
+      "originY": 0.76953125,
+      "bladeLength": 167.578125
+    },
+    {
+      "name": "long-sword-down",
+      "x": 554,
+      "y": 4,
+      "w": 96,
+      "h": 220,
+      "originX": 0.5,
+      "originY": 0.23046875,
+      "bladeLength": 167.578125
+    },
+    {
+      "name": "long-sword-down-grip",
+      "x": 554,
+      "y": 228,
+      "w": 96,
+      "h": 220,
+      "originX": 0.5,
+      "originY": 0.23046875,
+      "bladeLength": 167.578125
+    },
+    {
+      "name": "long-sword-up",
+      "x": 654,
+      "y": 4,
+      "w": 96,
+      "h": 220,
+      "originX": 0.5,
+      "originY": 0.76953125,
+      "bladeLength": 167.578125
+    },
+    {
+      "name": "long-sword-up-grip",
+      "x": 654,
+      "y": 228,
+      "w": 96,
+      "h": 220,
+      "originX": 0.5,
+      "originY": 0.76953125,
+      "bladeLength": 167.578125
+    }
+  ]
 }

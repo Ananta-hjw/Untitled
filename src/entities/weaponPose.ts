@@ -1,14 +1,20 @@
 import type { Blade } from '../combat/blade.ts';
 import type { GearId } from '../items/equipment.ts';
 
-export type WeaponId = Extract<GearId, 'wooden-sword' | 'iron-sword'>;
-/**
- * 낀 장비를 그릴 무기 그림으로 바꾼다. 그림은 나무검과 철검 두 가지뿐이라,
- * 대장간의 짧은 검·긴 검은 그림이 생길 때까지 철검 모양을 쓴다(없으면 맨손이 되어 칼날 판정도 사라진다).
- */
+const BLADE_LENGTH_SCALE = {
+  'wooden-sword': 1,
+  'iron-sword': 1,
+  'short-sword': 0.82,
+  'long-sword': 1.14,
+} as const satisfies Partial<Record<GearId, number>>;
+export type WeaponId = keyof typeof BLADE_LENGTH_SCALE;
+
 export function weaponId(id: GearId | undefined): WeaponId | null {
-  if (id === 'wooden-sword') return 'wooden-sword';
-  return id === 'iron-sword' || id === 'short-sword' || id === 'long-sword' ? 'iron-sword' : null;
+  return id && Object.hasOwn(BLADE_LENGTH_SCALE, id) ? id as WeaponId : null;
+}
+
+export function weaponLengthScale(id: WeaponId): number {
+  return BLADE_LENGTH_SCALE[id];
 }
 
 // Empty scabbard mouths in the 313.5px cells of the unarmed walk sheet, in row/pose order

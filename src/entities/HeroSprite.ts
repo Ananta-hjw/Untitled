@@ -37,7 +37,7 @@ import perspectiveAtlas from '../assets/hero/weapons/perspective_atlas.json';
 import perspectiveSheet from '../assets/hero/weapons/perspective.png?url';
 import slashFxAtlas from '../assets/effects/slash_fx_atlas.json';
 import slashFxSheet from '../assets/effects/slash_fx.png?url';
-import { weaponId, weaponPose, type WeaponId } from './weaponPose';
+import { weaponId, weaponLengthScale, weaponPose, type WeaponId } from './weaponPose';
 import type { GearId } from '../items/equipment';
 import { ACTION_DURATION, attackFacingFor, guardFrame, heroFrame, movementFacing, type AttackFacing, type Facing, type HeroAction } from './heroFrames';
 
@@ -283,8 +283,9 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     const pose = weaponPose(this.frame);
     const f = this.frame;
     const persp = !this.guarding && (f.weaponPerspective === 'down' || f.weaponPerspective === 'up') ? f.weaponPerspective : undefined;
-    this.weaponBack.setVisible(!!this.weapon && !pose.sheathed && !persp);
+    this.weaponBack.setVisible(!!this.weapon && !pose.sheathed);
     if (!this.weapon) return;
+    const lengthScale = weaponLengthScale(this.weapon);
     let { base, tip } = pose.blade;
     if (this.guarding && f.grip) {
       // A small settling motion keeps the blade and hilt rigid around the actual fist.
@@ -305,11 +306,13 @@ export class HeroSprite extends Phaser.GameObjects.Container {
       const meta = perspectiveAtlas.frames.find(entry => entry.name === name)!;
       const scale = Math.hypot(dx, dy) / meta.bladeLength;
       const baseAngle = persp === 'down' ? Math.PI / 2 : -Math.PI / 2;
-      this.weaponFront.setTexture('hero-weapons-perspective', name)
-        .setOrigin(meta.originX, meta.originY)
-        .setPosition(x, y)
-        .setRotation(Math.atan2(dy, dx) - baseAngle)
-        .setScale(scale);
+      const rotation = Math.atan2(dy, dx) - baseAngle;
+      for (const [image, part] of [[this.weaponBack, `${name}-grip`], [this.weaponFront, name]] as const) {
+        image.setTexture('hero-weapons-perspective', part)
+          .setOrigin(meta.originX, meta.originY).setPosition(x, y).setRotation(rotation);
+      }
+      this.weaponBack.setScale(scale);
+      this.weaponFront.setScale(scale, scale * lengthScale);
       return;
     }
     const scale = Math.hypot(dx, dy) / weaponAtlas.bladeLength;
@@ -319,7 +322,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
         .setPosition(x, y).setRotation(Math.atan2(dy, dx)).setScale(scale);
     };
     apply(this.weaponFront, pose.sheathed ? 'hilt' : 'blade');
-    if (!pose.sheathed) this.weaponFront.setScale(scale, scale * HERO_BLADE_WIDTH_SCALE);
+    if (!pose.sheathed) this.weaponFront.setScale(scale * lengthScale, scale * HERO_BLADE_WIDTH_SCALE);
     apply(this.weaponBack, 'grip');
     if (this.guarding) this.weaponBack.setScale(30 / weaponAtlas.guardX, scale);
     if (this.guarding && f.supportCover) {

@@ -3266,6 +3266,49 @@ test('무기 교체·해제는 별도 레이어와 칼집 손잡이·잔상·저
   assert.equal(result.copies[0],'hero-weapons:iron-sword-grip');assert.equal(result.copies[3],'hero-weapons:iron-sword-blade');
 });
 
+test('네 검의 외형이 서로 다르고 정면 찌르기의 손잡이는 주먹 뒤로 들어간다', async () => {
+  await load('village');
+  const results = await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'), h=s.player.sprite;
+    h.setAttackFacing('down');
+    const sample=(action,time)=>{
+      h.play('hero-'+action);
+      h.time=time;h.applyFrame();
+      const blade=h.getBlade(), front=h.weaponFront, back=h.weaponBack;
+      return {body:h.frame.name, blade, front:front.frame.name, grip:back.frame.name,
+        depth:h.list.indexOf(back)<h.list.indexOf(h.image)&&h.list.indexOf(h.image)<h.list.indexOf(front),
+        visible:front.visible&&back.visible,
+        length:Math.hypot(blade.tip.x-blade.base.x,blade.tip.y-blade.base.y)};
+    };
+    return ['wooden-sword','iron-sword','short-sword','long-sword'].map(id=>{
+      h.setWeapon(id);
+      const end=sample('attack2',800), start=sample('attack3',0), thrust=sample('attack3',180);
+      h.setAttackFacing('right');
+      const side=sample('attack1',200);
+      h.setAttackFacing('down');
+      return {id,end,start,thrust,side};
+    });
+  })()`);
+  for (const {id,end,start,thrust,side} of results) {
+    assert.equal(end.body,'attack2-front6-5');
+    assert.equal(start.body,'attack3-front6-0');
+    assert.equal(thrust.body,'attack3-front6-3');
+    assert.deepEqual(end.blade,start.blade);
+    for (const pose of [end,start,thrust]) {
+      assert.equal(pose.front,`${id}-down`);
+      assert.equal(pose.grip,`${id}-down-grip`);
+      assert.ok(pose.visible && pose.depth, JSON.stringify(pose));
+      assert.ok(Math.abs(pose.blade.tip.x-pose.blade.base.x)<.01 && pose.blade.tip.y>pose.blade.base.y);
+    }
+    assert.equal(side.front,`${id}-blade`);
+    assert.equal(side.grip,`${id}-grip`);
+  }
+  for (const k of ['side','thrust']) {
+    assert.ok(results[2][k].length < results[1][k].length);
+    assert.ok(results[3][k].length > results[1][k].length);
+  }
+});
+
 test('타격 뒤 잠깐 멈춰도 세계 시계와 예약 입력·회피는 동작한다', async () => {
   await load('village');
   const result = await evaluate(`(() => {
