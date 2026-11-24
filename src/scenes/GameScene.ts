@@ -46,7 +46,7 @@ import { ActionButton } from '../ui/ActionButton';
 import { actionIcon, createActionIcons, type ActionIcon } from '../ui/actionIcons';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { HERO_SPRITE_HEIGHT, HeroSprite, preloadHeroSprite } from '../entities/HeroSprite';
-import { attackFacingFor, attackVector, dodgeFacingFor, insideAttackLane, movementFacing, strikePoseStart } from '../entities/heroFrames';
+import { attackFacingFor, attackVector, dodgeFacingFor, insideAttackLane, insideFrontReach, movementFacing, strikePoseStart } from '../entities/heroFrames';
 import { createPlaceholderArt } from '../world/placeholderArt';
 import type { WalkArea } from '../world/walkArea';
 import { NavGrid } from '../world/navGrid';
@@ -1618,7 +1618,10 @@ export class GameScene extends Phaser.Scene {
       if (!insideAttackLane(c.x - player.x, c.y - player.y, trace.direction,
         PLAYER.attackLane, VERTICAL_SPEED_RATIO)) continue;
       const bounds = c.sprite.getBounds(this.boundsScratch);
-      if (!bladeHitsEllipse(sweep.previous, sweep.current, { x: bounds.centerX, y: bounds.centerY },
+      // 정면 공격은 원근으로 짧게 그려진 칼 대신 판정 띠 안의 사거리로도 맞는다(PLAYER.frontReach).
+      const frontHit = rig.activeAttackFacing === 'down'
+        && insideFrontReach(c.y - player.y, PLAYER.frontReach[trace.stage], VERTICAL_SPEED_RATIO);
+      if (!frontHit && !bladeHitsEllipse(sweep.previous, sweep.current, { x: bounds.centerX, y: bounds.centerY },
         bounds.width * 0.42 + PLAYER.bladeRadius, bounds.height * 0.42 + PLAYER.bladeRadius)) continue;
       trace.hit.add(enemy);
       // 서리 딱정벌레의 얼음 껍질: 정면에서 벤 칼은 튕겨 나간다(반격은 껍질을 뚫는다).

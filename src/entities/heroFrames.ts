@@ -36,7 +36,7 @@ const PROTO_POSE_STARTS = {
 };
 
 /**
- * 옆(좌우) 1·2타는 6자세 원화를 쓴다(attack-six/). 각 공격의 타격 자세(3번)가 명중 구간
+ * 옆(좌우)과 정면(아래)의 1·2·3타는 6자세 원화를 쓴다(attack-six/). 각 공격의 타격 자세(3번)가 명중 구간
  * (hitDelayMs ~ +hitWindowMs)을 덮는다.
  * - 1타 내려 베기: 준비→예비→최대 들어 올림(길게, 힘을 모음)→타격→마무리→복귀
  * - 2타 올려 베기: 시작(1타의 끝)→낮게 뒤로 당김→휘두르기 시작→타격→마무리(위로)→자세 정리(3타의 시작)
@@ -49,8 +49,17 @@ const SIDE_SIX = {
   attack3: { frame: 'attack3-side6', starts: [0, 40, 100, 170, 245, 330] },
 } as const;
 
+/** 정면 6자세: 같은 공격 구성이라 자세 시각도 옆모습과 같다. */
+const FRONT_SIX = {
+  attack1: { frame: 'attack-front6', starts: SIDE_SIX.attack1.starts },
+  attack2: { frame: 'attack2-front6', starts: SIDE_SIX.attack2.starts },
+  attack3: { frame: 'attack3-front6', starts: SIDE_SIX.attack3.starts },
+} as const;
+
 function sideSix(action: HeroAction, facing: Facing) {
-  return (facing === 'right' || facing === 'left') && action !== 'idle' && action !== 'walk' && action !== 'dodge' ? SIDE_SIX[action] : undefined;
+  if (action === 'idle' || action === 'walk' || action === 'dodge') return undefined;
+  if (facing === 'right' || facing === 'left') return SIDE_SIX[action];
+  return facing === 'down' ? FRONT_SIX[action] : undefined;
 }
 
 function usesFrontPoses(facing: Facing): boolean {
@@ -96,6 +105,14 @@ export function attackVector(facing: AttackFacing): { x: number; y: number } {
   const x = facing.includes('left') ? -1 : 1;
   if (facing === 'left' || facing === 'right') return { x, y: 0 };
   return { x: x * Math.SQRT1_2, y: (facing.startsWith('up') ? -1 : 1) * Math.SQRT1_2 };
+}
+
+/**
+ * 정면(아래 방향) 공격의 사거리 판정: 적의 발이 캐릭터 발에서 지면 거리 reach 안쪽 앞에 있는지.
+ * 화면 세로는 지면 거리 × verticalRatio로 줄어 보이므로 되돌려 잰다. (옆 범위는 insideAttackLane이 본다)
+ */
+export function insideFrontReach(dy: number, reach: number, verticalRatio: number): boolean {
+  return dy >= 0 && dy / verticalRatio <= reach;
 }
 
 /** Compare feet on the ground plane, not screen-space character overlap. */

@@ -63,6 +63,12 @@ export const PLAYER = {
   hitWindowMs: 55,
   bladeRadius: 6,
   attackLane: 52,
+  /**
+   * 정면(아래 방향) 공격의 사거리(지면 거리, 콤보 단계별). 정면에서는 화면 쪽으로 뻗은 칼이 원근 때문에
+   * 짧게 그려져, 그려진 칼만으로 판정하면 바로 앞의 적도 못 맞힌다. 명중 구간 동안 판정 띠(attackLane) 안에서
+   * 이 거리까지의 적도 맞는다.
+   */
+  frontReach: [120, 120, 160],
   /** 입력이 없을 때 이 거리 안의 적 쪽으로 자동으로 돌아선다 */
   autoFaceRange: 230,
   knockback: 340,

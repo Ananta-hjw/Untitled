@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { slashFxPlacement } from '../src/entities/attackMotion.ts';
 import { PLAYER, VERTICAL_SPEED_RATIO } from '../src/config.ts';
-import { attackFacingFor, attackVector, heroFrame, insideAttackLane, strikePoseStart } from '../src/entities/heroFrames.ts';
+import { attackFacingFor, attackVector, heroFrame, insideAttackLane, insideFrontReach, strikePoseStart } from '../src/entities/heroFrames.ts';
 
 const EIGHT_DIRS = ['right', 'down-right', 'down', 'down-left', 'left', 'up-left', 'up', 'up-right'];
 const correctionData = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/combo-proto/attack-corrections_frames.json', import.meta.url)));
@@ -24,7 +24,8 @@ test('공격은 8방향 모두 그대로 유지하고 정면·앞대각선은 �
   }
   for (let stage = 0; stage < 3; stage++) {
     const t = PLAYER.combo[stage].hitDelayMs + 20;
-    assert.equal(heroFrame(`attack${stage + 1}`, 'down', t), `attack-front-${stage * 4 + 2}`);
+    // 정면은 6자세 원화(attack-front6, attack2-front6, attack3-front6)의 타격 자세(3번)
+    assert.equal(heroFrame(`attack${stage + 1}`, 'down', t), `attack${stage ? stage + 1 : ''}-front6-3`);
     assert.equal(heroFrame(`attack${stage + 1}`, 'down-right', t), `attack-down-diag-${stage * 4 + 2}`);
     assert.equal(heroFrame(`attack${stage + 1}`, 'down-left', t), `attack-down-diag-${stage * 4 + 2}`);
   }
@@ -95,8 +96,8 @@ test('검기 시작 시각에 해당 방향의 타격 자세가 처음 표시된
   for (const facing of EIGHT_DIRS) for (const stage of [0, 1, 2]) {
     const action = `attack${stage + 1}`, at = strikePoseStart(stage, facing);
     const index = frame => Number(frame.slice(frame.lastIndexOf('-') + 1));
-    // 옆 1·2·3타는 6자세(attack-side6-, attack2-side6-, attack3-side6-0..5): 2번 다음이 타격(3)
-    const six = /^attack[23]?-side6-/.test(heroFrame(action, facing, at));
+    // 옆·정면 1·2·3타는 6자세(attack[23]?-side6-, attack[23]?-front6-0..5): 2번 다음이 타격(3)
+    const six = /^attack[23]?-(side|front)6-/.test(heroFrame(action, facing, at));
     assert.equal(six ? index(heroFrame(action, facing, at - .001)) : index(heroFrame(action, facing, at - .001)) % 4, six ? 2 : 1, `${facing} ${stage}`);
     assert.equal(six ? index(heroFrame(action, facing, at)) : index(heroFrame(action, facing, at)) % 4, six ? 3 : 2, `${facing} ${stage}`);
   }
@@ -123,4 +124,13 @@ test('옆 1타 검기는 손(코등이) 앞에만 놓여 머리를 덮지 않고
   // 2타와 다른 방향은 예전 배치 그대로 (칼 가운데)
   const rising = slashFxPlacement(1, 'right', previous, current);
   assert.ok(Math.abs(rising.x - (current.base.x + 135 * 0.55 + (previous.tip.x - current.tip.x) * 0.15)) < 1e-9);
+});
+
+test('정면 사거리: 앞(아래)으로 지면 거리 reach 안만 맞고, 뒤(위)나 더 먼 적은 맞지 않는다', () => {
+  const [near, , thrust] = PLAYER.frontReach;
+  // 화면 세로는 지면 거리 × VERTICAL_SPEED_RATIO로 줄어 보인다
+  assert.equal(insideFrontReach(110 * VERTICAL_SPEED_RATIO, near, VERTICAL_SPEED_RATIO), true);
+  assert.equal(insideFrontReach(150 * VERTICAL_SPEED_RATIO, near, VERTICAL_SPEED_RATIO), false);
+  assert.equal(insideFrontReach(150 * VERTICAL_SPEED_RATIO, thrust, VERTICAL_SPEED_RATIO), true);
+  assert.equal(insideFrontReach(-20, near, VERTICAL_SPEED_RATIO), false);
 });

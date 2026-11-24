@@ -14,7 +14,8 @@ const dodgeData = JSON.parse(readFileSync(new URL('dodge/frames.json', root)));
 const sideSixData = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/attack-six/attack-side_frames.json', import.meta.url)));
 const sideSix2Data = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/attack-six/attack2-side_frames.json', import.meta.url)));
 const sideSix3Data = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/attack-six/attack3-side_frames.json', import.meta.url)));
-const allFrames = [...new Map([...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames, ...correctionData.frames, ...dodgeData.frames, ...sideSixData.frames, ...sideSix2Data.frames, ...sideSix3Data.frames].map(f => [f.name, f])).values()];
+const frontSix = [1, 2, 3].map(n => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${n}-front_frames.json`, import.meta.url))));
+const allFrames = [...new Map([...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames, ...correctionData.frames, ...dodgeData.frames, ...sideSixData.frames, ...sideSix2Data.frames, ...sideSix3Data.frames, ...frontSix.flatMap(d => d.frames)].map(f => [f.name, f])).values()];
 
 test('상하 회피는 정면·뒷면 전용 네 자세를 쓰고 놓은 입력과 작은 좌우 흔들림에도 방향을 유지한다', () => {
   for (const facing of ['up','down','left','right','up-left','up-right','down-left','down-right']) {
@@ -251,4 +252,29 @@ test('옆 3타 6자세: 찌르기 자세가 명중 구간 전체를 덮고, 2타
   // 찌르기 자세에서 코등이가 당긴 자세보다 훨씬 앞에 있다 (발 기준점에서 잰 거리)
   const reach = f => f.blade.base.x - f.originX * f.w;
   assert.ok(reach(frames[3]) - reach(frames[1]) > 60);
+});
+
+test('정면 1·2·3타 6자세: 타격 자세가 명중 구간을 덮고, 콤보의 끝과 시작이 이어지며, 3타 칼끝은 발 아래까지 닿는다', () => {
+  const names = ['attack-front6', 'attack2-front6', 'attack3-front6'];
+  for (let stage = 0; stage < 3; stage++) {
+    const combo = PLAYER.combo[stage], action = `attack${stage + 1}`;
+    for (let t = combo.hitDelayMs; t <= combo.hitDelayMs + PLAYER.hitWindowMs; t += 5) {
+      assert.equal(heroFrame(action, 'down', t), `${names[stage]}-3`, `${action} ${t}`);
+    }
+    const seen = new Set();
+    for (let t = 0; t < ACTION_DURATION[action]; t += 5) seen.add(heroFrame(action, 'down', t));
+    assert.deepEqual([...seen], [0, 1, 2, 3, 4, 5].map(i => `${names[stage]}-${i}`));
+  }
+  const angle = f => Math.atan2(f.blade.tip.y - f.blade.base.y, f.blade.tip.x - f.blade.base.x) * 180 / Math.PI;
+  // 각 공격의 마지막 자세와 다음 공격의 첫 자세는 칼 방향이 같다 (3타 → 1타로 다시 돈다)
+  for (let stage = 0; stage < 3; stage++) {
+    const end = frontSix[stage].frames[5], next = frontSix[(stage + 1) % 3].frames[0];
+    assert.ok(Math.abs(angle(end) - angle(next)) < 5, `${end.name} → ${next.name}`);
+  }
+  // 3타 찌르기(3·4번)는 원근 무기 그림으로 화면 쪽(아래)을 향하고, 칼끝이 발 기준점보다 아래에 온다
+  for (const f of frontSix[2].frames.slice(3, 5)) {
+    assert.equal(f.weaponPerspective, 'down');
+    assert.ok(Math.abs(angle(f) - 90) < 5, f.name);
+    assert.ok(f.blade.tip.y > f.originY * f.h, `${f.name} 칼끝이 발보다 아래`);
+  }
 });
