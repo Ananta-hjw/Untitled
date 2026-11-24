@@ -704,8 +704,10 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
     // 정확히 수평 왼쪽인 칼은 -π와 π가 같은 각도다
     assert.ok(Math.abs(Math.sin(run.fx.rotation - angle)) < 1e-6 && Math.cos(run.fx.rotation - angle) > 0, JSON.stringify(run));
     if (run.stage === 2) {
-      assert.ok(Math.abs(run.fx.x - (b.base.x * .45 + b.tip.x * .55)) < .001);
-      assert.ok(Math.abs(run.fx.y - (b.base.y * .45 + b.tip.y * .55)) < .001);
+      // 옆 찌르기는 칼 길이의 0.8 지점(코등이에서 칼끝 너머까지), 다른 방향은 0.55 지점
+      const at = sideSix ? .8 : .55;
+      assert.ok(Math.abs(run.fx.x - (b.base.x * (1 - at) + b.tip.x * at)) < .001);
+      assert.ok(Math.abs(run.fx.y - (b.base.y * (1 - at) + b.tip.y * at)) < .001);
     }
     assert.equal(run.mirrored, run.facing.includes('left'));
     assert.ok(Math.sign(run.dx) === run.signX);

@@ -101,3 +101,26 @@ test('검기 시작 시각에 해당 방향의 타격 자세가 처음 표시된
     assert.equal(six ? index(heroFrame(action, facing, at)) : index(heroFrame(action, facing, at)) % 4, six ? 3 : 2, `${facing} ${stage}`);
   }
 });
+
+test('옆 1타 검기는 손(코등이) 앞에만 놓여 머리를 덮지 않고, 옆 3타 찌르기는 칼끝 너머까지 길게 뻗는다', () => {
+  // 오른쪽 1타: 칼을 머리 뒤(왼쪽 위)에서 앞(오른쪽)으로 휘둘렀다
+  const previous = { base: { x: 10, y: -150 }, tip: { x: -80, y: -260 } };
+  const current = { base: { x: 40, y: -140 }, tip: { x: 175, y: -140 } };
+  const mirror = b => ({ base: { x: -b.base.x, y: b.base.y }, tip: { x: -b.tip.x, y: b.tip.y } });
+  const right = slashFxPlacement(0, 'right', previous, current);
+  // 검기의 뒤쪽 끝(가운데 - 너비/2)이 코등이보다 뒤로 가지 않는다
+  assert.ok(right.x - right.width / 2 >= current.base.x + 135 * 0.1);
+  assert.equal(right.y, current.base.y);
+  const left = slashFxPlacement(0, 'left', mirror(previous), mirror(current));
+  assert.equal(left.x, -right.x);
+  // 굵은 몸통이 칼날 위쪽(머리 위에서 내려온 쪽)에 온다: 오른쪽은 뒤집고, 왼쪽은 반전과 겹쳐 그대로
+  assert.equal(right.flipY, true);
+  assert.equal(left.flipY, false);
+  // 3타: 코등이에서 시작해 칼끝보다 멀리 뻗는다
+  const thrust = slashFxPlacement(2, 'right', current, current);
+  assert.ok(thrust.x - thrust.width / 2 >= current.base.x - 1e-9);
+  assert.ok(thrust.x + thrust.width / 2 > current.tip.x + 50);
+  // 2타와 다른 방향은 예전 배치 그대로 (칼 가운데)
+  const rising = slashFxPlacement(1, 'right', previous, current);
+  assert.ok(Math.abs(rising.x - (current.base.x + 135 * 0.55 + (previous.tip.x - current.tip.x) * 0.15)) < 1e-9);
+});
