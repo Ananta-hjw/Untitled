@@ -186,13 +186,17 @@ export const KNOCKBACK_DAMPING = 7;
  *  - 레벨이 오를 때마다 최대 체력 +hpPerLevel, 공격력(최소·최대 모두) +damagePerLevel (소수점은 반올림)
  *    레벨만으로 오르는 기본 성장이다. 나머지는 레벨업 포인트로 올리는 능력치(ATTRIBUTES)와 장비가 더한다.
  * 레벨 1의 체력·공격력은 위의 PLAYER.maxHp, damageMin, damageMax다.
+ *
+ * TODO(경험치 재조정): 최고 레벨을 30에서 100으로 올렸지만 경험치 곡선(xpBase, xpStep)은 그대로다.
+ * 3장 이후 몬스터 레벨대와 전직 레벨(entities/jobs.ts의 JOB_ADVANCE, 임시 20·50)이 정해지면
+ * 필요 경험치와 몬스터 경험치를 함께 다시 맞춘다.
  */
 export const PROGRESSION = {
   /** 슬라임 한 마리를 잡으면 얻는 경험치 */
   slimeXp: 10,
   xpBase: 36,
   xpStep: 24,
-  maxLevel: 30,
+  maxLevel: 100,
   hpPerLevel: 4,
   damagePerLevel: 0.5,
 };

@@ -43,6 +43,10 @@ Keep generated build directories out of commits.
 
 Asset generators using `PIL` require Python and Pillow. `python3 tools/build_map_art.py` regenerates runtime WebP map backgrounds from source PNGs; preserve the source composition. Keep terrain separate from solid props so collision and depth ordering match the displayed objects.
 
+## Character Jobs
+
+Whenever you design or add a character who fights in the game — an ally (companion, fighting NPC) or an enemy of upper rank or above (상급 이상: commanders, bosses, heirs, named rivals) — always recommend a job for it from `src/entities/jobs.ts` / `docs/jobs.md` (base job and likely advancement branch, with a one-line reason tied to its story and fighting style), and note which combat art it would need. Recommend jobs only for characters who need to fight; people who never fight (villagers, shopkeepers, story-only characters) and low/mid-rank minions get none.
+
 ## Commit & Pull Request Guidelines
 
 History uses short, imperative subjects such as “Fix doubled upper arms” and “Add dodge button.” Follow that pattern and keep commits focused. PRs should explain behavior changes, list validation performed, link relevant issues, and include screenshots or short recordings for visual or gameplay changes.
