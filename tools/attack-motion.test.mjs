@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { swingTrailArc } from '../src/entities/attackMotion.ts';
+import { swingTrailArc, swingTrailEdge } from '../src/entities/attackMotion.ts';
 import { PLAYER, VERTICAL_SPEED_RATIO } from '../src/config.ts';
 import { attackFacingFor, attackVector, heroFrame, insideAttackLane, insideFrontReach, strikePoseStart } from '../src/entities/heroFrames.ts';
 
@@ -113,6 +113,21 @@ test('베기 궤적은 움직이는 손과 검의 각도를 보간하고 양 끝
     assert.ok(Math.abs(left[i].tip.x + blade.tip.x) < 1e-9);
     assert.ok(Math.abs(left[i].tip.y - blade.tip.y) < 1e-9);
   }
+});
+
+test('칼이 검기 진행 방향과 나란하거나 반대로 돌아도 베기 띠가 접히지 않는다', () => {
+  const edge = swingTrailEdge([
+    { base: { x: 0, y: 20 }, tip: { x: 0, y: 0 } },
+    { base: { x: -10, y: 0 }, tip: { x: 10, y: 0 } },
+    { base: { x: 20, y: -20 }, tip: { x: 20, y: 0 } },
+    { base: { x: 30, y: 20 }, tip: { x: 30, y: 0 } },
+  ]);
+  assert.equal(edge.length, 4);
+  for (const { offset } of edge.slice(1)) {
+    assert.equal(Math.abs(offset.x), 0);
+    assert.ok(offset.y > 0);
+  }
+  assert.deepEqual(edge.at(-1).tip, { x: 30, y: 0 });
 });
 
 test('검기 시작 시각에 해당 방향의 타격 자세가 처음 표시된다', () => {

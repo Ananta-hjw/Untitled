@@ -1,15 +1,18 @@
 import Phaser from 'phaser';
 import { HeroSprite } from '../entities/HeroSprite';
-import { swingTrailArc } from '../entities/attackMotion';
+import { interpolateSwingBlade, smoothSwingTrail, swingTrailArc, swingTrailEdge } from '../entities/attackMotion';
 import { interpolateBlade, type Blade, type BladeSweep } from './blade';
 
 const TRAIL_SAMPLE_MS = 10;
-const ATTACK_FADE_MS = 110;
+const ATTACK_FADE_MS = 90;
+const SWING_REVEAL_MS = 60;
+const THRUST_FADE_IN_MS = 45;
 const GHOST_FADE_MS = 220;
 
 export interface AttackEffect {
   graphic: Phaser.GameObjects.Graphics;
   stage: number;
+  startedAt: number;
   activeUntil: number;
   nextSampleAt: number;
   samples: Blade[];
@@ -31,13 +34,14 @@ export class CombatEffects {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
   }
 
-  beginAttack(stage: number, activeUntil: number, sampleStart: number, depth: number): AttackEffect {
+  beginAttack(stage: number, startedAt: number, activeUntil: number, sampleStart: number, depth: number): AttackEffect {
     let effect = this.attackPool.find((entry) => !entry.graphic.active);
     if (!effect) {
-      effect = { graphic: this.scene.add.graphics(), stage, activeUntil, nextSampleAt: sampleStart, samples: [], arc: [] };
+      effect = { graphic: this.scene.add.graphics(), stage, startedAt, activeUntil, nextSampleAt: sampleStart, samples: [], arc: [] };
       this.attackPool.push(effect);
     }
     effect.stage = stage;
+    effect.startedAt = startedAt;
     effect.activeUntil = activeUntil;
     effect.nextSampleAt = sampleStart + TRAIL_SAMPLE_MS;
     effect.samples.length = 0;
@@ -47,43 +51,53 @@ export class CombatEffects {
     return effect;
   }
 
-  drawAttack(effect: AttackEffect, sweep: BladeSweep, time: number): void {
+  drawAttack(effect: AttackEffect, sweep: BladeSweep, time: number, displayed: Blade): void {
     const first = effect.samples.length === 0;
     if (first) {
       effect.samples.push(sweep.current);
       if (effect.stage !== 2) effect.arc = swingTrailArc(sweep.previous, sweep.current);
     }
     const span = sweep.end - sweep.start;
+    const interpolate = effect.stage === 2 ? interpolateBlade : interpolateSwingBlade;
     while (effect.nextSampleAt <= sweep.end + 1e-6) {
       effect.samples.push(first || span <= 0 ? sweep.current
-        : interpolateBlade(sweep.previous, sweep.current, (effect.nextSampleAt - sweep.start) / span));
+        : interpolate(sweep.previous, sweep.current, (effect.nextSampleAt - sweep.start) / span));
       effect.nextSampleAt += TRAIL_SAMPLE_MS;
     }
 
     effect.graphic.clear().setAlpha(this.alphaOf(effect, time));
-    if (effect.stage === 2) this.renderThrust(effect.graphic, sweep.current);
-    else this.renderSwing(effect.graphic, [...effect.arc, ...effect.samples, sweep.current]);
+    if (effect.stage === 2) {
+      this.renderThrust(effect.graphic, displayed);
+    } else {
+      // Keep the bright end on the blade while gradually revealing the path behind it.
+      const grow = Math.max(0, Math.min(1, (time - effect.startedAt) / SWING_REVEAL_MS));
+      const firstVisible = (1 - (0.2 + 0.8 * grow)) * (effect.arc.length - 1);
+      const index = Math.floor(firstVisible);
+      const tail = interpolateBlade(effect.arc[index], effect.arc[index + 1], firstVisible - index);
+      this.renderSwing(effect.graphic, [tail, ...effect.arc.slice(index + 1), ...effect.samples, displayed]);
+    }
   }
 
-  private renderSwing(g: Phaser.GameObjects.Graphics, blades: Blade[]): void {
-    if (blades.every(({ base, tip }) => base.x === tip.x && base.y === tip.y)) return;
-    const distances = [0];
-    for (let i = 1; i < blades.length; i++) {
-      const a = blades[i - 1].tip, b = blades[i].tip;
-      distances.push(distances[i - 1] + Math.hypot(b.x - a.x, b.y - a.y));
+  private renderSwing(g: Phaser.GameObjects.Graphics, trail: Blade[]): void {
+    if (trail.every(({ base, tip }) => base.x === tip.x && base.y === tip.y)) return;
+    // Collapse the tiny lunge samples, then round corners between the stepped poses.
+    // Keep both ends exact so the moving end still meets the visible blade.
+    const first = trail[0], last = trail[trail.length - 1];
+    const knots = [first];
+    for (let i = 1; i < trail.length - 1; i++) {
+      const blade = trail[i], prev = knots[knots.length - 1];
+      if (Math.hypot(blade.tip.x - prev.tip.x, blade.tip.y - prev.tip.y) >= 8) knots.push(blade);
     }
-    const length = distances[distances.length - 1];
-    if (length < 1) return;
-    // The outer edge passes through the tips. Taper by distance so repeated poses do not widen the trail.
+    knots.push(last);
+    const edge = swingTrailEdge(smoothSwingTrail(knots));
+    if (edge.length === 0) return;
     for (const [thickness, color, alpha] of [[0.32, 0xe3ab66, 0.36], [0.14, 0xffefd2, 0.64]] as const) {
       g.fillStyle(color, alpha).beginPath();
-      g.moveTo(blades[0].tip.x, blades[0].tip.y);
-      for (let i = 1; i < blades.length; i++) g.lineTo(blades[i].tip.x, blades[i].tip.y);
-      for (let i = blades.length - 1; i >= 0; i--) {
-        const { base, tip } = blades[i];
-        const progress = distances[i] / length;
-        const taper = thickness * (0.82 * Math.sin(Math.PI * progress) ** 0.65 + 0.18 * progress);
-        g.lineTo(tip.x + (base.x - tip.x) * taper, tip.y + (base.y - tip.y) * taper);
+      g.moveTo(first.tip.x, first.tip.y);
+      for (let i = 1; i < edge.length; i++) g.lineTo(edge[i].tip.x, edge[i].tip.y);
+      for (let i = edge.length - 1; i >= 0; i--) {
+        const { tip, offset } = edge[i];
+        g.lineTo(tip.x + offset.x * thickness, tip.y + offset.y * thickness);
       }
       g.closePath().fillPath();
     }
@@ -101,7 +115,10 @@ export class CombatEffects {
   }
 
   private alphaOf(effect: AttackEffect, time: number): number {
-    return Math.max(0, Math.min(1, (effect.activeUntil + ATTACK_FADE_MS - time) / ATTACK_FADE_MS));
+    const age = time - effect.startedAt;
+    const rise = Math.max(0, Math.min(1, age / THRUST_FADE_IN_MS));
+    const remaining = Math.max(0, Math.min(1, (effect.activeUntil + ATTACK_FADE_MS - time) / ATTACK_FADE_MS));
+    return (effect.stage === 2 ? 0.25 + 0.75 * rise : 1) * remaining * remaining * (3 - 2 * remaining);
   }
 
   spawnGhost(sprite: HeroSprite | Phaser.GameObjects.Sprite, x: number, y: number, depth: number, time: number): void {

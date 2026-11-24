@@ -13,7 +13,7 @@ import json
 import math
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1] / 'src/assets/hero/academy/attack-six'
 CELL = 512
@@ -24,10 +24,13 @@ ALPHA_FLOOR = 24    # 생성 도구가 남긴 거의 투명한 번짐은 지운�
 
 # 칸마다 (앞발 발끝 x, 발바닥 y, 코등이 (x, y), 칼끝 (x, y)) — 칼이 그려진 원본의 칸 안 픽셀 좌표
 SHEETS = [
-    dict(prefix='attack', name='attack-side6', shift=[0] * 6, frames=[
+    dict(prefix='attack', name='attack-side6', shift=[0] * 6, grip_covers={
+        1: [(203, 260), (216, 260), (221, 267), (220, 290), (215, 298), (203, 297), (198, 289), (198, 269)],
+        2: [(215, 239), (226, 238), (233, 243), (235, 258), (231, 269), (224, 273), (211, 269), (208, 259), (209, 246)],
+    }, frames=[
         (331, 466, (290, 383), (405, 441)),  # 0 준비: 칼 4시
-        (334, 466, (212, 253), (212, 115)),  # 1 예비: 칼 12시
-        (319, 466, (217, 220), (133, 121)),  # 2 최대 들어 올림: 칼 11시
+        (334, 466, (210, 250), (210, 112)),  # 1 예비: 칼 12시
+        (319, 466, (203, 229), (121, 130)),  # 2 최대 들어 올림: 칼 11시
         (336, 406, (345, 251), (480, 251)),  # 3 타격: 칼 3시
         (317, 407, (283, 337), (360, 420)),  # 4 내려 베기 마무리: 칼 5시
         (307, 406, (267, 321), (380, 390)),  # 5 복귀
@@ -109,7 +112,7 @@ SHEETS += [
 
 def build_sheet(sheet_def):
     scale = BODY / SOURCE_BODY
-    frames, bodies = [], []
+    frames, bodies, covers = [], [], []
     prefix, name = sheet_def['prefix'], sheet_def['name']
     view = sheet_def.get('view', 'side')
     perspective = sheet_def.get('perspective', {})
@@ -133,16 +136,33 @@ def build_sheet(sheet_def):
                          blade=dict(base=point(guard), tip=point(tip)))
             if i in perspective:
                 frame['weaponPerspective'] = perspective[i]
+            if i in sheet_def.get('grip_covers', {}):
+                mask = Image.new('L', cell.size)
+                ImageDraw.Draw(mask).polygon(sheet_def['grip_covers'][i], fill=255)
+                alpha = mask.crop((left, top, right, bottom)).resize(body.size, Image.Resampling.LANCZOS)
+                cx, cy, cr, cb = alpha.getbbox()
+                patch = body.crop((cx, cy, cr, cb))
+                patch.putalpha(alpha.crop((cx, cy, cr, cb)))
+                frame['gripCover'] = dict(name=f'{frame["name"]}-grip-cover', x=cx, y=cy, w=patch.width, h=patch.height)
+                covers.append((patch, frame['gripCover']))
             frames.append(frame)
     pad = 4
     width = sum(b.width + pad for b in bodies) + pad
     height = max(b.height for b in bodies) + pad * 2
+    cover_y = height
+    if covers:
+        height += max(patch.height for patch, _ in covers) + pad
     atlas = Image.new('RGBA', (width, height))
     x = pad
     for body, frame in zip(bodies, frames):
         atlas.paste(body, (x, pad))
         frame['x'], frame['y'] = x, pad
         x += body.width + pad
+    x = pad
+    for patch, cover in covers:
+        atlas.paste(patch, (x, cover_y))
+        cover['atlasX'], cover['atlasY'] = x, cover_y
+        x += patch.width + pad
     atlas.save(ROOT / f'{prefix}-{view}.webp', quality=92, method=6)
     (ROOT / f'{prefix}-{view}_frames.json').write_text(json.dumps(dict(frames=frames), indent=2) + '\n')
     print(f'{name}: {len(frames)} frames, atlas {width}x{height}')
