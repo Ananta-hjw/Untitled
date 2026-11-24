@@ -22,3 +22,7 @@
 ## 2타 원화 (상승 베기)
 
 `attack2-side-source.png`는 `attack-side-source.png`(1타)의 마지막 자세에서 이어지는 2타 상승 베기(4 → 7 → 5 → 2 → 12 → 2시 방향) 6프레임 원화이며, `attack2-side-sword-removed.png`는 동일한 1536×1024 투명 RGBA 규격에서 손에 든 검만 제거한 편집본입니다.
+
+## 3타 원화 (전방 찌르기 피니셔)
+
+`attack3-side-source.png`는 `attack2-side-source.png`(2타)의 마지막 자세에서 이어지는 3타 전방 찌르기(2 → 3(당김) → 3(낮게 웅크림) → 3(전방 풀 찌르기) → 3(유지) → 4시 방향, 1타 시작 자세로 루프 연결) 6프레임 원화이며, `attack3-side-sword-removed.png`는 동일한 1536×1024 투명 RGBA 규격에서 손에 든 검만 제거한 편집본입니다.
