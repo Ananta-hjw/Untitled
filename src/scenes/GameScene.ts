@@ -1595,20 +1595,14 @@ export class GameScene extends Phaser.Scene {
     const lastElapsed = trace.elapsed;
     trace.elapsed = elapsed;
     const end = combo.hitDelayMs + PLAYER.hitWindowMs;
-    // 휘두르기 시작 시각에 손그림 검기·찌르기 이펙트를 재생하고, 없을 때만 벡터 초승달로 대체한다.
     const strikeAt = strikePoseStart(trace.stage, rig.activeAttackFacing);
-    if (lastElapsed + 1e-6 < strikeAt && elapsed + 1e-6 >= strikeAt) {
-      const played = this.effects.spawnSlashSprite(trace.stage, rig.activeAttackFacing, previous, current, player.y, time);
-      if (!played) {
-        trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, strikeAt, player.y + 2);
-        this.effects.slash(trace.effect, previous, current, time, trace.direction.x, trace.direction.y);
-      }
-    }
     const sweep = attackBladeSweep(previous, current, lastElapsed, elapsed, strikeAt, end);
     if (elapsed >= end) this.attackTrace = undefined;
     if (!sweep) return;
     const finisher = trace.stage === PLAYER.combo.length - 1;
-    trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, strikeAt, player.y + 2);
+    const behind = rig.activeAttackFacing.startsWith('up') || (trace.stage === 0
+      && (rig.activeAttackFacing === 'left' || rig.activeAttackFacing === 'right'));
+    trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + end, strikeAt, player.y + (behind ? -4 : 4));
     this.effects.drawAttack(trace.effect, sweep, time);
 
     let heaviest: Exclude<HitKind, 'hurt'> | undefined;

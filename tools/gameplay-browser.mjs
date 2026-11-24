@@ -657,13 +657,23 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
     s.joystick.vector.set(0, 0);
     const directions = [['right', 1, 0], ['down-right', 1, 1], ['down', 0, 1], ['down-left', -1, 1],
       ['left', -1, 0], ['up-left', -1, -1], ['up', 0, -1], ['up-right', 1, -1]];
-    const originalSpawn = s.effects.spawnSlashSprite.bind(s.effects);
-    let fx;
-    s.effects.spawnSlashSprite = (...args) => {
-      const idle = s.effects.slashSpritePool.find(e => !e.image.active);
-      const played = originalSpawn(...args), image = (idle ?? s.effects.slashSpritePool.at(-1)).image;
-      fx = { frame: hero.image.frame.name, blade: hero.getBlade(), x: image.x, y: image.y, rotation: image.rotation };
-      return played;
+    const drawAttack = s.effects.drawAttack.bind(s.effects);
+    let fx, maxTrailError, samples;
+    s.effects.drawAttack = (effect, sweep, time) => {
+      const graphic = effect.graphic, moveTo = graphic.moveTo, lineTo = graphic.lineTo;
+      const path = [];
+      graphic.moveTo = (x,y) => { path.push({ x, y }); return moveTo.call(graphic, x, y); };
+      graphic.lineTo = (x,y) => { path.push({ x, y }); return lineTo.call(graphic, x, y); };
+      try { drawAttack(effect, sweep, time); }
+      finally { graphic.moveTo = moveTo; graphic.lineTo = lineTo; }
+      const { base, tip } = sweep.current;
+      const distance = (p, q) => p ? Math.hypot(p.x - q.x, p.y - q.y) : Infinity;
+      const error = effect.stage === 2
+        ? Math.max(distance(path[0], base), distance(path[2], { x: tip.x + (tip.x - base.x) * .06, y: tip.y + (tip.y - base.y) * .06 }))
+        : Math.min(...path.map(p => distance(p, tip)));
+      maxTrailError = Math.max(maxTrailError, error);
+      fx ??= { frame: hero.image.frame.name, startError: distance(path[0], effect.stage === 2 ? base : sweep.previous.tip) };
+      samples++;
     };
     for (const fps of [20, 30, 60, 120]) for (const [facing, signX, signY] of directions) for (const stage of [0, 1, 2]) for (const distance of [80, 110]) {
       const magnitude = Math.hypot(signX, signY), x = signX / magnitude, y = signY / magnitude;
@@ -677,14 +687,14 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
         enemy.character.hurt = () => { hits[i]++; return false; }; enemy.interrupt = () => {};
       });
       s.comboStage = stage; s.comboExpiresAt = 10000; s.now = 1000;
-      fx = undefined; s.startAttack(1000, x, y);
+      fx = undefined; maxTrailError = 0; samples = 0; s.startAttack(1000, x, y);
       const texture = hero.image.texture.key, mirrored = hero.image.scaleX < 0;
       for (let i = 1; i <= Math.ceil(fps * .32); i++) {
         hero.advance(1000 / fps); s.now = 1000 + i * 1000 / fps;
         s.updateAttackLunge(s.now); s.updateAttackTrace(s.now);
       }
       const knockback = enemies[0].character.knockback;
-      runs.push({ fps, facing, stage, distance, hits, texture, mirrored, fx, signX, signY,
+      runs.push({ fps, facing, stage, distance, hits, texture, mirrored, fx, maxTrailError, samples, signX, signY,
         dx: p.x - 1000, dy: p.y - 640, kx: knockback.x, ky: knockback.y });
     }
     return runs;
@@ -701,15 +711,8 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
     assert.ok(run.fx, JSON.stringify(run));
     // 옆 1타의 6자세에서는 3번이 타격 자세
     assert.equal(Number(run.fx.frame.slice(run.fx.frame.lastIndexOf('-') + 1)) % (sideSix || frontSix ? 6 : 4), sideSix || frontSix ? 3 : 2, '검기는 타격 자세부터 나온다: ' + JSON.stringify(run));
-    const b = run.fx.blade, angle = Math.atan2(b.tip.y - b.base.y, b.tip.x - b.base.x);
-    // 정확히 수평 왼쪽인 칼은 -π와 π가 같은 각도다
-    assert.ok(Math.abs(Math.sin(run.fx.rotation - angle)) < 1e-6 && Math.cos(run.fx.rotation - angle) > 0, JSON.stringify(run));
-    if (run.stage === 2) {
-      // 옆 찌르기는 칼 길이의 0.8 지점(코등이에서 칼끝 너머까지), 다른 방향은 0.55 지점
-      const at = sideSix ? .8 : .55;
-      assert.ok(Math.abs(run.fx.x - (b.base.x * (1 - at) + b.tip.x * at)) < .001);
-      assert.ok(Math.abs(run.fx.y - (b.base.y * (1 - at) + b.tip.y * at)) < .001);
-    }
+    assert.ok(run.samples >= 2, JSON.stringify(run));
+    assert.ok(run.fx.startError < 1e-6 && run.maxTrailError < 1e-6, JSON.stringify(run));
     assert.equal(run.mirrored, run.facing.includes('left'));
     assert.ok(Math.sign(run.dx) === run.signX);
     assert.ok(Math.sign(run.dy) === run.signY);
@@ -730,7 +733,7 @@ test('근거리 찌르기와 좌우 올려 베기는 프레임 경계·변동·�
     s.joystick.vector.set(0, 0);
     // Keep the actual attack/lunge/lane/body collision path; omit visual allocation and knockback between samples.
     s.showDamage = () => {}; s.impacts.impact = () => {}; s.resolveEnemyHit = () => {};
-    s.effects.spawnSlashSprite = () => true; s.effects.beginAttack = () => ({}); s.effects.drawAttack = () => {};
+    s.effects.beginAttack = () => ({}); s.effects.drawAttack = () => {};
     const patterns = [
       ...[20, 30, 50, 1000 / 17.5, 60, 1000 / 15, 75, 100, 120, 200, 240, 1000]
         .map(fps => ({ name: fps + 'fps', steps: [1000 / fps] })),

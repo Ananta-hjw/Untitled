@@ -35,8 +35,6 @@ import weaponAtlas from '../assets/hero/weapons/atlas.json';
 import weaponSheet from '../assets/hero/weapons/weapons.webp?url';
 import perspectiveAtlas from '../assets/hero/weapons/perspective_atlas.json';
 import perspectiveSheet from '../assets/hero/weapons/perspective.png?url';
-import slashFxAtlas from '../assets/effects/slash_fx_atlas.json';
-import slashFxSheet from '../assets/effects/slash_fx.png?url';
 import { weaponId, weaponLengthScale, weaponPose, type WeaponId } from './weaponPose';
 import type { GearId } from '../items/equipment';
 import { ACTION_DURATION, attackFacingFor, guardFrame, heroFrame, movementFacing, type AttackFacing, type Facing, type HeroAction } from './heroFrames';
@@ -79,7 +77,6 @@ export function preloadHeroSprite(scene: Phaser.Scene): void {
   if (!scene.textures.exists('hero-academy-attack-corrections')) scene.load.image('hero-academy-attack-corrections', attackCorrectionsSheet);
   if (!scene.textures.exists('hero-weapons')) scene.load.image('hero-weapons', weaponSheet);
   if (!scene.textures.exists('hero-weapons-perspective')) scene.load.image('hero-weapons-perspective', perspectiveSheet);
-  if (!scene.textures.exists('combat-slash-fx')) scene.load.image('combat-slash-fx', slashFxSheet);
   if (!scene.textures.exists('hero-academy-walk')) scene.load.image('hero-academy-walk', walkSheet);
   if (!scene.textures.exists('hero-academy-combat')) scene.load.image('hero-academy-combat', combatSheet);
   if (!scene.textures.exists('hero-academy-diagonal')) scene.load.image('hero-academy-diagonal', diagonalSheet);
@@ -121,10 +118,6 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     if (scene.textures.exists('hero-weapons-perspective')) {
       const persp = scene.textures.get('hero-weapons-perspective');
       for (const f of perspectiveAtlas.frames) if (!persp.has(f.name)) persp.add(f.name, 0, f.x, f.y, f.w, f.h);
-    }
-    if (scene.textures.exists('combat-slash-fx')) {
-      const fx = scene.textures.get('combat-slash-fx');
-      for (const f of slashFxAtlas.frames) if (!fx.has(f.name)) fx.add(f.name, 0, f.x, f.y, f.w, f.h);
     }
     this.weaponBack = scene.add.image(0, 0, 'hero-weapons', 'wooden-sword-grip');
     this.weaponFront = scene.add.image(0, 0, 'hero-weapons', 'wooden-sword-blade');

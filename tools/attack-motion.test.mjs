@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { slashFxPlacement } from '../src/entities/attackMotion.ts';
+import { swingTrailArc } from '../src/entities/attackMotion.ts';
 import { PLAYER, VERTICAL_SPEED_RATIO } from '../src/config.ts';
 import { attackFacingFor, attackVector, heroFrame, insideAttackLane, insideFrontReach, strikePoseStart } from '../src/entities/heroFrames.ts';
 
@@ -12,7 +12,6 @@ const frontData = corrected(JSON.parse(readFileSync(new URL('../src/assets/hero/
 const downDiagData = corrected(JSON.parse(readFileSync(new URL('../src/assets/hero/academy/combo-proto/attack-down-diag_frames.json', import.meta.url))));
 const perspData = JSON.parse(readFileSync(new URL('../src/assets/hero/weapons/perspective_atlas.json', import.meta.url)));
 const frontSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-front_frames.json`, import.meta.url))).frames;
-const slashFxData = JSON.parse(readFileSync(new URL('../src/assets/effects/slash_fx_atlas.json', import.meta.url)));
 
 test('공격은 8방향 모두 그대로 유지하고 정면·앞대각선은 신규 시트를 선택한다', () => {
   for (const facing of EIGHT_DIRS) {
@@ -84,7 +83,7 @@ test('정면 콤보에서 이전 공격의 끝과 다음 공격의 시작이 같
   assert.equal(start.weaponPerspective, 'down');
 });
 
-test('모든 방향에서 검기는 실제 칼날의 위치·각도·크기를 따르고 좌우 반전에 대응한다', () => {
+test('원근 검은 장착 무기마다 칼날과 손잡이의 기준점이 같다', () => {
   for (const id of ['wooden-sword', 'iron-sword', 'short-sword', 'long-sword']) {
     for (const angle of ['down', 'up']) {
       const name = `${id}-${angle}`;
@@ -95,28 +94,24 @@ test('모든 방향에서 검기는 실제 칼날의 위치·각도·크기를 �
       assert.ok(Math.abs(grip.y - blade.y) >= blade.h);
     }
   }
-  assert.deepEqual(slashFxData.frames.map((f) => f.name), ['slash-1', 'slash-2', 'thrust-3']);
-  const previous = { base: { x: 12, y: 80 }, tip: { x: 90, y: 35 } };
-  const current = { base: { x: 20, y: 90 }, tip: { x: 100, y: 150 } };
+});
+
+test('베기 궤적은 움직이는 손과 검의 각도를 보간하고 양 끝이 실물 칼끝에 닿는다', () => {
+  const from = { base: { x: 12, y: 80 }, tip: { x: 12, y: 0 } };
+  const to = { base: { x: 20, y: 90 }, tip: { x: 140, y: 90 } };
+  const arc = swingTrailArc(from, to);
+  assert.deepEqual(arc[0], from);
+  assert.deepEqual(arc.at(-1), to);
+  const middle = arc[Math.floor(arc.length / 2)];
+  assert.deepEqual(middle.base, { x: 16, y: 85 });
+  assert.ok(Math.abs(middle.tip.x - (16 + Math.SQRT1_2 * 100)) < 1e-9);
+  assert.ok(Math.abs(middle.tip.y - (85 - Math.SQRT1_2 * 100)) < 1e-9);
   const mirror = b => ({ base: { x: -b.base.x, y: b.base.y }, tip: { x: -b.tip.x, y: b.tip.y } });
-  for (const stage of [0, 1, 2]) {
-    const right = slashFxPlacement(stage, 'down-right', previous, current);
-    const left = slashFxPlacement(stage, 'down-left', mirror(previous), mirror(current));
-    assert.equal(right.x, -left.x);
-    assert.equal(right.y, left.y);
-    assert.equal(right.width, left.width);
-    assert.equal(right.flipY, false);
-    assert.equal(left.flipY, true);
-    assert.ok(Math.abs(right.rotation - Math.atan2(60, 80)) < 1e-9);
-    const move = b => ({ base: { x: b.base.x + 17, y: b.base.y - 31 }, tip: { x: b.tip.x + 17, y: b.tip.y - 31 } });
-    const moved = slashFxPlacement(stage, 'down-right', move(previous), move(current));
-    assert.equal(moved.x, right.x + 17);
-    assert.equal(moved.y, right.y - 31);
-    assert.equal(moved.rotation, right.rotation);
-    if (stage === 2) {
-      assert.equal(right.x, 64);
-      assert.equal(right.y, 123);
-    }
+  const left = swingTrailArc(mirror(from), mirror(to));
+  for (const [i, blade] of arc.entries()) {
+    assert.deepEqual(left[i].base, mirror(blade).base);
+    assert.ok(Math.abs(left[i].tip.x + blade.tip.x) < 1e-9);
+    assert.ok(Math.abs(left[i].tip.y - blade.tip.y) < 1e-9);
   }
 });
 
@@ -129,29 +124,6 @@ test('검기 시작 시각에 해당 방향의 타격 자세가 처음 표시된
     assert.equal(six ? index(heroFrame(action, facing, at - .001)) : index(heroFrame(action, facing, at - .001)) % 4, six ? 2 : 1, `${facing} ${stage}`);
     assert.equal(six ? index(heroFrame(action, facing, at)) : index(heroFrame(action, facing, at)) % 4, six ? 3 : 2, `${facing} ${stage}`);
   }
-});
-
-test('옆 1타 검기는 손(코등이) 앞에만 놓여 머리를 덮지 않고, 옆 3타 찌르기는 칼끝 너머까지 길게 뻗는다', () => {
-  // 오른쪽 1타: 칼을 머리 뒤(왼쪽 위)에서 앞(오른쪽)으로 휘둘렀다
-  const previous = { base: { x: 10, y: -150 }, tip: { x: -80, y: -260 } };
-  const current = { base: { x: 40, y: -140 }, tip: { x: 175, y: -140 } };
-  const mirror = b => ({ base: { x: -b.base.x, y: b.base.y }, tip: { x: -b.tip.x, y: b.tip.y } });
-  const right = slashFxPlacement(0, 'right', previous, current);
-  // 검기의 뒤쪽 끝(가운데 - 너비/2)이 코등이보다 뒤로 가지 않는다
-  assert.ok(right.x - right.width / 2 >= current.base.x + 135 * 0.1);
-  assert.equal(right.y, current.base.y);
-  const left = slashFxPlacement(0, 'left', mirror(previous), mirror(current));
-  assert.equal(left.x, -right.x);
-  // 굵은 몸통이 칼날 위쪽(머리 위에서 내려온 쪽)에 온다: 오른쪽은 뒤집고, 왼쪽은 반전과 겹쳐 그대로
-  assert.equal(right.flipY, true);
-  assert.equal(left.flipY, false);
-  // 3타: 코등이에서 시작해 칼끝보다 멀리 뻗는다
-  const thrust = slashFxPlacement(2, 'right', current, current);
-  assert.ok(thrust.x - thrust.width / 2 >= current.base.x - 1e-9);
-  assert.ok(thrust.x + thrust.width / 2 > current.tip.x + 50);
-  // 2타와 다른 방향은 예전 배치 그대로 (칼 가운데)
-  const rising = slashFxPlacement(1, 'right', previous, current);
-  assert.ok(Math.abs(rising.x - (current.base.x + 135 * 0.55 + (previous.tip.x - current.tip.x) * 0.15)) < 1e-9);
 });
 
 test('정면 사거리: 앞(아래)으로 지면 거리 reach 안만 맞고, 뒤(위)나 더 먼 적은 맞지 않는다', () => {
