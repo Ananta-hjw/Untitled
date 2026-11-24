@@ -2436,7 +2436,7 @@ test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 
   const result = await evaluate(`(() => {
     const g = window.__game, s = g.scene.getScene('game'), p = s.player;
     let t = performance.now();
-    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.headlessStep(t += 16, 16); };
     const warning = s.bossHud.warning && !s.boss && s.enemies.length === 0;
     const warnStart = s.now;
     step(1);
@@ -2447,13 +2447,19 @@ test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 
     // 연속 돌진: 주인공을 가까이 두고 준비 동작이 시작되는 시각을 잰다.
     p.invulnerableUntil = Infinity; s.derived.evadeChance = 0;
     p.placeAt(c.x - 180, c.y);
-    const windups = [], recovers = [];
+    const windups = [], recovers = [], chargePoses = new Set();
+    let returnedToWalk = false;
     let last = boss.state;
     for (let i = 0; i < 600 && windups.length < 3; i++) {
       step();
+      const frame = c.sprite.image.frame.name;
+      if (boss.state === 'windup' && frame.startsWith('attack-')) chargePoses.add(Number(frame.at(-1)));
       if (boss.state !== last) {
         if (boss.state === 'windup') windups.push(s.now);
-        if (boss.state === 'recover') recovers.push(s.now);
+        if (boss.state === 'recover') {
+          recovers.push(s.now);
+          returnedToWalk ||= frame.startsWith('walk-');
+        }
         last = boss.state;
       }
     }
@@ -2480,13 +2486,16 @@ test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 
     c.hp = 0; s.resolveEnemyHit(boss, true, 1, 0, 0);
     const after = { bar: s.bossHud.barVisible, boss: !!s.boss, step: s.quests['village-raid'].step };
     localStorage.removeItem('untitled-rpg.quests');
-    return { warning, appearedAfter, spawned, gap1, gap2, armored, roar, frozen, retreated, farther: endDist > startDist + 150, phase, after };
+    return { warning, appearedAfter, spawned, gap1, gap2, chargePoses: [...chargePoses], returnedToWalk,
+      armored, roar, frozen, retreated, farther: endDist > startDist + 150, phase, after };
   })()`);
   assert.equal(result.warning, true, '보스 등장 경고가 먼저 뜬다');
   assert.ok(result.appearedAfter >= 2700 && result.appearedAfter <= 3000, String(result.appearedAfter));
   assert.deepEqual(result.spawned, { kind: 'corrosion-executioner', isBoss: true, hp: 500, bar: true });
   assert.ok(Math.abs(result.gap1 - 1000) <= 40, `연속 돌진 사이 ${result.gap1}ms`);
   assert.ok(result.gap2 >= 1250, `두 번째 돌진 뒤에는 길게 쉰다 ${result.gap2}ms`);
+  assert.deepEqual(result.chargePoses, [1, 2, 3], '돌진 준비·타격·제동에 전용 공격 그림을 쓴다');
+  assert.equal(result.returnedToWalk, true, '돌진이 끝나면 기본 자세로 돌아온다');
   assert.equal(result.armored, true);
   assert.deepEqual(result.roar, { state: 'roar', untouchable: true, until: true });
   assert.equal(result.frozen, true, '포효하는 동안 주인공도 움직이지 못한다');
@@ -2494,6 +2503,46 @@ test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 
   assert.equal(result.farther, true, '물러나 거리를 벌린다');
   assert.equal(result.phase, 2);
   assert.deepEqual(result.after, { bar: false, boss: false, step: 5 });
+});
+
+test('습격의 부식의 추적자와 잿빛 나방은 8방향 전용 공격 그림을 쓰며 한 번만 타격한다', async () => {
+  await load('village-north');
+  await evaluate(`(() => { const s = window.__game.scene.getScene('game');
+    s.quests = { 'festival-eve': { status: 'done', count: 1 }, 'village-raid': { status: 'active', count: 0, step: 4 } };
+    localStorage.setItem('untitled-rpg.festival', 'seen'); s.saveQuests(); return true; })()`);
+  await load('village-north');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    const directions = [[0,1],[-1,0],[1,0],[0,-1],[-1,1],[1,1],[-1,-1],[1,-1]];
+    return Object.fromEntries(['corrosion-tracker', 'ashen-moth'].map(kind => {
+      const enemy = s.enemies.find(e => e.kind === kind), sprite = enemy.character.sprite;
+      const { windupMs, strikeMs, returnMs } = enemy.stats;
+      return [kind, directions.map(([x,y], i) => {
+        let hits = 0;
+        const now = s.now + i * 5000;
+        enemy.beginWindup(now, x, y);
+        const at = (time) => {
+          enemy.updateStrike(now + time, () => { hits++; return true; }, s.walkArea);
+          return { frame: sprite.image.frame.name, key: sprite.image.texture.key };
+        };
+        const strike = windupMs + strikeMs, end = strike + returnMs;
+        const poses = [at(1), at(windupMs + 1), at(strike), at(strike + 1), at(end)];
+        return { poses, hits, state: enemy.state };
+      })];
+    }));
+  })()`);
+  const directions = ['down', 'left', 'right', 'up', 'down-left', 'down-right', 'up-left', 'up-right'];
+  for (const [kind, attacks] of Object.entries(result)) {
+    for (const [i, { poses, hits, state }] of attacks.entries()) {
+      const direction = directions[i], sheet = i < 4 ? 'cardinal' : 'diagonal';
+      for (const [j, pose] of [1, 2, 2, 3].entries()) {
+        assert.deepEqual(poses[j], { frame: `attack-${direction}-${pose}`, key: `monster-${kind}-attack_${sheet}` });
+      }
+      assert.equal(poses[4].frame, `walk-${direction}-0`);
+      assert.equal(hits, 1);
+      assert.equal(state, 'recover');
+    }
+  }
 });
 
 test('보스전 결계: 경고와 함께 병사들이 물러나고 고리가 번지며, 밖의 주인공은 밀려 들어오고, 보스가 나오면 고리 밖으로 못 나가고, 쓰러뜨리면 모두 돌아온다', async () => {
