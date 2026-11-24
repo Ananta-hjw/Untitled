@@ -124,7 +124,6 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     const animate = this.motion === 'walk' || flight;
     const fps = flight ? (cycle?.fps ?? 10) : 8;
     const pose = this.attackPose ?? (animate ? poses[Math.floor(this.elapsed * fps / 1000) % poses.length] : 0);
-    // 공격 그림이 없는 종류(잿빛 나방)는 같은 자세의 이동(날갯짓) 그림으로 공격한다.
     const f = this.frames.get(`${this.attackPose === undefined ? 'walk' : 'attack'}-${this.direction}-${pose}`)
       ?? this.frames.get(`walk-${this.direction}-${pose}`)!;
     const texture = this.scene.textures.get(keyFor(this.kind, f.sheet));

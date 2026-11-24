@@ -11,6 +11,7 @@ const corrected = (data) => ({ frames: data.frames.map(f => correctionData.frame
 const frontData = corrected(JSON.parse(readFileSync(new URL('../src/assets/hero/academy/combo-proto/attack-front_frames.json', import.meta.url))));
 const downDiagData = corrected(JSON.parse(readFileSync(new URL('../src/assets/hero/academy/combo-proto/attack-down-diag_frames.json', import.meta.url))));
 const perspData = JSON.parse(readFileSync(new URL('../src/assets/hero/weapons/perspective_atlas.json', import.meta.url)));
+const frontSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-front_frames.json`, import.meta.url))).frames;
 const slashFxData = JSON.parse(readFileSync(new URL('../src/assets/effects/slash_fx_atlas.json', import.meta.url)));
 
 test('공격은 8방향 모두 그대로 유지하고 정면·앞대각선은 신규 시트를 선택한다', () => {
@@ -63,10 +64,37 @@ test('신규 정면·앞대각선 시트는 모든 프레임에서 검이 주먹
   }
 });
 
+test('정면 콤보에서 이전 공격의 끝과 다음 공격의 시작이 같은 검 위치를 쓴다', () => {
+  const firstEnd = frontSix(1).at(-1);
+  const secondStart = frontSix(2)[0];
+  const relativeBlade = (frame) => [frame.blade.base, frame.blade.tip]
+    .flatMap(p => [p.x - frame.originX * frame.w, p.y - frame.originY * frame.h]);
+  relativeBlade(firstEnd).forEach((value, i) => {
+    assert.ok(Math.abs(value - relativeBlade(secondStart)[i]) < .02);
+  });
+  assert.ok(firstEnd.blade.tip.x > firstEnd.blade.base.x);
+  assert.ok(firstEnd.blade.tip.y > firstEnd.blade.base.y);
+  const end = frontSix(2).at(-1);
+  const start = frontSix(3)[0];
+  assert.deepEqual(end.blade, start.blade);
+  assert.deepEqual([end.originX, end.originY], [start.originX, start.originY]);
+  assert.equal(end.blade.tip.x, end.blade.base.x);
+  assert.ok(end.blade.tip.y > end.blade.base.y);
+  assert.equal(end.weaponPerspective, 'down');
+  assert.equal(start.weaponPerspective, 'down');
+});
+
 test('모든 방향에서 검기는 실제 칼날의 위치·각도·크기를 따르고 좌우 반전에 대응한다', () => {
-  assert.deepEqual(perspData.frames.map((f) => f.name), [
-    'iron-sword-down', 'iron-sword-up', 'wooden-sword-down', 'wooden-sword-up',
-  ]);
+  for (const id of ['wooden-sword', 'iron-sword', 'short-sword', 'long-sword']) {
+    for (const angle of ['down', 'up']) {
+      const name = `${id}-${angle}`;
+      const blade = perspData.frames.find(f => f.name === name);
+      const grip = perspData.frames.find(f => f.name === `${name}-grip`);
+      assert.ok(blade && grip, name);
+      for (const key of ['w', 'h', 'originX', 'originY', 'bladeLength']) assert.equal(grip[key], blade[key]);
+      assert.ok(Math.abs(grip.y - blade.y) >= blade.h);
+    }
+  }
   assert.deepEqual(slashFxData.frames.map((f) => f.name), ['slash-1', 'slash-2', 'thrust-3']);
   const previous = { base: { x: 12, y: 80 }, tip: { x: 90, y: 35 } };
   const current = { base: { x: 20, y: 90 }, tip: { x: 100, y: 150 } };

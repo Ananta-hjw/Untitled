@@ -13,12 +13,11 @@ test('남쪽 들판은 슬라임·버섯, 서쪽 숲길은 버섯·도마뱀이 
   }
 });
 
-test('모든 몬스터의 모든 방향·모션에 실사용 WebP와 프레임 좌표가 있다 (잿빛 나방은 이동 그림으로 공격한다)', () => {
+test('모든 몬스터의 모든 방향·모션에 실사용 WebP와 프레임 좌표가 있다', () => {
   for (const kind of Object.keys(MONSTERS)) {
     const root = new URL(`../src/assets/monsters/${kind}/`, import.meta.url);
     const data = JSON.parse(readFileSync(new URL('animation_frames.json', root)));
-    // 나방과 습격 권속(추적자·집행자)은 이동 그림만 있고, 공격은 같은 자세의 이동 그림으로 한다.
-    const actions = ['ashen-moth', 'corrosion-tracker', 'corrosion-executioner'].includes(kind) ? ['walk'] : ['walk', 'attack'];
+    const actions = ['walk', 'attack'];
     assert.equal(data.frames.length, actions.length * 32, kind);
     for (const sheet of Object.keys(data.sheets)) assert.ok(existsSync(new URL(sheet.replace('.png', '.webp'), root)));
     for (const direction of ['down', 'left', 'right', 'up', 'down-left', 'down-right', 'up-left', 'up-right']) {

@@ -30,10 +30,14 @@
 - 잿빛 나방: 제자리 비행과 날개를 올리고 펼치고 내리는 날갯짓.
 - 부식의 추적자: 몸을 낮추고 네 발을 번갈아 내딛는 보행.
 - 부식의 집행자: 큰 오른팔의 비대칭을 유지하며 발과 장막이 움직이는 무거운 보행.
+- 부식의 집행자의 `attack_cardinal.png`와 `attack_diagonal.png`는 기존 이동 원화를 바탕으로 만든 돌진 원화입니다. 방향별로 기본 자세, 몸을 낮추는 준비, 어깨와 큰 팔을 내미는 돌진, 발을 딛는 제동을 배치했습니다. 두 페이즈의 돌진에 같은 원화를 씁니다.
+- 부식의 추적자의 `attack_cardinal.png`와 `attack_diagonal.png`는 같은 방향 순서의 근접 공격 원화입니다. 기본 자세에서 낮게 웅크린 뒤 앞발을 내밀어 할퀴고 착지합니다.
 
-권장 이동 재생은 초당 8프레임, `[1, 2, 3, 2]` 반복입니다. 좌표는 대기 자세를 기준으로 방향별 고정 원점과 배율을 사용합니다. 나방의 원점은 비행 자세 기준이며 실제 비행 높이와 지상 그림자는 게임 연결 시 정해야 합니다.
+- 잿빛 나방의 `attack_cardinal.png`와 `attack_diagonal.png`는 제자리 비행, 날개를 올리는 준비, 앞발을 내미는 덮치기, 날개를 펼쳐 제동하는 자세를 담았습니다. 덮치기의 부식 효과는 게임에서 처리합니다.
 
-`python3 tools/build_monster_frames.py --monsters ashen-moth corrosion-tracker corrosion-executioner`로 새 3종의 좌표를 측정합니다. `/tools/monster-animation-preview.html?group=raid`에서 8방향 대기·이동을 확인할 수 있습니다. 공격을 선택하면 공격 시트가 없는 3종은 대기로 표시됩니다. 공격·피격·사망 모션과 게임의 임시 습격 그래픽 교체는 아직 포함하지 않습니다.
+권장 이동 재생은 초당 8프레임, `[1, 2, 3, 2]` 반복입니다. 좌표는 대기 자세를 기준으로 방향별 고정 원점과 배율을 사용합니다. 나방의 원점은 비행 자세 기준이며 실제 비행 높이는 게임에서 적용합니다.
+
+`python3 tools/build_monster_frames.py --monsters ashen-moth corrosion-tracker corrosion-executioner`로 습격 몬스터의 좌표를 측정합니다. `/tools/monster-animation-preview.html?group=raid`에서 8방향 대기·이동과 나방의 덮치기, 추적자의 할퀴기, 집행자의 돌진을 볼 수 있습니다.
 
 ## 기존 4종 이동·공격 모션
 

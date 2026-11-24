@@ -8,17 +8,22 @@ from statistics import median
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1] / 'src/assets/monsters'
-MONSTERS = ['slime', 'waterdrop-mushroom', 'iron-scale-lizard', 'frost-beetle']
-WALK_ONLY = ['ashen-moth', 'corrosion-tracker', 'corrosion-executioner']
+MONSTERS = ['slime', 'waterdrop-mushroom', 'iron-scale-lizard', 'frost-beetle', 'corrosion-executioner', 'corrosion-tracker', 'ashen-moth']
 DIRECTIONS = {
     'cardinal': ['down', 'left', 'right', 'up'],
     'diagonal': ['down-left', 'down-right', 'up-left', 'up-right'],
+}
+# Move crop seams into transparent gaps without shifting the drawing origin.
+COLUMN_EDGES = {
+    ('corrosion-executioner', 'attack_diagonal.png', 0): [0, 314, 620, 940, 1254],
+    ('ashen-moth', 'attack_diagonal.png', 2): [0, 314, 620, 940, 1254],
+    ('ashen-moth', 'attack_diagonal.png', 3): [0, 314, 620, 940, 1254],
 }
 
 
 def build(name):
     frames, sheets, rows = [], {}, []
-    for animation in (['walk'] if name in WALK_ONLY else ['walk', 'attack']):
+    for animation in ['walk', 'attack']:
         for kind, directions in DIRECTIONS.items():
             filename = f'{animation}_{kind}.png'
             with Image.open(ROOT / name / filename) as image:
@@ -29,14 +34,16 @@ def build(name):
                 for row, direction in enumerate(directions):
                     poses = []
                     for col in range(4):
-                        left, top = round(col * image.width / 4), round(row * image.height / 4)
-                        right, bottom = round((col + 1) * image.width / 4), round((row + 1) * image.height / 4)
+                        nominal_left = round(col * image.width / 4)
+                        edges = COLUMN_EDGES.get((name, filename, row))
+                        left, right = edges[col:col + 2] if edges else (nominal_left, round((col + 1) * image.width / 4))
+                        top, bottom = round(row * image.height / 4), round((row + 1) * image.height / 4)
                         mask = alpha.crop((left, top, right, bottom)).point(lambda a: 255 if a >= 128 else 0)
                         bounds = mask.getbbox()
                         assert bounds, (name, filename, row, col, 'Empty frame')
                         x0, y0, x1, y1 = bounds
                         assert x0 > 0 and y0 > 0 and x1 < mask.width and y1 < mask.height, (name, filename, row, col, 'Art touches cell boundary')
-                        poses.append((left, top, mask, bounds))
+                        poses.append((left, top, mask, bounds, nominal_left - left))
                     idle = poses[0]
                     # Fixed per-row idle pivot preserves squish, forward lean and attack reach.
                     pivot_x = (idle[3][0] + idle[3][2]) / 2
@@ -49,7 +56,8 @@ def build(name):
         # Area is more stable than head/height for blobs, long-tailed reptiles and shells.
         # One scale per direction, shared across all its poses: never normalize a squashed pose.
         scale = sqrt(reference_area / area)
-        for pose, (left, top, mask, bounds) in enumerate(poses):
+        for pose, (left, top, mask, bounds, pivot_offset) in enumerate(poses):
+            frame_pivot = pivot_x + pivot_offset
             x0, y0, x1, y1 = bounds
             x, y = max(0, x0 - 3), max(0, y0 - 3)
             width = min(mask.width, x1 + 3) - x
@@ -58,11 +66,11 @@ def build(name):
                 'name': f'{animation}-{direction}-{pose}', 'animation': animation,
                 'direction': direction, 'pose': pose, 'sheet': filename,
                 'x': left + x, 'y': top + y, 'w': width, 'h': height,
-                'originX': round((pivot_x - x) / width, 6),
+                'originX': round((frame_pivot - x) / width, 6),
                 'originY': round((baseline - y) / height, 6), 'scale': round(scale, 6),
             })
-            extents.append(((x - pivot_x) * scale, (y - baseline) * scale,
-                            (x + width - pivot_x) * scale, (y + height - baseline) * scale))
+            extents.append(((x - frame_pivot) * scale, (y - baseline) * scale,
+                            (x + width - frame_pivot) * scale, (y + height - baseline) * scale))
     data = {
         'monster': name, 'referenceArea': reference_area,
         'bounds': {'left': min(e[0] for e in extents), 'top': min(e[1] for e in extents),
@@ -76,16 +84,14 @@ def build(name):
         'sheets': sheets, 'frames': frames,
         'anchorNote': 'Fixed idle silhouette center and baseline per direction; scales measured from idle area. Verify contact and projectile origins on game integration.',
     }
-    if name in WALK_ONLY:
-        del data['animations']['attack']
     if name == 'ashen-moth':
-        data['anchorNote'] = 'Fixed idle silhouette pivot per direction for hovering flight; wings move around this pivot. Set flight height on game integration.'
+        data['anchorNote'] = 'Fixed idle silhouette pivot per direction for hover and attack. Flight height and lunge travel are applied in-game.'
     (ROOT / name / 'animation_frames.json').write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
-    print(f'{name}: {len(frames)} frames, 8 directions, ' + ('movement' if name in WALK_ONLY else 'movement + attack'))
+    print(f'{name}: {len(frames)} frames, 8 directions, movement + attack')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--monsters', nargs='+', choices=MONSTERS + WALK_ONLY + ['fog-crow'], default=MONSTERS + WALK_ONLY)
+    parser.add_argument('--monsters', nargs='+', choices=MONSTERS + ['fog-crow'], default=MONSTERS)
     for monster in parser.parse_args().monsters:
         build(monster)

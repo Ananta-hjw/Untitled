@@ -108,19 +108,19 @@
     {
       "name": "attack-front6-5",
       "texture": "hero-academy-attack-front6",
-      "w": 171,
-      "h": 306,
-      "originX": 0.55053,
-      "originY": 0.99667,
+      "w": 175,
+      "h": 309,
+      "originX": 0.56034,
+      "originY": 0.98382,
       "scale": 1,
       "blade": {
         "base": {
-          "x": 88.26,
-          "y": 205.94
+          "x": 156.9,
+          "y": 209.86
         },
         "tip": {
-          "x": 177.04,
-          "y": 304.14
+          "x": 270.54,
+          "y": 277.78
         }
       },
       "x": 872,
