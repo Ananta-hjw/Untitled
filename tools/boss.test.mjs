@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { BOSS, entersPhaseTwo, fanDirections, insideEllipse, retreatDone, shouldVeil, wantsVolley } from '../src/combat/bossPattern.ts';
-import { MONSTERS } from '../src/combat/monsterTypes.ts';
+import { MONSTERS, monsterDamageTaken } from '../src/combat/monsterTypes.ts';
 import { RAID_LEVELS, scaleMonster } from '../src/combat/monsterLevel.ts';
 
 test('1장 보스는 체력이 절반 이하가 되는 순간 한 번만 2페이즈로 넘어간다', () => {
@@ -26,6 +26,12 @@ test('부식의 집행자는 추적자보다 훨씬 단단하고 세다 (레벨 
   assert.ok(boss.damage >= tracker.damage * 2.5, `${boss.damage} vs ${tracker.damage}`);
   assert.equal(BOSS.chain, 2);
   assert.equal(BOSS.chainGapMs, 1000);
+  assert.equal(boss.hp, 1000, '체력 2배');
+  assert.equal(boss.damage, 41, '공격력 1.2배 (34 → 41)');
+  assert.equal(boss.defense, 1.2);
+  assert.equal(monsterDamageTaken(24, boss.defense), 20, '방어 1.2: 받는 피해 ÷1.2');
+  assert.equal(monsterDamageTaken(1, boss.defense), 1, '최소 1');
+  assert.equal(monsterDamageTaken(24), 24, '방어 없는 몬스터는 그대로');
 });
 
 test('2페이즈: 부식 산탄은 멀리 있을 때 쿨다운마다, 장막은 체력 1/4 아래에서 한 번만', () => {

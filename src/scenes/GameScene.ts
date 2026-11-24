@@ -9,7 +9,7 @@ import { attackBladeSweep, bladeHitsEllipse, type Blade } from '../combat/blade'
 import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
 import { MonsterSprite, preloadMonsters } from '../combat/MonsterSprite';
-import { ASH_SLOW, MONSTERS, enemyHitReaches, shellBlocks, type EnemyHit, type EnemyKey } from '../combat/monsterTypes';
+import { ASH_SLOW, MONSTERS, enemyHitReaches, monsterDamageTaken, shellBlocks, type EnemyHit, type EnemyKey } from '../combat/monsterTypes';
 import { isJustDodge, slowMotionScale, strikeReaches } from '../combat/justDodge';
 import { critMultiplier, gameTimeScale, heavierKind, hitStopMs, strikeKind, type HitKind } from '../combat/hitFeel';
 import { ImpactEffects } from '../combat/ImpactEffects';
@@ -886,8 +886,9 @@ export class GameScene extends Phaser.Scene {
     if (!enemy?.character.alive || enemy.untouchable) return;
     const c = enemy.character, distance = Math.hypot(c.x-npc.x, c.y-npc.y) || 1;
     const dx = (c.x-npc.x)/distance, dy = (c.y-npc.y)/distance;
-    const died = c.hurt(damage);
-    this.showDamage(c.x, c.y-95, damage, '#bfe9ff', 26);
+    const taken = monsterDamageTaken(damage, enemy.stats.defense);
+    const died = c.hurt(taken);
+    this.showDamage(c.x, c.y-95, taken, '#bfe9ff', 26);
     this.impacts.impact(c.x, c.y-65, dx, dy, 'normal', time, c.y);
     this.resolveEnemyHit(enemy, died, dx, dy, NPC_COMBAT.knockback);
   }
@@ -1631,7 +1632,7 @@ export class GameScene extends Phaser.Scene {
       const strike = strikeKind(trace.counter, finisher, Math.random() - (this.derived.critChance - HIT_FEEL.critChance));
       heaviest = heavierKind(heaviest, strike.kind);
       const bonus = trace.counter ? JUST_DODGE.counterDamage : 1;
-      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * combo.damage * bonus * critMultiplier(strike.crit) * this.resonanceDamage());
+      const damage = monsterDamageTaken(Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * combo.damage * bonus * critMultiplier(strike.crit) * this.resonanceDamage()), enemy.stats.defense);
       const died = c.hurt(damage);
       if (trace.counter) this.showDamage(c.x, c.y - 100, damage, '#9fdcff', 50);
       else if (strike.crit) this.showDamage(c.x, c.y - 100, damage, '#ffd23f', finisher ? 58 : 52);
@@ -2303,7 +2304,7 @@ export class GameScene extends Phaser.Scene {
       if (this.shellBlocked(enemy, false, spinBounds.centerX, spinBounds.centerY)) continue;
       const length = Math.hypot(dx, dy / VERTICAL_SPEED_RATIO) || 1;
       const dirX = dx / length, dirY = dy / VERTICAL_SPEED_RATIO / length;
-      const damage = Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * SPIN_SLASH.damage * this.derived.skillDamage * this.resonanceDamage());
+      const damage = monsterDamageTaken(Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * SPIN_SLASH.damage * this.derived.skillDamage * this.resonanceDamage()), enemy.stats.defense);
       const died = c.hurt(damage);
       this.showDamage(c.x, c.y - 100, damage, '#8fc8ff', 46);
       const bounds = c.sprite.getBounds(this.boundsScratch);

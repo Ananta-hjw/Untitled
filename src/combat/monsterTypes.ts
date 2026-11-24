@@ -24,8 +24,8 @@ export const MONSTERS = {
     windupMs: 720, strikeMs: 200, returnMs: 240, recoverMs: 1400, color: 0x9fd8ee },
   'fog-crow': { name: '안개 까마귀', hp: 22, damage: 5, xp: 12, height: 76, speed: 205,
     windupMs: 360, strikeMs: 180, returnMs: 180, recoverMs: 900, color: 0x9daac7 },
-  // 1장 보스. 레벨 7에서 체력 500·공격력 34 (combat/bossPattern.ts의 패턴을 쓴다)
-  'corrosion-executioner': { name: '부식의 집행자', hp: 200, damage: 18, xp: 80, height: 150, speed: 95,
+  // 1장 보스. 레벨 7에서 체력 1000·공격력 41·방어 1.2 (combat/bossPattern.ts의 패턴을 쓴다)
+  'corrosion-executioner': { name: '부식의 집행자', hp: 400, damage: 21.6, defense: 1.2, xp: 80, height: 150, speed: 95,
     windupMs: 950, strikeMs: 340, returnMs: 260, recoverMs: 1300, color: 0x5e5468 },
 } as const;
 
@@ -53,6 +53,13 @@ export function shellBlocks(kind: MonsterKind | undefined, facing: { x: number; 
 export interface MonsterStats {
   name: string; hp: number; damage: number; xp: number; height: number; speed: number;
   windupMs: number; strikeMs: number; returnMs: number; recoverMs: number; color: number;
+  /** 방어: 받는 피해를 이 값으로 나눈다 (없으면 1) */
+  defense?: number;
+}
+
+/** 방어를 반영해 몬스터가 실제로 받는 피해 (최소 1) */
+export function monsterDamageTaken(damage: number, defense = 1): number {
+  return Math.max(1, Math.round(damage / defense));
 }
 
 /** 잿빛 나방의 부식성 가루에 닿으면 잠깐 느려진다 (게임 시계 ms, 이동 속도 배율). */
