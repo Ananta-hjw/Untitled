@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import shotFrame from '../assets/monsters/waterdrop-mushroom/projectile_frame.json';
-import { ENEMY } from '../config';
+import { BLOCK, ENEMY, VERTICAL_SPEED_RATIO } from '../config';
 import { hitSquash } from './hitFeel';
+import { bossParryOutcome, type BossParryOutcome } from './parry';
 import { Character } from '../entities/Character';
 import type { NavGrid } from '../world/navGrid';
 import type { WalkArea } from '../world/walkArea';
@@ -17,6 +18,14 @@ type State = 'wander' | 'chase' | 'windup' | 'recover' | 'roar' | 'retreat' | 'v
 
 /** 보스의 부식 효과가 주인공에게 닿았는지 알린다 (웅덩이 틱, 장막이 터질 때). hit: 장막 범위 안이었는지 */
 export type HazardHandler = (enemy: Enemy, kind: 'pool' | 'veil', hit: boolean, dirX: number, dirY: number) => void;
+/** 적 공격이 닿기 직전 예고 안광을 띄울 위치와 막기 불가 여부 */
+export type GlintHandler = (enemy: Enemy, x: number, y: number, unblockable: boolean) => void;
+/** 패링 처리 결과: 보스 연타가 이어지는지, 연타 마지막을 파훼했는지, 일반 경직인지 */
+export interface ParryBreakResult {
+  outcome: BossParryOutcome;
+  step: number;
+  total: number;
+}
 
 /**
  * 슬라임 근접·버섯 원거리·도마뱀 돌진과 습격 임시 권속의 AI.
@@ -47,6 +56,12 @@ export class Enemy {
   private timer = 0;
   private attackStartedAt?: number;
   private strikeLanded = false;
+  /** 이번 공격의 예고 안광을 이미 띄웠는지 */
+  private glintShown = false;
+  /** 패링으로 경직되어 휘청이는 기한(게임 시계)과 머리 위 경직 표시 */
+  private parryStunUntil = 0;
+  private parryStunPerfect = false;
+  private readonly staggerMark: Phaser.GameObjects.Graphics;
   /** 마지막으로 맞은 시각(게임 시계). 맞은 뒤 잠깐 몸이 출렁인다. */
   private hitAt?: number;
   private escapedAt = -Infinity;
@@ -59,6 +74,9 @@ export class Enemy {
   phase: BossPhase = 1;
   /** 이번 연속 공격에서 남은 돌진 수 */
   private chainLeft = 0;
+  /** 이번 연속 공격의 전체 타수 및 연속으로 패링당한 횟수 */
+  private chainTotal = 1;
+  private comboParries = 0;
   /** 다음 돌진을 기다리는 중 (recover가 끝나면 바로 준비 동작) */
   private chainPending = false;
   private retreatStartedAt = 0;
@@ -86,6 +104,7 @@ export class Enemy {
       levelTag: level,
       labelOffset: this.kind ? this.stats.height + (this.kind === 'fog-crow' ? 36 : 8) : 96,
     });
+    this.staggerMark = scene.add.graphics().setVisible(false);
     this.target.set(x, y);
     this.wanderSpeed = Phaser.Math.Between(50, 80);
     this.timer = Phaser.Math.Between(300, 1800);
@@ -101,6 +120,7 @@ export class Enemy {
     onStrike: (enemy: Enemy, hit?: EnemyHit) => boolean | void,
     onHazard?: HazardHandler,
     chaseTarget?: { x: number; y: number; alive: boolean },
+    onGlint?: GlintHandler,
   ): void {
     const c = this.character;
     if (this.state === 'dead' || this.kind === 'mist-weaver') return;
@@ -110,6 +130,7 @@ export class Enemy {
     });
     this.updateDecoy(time);
     this.updateHitSquash(time);
+    this.updateParryStun(time);
     this.updateProjectile(time, dt, player, area, onStrike);
     if (c.sprite instanceof MonsterSprite) c.sprite.advance(dt * 1000);
 
@@ -161,8 +182,11 @@ export class Enemy {
           : charge ? Math.hypot(dx, dy) <= (this.kind === 'fog-crow' ? 165 : 250) && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
           : Math.abs(dx) < ENEMY.attackRangeX && Math.abs(dy) < ENEMY.attackRangeY;
         if (inRange) {
-          // 보스는 돌진을 BOSS.chain번 잇달아 한다.
-          this.chainLeft = this.boss ? BOSS.chain - 1 : 0;
+          // 보스는 1페이즈 2연타(BOSS.chain), 2페이즈 3연타(BOSS.phaseTwoChain) 돌진을 잇달아 한다.
+          const total = this.boss ? (this.phase === 2 ? BOSS.phaseTwoChain : BOSS.chain) : 1;
+          this.chainTotal = total;
+          this.chainLeft = total - 1;
+          this.comboParries = 0;
           this.beginWindup(time, dx, ranged || charge ? dy : 0);
           if (this.waterJet && c.sprite instanceof MonsterSprite) {
             const mouth = c.sprite.swampMouthOffset();
@@ -186,7 +210,7 @@ export class Enemy {
 
       case 'windup':
         c.setMotion(false);
-        this.updateStrike(time, onStrike, area);
+        this.updateStrike(time, onStrike, area, onGlint);
         break;
 
       case 'recover':
@@ -222,6 +246,10 @@ export class Enemy {
         c.setMotion(false, dx);
         const shake = Math.sin(time / 30) * 3;
         c.sprite.setPosition(shake, 0);
+        if (!this.glintShown && this.timer - time <= 300) {
+          this.glintShown = true;
+          onGlint?.(this, c.x, c.y - Math.round((this.stats.height || 100) * 0.65), true);
+        }
         if (time >= this.timer) {
           c.sprite.setPosition(0, 0);
           this.hazards?.burstVeil(time);
@@ -266,6 +294,82 @@ export class Enemy {
     }
   }
 
+  /**
+   * 패링·불완전 막기에 당했을 때:
+   * - 보스 연타 중 남은 타격이 있으면 바로 끊지 않고 짧은 박자(BOSS.parryChainGapMs)로 다음 돌진을 이어 간다('continueChain').
+   * - 마지막 타까지 정밀 패링으로 받아내면 대경직('chainBreak')에 빠진다.
+   */
+  onParried(
+    time: number,
+    durationMs: number,
+    dirX: number,
+    dirY: number,
+    push: number,
+    perfect: boolean,
+  ): ParryBreakResult {
+    const c = this.character;
+    if (this.state === 'dead' || this.state === 'roar' || this.state === 'retreat' || this.state === 'veil') {
+      return { outcome: 'normalBreak', step: 1, total: 1 };
+    }
+    this.comboParries += 1;
+    const step = this.comboParries;
+    const total = Math.max(step, this.chainTotal);
+    const outcome = bossParryOutcome(this.boss, this.chainLeft, step, perfect);
+
+    if (outcome === 'continueChain') {
+      // 보스 연타 유지: 튕겨 나갔다가 짧은 리듬 간격 뒤에 바로 다음 돌진으로 이어진다.
+      this.hazards?.clearAim();
+      this.cancelStrike();
+      this.chainLeft = Math.max(0, this.chainLeft - 1);
+      this.chainPending = true;
+      this.parryStunUntil = 0;
+      this.staggerMark.setVisible(false);
+      this.state = 'recover';
+      this.timer = time + BOSS.parryChainGapMs;
+      this.hitAt = time;
+      const { scaleX, scaleY } = hitSquash(0);
+      c.sprite.setScale(scaleX, scaleY).setPosition(0, 0);
+      c.flash(perfect ? 0xbef0ff : 0xffb35a);
+      c.knockback.set(dirX * push * 0.45, dirY * push * 0.45 * VERTICAL_SPEED_RATIO);
+      return { outcome, step, total };
+    }
+
+    const stun = outcome === 'chainBreak' ? BOSS.parryChainStunMs : durationMs;
+    const pushScale = outcome === 'chainBreak' ? 1.45 : this.boss ? 0.7 : 1;
+    this.interrupt(time, stun);
+    if (this.state === 'recover') {
+      this.hitAt = time;
+      this.parryStunUntil = time + stun;
+      this.parryStunPerfect = perfect;
+      const { scaleX, scaleY } = hitSquash(0);
+      c.sprite.setScale(scaleX, scaleY);
+      c.flash(outcome === 'chainBreak' ? 0xffe880 : perfect ? 0xbef0ff : 0xffb35a);
+      c.knockback.set(dirX * push * pushScale, dirY * push * pushScale * VERTICAL_SPEED_RATIO);
+    }
+    return { outcome, step, total };
+  }
+
+  /** 차지 패링(무량반격) 파훼: 부식의 장막이나 보스 연타까지 모두 끊고 초대형 경직에 빠뜨린다. */
+  onUnboundParried(time: number, durationMs: number, dirX: number, dirY: number, push: number): void {
+    if (this.state === 'dead' || this.state === 'roar' || this.state === 'retreat') return;
+    const c = this.character;
+    this.hazards?.clearAim();
+    this.hazards?.cancelVeil();
+    this.cancelStrike();
+    this.chainLeft = 0;
+    this.chainPending = false;
+    this.comboParries = 0;
+    this.state = 'recover';
+    this.timer = time + durationMs;
+    this.hitAt = time;
+    this.parryStunUntil = time + durationMs;
+    this.parryStunPerfect = true;
+    const { scaleX, scaleY } = hitSquash(0);
+    c.sprite.setScale(scaleX, scaleY).setPosition(0, 0);
+    c.flash(0xfff2a6);
+    c.knockback.set(dirX * push * 1.65, dirY * push * 1.65 * VERTICAL_SPEED_RATIO);
+  }
+
   /** 맞으면 준비 동작이 끊기고 잠깐 멈칫한다. 저스트 회피를 당하면 더 오래 멈춘다. */
   interrupt(time: number, durationMs: number = ENEMY.staggerMs): void {
     if (this.state === 'dead' || this.state === 'roar' || this.state === 'retreat' || this.state === 'veil') return;
@@ -277,6 +381,39 @@ export class Enemy {
     this.character.sprite.setScale(1).setPosition(0, 0);
     this.state = 'recover';
     this.timer = time + durationMs;
+  }
+
+  /** 패링으로 경직된 동안 몸이 흔들리고 머리 위에 경직 표식이 회전한다. */
+  private updateParryStun(time: number): void {
+    const active = this.state === 'recover' && time < this.parryStunUntil;
+    this.staggerMark.setVisible(active);
+    if (!active) {
+      if (this.parryStunUntil > 0) {
+        this.parryStunUntil = 0;
+        if (this.state !== 'veil') this.character.sprite.setPosition(0, 0);
+      }
+      return;
+    }
+    const c = this.character;
+    const remain = Math.max(0, (this.parryStunUntil - time) / 1200);
+    const wobble = Math.sin(time / 42) * (this.parryStunPerfect ? 3.2 : 1.8) * Math.min(1, remain + 0.25);
+    c.sprite.setPosition(wobble, 0);
+    const headY = c.y - (this.stats.height || 100) - 24;
+    const g = this.staggerMark.clear().setDepth(c.y + 420);
+    const color = this.parryStunPerfect ? 0xffe270 : 0xffa654;
+    const orbit = time / 190;
+    for (let i = 0; i < 3; i++) {
+      const a = orbit + (i * Math.PI * 2) / 3;
+      const sx = c.x + Math.cos(a) * 20;
+      const sy = headY + Math.sin(a) * 6;
+      const r = this.parryStunPerfect ? 5 : 3.5;
+      g.fillStyle(color, 0.95).fillPoints([
+        new Phaser.Math.Vector2(sx, sy - r),
+        new Phaser.Math.Vector2(sx + r * 0.45, sy),
+        new Phaser.Math.Vector2(sx, sy + r),
+        new Phaser.Math.Vector2(sx - r * 0.45, sy),
+      ], true);
+    }
   }
 
   /** 칼에 맞았을 때: 그 자리에서 납작해졌다가 출렁이며 돌아온다 (게임 시계 기준). */
@@ -342,6 +479,7 @@ export class Enemy {
   private startVeil(time: number): void {
     const c = this.character;
     this.veilUsed = true;
+    this.glintShown = false;
     this.chainLeft = 0;
     this.chainPending = false;
     this.state = 'veil';
@@ -358,6 +496,8 @@ export class Enemy {
     this.chainLeft = 0;
     this.chainPending = false;
     this.hitAt = undefined;
+    this.parryStunUntil = 0;
+    this.staggerMark.setVisible(false);
     this.character.sprite.setPosition(0, 0).setScale(1);
     this.character.knockback.set(0, 0);
     this.state = 'roar';
@@ -368,6 +508,8 @@ export class Enemy {
     this.clearDecoy();
     this.hazards?.clear();
     this.hitAt = undefined;
+    this.parryStunUntil = 0;
+    this.staggerMark.setVisible(false);
     this.state = 'dead';
     this.cancelStrike();
     this.clearProjectile();
@@ -378,6 +520,8 @@ export class Enemy {
     this.clearDecoy();
     this.escapedAt = -Infinity;
     this.hitAt = undefined;
+    this.parryStunUntil = 0;
+    this.staggerMark.setVisible(false);
     this.clearProjectile();
     this.cancelStrike();
     this.character.revive(x, y);
@@ -391,6 +535,7 @@ export class Enemy {
   private cancelStrike(): void {
     this.attackStartedAt = undefined;
     this.strikeLanded = false;
+    this.glintShown = false;
     this.waterJet?.clear();
     if (this.character.sprite instanceof MonsterSprite) this.character.sprite.endStrike();
   }
@@ -400,6 +545,7 @@ export class Enemy {
     this.hitAt = undefined;
     this.attackStartedAt = time;
     this.strikeLanded = false;
+    this.glintShown = false;
     const distance = Math.hypot(dx, dy) || 1;
     this.aim.x = dx / distance;
     this.aim.y = dy / distance;
@@ -411,13 +557,22 @@ export class Enemy {
 
   /** 명중과 자세 모두 씬의 게임 시계를 사용한다. Tween 완료로 피해를 주지 않는다. */
   private updateStrike(time: number, onStrike: (enemy: Enemy, hit?: EnemyHit) => boolean | void,
-    area: WalkArea): void {
+    area: WalkArea, onGlint?: GlintHandler): void {
     if (this.attackStartedAt === undefined) return;
     const elapsed = time - this.attackStartedAt;
     const sprite = this.character.sprite;
     const { windupMs, strikeMs, returnMs, recoverMs } = this.stats;
     const strikeAt = windupMs + strikeMs;
     const endAt = strikeAt + returnMs;
+    // 공격이 닿기 BLOCK.glintLeadMs 전: 패링 타이밍을 읽어낼 수 있게 무기/앞쪽에서 십자 안광이 번쩍인다.
+    const impactLeadAt = this.waterJet || isCharger(this.kind) ? windupMs : strikeAt;
+    if (!this.glintShown && elapsed >= Math.max(0, impactLeadAt - BLOCK.glintLeadMs)) {
+      this.glintShown = true;
+      const c = this.character;
+      const gx = c.x + this.aim.x * 36;
+      const gy = c.y - Math.round((this.stats.height || 96) * 0.56) + this.aim.y * 12;
+      onGlint?.(this, gx, gy, false);
+    }
     if (sprite instanceof MonsterSprite) {
       sprite.showAttack(elapsed, windupMs, strikeMs, returnMs);
       if (this.waterJet) {

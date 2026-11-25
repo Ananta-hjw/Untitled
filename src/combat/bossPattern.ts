@@ -15,7 +15,16 @@
  */
 export const BOSS = {
   chain: 2,
+  /** 2페이즈에서는 3연속 돌진으로 더 쫀득한 연속 패링 리듬을 만든다. */
+  phaseTwoChain: 3,
   chainGapMs: 1000,
+  /** 보스 연타 중 앞 타를 패링했을 때 다음 타가 이어지는 리듬 간격(ms) */
+  parryChainGapMs: 360,
+  /** 보스 연타의 마지막 타까지 연속 패링으로 파훼했을 때의 대경직 시간(ms) */
+  parryChainStunMs: 2000,
+  /** 차지 패링(무량반격)으로 보스 강공격·장막을 파훼했을 때의 초대형 경직(ms)과 반사 피해 배율 */
+  unboundStunMs: 2400,
+  unboundCounterScale: 1.6,
   phaseTwoAt: 0.5,
   roarMs: 1700,
   retreatDistance: 520,

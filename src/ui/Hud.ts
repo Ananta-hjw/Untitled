@@ -150,16 +150,36 @@ export class Hud {
   }
 
   /** 화면 위쪽에 짧은 알림을 띄웠다가 지운다. */
-  showCallout(text: string): void {
+  showCallout(text: string, style?: { color?: string; stroke?: string; scale?: number }): void {
     const label = this.callout;
     this.scene.tweens.killTweensOf(label);
-    label.setText(text).setVisible(true).setAlpha(1).setScale(1.3);
+    label.setColor(style?.color ?? '#bfe9ff');
+    label.setStroke(style?.stroke ?? '#0b2236', 8);
+    label.setText(text).setVisible(true).setAlpha(1).setScale(style?.scale ?? 1.3);
     this.scene.tweens.chain({
       targets: label,
       tweens: [
         { scale: 1, duration: 140, ease: 'Back.easeOut' },
         { alpha: 0, duration: 350, delay: 600, onComplete: () => label.setVisible(false) },
       ],
+    });
+  }
+
+  /** 패링으로 공명 조각이 구슬에 도달했을 때 해당 구슬 테두리가 번쩍인다. */
+  pulseOrb(index: number): void {
+    const { x, y, radius, gap } = ORBS;
+    const cx = x + index * gap;
+    const ring = this.scene.add.circle(cx, y, radius, 0xffe482, 0.75)
+      .setStrokeStyle(3, 0xffffff, 1)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_UI + 3);
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 2.15,
+      alpha: 0,
+      duration: 240,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy(),
     });
   }
 
@@ -246,8 +266,11 @@ export class Hud {
     this.goldText.setText(`● ${gold.toLocaleString()} G`);
   }
 
-  /** herb: 약초 기운으로 늘어난 최대 체력. 막대 끝의 그만큼을 초록색으로 그린다. */
-  setHp(hp: number, maxHp: number, herb = 0): void {
+  /**
+   * herb: 약초 기운으로 늘어난 최대 체력(초록).
+   * internal: 불완전 막기로 쌓인 회복 가능한 내상(체력 끝에서 이어지는 분홍-보라 구간).
+   */
+  setHp(hp: number, maxHp: number, herb = 0, internal = 0): void {
     const { x, y, width, height } = BAR;
     const ratio = hp / maxHp;
     const bar = this.bar;
@@ -256,6 +279,15 @@ export class Hud {
     bar.fillRoundedRect(x - 3, y - 3, width + 6, height + 6, 9);
     bar.fillStyle(0x3a1512);
     bar.fillRoundedRect(x, y, width, height, 7);
+    // 회복 가능한 내상(나인솔즈 내상 바): 현재 체력 바로 뒤에 연보라-장밋빛으로 표시한다.
+    if (internal > 0 && hp < maxHp) {
+      const cap = Math.min(maxHp, hp + internal);
+      const internalW = Math.max(14, width * (cap / maxHp));
+      bar.fillStyle(0xb95aa8);
+      bar.fillRoundedRect(x, y, internalW, height, 7);
+      bar.fillStyle(0xf5a8e6, 0.5);
+      bar.fillRoundedRect(x, y, internalW, Math.round(height * 0.34), { tl: 7, tr: 7, bl: 0, br: 0 });
+    }
     if (ratio > 0) {
       const filled = Math.max(14, width * ratio);
       const base = (maxHp - herb) / maxHp * width;
@@ -269,7 +301,8 @@ export class Hud {
         bar.fillRoundedRect(x, y, filled, height, 7);
       }
     }
-    this.hpText.setText(herb > 0 ? `HP ${hp} / ${maxHp}  약초 +${herb}` : `HP ${hp} / ${maxHp}`);
+    const suffix = [herb > 0 ? `약초 +${herb}` : '', internal > 0 ? `내상 ${internal}` : ''].filter(Boolean).join(' · ');
+    this.hpText.setText(suffix ? `HP ${hp} / ${maxHp}  ${suffix}` : `HP ${hp} / ${maxHp}`);
   }
 
   layout(width: number): void {

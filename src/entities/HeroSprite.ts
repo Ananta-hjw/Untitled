@@ -131,6 +131,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   private frame!: SpriteFrame;
   private guarding = false;
   private guardTime = 0;
+  private guardRecoilAt = -Infinity;
   private attackWeaponBehind = false;
 
   constructor(scene: Phaser.Scene) {
@@ -189,6 +190,13 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     if (this.guarding === active) return;
     this.guarding = active;
     this.guardTime = 0;
+    if (!active) this.guardRecoilAt = -Infinity;
+    this.applyFrame();
+  }
+
+  /** 패링·막기로 충격을 받아낸 순간 검과 상체에 짧은 반동을 준다. */
+  triggerGuardRecoil(): void {
+    this.guardRecoilAt = this.guardTime;
     this.applyFrame();
   }
 
@@ -290,7 +298,8 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     const mirrored = this.guarding ? this.facing.includes('left')
       : attacking ? this.attackFacing.includes('left') : this.animation === 'dodge' && this.facing.includes('left');
     this.frame = frame;
-    this.setRotation(this.guarding ? guardMotion(this.guardTime, this.facing).bodyAngle : 0);
+    const guardRecoil = this.guardRecoilAt >= 0 ? this.guardTime - this.guardRecoilAt : undefined;
+    this.setRotation(this.guarding ? guardMotion(this.guardTime, this.facing, guardRecoil).bodyAngle : 0);
     this.image.setTexture(frame.texture, frame.name).setOrigin(frame.originX, frame.originY)
       .setScale(frame.scale * (mirrored ? -1 : 1), frame.scale);
     this.applyWeapon();
@@ -311,7 +320,8 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     let { base, tip } = pose.blade;
     if (this.guarding && f.grip) {
       // A small settling motion keeps the blade and hilt rigid around the actual fist.
-      const angle = guardMotion(this.guardTime, this.facing).swordAngle;
+      const guardRecoil = this.guardRecoilAt >= 0 ? this.guardTime - this.guardRecoilAt : undefined;
+      const angle = guardMotion(this.guardTime, this.facing, guardRecoil).swordAngle;
       const grip = f.grip;
       const rotate = (p: { x: number; y: number }) => ({
         x: grip.x + (p.x - grip.x) * Math.cos(angle) - (p.y - grip.y) * Math.sin(angle),

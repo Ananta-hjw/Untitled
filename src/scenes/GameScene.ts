@@ -12,7 +12,21 @@ import { MonsterSprite, preloadMonsters } from '../combat/MonsterSprite';
 import { MistThreads } from '../combat/MistThreads';
 import { ASH_SLOW, MONSTERS, enemyHitReaches, monsterDamageTaken, shellBlocks, type EnemyHit, type EnemyKey } from '../combat/monsterTypes';
 import { isJustDodge, slowMotionScale, strikeReaches } from '../combat/justDodge';
-import { critMultiplier, gameTimeScale, heavierKind, hitStopMs, strikeKind, type HitKind } from '../combat/hitFeel';
+import { critMultiplier, gameTimeScale, heavierKind, hitStopMs, strikeKind, type HitKind, type StrikeHitKind } from '../combat/hitFeel';
+import {
+  addResonanceParts,
+  chargeParryProgress,
+  gradeParry,
+  imperfectGuardDamage,
+  isChargeParryReady,
+  isUnboundActive,
+  nextParryChain,
+  parryZoom,
+  recoverInternal,
+  stepInternalHeal,
+  type ParryChainState,
+} from '../combat/parry';
+import { CombatAudio } from '../audio/combatAudio';
 import { ImpactEffects } from '../combat/ImpactEffects';
 import {
   DEPTH_LIGHTING,
@@ -205,9 +219,31 @@ export class GameScene extends Phaser.Scene {
   private blockKeys: Phaser.Input.Keyboard.Key[] = [];
   /** 지금 막고 있는지 (패링 판정 시간 안인지, updatePlayer가 매 프레임 정한다) */
   private blocking = false;
-  /** 패링 판정이 끝나는 시각과, 다시 막을 수 있는 시각 (게임 시계) */
+  /** 막기를 시작한 시각, 패링 판정이 끝나는 시각, 다시 막을 수 있는 시각 (게임 시계) */
+  private parryStartedAt = -Infinity;
   private parryUntil = 0;
   private parryReadyAt = 0;
+  /** 연속 정밀 패링 체인(음정 상승·연출 격상) */
+  private parryChain: ParryChainState = { count: 0, lastAt: -Infinity };
+  /** 정밀 패링·무량반격 히트스톱 뒤 짧은 여운 슬로우아웃(실제 시간 ms) */
+  private parrySlowOutLeft = 0;
+  private parrySlowOutScaleVal = BLOCK.slowOutScale;
+  private parrySlowOutDur = BLOCK.slowOutMs;
+  /** 차지 패링(무량반격) 홀드 시작 시각, 충전 완료 여부, 릴리즈 발동 창 기한(게임 시계) */
+  private chargeHoldStart?: number;
+  private chargeParryReady = false;
+  private unboundUntil = 0;
+  /** 정밀 패링 카메라 줌 펀치(실제 시간 ms, 비활성 -1) */
+  private parryZoomElapsed = -1;
+  private parryZoomPeak = 1;
+  /** 패링 직후 검 리코일 자세를 잠깐 유지하는 기한(게임 시계, 공격·회피·이동 시 즉시 해제) */
+  private guardPoseUntil = 0;
+  /** 불완전 막기로 쌓인 회복 가능 내상(HP 단위)과 회복 시작 시각·누적 소수 */
+  private internalDamage = 0;
+  private internalHealAt = 0;
+  private internalHealCarry = 0;
+  /** Web Audio 기반 패링·전투 효과음 + 모바일 진동 */
+  private readonly combatAudio = new CombatAudio();
   /** 막는 동안 주인공 앞에 그리는 방패 빛 */
   private shield?: Phaser.GameObjects.Graphics;
   private dodgeKeys: Phaser.Input.Keyboard.Key[] = [];
@@ -511,8 +547,22 @@ export class GameScene extends Phaser.Scene {
     this.blockButton = undefined;
     this.blockKeys = [];
     this.blocking = false;
+    this.parryStartedAt = -Infinity;
     this.parryUntil = 0;
     this.parryReadyAt = 0;
+    this.parryChain = { count: 0, lastAt: -Infinity };
+    this.parrySlowOutLeft = 0;
+    this.parrySlowOutScaleVal = BLOCK.slowOutScale;
+    this.parrySlowOutDur = BLOCK.slowOutMs;
+    this.chargeHoldStart = undefined;
+    this.chargeParryReady = false;
+    this.unboundUntil = 0;
+    this.parryZoomElapsed = -1;
+    this.parryZoomPeak = 1;
+    this.guardPoseUntil = 0;
+    this.internalDamage = 0;
+    this.internalHealAt = 0;
+    this.internalHealCarry = 0;
     this.shield = undefined;
     this.playerRespawnAt = undefined;
     this.deathMessage = undefined;
@@ -809,13 +859,33 @@ export class GameScene extends Phaser.Scene {
     // 수련 연습이 막 시작됐으면 시스템 안내 창을 한 번 띄운다.
     if (this.showLessonIfNew()) return;
 
-    // 타격 순간에는 게임 시간을 아주 잠깐 멈추고(히트스톱), 저스트 회피 뒤에는 느리게 흘린다.
+    // 패링 카메라 줌 펀치는 실제 시간으로 움직여 히트스톱 순간에도 즉각 반응한다.
+    if (this.parryZoomElapsed >= 0) {
+      this.parryZoomElapsed += step;
+      if (this.parryZoomElapsed >= BLOCK.zoomInMs + BLOCK.zoomOutMs) {
+        this.parryZoomElapsed = -1;
+        this.cameras.main.setZoom(1);
+      } else {
+        this.cameras.main.setZoom(parryZoom(this.parryZoomElapsed, this.parryZoomPeak, BLOCK.zoomInMs, BLOCK.zoomOutMs));
+      }
+    }
+
+    // 타격 순간에는 게임 시간을 아주 잠깐 멈추고(히트스톱), 저스트 회피·정밀 패링 뒤에는 느리게 흘린다.
     // 적·플레이어·주인공 그림·타이머가 모두 이 시간을 따르므로 서로 어긋나지 않는다.
     const slow = slowMotionScale(this.slowMotionLeft, JUST_DODGE.slowScale, JUST_DODGE.rampMs);
     this.hud.setSlowMotion((1 - slow) / (1 - JUST_DODGE.slowScale));
-    const gameStep = step * gameTimeScale(this.hitStopLeft, this.slowMotionLeft);
+    const wasHitStop = this.hitStopLeft > 0;
+    const gameStep = step * gameTimeScale(
+      this.hitStopLeft,
+      this.slowMotionLeft,
+      this.parrySlowOutLeft,
+      this.parrySlowOutScaleVal,
+      this.parrySlowOutDur,
+    );
     this.slowMotionLeft = Math.max(0, this.slowMotionLeft - step);
     this.hitStopLeft = Math.max(0, this.hitStopLeft - step);
+    // 패링 슬로우아웃은 히트스톱이 풀린 직후부터 카운트해 여운을 남긴다.
+    if (!wasHitStop) this.parrySlowOutLeft = Math.max(0, this.parrySlowOutLeft - step);
     // 멈춘 동안에는 아무것도 진행하지 않는다. 눌린 입력은 그대로 남아 있다가 다음 프레임에 처리된다.
     if (gameStep === 0) return;
 
@@ -852,7 +922,7 @@ export class GameScene extends Phaser.Scene {
     for (const enemy of this.enemies) {
       const defender = this.defenderTarget(enemy);
       enemy.update(time, dt, this.player, this.walkArea, this.nav, this.onEnemyStrike, this.onBossHazard,
-        defender ? { x: defender.x, y: defender.y, alive: defender.canFight } : undefined);
+        defender ? { x: defender.x, y: defender.y, alive: defender.canFight } : undefined, this.onEnemyGlint);
       this.applyKnockback(enemy.character, dt);
     }
     this.separateEnemies(dt);
@@ -864,6 +934,7 @@ export class GameScene extends Phaser.Scene {
     this.finishSerenaEvacuation();
     for (const door of this.doorMarkers) if (door.marker) door.text.setY(door.spot.y - 150 - Math.abs(Math.sin(time / 320)) * 8);
     this.applyKnockback(this.player, dt);
+    this.updateInternalHeal(time, dt);
     this.damageNumbers.update(gameStep);
     this.updatePotion(time);
     this.updateSkill(time, gameStep);
@@ -1236,7 +1307,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawHud(): void {
-    this.hud.setHp(this.player.hp, this.player.maxHp, this.herb);
+    this.internalDamage = Math.min(this.internalDamage, Math.max(0, this.player.maxHp - this.player.hp));
+    this.hud.setHp(this.player.hp, this.player.maxHp, this.herb, this.internalDamage);
     this.drawMp(true);
     this.drawOrbs();
     this.hud.setXp(this.progress.level, this.progress.xp, xpToNext(this.progress.level));
@@ -1379,13 +1451,20 @@ export class GameScene extends Phaser.Scene {
     player.setDodging(false);
 
     if (!bound && dodgePressed && time >= this.dodgeReadyAt) {
+      this.combatAudio.unlock();
+      this.guardPoseUntil = 0;
+      this.chargeHoldStart = undefined;
+      this.chargeParryReady = false;
+      this.unboundUntil = 0;
       this.startDodge(time, v);
       return;
     }
 
-    // 막기는 공격보다 우선한다. 공격·후딜·회전 베기의 남은 판정을 취소한다.
-    this.blockButton?.setEnabled(time >= this.parryReadyAt);
+    // 막기는 공격보다 우선한다. 짧게 누르면 2단 패링, 길게 눌러(chargeHoldMs) 충전 후 떼면 무량반격이 발동한다.
+    const blockHeld = !this.opening && ((this.blockButton?.isDown ?? false) || this.blockKeys.some(k => k.isDown));
+    this.blockButton?.setEnabled(time >= this.parryReadyAt || this.chargeHoldStart !== undefined);
     if (parryPressed && time >= this.parryReadyAt) {
+      this.combatAudio.unlock();
       this.clearAttackInput();
       player.endAttack();
       this.attackTrace = undefined;
@@ -1393,15 +1472,52 @@ export class GameScene extends Phaser.Scene {
       this.spinHitAt = undefined;
       this.comboStage = 0;
       this.comboExpiresAt = 0;
+      this.guardPoseUntil = 0;
+      this.unboundUntil = 0;
+      this.parryStartedAt = time;
       this.parryUntil = time + BLOCK.windowMs;
       this.parryReadyAt = time + BLOCK.cooldownMs;
       this.nextAttackAt = Math.max(this.nextAttackAt, this.parryUntil);
+      this.chargeHoldStart = time;
+      this.chargeParryReady = false;
       this.dismissHint();
+    } else if (blockHeld && this.chargeHoldStart === undefined && time >= this.parryReadyAt && !player.isAttacking) {
+      this.combatAudio.unlock();
+      this.chargeHoldStart = time;
+      this.chargeParryReady = false;
     }
+    if (blockHeld && this.chargeHoldStart !== undefined && !player.isAttacking) {
+      const heldMs = time - this.chargeHoldStart;
+      if (!this.chargeParryReady && isChargeParryReady(heldMs)) {
+        this.chargeParryReady = true;
+        this.combatAudio.playChargeReady();
+        player.flash(0xffe482);
+        this.impacts.dust(player.x, player.y, 4, time, 45);
+      }
+    } else if (!blockHeld && this.chargeHoldStart !== undefined) {
+      if (this.chargeParryReady && !player.isAttacking) {
+        this.unboundUntil = time + BLOCK.unboundWindowMs;
+        this.parryUntil = 0;
+        this.parryReadyAt = time + BLOCK.cooldownMs;
+        this.guardPoseUntil = time + BLOCK.unboundWindowMs;
+        this.nextAttackAt = Math.max(this.nextAttackAt, this.unboundUntil);
+        this.combatAudio.playUnboundRelease();
+        this.impacts.unboundReleasePulse(player.x, player.y - 85, time);
+        if (player.sprite instanceof HeroSprite) player.sprite.triggerGuardRecoil();
+      }
+      this.chargeHoldStart = undefined;
+      this.chargeParryReady = false;
+    }
+    const chargingParry = blockHeld && this.chargeHoldStart !== undefined && !player.isAttacking && time >= this.parryUntil;
     this.blocking = time < this.parryUntil && !player.isAttacking;
 
     // 초 단위 애니메이션과 밀리초 시계의 부동소수점 오차로 한 프레임 쉬지 않게 한다.
-    if (!this.opening && !this.blocking && this.wantsAttack(time) && time + 1e-6 >= this.nextAttackAt) {
+    if (!this.opening && !this.blocking && !chargingParry && this.wantsAttack(time) && time + 1e-6 >= this.nextAttackAt) {
+      this.combatAudio.unlock();
+      this.guardPoseUntil = 0;
+      this.chargeHoldStart = undefined;
+      this.chargeParryReady = false;
+      this.unboundUntil = 0;
       this.startAttack(time, v.x, v.y);
       this.attackBufferedUntil = undefined;
     }
@@ -1410,8 +1526,10 @@ export class GameScene extends Phaser.Scene {
     const fromY = player.y;
     // 공격 중에는 조이스틱으로 움직이지 않는다. 앞으로 나가는 것은 공격 자체의 전진(lunge)뿐이다.
     if (force > 0 && !bound && !player.isAttacking) {
+      if (!this.blocking && !chargingParry) this.guardPoseUntil = 0;
+      const guardSpeedScale = chargingParry ? BLOCK.chargeMoveScale : this.blocking ? BLOCK.moveScale : 1;
       const speed = PLAYER_SPEED * (this.now < this.slowedUntil ? ASH_SLOW.speedScale : 1)
-        * (this.blocking ? BLOCK.moveScale : 1) * resonanceSpeed(this.resonating, RESONANCE);
+        * guardSpeedScale * resonanceSpeed(this.resonating, RESONANCE);
       const next = this.walkArea.move(
         player.x,
         player.y,
@@ -1685,7 +1803,8 @@ export class GameScene extends Phaser.Scene {
     if (!sweep) return;
     if (this.mistWeaver?.threads.cutWithBlade(player, sweep, time)) this.hud.showCallout('안개 실을 끊었다');
     const finisher = trace.stage === PLAYER.combo.length - 1;
-    let heaviest: Exclude<HitKind, 'hurt'> | undefined;
+    let heaviest: StrikeHitKind | undefined;
+    let internalRecovered = false;
     for (const enemy of this.enemies) {
       const c = enemy.character;
       if (!c.alive || enemy.untouchable || trace.hit.has(enemy)) continue;
@@ -1714,17 +1833,31 @@ export class GameScene extends Phaser.Scene {
       // 칼이 닿은 자리(몸 가운데)에서 섬광과 불꽃이 튄다.
       this.impacts.impact(bounds.centerX, bounds.centerY, trace.direction.x, trace.direction.y,
         strike.crit && strike.kind === 'finisher' ? 'finisher' : strike.kind, this.now, c.y);
-      // 검으로 벨 때마다 마나가 조금 찬다.
+      // 검으로 벨 때마다 마나가 조금 차고, 쌓여 있던 내상도 일부 즉시 회복된다.
       this.mp = addMana(this.mp, this.maxMp, MANA.perHit);
+      if (this.internalDamage > 0) {
+        const healAmt = trace.counter ? BLOCK.internalHealOnHit * 2 : BLOCK.internalHealOnHit;
+        const healed = recoverInternal(player.hp, player.maxHp, this.internalDamage, healAmt);
+        if (healed.recovered > 0) {
+          player.hp = healed.hp;
+          this.internalDamage = healed.internal;
+          internalRecovered = true;
+        }
+      }
       const heavy = strike.kind !== 'normal' ? HIT_FEEL.heavyKnockback : 1;
       this.resolveEnemyHit(enemy, died, trace.direction.x, trace.direction.y, PLAYER.knockback * combo.knockback * heavy);
     }
+    if (internalRecovered) this.drawHud();
     if (heaviest) {
       const [ms, intensity] = HIT_FEEL.shake[heaviest];
       this.cameras.main.shake(ms, intensity);
       this.hitStop(heaviest);
-      if (heaviest === 'counter') this.impacts.screenFlash(0x9fdcff, 0.16);
-      else if (heaviest !== 'normal') this.impacts.screenFlash(0xffffff, heaviest === 'finisher' ? 0.1 : 0.07);
+      if (heaviest === 'counter') {
+        this.combatAudio.playCounterHit();
+        this.impacts.screenFlash(0x9fdcff, 0.16);
+      } else if (heaviest !== 'normal') {
+        this.impacts.screenFlash(0xffffff, heaviest === 'finisher' ? 0.1 : 0.07);
+      }
     }
   }
 
@@ -2090,6 +2223,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.player.setMaxHp(this.player.maxHp, true);
+    this.internalDamage = 0;
+    this.internalHealCarry = 0;
     this.mp = this.maxMp;
     this.drawHud();
     try {
@@ -2107,6 +2242,8 @@ export class GameScene extends Phaser.Scene {
   private healAtClinic(): void {
     this.herb = herbBonus(this.stats.maxHp);
     this.player.setMaxHp(this.stats.maxHp + this.herb, true);
+    this.internalDamage = 0;
+    this.internalHealCarry = 0;
     this.mp = this.maxMp;
     this.slowedUntil = 0;
     this.drawHud();
@@ -2244,8 +2381,9 @@ export class GameScene extends Phaser.Scene {
   private updateCombatCooldowns(time: number): void {
     this.dodgeButton.setEnabled(time >= this.dodgeReadyAt);
     this.dodgeButton.setCooldown(Math.max(0, this.dodgeReadyAt - time), DODGE.cooldownMs * this.derived.dodgeCooldown);
-    this.blockButton?.setEnabled(time >= this.parryReadyAt);
-    this.blockButton?.setCooldown(Math.max(0, this.parryReadyAt - time), BLOCK.cooldownMs);
+    const holdingCharge = this.chargeHoldStart !== undefined;
+    this.blockButton?.setEnabled(time >= this.parryReadyAt || holdingCharge);
+    this.blockButton?.setCooldown(holdingCharge ? 0 : Math.max(0, this.parryReadyAt - time), BLOCK.cooldownMs);
     this.skillSlots.forEach((skill, i) => {
       if (skill === 'spin') this.skillButtons[i]?.setCooldown(Math.max(0, this.nextSpinAt - time), SPIN_SLASH.cooldownMs);
     });
@@ -2795,28 +2933,123 @@ export class GameScene extends Phaser.Scene {
       this.impacts.dust(player.x, player.y, 3, now, 30);
       return true;
     }
-    // 패링: 판정 시간 안에 앞쪽(바라보는 쪽)에서 온 공격은 피해 없이 막는다.
+    // 0) 차지 패링(무량반격): 충전 후 뗀 판정 창 안에서는 전방위 모든 공격을 압도적으로 파훼한다.
     const sourceX = hit ? player.x - hit.dx : c.x;
-    if (this.blocking && (sourceX - player.x) * player.facing >= 0) {
-      // 들어 올린 검날에서 불꽃이 튀고 다음 공격은 반격이 된다.
-      const blade = player.sprite instanceof HeroSprite ? player.sprite.getBlade() : undefined;
-      const x = blade ? blade.base.x + (blade.tip.x - blade.base.x) * 0.55 : player.x + player.facing * 60;
-      const y = blade ? blade.base.y + (blade.tip.y - blade.base.y) * 0.55 : player.y - 95;
-      this.impacts.impact(x, y, -player.facing, 0, 'counter', now, player.y + 2);
-      this.hud.showCallout('패링!');
-      // 패링마다 공명 구슬이 1/3씩 찬다.
-      this.setResonanceCharge(chargeOnParry(this.resonanceCharge, RESONANCE));
-      enemy.interrupt(now, BLOCK.stunMs);
-      this.focusCompanion(enemy);
-      this.counterUntil = now + JUST_DODGE.counterMs;
+    const awayX = sourceX >= player.x ? -1 : 1;
+    const awayY = Math.sign(player.y - c.y) * 0.25;
+    const enemyPushX = Math.sign(c.x - player.x) || -awayX;
+    const enemyPushY = Math.sign(c.y - player.y) * 0.25;
+    const blade = player.sprite instanceof HeroSprite ? player.sprite.getBlade() : undefined;
+    const impactX = blade ? blade.base.x + (blade.tip.x - blade.base.x) * 0.55 : player.x + player.facing * 60;
+    const impactY = blade ? blade.base.y + (blade.tip.y - blade.base.y) * 0.55 : player.y - 95;
+    if (isUnboundActive(now, this.unboundUntil)) {
+      this.triggerUnboundCounter(enemy, impactX, impactY, awayX, awayY, enemyPushX, enemyPushY);
+      return true;
+    }
+    // 2단 패링: 앞쪽(바라보는 쪽)에서 온 공격을 정밀 패링(0~perfectWindowMs) 또는 불완전 막기(그 이후~windowMs)로 받아낸다.
+    const inFront = (sourceX - player.x) * player.facing >= 0;
+    const grade = gradeParry(this.blocking, now - this.parryStartedAt, inFront);
+    if (grade !== 'none') {
+      const x = impactX, y = impactY;
+
+      if (grade === 'perfect') {
+        this.parryChain = nextParryChain(this.parryChain, now);
+        const chain = this.parryChain.count;
+        const result = enemy.onParried(now, BLOCK.stunMs, enemyPushX, enemyPushY, BLOCK.enemyKnockback, true);
+        const chainBreak = result.outcome === 'chainBreak';
+        const continuing = result.outcome === 'continueChain';
+
+        if (chainBreak) {
+          this.combatAudio.playChainBreak();
+          this.impacts.parryBurst(x, y, -awayX, -awayY, 'chainBreak', chain, now, player.y + 2);
+          player.flash(0xfff0a0);
+          this.hud.showCallout('연속 패링 파훼!', { color: '#ffe47a', stroke: '#4a1c04', scale: 1.58 });
+        } else {
+          this.combatAudio.playParry('perfect', chain);
+          this.impacts.parryBurst(x, y, -awayX, -awayY, 'perfect', chain, now, player.y + 2);
+          player.flash(chain >= 2 ? 0xfff0b0 : 0xd0f4ff);
+          const label = continuing ? `연속 패링 ${result.step}/${result.total}!`
+            : chain >= 2 ? `완벽 패링 ×${chain}!` : '완벽 패링!';
+          this.hud.showCallout(
+            label,
+            continuing || chain >= 2 ? { color: '#ffe47a', stroke: '#3a1d04', scale: 1.48 } : { color: '#e6f9ff', stroke: '#0a2540', scale: 1.42 },
+          );
+        }
+        player.knockback.set(awayX * BLOCK.perfectRecoil, awayY * BLOCK.perfectRecoil * VERTICAL_SPEED_RATIO);
+        if (player.sprite instanceof HeroSprite) player.sprite.triggerGuardRecoil();
+        this.guardPoseUntil = now + (chainBreak ? 180 : 150);
+        // 패링마다 공명 구슬이 1/3씩 차고(보스 연타 파훼 시 +1 보너스), 충돌 지점에서 공명 조각이 HUD 구슬로 빨려 들어간다.
+        const bonusParts = chainBreak ? BLOCK.chainBreakResonanceBonus : 0;
+        const prevCharge = this.resonanceCharge;
+        const nextCharge = addResonanceParts(chargeOnParry(prevCharge, RESONANCE), bonusParts, maxCharge(RESONANCE));
+        this.setResonanceCharge(nextCharge);
+        if (nextCharge > prevCharge) {
+          this.launchOrbAbsorb(x, y, nextCharge);
+        }
+        // 쌓여 있던 내상도 정밀 패링 보상으로 즉시 일부 회복한다.
+        if (this.internalDamage > 0) {
+          const healAmt = chainBreak ? BLOCK.internalHealOnParry * 2 : BLOCK.internalHealOnParry;
+          const healed = recoverInternal(player.hp, player.maxHp, this.internalDamage, healAmt);
+          if (healed.recovered > 0) {
+            player.hp = healed.hp;
+            this.internalDamage = healed.internal;
+            this.drawHud();
+          }
+        }
+        this.focusCompanion(enemy);
+        this.counterUntil = now + JUST_DODGE.counterMs;
+        this.parryUntil = 0;
+        this.parryReadyAt = now;
+        this.chargeHoldStart = undefined;
+        this.chargeParryReady = false;
+        // 패링에 성공하면 즉시 반격 공격으로 이어갈 수 있게 공격 대기도 풀어 준다.
+        this.nextAttackAt = Math.min(this.nextAttackAt, now);
+        this.questEvent({ type: 'parry' });
+        // 패링에 성공하면 회피 대기 시간도 줄어든다.
+        this.dodgeReadyAt = Math.max(now, this.dodgeReadyAt - BLOCK.dodgeRefundMs);
+        const [shakeMs, shakeIntensity] = chainBreak ? HIT_FEEL.shake.chainBreak : HIT_FEEL.shake.parry;
+        this.cameras.main.shake(shakeMs, shakeIntensity);
+        this.parryZoomElapsed = 0;
+        this.parryZoomPeak = chainBreak ? BLOCK.zoomChainBreakPeak : chain >= 2 ? BLOCK.zoomChainPeak : BLOCK.zoomPeak;
+        this.hitStop(chainBreak ? 'chainBreak' : 'parry');
+        this.parrySlowOutScaleVal = BLOCK.slowOutScale;
+        this.parrySlowOutDur = chainBreak ? 145 : BLOCK.slowOutMs;
+        this.parrySlowOutLeft = this.parrySlowOutDur;
+        return true;
+      }
+
+      // 불완전 막기: 피해 일부를 회복 가능한 내상으로만 받고(죽지 않음), 밀려나며 짧은 막기 쿨타임을 갖는다.
+      this.parryChain = { count: 0, lastAt: -Infinity };
+      this.combatAudio.playParry('imperfect', 1);
+      this.impacts.parryBurst(x, y, -awayX, -awayY, 'imperfect', 1, now, player.y + 2);
+      const raw = enemy.stats.damage * (hit?.damageScale ?? 1);
+      const mitigated = resonanceTaken(mitigate(Math.round(raw), this.derived), this.resonating, RESONANCE);
+      const { applied, nextHp } = imperfectGuardDamage(mitigated, player.hp);
+      if (applied > 0) {
+        player.hp = nextHp;
+        this.internalDamage = Math.min(player.maxHp - player.hp, this.internalDamage + applied);
+        this.internalHealAt = now + BLOCK.internalHealDelayMs;
+        this.internalHealCarry = 0;
+        this.showDamage(player.x, player.y - 190, applied, '#e896dc', 32);
+      }
+      player.flash(0xffaa55);
+      player.knockback.set(awayX * BLOCK.imperfectKnockback, awayY * BLOCK.imperfectKnockback * VERTICAL_SPEED_RATIO);
+      if (player.sprite instanceof HeroSprite) player.sprite.triggerGuardRecoil();
+      this.guardPoseUntil = now + 130;
+      const impResult = enemy.onParried(now, BLOCK.imperfectStunMs, enemyPushX, enemyPushY, BLOCK.enemyKnockback * 0.55, false);
       this.parryUntil = 0;
-      this.parryReadyAt = now;
-      this.questEvent({ type: 'parry' });
-      // 패링에 성공하면 회피 대기 시간도 줄어든다.
-      this.dodgeReadyAt = Math.max(now, this.dodgeReadyAt - BLOCK.dodgeRefundMs);
-      this.cameras.main.shake(70, 0.002);
-      this.cameras.main.flash(90, 190, 215, 255);
-      this.hitStop('counter');
+      this.parryReadyAt = now + BLOCK.imperfectCooldownMs;
+      this.chargeHoldStart = undefined;
+      this.chargeParryReady = false;
+      this.nextAttackAt = Math.min(this.nextAttackAt, now + 90);
+      this.hud.showCallout(
+        impResult.outcome === 'continueChain' ? `막기 (${impResult.step}/${impResult.total})` : '막기',
+        { color: '#ffbe7a', stroke: '#3a1a08', scale: 1.15 },
+      );
+      const [shakeMs, shakeIntensity] = HIT_FEEL.shake.imperfectGuard;
+      this.cameras.main.shake(shakeMs, shakeIntensity);
+      this.hitStop('imperfectGuard');
+      this.drawHud();
       return true;
     }
     // 방어력(DEF)만큼 받는 피해가 줄어든다.
@@ -2847,6 +3080,13 @@ export class GameScene extends Phaser.Scene {
    */
   private hurtPlayer(enemy: Enemy, damage: number, source: string): { taken: number; died: boolean } {
     const player = this.player;
+    // 막지 못하고 정통으로 맞으면 회복 가능했던 내상도 사라지고 연속 패링 체인·차지도 끊긴다.
+    this.internalDamage = 0;
+    this.internalHealCarry = 0;
+    this.parryChain = { count: 0, lastAt: -Infinity };
+    this.chargeHoldStart = undefined;
+    this.chargeParryReady = false;
+    this.unboundUntil = 0;
     const taken = resonanceTaken(mitigate(Math.round(damage), this.derived), this.resonating, RESONANCE);
     const died = player.hurt(taken, 0xff5a4a);
     this.damageLog = recordDamage(this.damageLog, { name: source, level: enemy.level }, taken);
@@ -2861,16 +3101,27 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * 보스 2페이즈의 부식: 웅덩이 틱(작은 피해와 짧은 둔화, 무적 시간을 주지 않는다)과
-   * 부식의 장막(터질 때 범위 안이면 큰 피해와 넉백). 회피 무적 중에는 받지 않고, 패링으로는 막지 못한다.
+   * 부식의 장막(터질 때 범위 안이면 큰 피해와 넉백).
+   * 일반 패링으로는 장막을 막지 못하지만, 회피 무적 또는 차지 패링(무량반격) 릴리즈로 파훼할 수 있다.
    */
   private readonly onBossHazard = (enemy: Enemy, kind: 'pool' | 'veil', hit: boolean, dirX: number, dirY: number): void => {
     const player = this.player, now = this.now;
-    if (kind === 'veil') {
+    const veil = kind === 'veil';
+    // 차지 패링(무량반격): 붉은 안광의 부식의 장막 폭발을 정면으로 받아쳐 보스를 대경직시킨다.
+    if (veil && hit && player.alive && !this.dialogue.isOpen && isUnboundActive(now, this.unboundUntil)) {
+      const c = enemy.character;
+      const awayX = dirX || (c.x >= player.x ? -1 : 1);
+      const awayY = dirY * 0.25;
+      const enemyPushX = Math.sign(c.x - player.x) || -awayX;
+      const enemyPushY = Math.sign(c.y - player.y) * 0.25;
+      this.triggerUnboundCounter(enemy, player.x, player.y - 95, awayX, awayY, enemyPushX, enemyPushY);
+      return;
+    }
+    if (veil) {
       this.cameras.main.shake(320, 0.012);
       this.impacts.screenFlash(0x8a2bd0, 0.18, 260);
     }
     if (!hit || !player.alive || now < player.invulnerableUntil || this.dialogue.isOpen) return;
-    const veil = kind === 'veil';
     const scale = veil ? BOSS.veil.damageScale : BOSS.pool.damageScale;
     const { taken, died } = this.hurtPlayer(enemy, enemy.stats.damage * scale, `${enemy.stats.name}(${veil ? '부식의 장막' : '부식 웅덩이'})`);
     this.showDamage(player.x, player.y - 190, taken, veil ? '#ff8a7a' : '#c9a3e6');
@@ -2887,26 +3138,158 @@ export class GameScene extends Phaser.Scene {
     if (died) this.onPlayerDeath();
   };
 
-  /** 전용 검 막기 자세와 검날을 따라가는 얇은 반사광을 표시한다. */
+  /** 충돌 지점의 월드 좌표를 화면 좌표로 바꿔 HUD 공명 구슬로 빨려 들어가는 조각을 띄운다. */
+  private launchOrbAbsorb(worldX: number, worldY: number, nextCharge: number): void {
+    const orbIdx = Math.min(RESONANCE.orbs - 1, Math.floor((nextCharge - 1) / RESONANCE.parts));
+    const cam = this.cameras.main;
+    const sx = (worldX - cam.scrollX) * cam.zoom;
+    const sy = (worldY - cam.scrollY) * cam.zoom;
+    const full = nextCharge >= RESONANCE.cost;
+    this.impacts.absorbOrb(sx, sy, ORBS.x + orbIdx * ORBS.gap, ORBS.y, full ? 0xfff0a0 : 0xffe066, () => {
+      this.hud.pulseOrb(orbIdx);
+      this.combatAudio.playOrbAbsorb(full);
+    });
+  }
+
+  /**
+   * 차지 패링(무량반격) 파훼 연출과 보상:
+   * 0 피해, 부식의 장막 포함 적 강공격 파훼 + 초대형 경직 + 반사 충격 피해 + 공명 구슬 1칸 통째 충전 + 내상 전량 회복.
+   */
+  private triggerUnboundCounter(
+    enemy: Enemy,
+    x: number,
+    y: number,
+    awayX: number,
+    awayY: number,
+    enemyPushX: number,
+    enemyPushY: number,
+  ): void {
+    const player = this.player, now = this.now, c = enemy.character;
+    this.unboundUntil = 0;
+    this.parryUntil = 0;
+    this.parryReadyAt = now;
+    this.chargeHoldStart = undefined;
+    this.chargeParryReady = false;
+    this.nextAttackAt = Math.min(this.nextAttackAt, now);
+    this.parryChain = nextParryChain(this.parryChain, now);
+
+    this.combatAudio.playUnboundCounter();
+    this.impacts.parryBurst(x, y, -awayX, -awayY, 'unbound', 3, now, player.y + 2);
+    player.flash(0xfff4b0);
+    player.knockback.set(awayX * BLOCK.perfectRecoil * 1.15, awayY * BLOCK.perfectRecoil * VERTICAL_SPEED_RATIO);
+    if (player.sprite instanceof HeroSprite) player.sprite.triggerGuardRecoil();
+    this.guardPoseUntil = now + 220;
+    player.invulnerableUntil = Math.max(player.invulnerableUntil, now + 450);
+
+    // 공명 구슬 1칸(3조각) 통째 충전
+    const prevCharge = this.resonanceCharge;
+    const nextCharge = addResonanceParts(prevCharge, BLOCK.unboundResonanceParts, maxCharge(RESONANCE));
+    this.setResonanceCharge(nextCharge);
+    if (nextCharge > prevCharge) this.launchOrbAbsorb(x, y, nextCharge);
+
+    // 쌓여 있던 내상 전량 즉시 회복
+    if (this.internalDamage > 0) {
+      const healed = recoverInternal(player.hp, player.maxHp, this.internalDamage, this.internalDamage);
+      player.hp = healed.hp;
+      this.internalDamage = healed.internal;
+    }
+
+    // 보스·적 초대형 경직 + 무량반격 반사 충격파 피해
+    enemy.onUnboundParried(now, BOSS.unboundStunMs, enemyPushX, enemyPushY, BLOCK.enemyKnockback);
+    if (c.alive && !enemy.untouchable) {
+      const shockDamage = monsterDamageTaken(
+        Math.round(this.stats.damageMax * BOSS.unboundCounterScale * this.resonanceDamage()),
+        enemy.stats.defense,
+      );
+      const died = c.hurt(shockDamage, 0xfff0a0);
+      this.showDamage(c.x, c.y - 125, shockDamage, '#ffe878', 56);
+      if (died) this.resolveEnemyHit(enemy, true, enemyPushX, enemyPushY, BLOCK.enemyKnockback * 1.5);
+    }
+
+    this.focusCompanion(enemy);
+    this.counterUntil = now + JUST_DODGE.counterMs;
+    this.dodgeReadyAt = Math.max(now, this.dodgeReadyAt - BLOCK.unboundDodgeRefundMs);
+    this.questEvent({ type: 'parry' });
+    this.hud.showCallout('무량반격!!', { color: '#fff2a6', stroke: '#5a1408', scale: 1.65 });
+    const [shakeMs, shakeIntensity] = HIT_FEEL.shake.unbound;
+    this.cameras.main.shake(shakeMs, shakeIntensity);
+    this.parryZoomElapsed = 0;
+    this.parryZoomPeak = BLOCK.zoomUnboundPeak;
+    this.hitStop('unbound');
+    this.parrySlowOutScaleVal = BLOCK.unboundSlowOutScale;
+    this.parrySlowOutDur = BLOCK.unboundSlowOutMs;
+    this.parrySlowOutLeft = BLOCK.unboundSlowOutMs;
+    this.drawHud();
+  }
+
+  /** 적 공격이 닿기 직전 예고 안광 + 짧은 경고음 */
+  private readonly onEnemyGlint = (_enemy: Enemy, x: number, y: number, unblockable: boolean): void => {
+    if (!this.player.alive || this.dialogue.isOpen || this.opening) return;
+    this.impacts.glint(x, y, this.now, unblockable);
+    this.combatAudio.playGlint(unblockable);
+  };
+
+  /** 대기 시간이 지난 내상(회복 가능 체력)을 서서히 체력으로 되돌린다. */
+  private updateInternalHeal(time: number, dt: number): void {
+    if (!this.player.alive || this.internalDamage <= 0) return;
+    const next = stepInternalHeal(
+      this.player.hp, this.player.maxHp, this.internalDamage, this.internalHealCarry,
+      time, this.internalHealAt, dt,
+    );
+    const changed = next.hp !== this.player.hp || next.internal !== this.internalDamage;
+    this.player.hp = next.hp;
+    this.internalDamage = next.internal;
+    this.internalHealCarry = next.carry;
+    if (changed) this.drawHud();
+  }
+
+  /** 전용 검 막기 자세, 검날 반사광, 차지 패링(무량반격) 충전 고리를 표시한다. */
   private drawShield(time: number): void {
     const shield = this.shield, player = this.player;
     if (!shield) return;
     const hero = player.sprite;
-    if (hero instanceof HeroSprite) hero.setGuarding(this.blocking);
+    const charging = this.chargeHoldStart !== undefined && !player.isAttacking && this.dodgeProgress === 1 && !this.blocking;
+    const unboundActive = isUnboundActive(time, this.unboundUntil) && !player.isAttacking;
+    const recoilPose = time < this.guardPoseUntil && !player.isAttacking && this.dodgeProgress === 1;
+    if (hero instanceof HeroSprite) hero.setGuarding(this.blocking || charging || unboundActive || recoilPose);
     shield.clear();
-    shield.setVisible(this.blocking);
-    if (!this.blocking || !(hero instanceof HeroSprite)) return;
+    const visible = this.blocking || charging || unboundActive;
+    shield.setVisible(visible);
+    if (!visible || !(hero instanceof HeroSprite)) return;
+
     const { base, tip } = hero.getBlade();
-    if (Math.hypot(tip.x - base.x, tip.y - base.y) < 1) return;
-    const pulse = 0.75 + 0.25 * Math.sin(time / 90);
+    const pulse = 0.75 + 0.25 * Math.sin(time / (this.chargeParryReady || unboundActive ? 55 : 90));
     shield.setDepth(player.y + (hero.guardWeaponBehind ? -0.1 : 1));
+
+    // 차지 패링(무량반격) 충전 진행 원 및 완료 황금-붉은 오라
+    if (charging || unboundActive) {
+      const progress = unboundActive ? 1 : chargeParryProgress(time - (this.chargeHoldStart ?? time));
+      const ready = this.chargeParryReady || unboundActive;
+      const cx = player.x, cy = player.y - 95;
+      const radius = ready ? 58 + 5 * Math.sin(time / 55) : 46;
+      if (ready) {
+        shield.lineStyle(5, 0xffd86b, 0.38 * pulse).strokeCircle(cx, cy, radius + 6);
+        shield.lineStyle(2.5, 0xfff5c0, 0.9 * pulse).strokeCircle(cx, cy, radius);
+      } else if (progress > 0.1) {
+        shield.lineStyle(3, 0xffc864, 0.55).beginPath();
+        shield.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress, false);
+        shield.strokePath();
+      }
+    }
+
+    if (Math.hypot(tip.x - base.x, tip.y - base.y) < 1) return;
+    const inPerfect = time - this.parryStartedAt <= BLOCK.perfectWindowMs;
     const palm = hero.getGuardSupportPoint();
     const dx = tip.x - base.x, dy = tip.y - base.y, length = Math.hypot(dx, dy);
     const at = palm ? ((palm.x - base.x) * dx + (palm.y - base.y) * dy) / (length * length) : 0;
     const gap = 22 * Math.abs(hero.scaleY) / length;
     const segments = palm ? [[0, Math.max(0, at - gap)], [Math.min(1, at + gap), 1]] : [[0, 1]];
-    for (const [width, alpha] of [[5, 0.12], [1, 0.65]]) {
-      shield.lineStyle(width, 0xe6f2ff, alpha * pulse);
+    // 무량반격 준비/발동은 찬란한 금빛, 정밀 패링 구간은 밝은 청백빛, 불완전 막기 꼬리는 따뜻한 주황빛
+    const readyGlow = this.chargeParryReady || unboundActive;
+    const sheenColor = readyGlow ? 0xffe478 : inPerfect ? 0xeef9ff : 0xffcb8a;
+    const sheenScale = readyGlow ? 1.35 : inPerfect ? 1.15 : 0.65;
+    for (const [width, alpha] of [[readyGlow ? 8 : 5, 0.16], [readyGlow ? 2.5 : 1.5, 0.78]]) {
+      shield.lineStyle(width, sheenColor, alpha * pulse * sheenScale);
       for (const [from, to] of segments) {
         shield.lineBetween(base.x + dx * from, base.y + dy * from, base.x + dx * to, base.y + dy * to);
       }
@@ -2935,6 +3318,14 @@ export class GameScene extends Phaser.Scene {
 
   private onPlayerDeath(): void {
     const player = this.player;
+    this.internalDamage = 0;
+    this.internalHealCarry = 0;
+    this.parryChain = { count: 0, lastAt: -Infinity };
+    this.chargeHoldStart = undefined;
+    this.chargeParryReady = false;
+    this.unboundUntil = 0;
+    this.parryZoomElapsed = -1;
+    this.cameras.main.setZoom(1);
     this.mistWeaver?.threads.clear();
     this.clearAttackInput();
     this.dodgeProgress = 1;

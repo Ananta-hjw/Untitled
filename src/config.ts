@@ -173,6 +173,14 @@ export const HIT_FEEL = {
   critHitStopMs: 50,
   finisherHitStopMs: 65,
   counterHitStopMs: 80,
+  /** 정밀 패링: 칼날이 부딪히는 순간을 강렬하게 각인시키는 짧은 정지 */
+  parryHitStopMs: 95,
+  /** 보스 연속 패링 파훼: 마지막 타를 받아냈을 때의 묵직한 정지 */
+  chainBreakHitStopMs: 115,
+  /** 차지 패링(무량반격): 붉은 강공격·장막을 파훼하는 최고 등급 정지 */
+  unboundHitStopMs: 135,
+  /** 불완전 막기: 정밀 패링보다 짧고 둔탁한 정지 */
+  imperfectGuardHitStopMs: 45,
   hurtHitStopMs: 60,
   /** 치명타 확률과 피해 배율 (반격에는 치명타가 붙지 않는다. 반격 자체가 강하다) */
   critChance: 0.15,
@@ -183,9 +191,13 @@ export const HIT_FEEL = {
     crit: [90, 0.008],
     finisher: [120, 0.011],
     counter: [140, 0.012],
+    parry: [110, 0.0085],
+    chainBreak: [130, 0.011],
+    unbound: [155, 0.0135],
+    imperfectGuard: [70, 0.0045],
     hurt: [120, 0.01],
     kill: [90, 0.006],
-  } as Record<'normal' | 'crit' | 'finisher' | 'counter' | 'hurt' | 'kill', readonly [number, number]>,
+  } as Record<'normal' | 'crit' | 'finisher' | 'counter' | 'parry' | 'chainBreak' | 'unbound' | 'imperfectGuard' | 'hurt' | 'kill', readonly [number, number]>,
   /** 마무리 일격·치명타의 넉백 배율 */
   heavyKnockback: 1.35,
   squashMs: 280,
@@ -289,15 +301,43 @@ export const RESONANCE = {
 };
 
 /**
- * 막기(패링, 막기 버튼·키 L): 누르는 순간부터 windowMs 동안만 막는다(누르고 있어도 길어지지 않는다).
- * 그 사이 앞쪽(바라보는 쪽)에서 온 공격을 막으면 패링: 피해가 전혀 없고 밀리지도 않으며,
- * 그 적은 stunMs 동안 휘청이고, 다음 공격은 저스트 회피처럼 반격(JUST_DODGE.counterMs 안)이 된다.
- * 헛막으면 cooldownMs 동안 다시 막을 수 없다(패링에 성공하면 바로 다시 막을 수 있다).
- * 패링에 성공하면 회피의 남은 재사용 대기 시간도 dodgeRefundMs만큼 줄어든다(0 아래로는 안 내려간다).
- * 막는 동안에는 moveScale배로 천천히 움직인다.
+ * 막기(2단 패링, 막기 버튼·키 L): 누르는 순간부터 windowMs 동안만 막는다(누르고 있어도 길어지지 않는다).
+ *  - perfectWindowMs 안(정밀 패링): 피해 0, 공명 충전, 적 대경직(stunMs), 반격 창, 회피 쿨 1초 감소, 막기 쿨 즉시 초기화.
+ *  - perfectWindowMs ~ windowMs 사이(불완전 막기): 원래 피해의 일부를 회복 가능한 내상으로만 받고(죽지 않음),
+ *    뒤로 밀리며 적은 짧게 멈칫한다. 막기 쿨은 헛막기보다 짧게 돌아온다.
+ *  - 헛막으면 cooldownMs 동안 다시 막을 수 없다.
  */
 export const BLOCK = {
-  windowMs: 250,
+  perfectWindowMs: 130,
+  windowMs: 260,
+  imperfectDamageRatio: 0.4,
+  internalHealDelayMs: 2400,
+  internalHealPerSec: 12,
+  internalHealOnHit: 4,
+  internalHealOnParry: 8,
+  imperfectKnockback: 210,
+  perfectRecoil: 95,
+  enemyKnockback: 185,
+  imperfectStunMs: 420,
+  imperfectCooldownMs: 360,
+  chainWindowMs: 1800,
+  slowOutMs: 115,
+  slowOutScale: 0.5,
+  unboundSlowOutMs: 175,
+  unboundSlowOutScale: 0.38,
+  zoomPeak: 1.075,
+  zoomChainPeak: 1.095,
+  zoomChainBreakPeak: 1.105,
+  zoomUnboundPeak: 1.12,
+  zoomInMs: 32,
+  zoomOutMs: 190,
+  chargeHoldMs: 380,
+  unboundWindowMs: 240,
+  chargeMoveScale: 0.2,
+  unboundDodgeRefundMs: 2000,
+  chainBreakResonanceBonus: 1,
+  unboundResonanceParts: 3,
+  glintLeadMs: 240,
   cooldownMs: 1000,
   stunMs: 1200,
   moveScale: 0.4,

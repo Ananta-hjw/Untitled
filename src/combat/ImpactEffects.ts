@@ -1,20 +1,32 @@
 import Phaser from 'phaser';
 import { DEPTH_UI } from '../config';
+import { parryImpactShadeAlpha } from './parry';
 
 /**
- * 묵직한 타격 연출: 칼이 닿은 자리의 섬광과 불꽃, 바닥의 충격파, 먼지, 쓰러진 슬라임의 파편, 화면 번쩍임.
+ * 묵직한 타격·패링 연출: 칼이 닿은 자리의 섬광과 불꽃, 패링 임팩트 프레임·십자 별빛·공명 오브 흡입,
+ * 적 공격 예고 안광, 바닥 충격파, 먼지, 쓰러진 슬라임의 파편, 화면 번쩍임.
  *
  * - 입자는 처음에 만든 이미지들을 돌려 쓴다(풀). 한 번에 MAX_PARTICLES개를 넘으면 가장 오래된 것을 다시 쓴다.
  * - 입자는 씬의 게임 시계(now)로 움직인다. 그래서 히트스톱 동안 섬광과 불꽃이 그 자리에 멈춰
- *   "맞는 순간의 한 장면"이 화면에 남고, 저스트 회피의 느린 화면에서는 함께 느려진다.
- * - 화면 번쩍임만 실제 시간으로 사라진다(멈춘 화면 위에서도 바로 사라져야 하므로).
+ *   "맞는 순간의 한 장면"이 화면에 남고, 저스트 회피·패링 슬로우아웃에서는 함께 느려진다.
+ * - 화면 번쩍임·패링 임팩트 프레임·HUD 오브 흡입만 실제 시간으로 움직인다.
  * 그림 파일 없이 코드로 그린 텍스처를 쓴다.
  */
 
 export type ImpactStrength = 'normal' | 'crit' | 'finisher' | 'counter';
 
-const MAX_PARTICLES = 120;
-const TEX = { flash: 'fx-flash', streak: 'fx-streak', ring: 'fx-ring', dust: 'fx-dust', drop: 'fx-drop' } as const;
+const MAX_PARTICLES = 140;
+const MAX_SCREEN_ORBS = 18;
+const TEX = {
+  flash: 'fx-flash',
+  streak: 'fx-streak',
+  ring: 'fx-ring',
+  dust: 'fx-dust',
+  drop: 'fx-drop',
+  star: 'fx-star',
+  slash: 'fx-slash',
+  orb: 'fx-orb',
+} as const;
 
 interface Particle {
   image: Phaser.GameObjects.Image;
@@ -32,7 +44,22 @@ interface Particle {
   alpha0: number;
   /** 날아가는 방향으로 그림을 돌린다 */
   align: boolean;
+  /** 고정 회전각(라디안) 및 초당 회전 속도 */
+  rotation: number;
+  spin: number;
   depthOffset: number;
+  /** 지정하면 Y 정렬 대신 이 깊이를 그대로 쓴다(임팩트 프레임 위로 솟는 별빛 등) */
+  depthOverride?: number;
+}
+
+interface ScreenOrb {
+  image: Phaser.GameObjects.Image;
+  elapsed: number;
+  duration: number;
+  x0: number; y0: number;
+  cx: number; cy: number;
+  x1: number; y1: number;
+  onArrive?: () => void;
 }
 
 const STYLE: Record<ImpactStrength, { streaks: number; speed: number; flash: number; color: number; ring: boolean }> = {
@@ -50,6 +77,14 @@ export class ImpactEffects {
   private screenLeft = 0;
   private screenAlpha = 0;
   private screenMs = 1;
+  /** 패링 1~2프레임 임팩트 프레임용 어두운 화면 덮개(별빛·불꽃이 이 위에서 눈부시게 튄다) */
+  private readonly impactShade: Phaser.GameObjects.Rectangle;
+  private impactShadeElapsed = -1;
+  private impactShadeHold = 34;
+  private impactShadeFade = 24;
+  private impactShadeMax = 0.46;
+  private readonly screenOrbs: ScreenOrb[] = [];
+  private nextOrb = 0;
 
   constructor(scene: Phaser.Scene) {
     makeTextures(scene);
@@ -58,8 +93,15 @@ export class ImpactEffects {
       const image = scene.add.image(0, 0, TEX.flash).setVisible(false);
       this.particles.push({ image } as Particle);
     }
+    this.impactShade = scene.add.rectangle(0, 0, 4000, 4000, 0x050a16, 0)
+      .setOrigin(0).setScrollFactor(0).setDepth(DEPTH_UI - 2).setVisible(false);
     this.screen = scene.add.rectangle(0, 0, 4000, 4000, 0xffffff, 0)
       .setOrigin(0).setScrollFactor(0).setDepth(DEPTH_UI - 1).setVisible(false);
+    for (let i = 0; i < MAX_SCREEN_ORBS; i++) {
+      const image = scene.add.image(0, 0, TEX.orb)
+        .setScrollFactor(0).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH_UI + 3).setVisible(false);
+      this.screenOrbs.push({ image, elapsed: -1, duration: 1, x0: 0, y0: 0, cx: 0, cy: 0, x1: 0, y1: 0 });
+    }
   }
 
   /** 칼이 적에게 닿은 자리. (dirX, dirY)는 베는 방향이다. */
@@ -83,6 +125,141 @@ export class ImpactEffects {
       // 바닥을 따라 퍼지는 충격파
       this.spawn(TEX.ring, now, { x, y: groundY, life: 260, scale0: 0.3, scale1: strength === 'crit' ? 1.6 : 2.3, alpha0: 0.85, tint: style.color, flat: 0.42, depthOffset: -1 });
       this.dust(x, groundY, strength === 'crit' ? 4 : 7, now, 70);
+    }
+  }
+
+  /**
+   * 나인솔즈 스타일 패링 충돌 연출.
+   * - 정밀 패링: 짧은 어두운 임팩트 프레임 위로 눈부신 백금/청백·금빛 십자 별빛, X자 검격 섬광, 이중 충격파와 고속 불꽃.
+   * - 연속 파훼('chainBreak'): 보스 연타 마지막 타 파훼 시 금빛-백금 대형 폭발.
+   * - 무량반격('unbound'): 붉은 강공격·장막을 부수는 초대형 암적·금빛 임팩트 프레임과 전방위 충격파.
+   * - 불완전 막기: 임팩트 프레임 없이 둔탁한 주황 불꽃과 흙먼지만 튄다.
+   */
+  parryBurst(
+    x: number,
+    y: number,
+    dirX: number,
+    dirY: number,
+    grade: 'perfect' | 'imperfect' | 'chainBreak' | 'unbound',
+    chain: number,
+    now: number,
+    groundY: number,
+  ): void {
+    const base = Math.atan2(dirY, dirX);
+    if (grade === 'imperfect') {
+      const color = 0xff9a44;
+      this.spawn(TEX.flash, now, { x, y, life: 95, scale0: 0.25, scale1: 0.85, alpha0: 0.8, tint: 0xffd7a8, depthOffset: 400 });
+      this.spawn(TEX.flash, now, { x, y, life: 160, scale0: 0.4, scale1: 1.05, alpha0: 0.38, tint: color, depthOffset: 399 });
+      for (let i = 0; i < 9; i++) {
+        const angle = base + (Math.random() - 0.5) * 2.4;
+        const speed = 420 + Math.random() * 340;
+        this.spawn(TEX.streak, now, {
+          x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed * 0.75,
+          life: 140 + Math.random() * 80, scale0: 0.75 + Math.random() * 0.35, scale1: 0.12,
+          alpha0: 0.9, tint: i % 3 === 0 ? 0xffe4b8 : color, drag: 6, align: true, depthOffset: 401,
+        });
+      }
+      this.spawn(TEX.ring, now, { x, y: groundY, life: 210, scale0: 0.25, scale1: 1.45, alpha0: 0.55, tint: color, flat: 0.42, depthOffset: -1 });
+      this.dust(x, groundY, 6, now, 65);
+      this.screenFlash(0xff8838, 0.09, 90);
+      return;
+    }
+
+    const unbound = grade === 'unbound';
+    const chainBreak = grade === 'chainBreak';
+    const color = unbound ? 0xffd86b : chainBreak ? 0xffe878 : chain >= 3 ? 0xfff2a8 : chain === 2 ? 0xffdd66 : 0x9ce8ff;
+    const secondary = unbound ? 0xff5a5a : color;
+    const popDepth = DEPTH_UI - 1;
+    // 1~2프레임 어두운 임팩트 프레임으로 충돌 지점의 대비를 극대화한다.
+    this.impactShadeElapsed = 0;
+    this.impactShadeHold = unbound ? 58 : chainBreak ? 46 : chain >= 2 ? 42 : 34;
+    this.impactShadeFade = unbound ? 36 : 26;
+    this.impactShadeMax = unbound ? 0.62 : chainBreak ? 0.54 : chain >= 2 ? 0.52 : 0.46;
+    this.impactShade.setFillStyle(unbound ? 0x120512 : 0x050a16, this.impactShadeMax).setVisible(true);
+
+    // 눈부신 십자 별빛(코어 + 오라) — 어두운 임팩트 프레임 위에서 강렬하게 빛난다.
+    const boost = unbound ? 1.65 : chainBreak ? 1.35 : chain >= 2 ? 1.18 : 1;
+    this.spawn(TEX.star, now, {
+      x, y, life: unbound ? 240 : 170, scale0: 1.55 * boost, scale1: 0.45 * boost, alpha0: 1,
+      tint: 0xffffff, rotation: (Math.random() - 0.5) * 0.28, spin: 0.6, depthOverride: popDepth,
+    });
+    this.spawn(TEX.star, now, {
+      x, y, life: unbound ? 310 : 230, scale0: 2.1 * boost, scale1: 0.75 * boost, alpha0: 0.82,
+      tint: color, rotation: Math.PI / 4 + (Math.random() - 0.5) * 0.2, spin: -0.45, depthOverride: popDepth,
+    });
+    this.spawn(TEX.flash, now, {
+      x, y, life: unbound ? 180 : 130, scale0: 0.55 * boost, scale1: 1.85 * boost, alpha0: 0.95, tint: 0xffffff, depthOverride: popDepth,
+    });
+    this.spawn(TEX.flash, now, {
+      x, y, life: unbound ? 300 : 220, scale0: 0.85 * boost, scale1: 2.5 * boost, alpha0: 0.52, tint: secondary, depthOverride: popDepth,
+    });
+    // X자(무량반격은 4방향) 충돌 빛줄기
+    const tilts = unbound ? [0, Math.PI / 4, Math.PI / 2, (Math.PI * 3) / 4]
+      : chainBreak ? [-0.65, 0, 0.65] : [-0.58, 0.58];
+    for (const tilt of tilts) {
+      this.spawn(TEX.slash, now, {
+        x, y, life: unbound ? 190 : 135, scale0: 1.45 * boost, scale1: 0.25, alpha0: 0.95,
+        tint: unbound && tilt % (Math.PI / 2) !== 0 ? color : 0xffffff, rotation: base + tilt, depthOverride: popDepth,
+      });
+    }
+    // 충돌 지점 수직 충격파 + 바닥 충격파
+    this.spawn(TEX.ring, now, { x, y, life: unbound ? 280 : 210, scale0: 0.22, scale1: 2.25 * boost, alpha0: 0.95, tint: 0xffffff, depthOverride: popDepth });
+    this.spawn(TEX.ring, now, { x, y, life: unbound ? 360 : 280, scale0: 0.35, scale1: 2.8 * boost, alpha0: 0.72, tint: secondary, depthOffset: 400 });
+    this.spawn(TEX.ring, now, { x, y: groundY, life: unbound ? 380 : 290, scale0: 0.3, scale1: 2.8 * boost, alpha0: 0.88, tint: color, flat: 0.4, depthOffset: -1 });
+
+    // 고속 스파크(정밀 18줄기 / 연속 파훼 24줄기 / 무량반격 30줄기)
+    const sparkCount = unbound ? 30 : chainBreak ? 24 : 18;
+    for (let i = 0; i < sparkCount; i++) {
+      const spread = (!unbound && i < 12) ? base + (Math.random() - 0.5) * 2.1 : Math.random() * Math.PI * 2;
+      const speed = (740 + Math.random() * 620) * boost;
+      this.spawn(TEX.streak, now, {
+        x, y, vx: Math.cos(spread) * speed, vy: Math.sin(spread) * speed * 0.82,
+        life: 165 + Math.random() * (unbound ? 170 : 115), scale0: 1.05 + Math.random() * 0.65, scale1: 0.14,
+        alpha0: 1, tint: i % 3 === 0 ? 0xffffff : i % 3 === 1 ? color : secondary, drag: 4.3, align: true, depthOverride: popDepth,
+      });
+    }
+    this.dust(x, groundY, unbound ? 15 : chainBreak ? 12 : 9, now, unbound ? 115 : 80);
+  }
+
+  /** 차지 패링(무량반격) 버튼을 뗄 때 주인공 주변으로 퍼지는 짧은 황금 기류 고리 */
+  unboundReleasePulse(x: number, y: number, now: number): void {
+    this.spawn(TEX.ring, now, { x, y, life: 220, scale0: 0.35, scale1: 1.85, alpha0: 0.9, tint: 0xffe074, depthOffset: 410 });
+    this.spawn(TEX.flash, now, { x, y, life: 140, scale0: 0.35, scale1: 1.15, alpha0: 0.55, tint: 0xfff3b0, depthOffset: 409 });
+  }
+
+  /** 적 공격 직전 예고 안광(흰/청백 = 패링 가능, 붉은빛 = 회피 전용 강공격) */
+  glint(x: number, y: number, now: number, unblockable = false): void {
+    const color = unblockable ? 0xff3b52 : 0xbef2ff;
+    this.spawn(TEX.star, now, {
+      x, y, life: 210, scale0: 0.25, scale1: unblockable ? 1.45 : 1.15, alpha0: 0.98,
+      tint: unblockable ? 0xff7080 : 0xffffff, rotation: 0, spin: 0.8, depthOffset: 420,
+    });
+    this.spawn(TEX.flash, now, {
+      x, y, life: 190, scale0: 0.15, scale1: unblockable ? 1.1 : 0.8, alpha0: 0.65, tint: color, depthOffset: 419,
+    });
+    this.spawn(TEX.ring, now, {
+      x, y, life: 220, scale0: 0.15, scale1: unblockable ? 1.35 : 0.95, alpha0: 0.75, tint: color, depthOffset: 418,
+    });
+  }
+
+  /** 패링 충돌 지점(화면 좌표)에서 공명 조각이 곡선을 그리며 HUD 공명 구슬로 빨려 들어간다. */
+  absorbOrb(screenFromX: number, screenFromY: number, screenToX: number, screenToY: number, color = 0xffe074, onArrive?: () => void): void {
+    const count = 3;
+    for (let i = 0; i < count; i++) {
+      const orb = this.screenOrbs[this.nextOrb];
+      this.nextOrb = (this.nextOrb + 1) % MAX_SCREEN_ORBS;
+      const spreadAngle = -Math.PI / 2 + (i - 1) * 1.05 + (Math.random() - 0.5) * 0.4;
+      const lift = 95 + Math.random() * 55;
+      orb.elapsed = -i * 38;
+      orb.duration = 320 + i * 45;
+      orb.x0 = screenFromX;
+      orb.y0 = screenFromY;
+      orb.cx = (screenFromX + screenToX) * 0.5 + Math.cos(spreadAngle) * lift;
+      orb.cy = Math.min(screenFromY, screenToY) - 60 + Math.sin(spreadAngle) * lift * 0.6;
+      orb.x1 = screenToX;
+      orb.y1 = screenToY;
+      orb.onArrive = i === 0 ? onArrive : undefined;
+      orb.image.setPosition(screenFromX, screenFromY).setTint(i === 0 ? 0xffffff : color).setScale(0.75).setAlpha(0).setVisible(true);
     }
   }
 
@@ -139,6 +316,7 @@ export class ImpactEffects {
         const keep = Math.max(0, 1 - p.drag * dt);
         p.vx *= keep; p.vy *= keep;
         p.x += p.vx * dt; p.y += p.vy * dt;
+        if (p.spin) p.rotation += p.spin * dt;
         if (p.gravity) {
           p.vh -= p.gravity * dt;
           p.h = Math.max(0, p.h + p.vh * dt);
@@ -147,8 +325,20 @@ export class ImpactEffects {
       }
       const scale = p.scale0 + (p.scale1 - p.scale0) * t;
       p.image.setPosition(p.x, p.y - p.h).setScale(scale, scale * p.flat)
-        .setAlpha(p.alpha0 * (1 - t) * (1 - t * 0.3)).setDepth(p.y + p.depthOffset);
+        .setAlpha(p.alpha0 * (1 - t) * (1 - t * 0.3))
+        .setDepth(p.depthOverride ?? p.y + p.depthOffset);
       if (p.align && (p.vx || p.vy)) p.image.setRotation(Math.atan2(p.vy, p.vx));
+      else p.image.setRotation(p.rotation);
+    }
+    if (this.impactShadeElapsed >= 0) {
+      this.impactShadeElapsed += realDelta;
+      const a = parryImpactShadeAlpha(this.impactShadeElapsed, this.impactShadeHold, this.impactShadeFade, this.impactShadeMax);
+      if (a <= 0) {
+        this.impactShadeElapsed = -1;
+        this.impactShade.setVisible(false);
+      } else {
+        this.impactShade.setFillStyle(0x050a16, a).setVisible(true);
+      }
     }
     if (this.screenLeft > 0) {
       this.screenLeft -= realDelta;
@@ -156,25 +346,47 @@ export class ImpactEffects {
       this.screen.setAlpha(1).setFillStyle(this.screen.fillColor, this.screenAlpha * k);
       if (k === 0) this.screen.setVisible(false);
     }
+    for (const orb of this.screenOrbs) {
+      if (!orb.image.visible) continue;
+      orb.elapsed += realDelta;
+      if (orb.elapsed < 0) continue;
+      const t = orb.elapsed / orb.duration;
+      if (t >= 1) {
+        orb.image.setVisible(false);
+        const cb = orb.onArrive;
+        orb.onArrive = undefined;
+        cb?.();
+        continue;
+      }
+      // 가속하며 HUD 구슬로 빨려 들어가는 2차 베지어 궤적
+      const u = t * t * (3 - 2 * t);
+      const inv = 1 - u;
+      const px = inv * inv * orb.x0 + 2 * inv * u * orb.cx + u * u * orb.x1;
+      const py = inv * inv * orb.y0 + 2 * inv * u * orb.cy + u * u * orb.y1;
+      const sc = 0.55 + 0.55 * Math.sin(t * Math.PI);
+      orb.image.setPosition(px, py).setScale(sc).setAlpha(Math.min(1, t * 4) * (1 - t * 0.25));
+    }
   }
 
   private spawn(texture: string, now: number, o: {
     x: number; y: number; vx?: number; vy?: number; h?: number; vh?: number; gravity?: number; drag?: number;
-    life: number; scale0: number; scale1: number; alpha0: number; tint: number; flat?: number; align?: boolean; depthOffset?: number;
+    life: number; scale0: number; scale1: number; alpha0: number; tint: number; flat?: number; align?: boolean;
+    rotation?: number; spin?: number; depthOffset?: number; depthOverride?: number;
   }): void {
     const p = this.particles[this.next];
     this.next = (this.next + 1) % MAX_PARTICLES;
     Object.assign(p, {
       born: now, life: o.life, x: o.x, y: o.y, vx: o.vx ?? 0, vy: o.vy ?? 0, h: o.h ?? 0, vh: o.vh ?? 0,
       gravity: o.gravity ?? 0, drag: o.drag ?? 0, scale0: o.scale0, scale1: o.scale1, flat: o.flat ?? 1,
-      alpha0: o.alpha0, align: o.align ?? false, depthOffset: o.depthOffset ?? 0,
+      alpha0: o.alpha0, align: o.align ?? false, rotation: o.rotation ?? 0, spin: o.spin ?? 0,
+      depthOffset: o.depthOffset ?? 0, depthOverride: o.depthOverride,
     });
     // 흙먼지와 슬라임 파편은 빛이 아니라서 더하기 합성을 쓰지 않는다.
     const additive = texture !== TEX.dust && texture !== TEX.drop;
-    p.image.setTexture(texture).setTint(o.tint).setRotation(0)
+    p.image.setTexture(texture).setTint(o.tint).setRotation(o.rotation ?? 0)
       .setBlendMode(additive ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL)
       .setPosition(o.x, o.y - p.h).setScale(o.scale0, o.scale0 * p.flat).setAlpha(o.alpha0)
-      .setDepth(o.y + p.depthOffset).setVisible(true);
+      .setDepth(o.depthOverride ?? o.y + p.depthOffset).setVisible(true);
   }
 }
 
@@ -203,5 +415,28 @@ function makeTextures(scene: Phaser.Scene): void {
   // 파편 방울
   g.clear().fillStyle(0xffffff, 1).fillCircle(9, 9, 8).fillStyle(0xffffff, 0.5).fillCircle(9, 9, 9);
   g.generateTexture(TEX.drop, 18, 18);
+  // 4방향 십자 별빛(패링 섬광 · 공격 예고 안광)
+  const s = 64;
+  g.clear();
+  g.fillStyle(0xffffff, 0.35).fillCircle(s, s, 22);
+  g.fillStyle(0xffffff, 0.95).fillPoints([
+    new Phaser.Math.Vector2(s, 0), new Phaser.Math.Vector2(s + 9, s - 9),
+    new Phaser.Math.Vector2(s * 2, s), new Phaser.Math.Vector2(s + 9, s + 9),
+    new Phaser.Math.Vector2(s, s * 2), new Phaser.Math.Vector2(s - 9, s + 9),
+    new Phaser.Math.Vector2(0, s), new Phaser.Math.Vector2(s - 9, s - 9),
+  ], true);
+  g.fillStyle(0xffffff, 1).fillCircle(s, s, 10);
+  g.generateTexture(TEX.star, s * 2, s * 2);
+  // X자 패링 충돌 빛줄기
+  g.clear();
+  g.fillStyle(0xffffff, 0.35).fillPoints([
+    new Phaser.Math.Vector2(0, 12), new Phaser.Math.Vector2(90, 2), new Phaser.Math.Vector2(180, 12), new Phaser.Math.Vector2(90, 22),
+  ], true);
+  g.fillStyle(0xffffff, 1).fillPoints([
+    new Phaser.Math.Vector2(8, 12), new Phaser.Math.Vector2(90, 7), new Phaser.Math.Vector2(172, 12), new Phaser.Math.Vector2(90, 17),
+  ], true);
+  g.generateTexture(TEX.slash, 180, 24);
+  // 공명 흡입 조각 오브
+  radial(TEX.orb, 16, 10, 1.8);
   g.destroy();
 }
