@@ -10,6 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - The user writes in Korean; reply in Korean. Code comments and README are mostly Korean too.
 - Whenever you design or add a character who fights in the game — an ally (companion, fighting NPC) or an enemy of upper rank or above (상급 이상: commanders, bosses, heirs, named rivals) — always recommend a job for it from `src/entities/jobs.ts` / `docs/jobs.md` (base job and likely advancement branch, with a one-line reason tied to its story and fighting style), and note which combat art it would need. Recommend jobs only for characters who need to fight; people who never fight (villagers, shopkeepers, story-only characters) and low/mid-rank minions get none.
 
+- When you design an enemy's skills, an enemy uses one skill at a time: while one skill is being cast or is still running (telegraph, channel, hold or recovery), it does not start another. Effects a finished skill leaves behind on the ground (e.g. the executioner's corrosion pools) may stay. Only enemies the user names, or that you recommend and the user accepts, may overlap skills; say so explicitly in their design.
+
 ## Commands
 
 ```bash
