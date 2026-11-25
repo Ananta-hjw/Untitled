@@ -1012,14 +1012,17 @@ export class GameScene extends Phaser.Scene {
 
   /** ?map=east-stream&npcs=chapter2: 미구현 2장 인물의 그림·대화 확인용. 배포판에는 적용하지 않는다. */
   /**
-   * 개발용: ?monsters=frost-beetle 또는 fog-crow 이면 플레이어 둘레에 그 몬스터 셋을 더 세운다(아직 맵이 없는 2장 몬스터를 확인할 때).
+   * 개발용: ?monsters=종류 로 2장 몬스터의 원화와 동작을 확인한다.
    * 배포판에는 적용하지 않는다.
    */
   private previewMonsters(): Array<{ key: EnemyKey; x: number; y: number }> {
     if (!import.meta.env.DEV) return [];
     const key = new URLSearchParams(location.search).get('monsters');
-    if (key !== 'frost-beetle' && key !== 'fog-crow') return [];
     const s = this.map.spawn;
+    if (this.mapId === 'reed-swamp' && (key === 'mist-phantom' || key === 'mist-weaver')) {
+      return [{ key, x: s.x + 245, y: s.y }];
+    }
+    if (key !== 'frost-beetle' && key !== 'fog-crow') return [];
     return [-260, 0, 260].map((dx) => ({ key, x: s.x + dx, y: s.y - 260 }));
   }
 
@@ -1679,7 +1682,7 @@ export class GameScene extends Phaser.Scene {
       enemy.kill();
       this.impacts.splatter(c.x, c.y, enemy.color, this.now);
       const raid = this.raidEnemies.has(enemy);
-      if (!raid) this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
+      if (!raid && enemy.kind !== 'swamp-lurker') this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
       // 주인공이 몬스터보다 너무 높으면 경험치가 줄어든다.
       this.gainXp(xpForKill(enemy.stats.xp, enemy.level, this.progress.level), c.x, c.y - 185);
       this.questEvent({ type: 'kill', map: this.mapId, monster: enemy.kind, ...(raid ? { encounter: 'village-raid' as const } : {}) });
@@ -2685,7 +2688,9 @@ export class GameScene extends Phaser.Scene {
     const c = enemy.character;
     const now = this.now;
     if (!player.alive || this.dialogue.isOpen) return false;
-    const reaches = (x: number, y: number) => hit ? enemyHitReaches(hit, x, y) : strikeReaches(c.x, c.y, c.facing, x, y);
+    const reaches = (x: number, y: number) => hit
+      ? enemyHitReaches(hit, x, y) && (enemy.kind !== 'swamp-lurker' || this.walkArea.hasClearPath(hit.fromX, hit.fromY, x, y, 4))
+      : strikeReaches(c.x, c.y, c.facing, x, y);
     if (!reaches(player.x, player.y)) {
       const defender = [...this.npcs, ...this.companionFighters()].filter(npc => npc.canFight && reaches(npc.x, npc.y))
         .sort((a, b) => Math.hypot(a.x-c.x, a.y-c.y)-Math.hypot(b.x-c.x, b.y-c.y))[0];

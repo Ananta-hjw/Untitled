@@ -8,7 +8,8 @@ from statistics import median
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1] / 'src/assets/monsters'
-MONSTERS = ['slime', 'waterdrop-mushroom', 'iron-scale-lizard', 'frost-beetle', 'corrosion-executioner', 'corrosion-tracker', 'ashen-moth']
+MONSTERS = ['slime', 'waterdrop-mushroom', 'iron-scale-lizard', 'frost-beetle', 'corrosion-executioner',
+            'corrosion-tracker', 'ashen-moth', 'swamp-lurker', 'reed-stalker', 'mist-phantom']
 DIRECTIONS = {
     'cardinal': ['down', 'left', 'right', 'up'],
     'diagonal': ['down-left', 'down-right', 'up-left', 'up-right'],

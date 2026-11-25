@@ -27,7 +27,7 @@ import {
  * 이 파일은 Phaser를 쓰지 않아 tools/maps.test.mjs가 직접 불러 검사한다.
  */
 
-export type MapId = 'village' | 'village-north' | 'south-field' | 'west-forest' | 'east-stream' | 'east-pass' | `in-${InteriorId}`;
+export type MapId = 'village' | 'village-north' | 'south-field' | 'west-forest' | 'east-stream' | 'east-pass' | 'reed-swamp' | `in-${InteriorId}`;
 
 export interface Rect { left: number; top: number; right: number; bottom: number }
 export interface Point { x: number; y: number }
@@ -239,6 +239,34 @@ const EAST_STREAM: GameMap = {
   interactables: [streamSign.spot],
 };
 
+const REED_SWAMP: GameMap = {
+  id: 'reed-swamp',
+  name: '갈대밭 늪',
+  hint: '갈대밭 늪 · 잠복 마물이 몸을 낮추면 물줄기를 피하세요',
+  artBounds: { left: 0, top: 0, right: 2100, bottom: 1400 },
+  bounds: { left: 65, top: 460, right: 2035, bottom: 1340 },
+  props: [
+    { frame: 'boulders', x: 725, y: 795, width: 166, footprint: { rx: 69, ry: 31 } },
+    { frame: 'rock', x: 1580, y: 968, width: 130, footprint: { rx: 53, ry: 24 } },
+    { frame: 'stump', x: 1670, y: 607, width: 105, footprint: { rx: 38, ry: 20 } },
+    { frame: 'shrub', x: 485, y: 532, width: 100, footprint: { rx: 39, ry: 19 } },
+    { frame: 'shrub', x: 1900, y: 1210, width: 130, footprint: { rx: 44, ry: 23 } },
+  ],
+  buildings: [],
+  npcs: [],
+  spawn: { x: 240, y: 920 },
+  enemies: [
+    { key: 'swamp-lurker', x: 1240, y: 825 },
+    { key: 'reed-stalker', x: 935, y: 554 },
+    { key: 'reed-stalker', x: 1750, y: 1100 },
+  ],
+  exits: [
+    { to: 'east-pass', zone: { left: 0, top: 805, right: 155, bottom: 1040 }, arrive: { x: 4510, y: 1440 },
+      label: '◀ 동쪽 고갯길', labelAt: { x: 185, y: 1040 } },
+  ],
+  interactables: [],
+};
+
 /** 건물 문 앞의 "들어가기". 실내에서 나오면 이 자리 조금 앞에 선다. */
 function doorSpots(area: VillageArea): Interactable[] {
   return buildingsIn(area).flatMap((b) => {
@@ -283,6 +311,7 @@ export const MAPS = {
   'west-forest': WEST_FOREST,
   'east-stream': EAST_STREAM,
   'east-pass': EAST_PASS,
+  'reed-swamp': REED_SWAMP,
   ...Object.fromEntries(INTERIORS.map((i) => [`in-${i.id}`, interiorMap(i)])),
 } as Record<MapId, GameMap>;
 

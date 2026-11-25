@@ -13,10 +13,17 @@ test('남쪽 들판은 슬라임·버섯, 서쪽 숲길은 버섯·도마뱀이 
   }
 });
 
-test('모든 몬스터의 모든 방향·모션에 실사용 WebP와 프레임 좌표가 있다', () => {
+test('몬스터는 전체 방향 시트나 등록된 기본 원화의 실사용 WebP가 있다', () => {
+  const idleOnly = new Set(['mist-weaver']);
   for (const kind of Object.keys(MONSTERS)) {
     const root = new URL(`../src/assets/monsters/${kind}/`, import.meta.url);
-    const data = JSON.parse(readFileSync(new URL('animation_frames.json', root)));
+    const manifest = new URL('animation_frames.json', root);
+    if (idleOnly.has(kind) && !existsSync(manifest)) {
+      assert.ok(existsSync(new URL('sd_idle.png', root)), kind);
+      assert.ok(existsSync(new URL('sd_idle.webp', root)), kind);
+      continue;
+    }
+    const data = JSON.parse(readFileSync(manifest));
     const actions = ['walk', 'attack'];
     assert.equal(data.frames.length, actions.length * 32, kind);
     for (const sheet of Object.keys(data.sheets)) assert.ok(existsSync(new URL(sheet.replace('.png', '.webp'), root)));

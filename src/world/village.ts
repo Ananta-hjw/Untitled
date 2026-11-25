@@ -10,7 +10,7 @@ import buildingFrames from '../assets/village/rowen/buildings.json';
 import props from '../assets/village/props.png?url';
 import frames from '../assets/village/frames.json';
 import { WalkArea } from './walkArea';
-import { drawFieldArt, preloadMapArt } from './mapArt';
+import { drawFieldArt, mapArtKey, preloadMapArt } from './mapArt';
 import { drawInterior } from './interiorArt';
 import { mapObstacles, mapPolygon, type GameMap } from './maps';
 
@@ -46,7 +46,7 @@ export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
       if (!buildingTexture.has(f.name)) buildingTexture.add(f.name, 0, f.x, f.y, f.w, f.h);
     }
   }
-  if (map.id === 'south-field' || map.id === 'east-pass') drawFieldArt(scene, map);
+  if (scene.textures.exists(mapArtKey(map.id))) drawFieldArt(scene, map);
   else {
     const floor = scene.add.image(0, 0, 'village-ground').setOrigin(0).setDisplaySize(WORLD_WIDTH, WORLD_HEIGHT).setDepth(-100);
     if (map.groundTint !== undefined) floor.setTint(map.groundTint);

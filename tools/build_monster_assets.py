@@ -4,7 +4,8 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1] / 'src/assets/monsters'
-for name in ['slime', 'waterdrop-mushroom', 'iron-scale-lizard', 'ashen-moth', 'corrosion-tracker', 'corrosion-executioner', 'frost-beetle']:
+for name in ['slime', 'waterdrop-mushroom', 'iron-scale-lizard', 'ashen-moth', 'corrosion-tracker',
+             'corrosion-executioner', 'frost-beetle', 'swamp-lurker', 'reed-stalker', 'mist-phantom']:
     for source in sorted((ROOT / name).glob('*.png')):
         if not (source.stem.startswith(('walk_', 'attack_')) or source.stem == 'projectile'):
             continue
@@ -12,6 +13,15 @@ for name in ['slime', 'waterdrop-mushroom', 'iron-scale-lizard', 'ashen-moth', '
             image.resize((round(image.width * .6), round(image.height * .6)), Image.Resampling.LANCZOS).save(
                 source.with_suffix('.webp'), 'WEBP', quality=82, method=6)
         print(source.with_suffix('.webp').relative_to(ROOT))
+
+for name in ['reed-stalker', 'mist-phantom', 'mist-weaver']:
+    with Image.open(ROOT / name / 'sd_idle.png') as image:
+        bounds = image.getchannel('A').point(lambda a: 255 if a >= 16 else 0).getbbox()
+        if bounds is None:
+            raise ValueError(f'{name}: empty idle sprite')
+        idle = image.crop(bounds)
+        idle.thumbnail((512, 512), Image.Resampling.LANCZOS)
+        idle.save(ROOT / name / 'sd_idle.webp', 'WEBP', quality=88, method=6)
 
 # Tight runtime frame for the water bead; keeps transparent source padding out of its hit position.
 with Image.open(ROOT / 'waterdrop-mushroom/projectile.webp') as image:

@@ -7,7 +7,8 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1] / 'src/assets'
-SOURCES = [*(ROOT / 'village/rowen/interiors').glob('*.png'), ROOT / 'maps/south-field/overview.png', ROOT / 'maps/south-field/ground.png']
+SOURCES = [*(ROOT / 'village/rowen/interiors').glob('*.png'), ROOT / 'maps/south-field/overview.png',
+           ROOT / 'maps/south-field/ground.png', ROOT / 'maps/reed-swamp/ground.png']
 
 for source in sorted(SOURCES):
     with Image.open(source) as image:

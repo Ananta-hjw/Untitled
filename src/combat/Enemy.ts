@@ -11,6 +11,7 @@ import { FOG_CROW, fogEscape } from './fogCrow';
 import { scaleMonster } from './monsterLevel';
 import { BOSS, fanDirections, insideEllipse, retreatDone, shouldVeil, wantsVolley, type BossPhase } from './bossPattern';
 import { BossHazards } from './BossHazards';
+import { SWAMP_JET, SwampWaterJet } from './SwampWaterJet';
 
 type State = 'wander' | 'chase' | 'windup' | 'recover' | 'roar' | 'retreat' | 'volley' | 'veil' | 'dead';
 
@@ -33,6 +34,7 @@ export class Enemy {
   private readonly aim = { x: 1, y: 0 };
   private chargeProgress = 0;
   private projectile?: { image: Phaser.GameObjects.Image; x: number; y: number; dx: number; dy: number; expires: number };
+  private readonly waterJet?: SwampWaterJet;
   state: State = 'wander';
   /** 마지막 돌진이 닿은 시각(게임 시계). 저스트 회피 판정에 쓴다. */
   lastStrikeAt?: number;
@@ -71,13 +73,14 @@ export class Enemy {
     this.boss = boss;
     if (boss) this.hazards = new BossHazards(scene);
     this.kind = monsterKind(key);
+    if (this.kind === 'swamp-lurker') this.waterJet = new SwampWaterJet(scene);
     this.level = level;
     this.stats = scaleMonster<MonsterStats>(MONSTERS[this.kind ?? 'slime'], level);
     this.color = key === 'retainer-ash' ? 0x9c96b3 : this.stats.color;
     this.character = new Character(scene, x, y, {
       key,
       monster: this.kind,
-      shadowWidth: this.kind === 'fog-crow' ? 54 : 100,
+      shadowWidth: this.kind === 'mist-phantom' ? 0 : this.kind === 'fog-crow' ? 54 : 100,
       maxHp: this.stats.hp,
       showHpBar: true,
       levelTag: level,
@@ -100,7 +103,7 @@ export class Enemy {
     chaseTarget?: { x: number; y: number; alive: boolean },
   ): void {
     const c = this.character;
-    if (this.state === 'dead') return;
+    if (this.state === 'dead' || this.kind === 'mist-weaver') return;
     this.hazards?.update(time, dt, player, area, {
       strike: (hit) => onStrike(this, hit) === true,
       pool: () => onHazard?.(this, 'pool', true, 0, 0),
@@ -120,6 +123,10 @@ export class Enemy {
       case 'wander': {
         if (playerNear) {
           this.state = 'chase';
+          break;
+        }
+        if (this.waterJet) {
+          c.setMotion(false);
           break;
         }
         if (time < this.timer) {
@@ -148,20 +155,25 @@ export class Enemy {
           this.startVolley(time, dx, dy);
           break;
         }
-        const ranged = this.kind === 'waterdrop-mushroom';
+        const ranged = this.kind === 'waterdrop-mushroom' || this.waterJet !== undefined;
         const charge = isCharger(this.kind);
-        const inRange = ranged ? Math.hypot(dx, dy) <= 350 && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
+        const inRange = ranged ? Math.hypot(dx, dy) <= (this.waterJet ? SWAMP_JET.attackRange : 350) && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
           : charge ? Math.hypot(dx, dy) <= (this.kind === 'fog-crow' ? 165 : 250) && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
           : Math.abs(dx) < ENEMY.attackRangeX && Math.abs(dy) < ENEMY.attackRangeY;
         if (inRange) {
           // 보스는 돌진을 BOSS.chain번 잇달아 한다.
           this.chainLeft = this.boss ? BOSS.chain - 1 : 0;
           this.beginWindup(time, dx, ranged || charge ? dy : 0);
+          if (this.waterJet && c.sprite instanceof MonsterSprite) {
+            const mouth = c.sprite.swampMouthOffset();
+            this.waterJet.prepare(area, c, { x: c.x + mouth.x, y: c.y + mouth.y }, this.aim.x, this.aim.y, Math.hypot(dx, dy));
+            this.waterJet.warn(0);
+          }
           break;
         }
         // 플레이어의 옆자리(같은 높이)로 붙는다.
         const side = dx > 0 ? -1 : 1;
-        const goalX = opponent.x + side * (this.kind === 'waterdrop-mushroom' ? 180 : ENEMY.attackRangeX - 25);
+        const goalX = opponent.x + side * (this.waterJet ? SWAMP_JET.standOff : ranged ? 180 : ENEMY.attackRangeX - 25);
         const step = this.stats.speed * dt;
         // 곧장 갈 수 있으면 곧장 가고, 테이블이나 카운터에 막혀 있으면 격자가 알려 주는 길로 돌아간다.
         if (!chaseTarget && !area.hasClearPath(c.x, c.y, goalX, opponent.y) && nav.next(c.x, c.y, this.waypoint)) {
@@ -311,7 +323,7 @@ export class Enemy {
 
   /** 포효해서 칼에 맞지 않는 중 (보스의 페이즈 전환) */
   get untouchable(): boolean {
-    return this.state === 'roar';
+    return this.state === 'roar' || this.kind === 'mist-weaver';
   }
 
   private startVolley(time: number, dx: number, dy: number): void {
@@ -379,6 +391,7 @@ export class Enemy {
   private cancelStrike(): void {
     this.attackStartedAt = undefined;
     this.strikeLanded = false;
+    this.waterJet?.clear();
     if (this.character.sprite instanceof MonsterSprite) this.character.sprite.endStrike();
   }
 
@@ -407,7 +420,18 @@ export class Enemy {
     const endAt = strikeAt + returnMs;
     if (sprite instanceof MonsterSprite) {
       sprite.showAttack(elapsed, windupMs, strikeMs, returnMs);
-      if (isCharger(this.kind) && elapsed >= windupMs) {
+      if (this.waterJet) {
+        if (elapsed < windupMs) this.waterJet.warn(elapsed / windupMs);
+        else if (elapsed >= strikeAt) this.waterJet.fade(elapsed - strikeAt, returnMs);
+        else {
+          const hit = this.waterJet.strike(elapsed - windupMs, strikeMs);
+          if (hit && !this.strikeLanded) {
+            this.lastStrikeAt = time;
+            this.strikeLanded = onStrike(this, hit) === true;
+            if (this.state !== 'windup') return;
+          }
+        }
+      } else if (isCharger(this.kind) && elapsed >= windupMs) {
         const progress = Math.min(1, (elapsed - windupMs) / strikeMs);
         if (progress > this.chargeProgress) {
           const c = this.character, fromX = c.x, fromY = c.y;
@@ -437,7 +461,7 @@ export class Enemy {
       const p = 1 - (1 - Math.min(1, (elapsed - strikeAt) / returnMs)) ** 2;
       sprite.setX(this.character.facing * 46 * (1 - p)).setScale(0.9 + 0.1 * p, 1.15 - 0.15 * p);
     }
-    if (elapsed >= strikeAt && !this.strikeLanded && !isCharger(this.kind)) {
+    if (elapsed >= strikeAt && !this.strikeLanded && !this.waterJet && !isCharger(this.kind)) {
       this.strikeLanded = true;
       this.lastStrikeAt = this.attackStartedAt + strikeAt;
       if (sprite instanceof MonsterSprite) sprite.showAttack(strikeAt - 1, windupMs, strikeMs, returnMs);
@@ -454,6 +478,7 @@ export class Enemy {
       this.chainPending = chained;
       this.timer = this.attackStartedAt + endAt + (chained ? BOSS.chainGapMs : recoverMs);
       this.attackStartedAt = undefined;
+      this.waterJet?.clear();
       sprite.setPosition(0, 0).setScale(1);
       if (sprite instanceof MonsterSprite) sprite.endStrike();
     }

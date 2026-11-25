@@ -4387,3 +4387,68 @@ test('위아래 회피는 입력을 놓거나 스틱이 조금 흔들려도 직�
     if(r.name==='up'||r.name==='down'){assert.equal(r.frames.length,4);assert.ok(r.frames.every(f=>f.startsWith('dodge-'+r.name+'-')));assert.equal(r.mirror,false);}
   }
 });
+
+test('갈대밭 늪에서 잠복 마물의 물줄기가 조준한 방향으로 나가며 벽과 공격 중단을 반영한다', async () => {
+  await load('east-pass&companion=none');
+  assert.equal(await evaluate(`(() => {
+    const game = window.__game, scene = game.scene.getScene('game');
+    const exit = scene.map.exits.find(exit => exit.to === 'reed-swamp');
+    scene.player.placeAt(exit.zone.left + 10, (exit.zone.top + exit.zone.bottom) / 2);
+    game.loop.wake();
+    return scene.checkExit();
+  })()`), true);
+  await until(() => evaluate(`window.__game.scene.getScene('game').mapId === 'reed-swamp'
+    && window.__game.scene.getScene('game').enemies.some(enemy => enemy.kind === 'swamp-lurker')`));
+  const result = await evaluate(`(() => {
+    const game = window.__game, scene = game.scene.getScene('game');
+    game.loop.sleep();
+    const e = scene.enemies[0], p = scene.player, sprite = e.character.sprite;
+    const jet = scene.children.getByName('swamp-water-jet'), warning = scene.children.getByName('swamp-jet-warning');
+    const { windupMs, strikeMs, returnMs } = e.stats;
+    const tick = (ms) => {
+      scene.now += ms;
+      e.update(scene.now, ms / 1000, p, scene.walkArea, scene.nav, scene.onEnemyStrike);
+    };
+    const aim = (x, y, targetX, targetY) => {
+      e.interrupt(scene.now, 0);
+      e.state = 'chase';
+      e.character.placeAt(x, y);
+      p.revive(targetX, targetY);
+      p.invulnerableUntil = 0;
+      tick(10);
+    };
+    scene.derived.evadeChance = 0;
+    aim(1240, 825, 1500, 825);
+    const strikeEnd = scene.now + windupMs + strikeMs;
+    tick(windupMs - 1);
+    const prepared = warning.commandBuffer.length > 0 && jet.commandBuffer.length === 0
+      && sprite.list[0].frame.name === 'attack-right-1' && p.hp === p.maxHp;
+    tick(31);
+    const fired = jet.commandBuffer.length > 0 && warning.commandBuffer.length === 0
+      && sprite.list[0].frame.name === 'attack-right-2' && p.hp === p.maxHp;
+    tick(220);
+    const hpAfterHit = p.hp;
+    p.invulnerableUntil = 0;
+    tick(120);
+    const hitOnce = hpAfterHit < p.maxHp && p.hp === hpAfterHit;
+    tick(strikeEnd - scene.now + 10);
+    const released = sprite.list[0].frame.name === 'attack-right-3';
+    tick(returnMs);
+    const cleared = !jet.commandBuffer.length && !warning.commandBuffer.length;
+
+    aim(1240, 825, 1500, 825);
+    p.placeAt(1500, 935);
+    tick(windupMs + 275);
+    const avoided = p.hp === p.maxHp && sprite.list[0].frame.name === 'attack-right-2';
+    e.interrupt(scene.now);
+    const interrupted = !jet.commandBuffer.length && !warning.commandBuffer.length;
+
+    aim(1005, 781, 880, 781);
+    p.placeAt(620, 781);
+    tick(windupMs + 310);
+    const blocked = p.hp === p.maxHp && e.waterJet.aim.start.x - e.waterJet.aim.length > 780;
+    const terrain = scene.textures.exists('map-art-reed-swamp') && !scene.walkArea.contains(1300, 300);
+    return { prepared, fired, hitOnce, released, cleared, avoided, interrupted, blocked, terrain };
+  })()`);
+  for (const [check, passed] of Object.entries(result)) assert.equal(passed, true, check);
+});

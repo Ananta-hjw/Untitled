@@ -16,6 +16,7 @@ export const AREA_LEVELS: Partial<Record<MapId, LevelRange>> = {
   'west-forest': { min: 4, max: 6 },
   'east-stream': { min: 7, max: 9 },
   'east-pass': { min: 8, max: 10 },
+  'reed-swamp': { min: 11, max: 11 },
 };
 
 /** 해 질 무렵 남쪽 들판의 잿빛 나방, 습격의 권속 */
@@ -55,5 +56,6 @@ export function xpForKill(xp: number, monsterLevel: number, playerLevel: number)
 /** 입장 안내에 붙이는 권장 레벨 글 (없으면 빈 문자열) */
 export function levelHint(map: MapId): string {
   const range = AREA_LEVELS[map];
-  return range ? ` · 권장 Lv. ${range.min}~${range.max}` : '';
+  if (!range) return '';
+  return ` · 권장 Lv. ${range.min === range.max ? range.min : `${range.min}~${range.max}`}`;
 }

@@ -40,7 +40,11 @@ export const EAST_PASS: GameMap = {
     // 서리 딱정벌레 셋이 흙길을 막고 있다(퀘스트 "동쪽 고갯길", docs/story-chapter2.md).
     { key: 'frost-beetle', x: 1150, y: 2280 }, { key: 'frost-beetle', x: 1800, y: 2200 }, { key: 'frost-beetle', x: 2470, y: 2450 },
   ],
-  exits: [{ to: 'east-stream', zone: { left: 0, top: 2010, right: 170, bottom: 2320 }, arrive: { x: 3040, y: 1420 },
-    label: '◀ 동쪽 개울가', labelAt: { x: 250, y: 2340 } }],
+  exits: [
+    { to: 'east-stream', zone: { left: 0, top: 2010, right: 170, bottom: 2320 }, arrive: { x: 3040, y: 1420 },
+      label: '◀ 동쪽 개울가', labelAt: { x: 250, y: 2340 } },
+    { to: 'reed-swamp', zone: { left: 4620, top: 1330, right: 4800, bottom: 1540 }, arrive: { x: 240, y: 920 },
+      label: '갈대밭 늪 ▶', labelAt: { x: 4470, y: 1430 } },
+  ],
   interactables: [{ id: 'east-pass-sign', x: 330, y: 2260, radius: 100, markerHeight: 120, dialogue: 'east-pass-sign' }],
 };

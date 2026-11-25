@@ -1,9 +1,10 @@
 import { ENEMY, PROGRESSION } from '../config.ts';
 
-export type MonsterKind = 'slime' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'corrosion-tracker' | 'corrosion-executioner' | 'frost-beetle' | 'fog-crow';
-export type EnemyKey = 'slime-green' | 'slime-blue' | 'waterdrop-mushroom' | 'iron-scale-lizard' | 'ashen-moth' | 'corrosion-tracker' | 'corrosion-executioner' | 'frost-beetle' | 'fog-crow' | 'retainer-ash';
+export type MonsterKind = keyof typeof MONSTERS;
+export type EnemyKey = Exclude<MonsterKind, 'slime'> | 'slime-green' | 'slime-blue' | 'retainer-ash';
 export function monsterKind(key: EnemyKey): MonsterKind | undefined {
-  return key.startsWith('slime-') ? 'slime' : key === 'retainer-ash' ? undefined : key as MonsterKind;
+  if (key === 'slime-green' || key === 'slime-blue') return 'slime';
+  return key === 'retainer-ash' ? undefined : key;
 }
 
 export const MONSTERS = {
@@ -24,6 +25,15 @@ export const MONSTERS = {
     windupMs: 720, strikeMs: 200, returnMs: 240, recoverMs: 1400, color: 0x9fd8ee },
   'fog-crow': { name: '안개 까마귀', hp: 22, damage: 5, xp: 12, height: 76, speed: 205,
     windupMs: 360, strikeMs: 180, returnMs: 180, recoverMs: 900, color: 0x9daac7 },
+  'swamp-lurker': { name: '늪의 잠복 마물', hp: 135, damage: 15, defense: 1.1, xp: 55, height: 130, speed: 78,
+    windupMs: 760, strikeMs: 450, returnMs: 320, recoverMs: 1450, color: 0x747e53 },
+  'reed-stalker': { name: '갈대밭의 마물', hp: 46, damage: 9, xp: 19, height: 105, speed: 115,
+    windupMs: 530, strikeMs: 150, returnMs: 260, recoverMs: 1250, color: 0x537f7d },
+  'mist-phantom': { name: '안개 환영', hp: 32, damage: 9, xp: 18, height: 110, speed: 142,
+    windupMs: 460, strikeMs: 130, returnMs: 220, recoverMs: 1100, color: 0xa8b8ba },
+  // 안개섬의 종 설치 전투가 들어오기 전에는 원화 확인용으로만 표시한다.
+  'mist-weaver': { name: '안개를 잣는 자', hp: 1, damage: 0, xp: 0, height: 208, speed: 0,
+    windupMs: 0, strikeMs: 0, returnMs: 0, recoverMs: 0, color: 0x8d9fac },
   // 1장 보스. 레벨 7에서 체력 1000·공격력 41·방어 1.2 (combat/bossPattern.ts의 패턴을 쓴다)
   'corrosion-executioner': { name: '부식의 집행자', hp: 400, damage: 21.6, defense: 1.2, xp: 80, height: 150, speed: 95,
     windupMs: 950, strikeMs: 340, returnMs: 260, recoverMs: 1300, color: 0x5e5468 },

@@ -10,13 +10,25 @@ interface FrameData { animations?: { walk: { fps: number; poses: number[] } }; f
 const DATA = import.meta.glob<FrameData>('../assets/monsters/*/animation_frames.json', { eager: true, import: 'default' });
 const URLS = import.meta.glob<string>('../assets/monsters/*/*.webp', { eager: true, query: '?url', import: 'default' });
 const keyFor = (kind: MonsterKind, sheet: string) => `monster-${kind}-${sheet.replace('.png', '')}`;
-const frameData = (kind: MonsterKind) => DATA[`../assets/monsters/${kind}/animation_frames.json`];
+const frameData = (kind: MonsterKind): FrameData | undefined => DATA[`../assets/monsters/${kind}/animation_frames.json`];
+const idleKey = (kind: MonsterKind) => keyFor(kind, 'idle');
+// 입을 벌린 타격 프레임에서 잰 입 위치. 원본 시트 px, 프레임의 기준점 상대 좌표.
+const SWAMP_MOUTH: Record<Direction8, [number, number]> = {
+  down: [13, -119], left: [-100, -97], right: [99, -97], up: [13, -223],
+  'down-left': [-92, -112], 'down-right': [91, -112], 'up-left': [-99, -174], 'up-right': [98, -174],
+};
 
 /** Load only species that inhabit the current map; textures are reused on revisits. */
 export function preloadMonsters(scene: Phaser.Scene, spawns: readonly { key: EnemyKey }[]): void {
   const kinds = new Set(spawns.map(s => monsterKind(s.key)).filter((k): k is MonsterKind => !!k));
   for (const kind of kinds) {
-    for (const sheet of Object.keys(frameData(kind).sheets)) {
+    const data = frameData(kind);
+    if (!data) {
+      const key = idleKey(kind);
+      if (!scene.textures.exists(key)) scene.load.image(key, URLS[`../assets/monsters/${kind}/sd_idle.webp`]);
+      continue;
+    }
+    for (const sheet of Object.keys(data.sheets)) {
       const key = keyFor(kind, sheet);
       if (!scene.textures.exists(key)) scene.load.image(key, URLS[`../assets/monsters/${kind}/${sheet.replace('.png', '.webp')}`]);
     }
@@ -33,6 +45,7 @@ export function preloadMonsters(scene: Phaser.Scene, spawns: readonly { key: Ene
 export class MonsterSprite extends Phaser.GameObjects.Container {
   readonly anims = { timeScale: 1 };
   private readonly image: Phaser.GameObjects.Image;
+  private readonly sheetData?: FrameData;
   private readonly frames: Map<string, Frame>;
   private readonly scale0: number;
   private direction: Direction8 = 'down';
@@ -45,8 +58,15 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
 
   constructor(scene: Phaser.Scene, readonly kind: MonsterKind) {
     super(scene, 0, 0);
-    const data = frameData(kind);
-    this.frames = new Map(data.frames.map(f => [f.name, f]));
+    const data = this.sheetData = frameData(kind);
+    this.frames = new Map(data?.frames.map(f => [f.name, f]));
+    if (!data) {
+      this.image = scene.add.image(0, 0, idleKey(kind)).setOrigin(0.5, 1);
+      this.scale0 = MONSTERS[kind].height / this.image.height;
+      this.image.setScale(this.scale0);
+      this.add(this.image);
+      return;
+    }
     for (const f of data.frames) {
       const texture = scene.textures.get(keyFor(kind, f.sheet));
       const source = data.sheets[f.sheet];
@@ -83,6 +103,9 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
       const step = ((to - from + 8) % 8) <= 4 ? 1 : -1;
       this.direction = order[(from + step + 8) % 8];
     } else this.direction = wanted;
+    if (!this.sheetData && (wanted.endsWith('left') || wanted.endsWith('right'))) {
+      this.image.setFlipX(wanted.endsWith('left'));
+    }
     this.showFrame();
   }
   /** 바라보는 방향 (화면 좌표의 단위 벡터에 가까운 값) */
@@ -93,6 +116,12 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     };
     const [x, y] = v[this.direction];
     return { x, y };
+  }
+
+  swampMouthOffset(): { x: number; y: number } {
+    const [x, y] = SWAMP_MOUTH[this.direction];
+    const scale = this.scale0 * this.frames.get(`attack-${this.direction}-2`)!.scale;
+    return { x: x * scale, y: y * scale };
   }
   // Character.face is horizontal compatibility; real direction comes from setMovement.
   setFlipX(_flip: boolean): this { return this; }
@@ -118,8 +147,9 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   }
 
   private showFrame(): void {
+    if (!this.sheetData) return;
     const flight = this.kind === 'fog-crow';
-    const cycle = frameData(this.kind).animations?.walk;
+    const cycle = this.sheetData.animations?.walk;
     const poses = flight ? (cycle?.poses ?? [0, 1, 2, 3]) : [1, 2, 3, 2];
     const animate = this.motion === 'walk' || flight;
     const fps = flight ? (cycle?.fps ?? 10) : 8;
@@ -127,7 +157,7 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     const f = this.frames.get(`${this.attackPose === undefined ? 'walk' : 'attack'}-${this.direction}-${pose}`)
       ?? this.frames.get(`walk-${this.direction}-${pose}`)!;
     const texture = this.scene.textures.get(keyFor(this.kind, f.sheet));
-    const source = frameData(this.kind).sheets[f.sheet];
+    const source = this.sheetData.sheets[f.sheet];
     const sx = texture.getSourceImage().width / source.width, sy = texture.getSourceImage().height / source.height;
     this.image.setTexture(texture.key, f.name).setOrigin(f.originX, f.originY)
       .setScale(this.scale0 * f.scale / sx, this.scale0 * f.scale / sy);
