@@ -335,6 +335,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
       }
       this.weaponBack.setScale(scale);
       this.weaponFront.setScale(scale, scale * lengthScale);
+      if (attacking && f.gripCover) this.showHandCover(f, f.gripCover);
       return;
     }
     const scale = Math.hypot(dx, dy) / weaponAtlas.bladeLength;

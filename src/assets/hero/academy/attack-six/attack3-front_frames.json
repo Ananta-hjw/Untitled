@@ -11,14 +11,23 @@
       "blade": {
         "base": {
           "x": 106.89,
-          "y": 186.32
+          "y": 183.38
         },
         "tip": {
           "x": 106.89,
-          "y": 265.75
+          "y": 262.81
         }
       },
       "weaponPerspective": "down",
+      "gripCover": {
+        "name": "attack3-front6-0-grip-cover",
+        "x": 82,
+        "y": 147,
+        "w": 44,
+        "h": 41,
+        "atlasX": 4,
+        "atlasY": 335
+      },
       "x": 4,
       "y": 4
     },
@@ -27,17 +36,17 @@
       "texture": "hero-academy-attack3-front6",
       "w": 163,
       "h": 306,
-      "originX": 0.52945,
+      "originX": 0.56552,
       "originY": 0.99346,
       "scale": 1,
       "blade": {
         "base": {
           "x": 50.99,
-          "y": 180.44
+          "y": 177.5
         },
         "tip": {
           "x": 52.22,
-          "y": 253.98
+          "y": 251.03
         }
       },
       "weaponPerspective": "down",
@@ -55,11 +64,11 @@
       "blade": {
         "base": {
           "x": 59.82,
-          "y": 177.5
+          "y": 173.57
         },
         "tip": {
           "x": 61.04,
-          "y": 251.03
+          "y": 247.11
         }
       },
       "weaponPerspective": "down",
@@ -77,11 +86,11 @@
       "blade": {
         "base": {
           "x": 148.08,
-          "y": 218.68
+          "y": 214.76
         },
         "tip": {
           "x": 148.08,
-          "y": 316.75
+          "y": 312.83
         }
       },
       "weaponPerspective": "down",
@@ -99,11 +108,11 @@
       "blade": {
         "base": {
           "x": 91.2,
-          "y": 212.8
+          "y": 207.9
         },
         "tip": {
           "x": 89.57,
-          "y": 310.85
+          "y": 305.95
         }
       },
       "weaponPerspective": "down",
@@ -124,8 +133,8 @@
           "y": 219.66
         },
         "tip": {
-          "x": -24.52,
-          "y": 331.03
+          "x": -8.08,
+          "y": 305.45
         }
       },
       "x": 1016,

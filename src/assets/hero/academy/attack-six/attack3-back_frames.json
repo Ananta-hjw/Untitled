@@ -26,17 +26,17 @@
       "texture": "hero-academy-attack3-back6",
       "w": 157,
       "h": 303,
-      "originX": 0.65586,
+      "originX": 0.46223,
       "originY": 0.99683,
       "scale": 1,
       "blade": {
         "base": {
           "x": 145.14,
-          "y": 136.31
+          "y": 133.37
         },
         "tip": {
           "x": 144.04,
-          "y": 62.77
+          "y": 59.83
         }
       },
       "weaponPerspective": "up",
@@ -48,17 +48,17 @@
       "texture": "hero-academy-attack3-back6",
       "w": 160,
       "h": 272,
-      "originX": 0.65581,
+      "originX": 0.45969,
       "originY": 0.99507,
       "scale": 1,
       "blade": {
         "base": {
           "x": 148.08,
-          "y": 129.45
+          "y": 125.52
         },
         "tip": {
           "x": 148.08,
-          "y": 55.9
+          "y": 51.97
         }
       },
       "weaponPerspective": "up",
@@ -76,11 +76,11 @@
       "blade": {
         "base": {
           "x": 176.52,
-          "y": 47.07
+          "y": 43.15
         },
         "tip": {
           "x": 176.52,
-          "y": -50.99
+          "y": -54.92
         }
       },
       "weaponPerspective": "up",
@@ -98,11 +98,11 @@
       "blade": {
         "base": {
           "x": 188.28,
-          "y": 32.36
+          "y": 28.44
         },
         "tip": {
           "x": 188.28,
-          "y": -65.7
+          "y": -69.63
         }
       },
       "weaponPerspective": "up",
