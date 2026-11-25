@@ -8,18 +8,21 @@ import { interiorBackgroundPieces } from './interiorLayers';
 export function drawInterior(scene: Phaser.Scene, interior: Interior): void {
   const art = INTERIOR_ART[interior.id], rect = interiorArtRect(interior);
   const key = mapArtKey(interior.id);
-  const width = rect.right - rect.left, height = rect.bottom - rect.top;
+  const [width, height] = art.textureSize;
   scene.add.rectangle(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 0x17120e).setOrigin(0).setDepth(-120);
   const texture = scene.textures.get(key);
-  const source = texture.getSourceImage() as HTMLImageElement;
-  const piece = (bounds: PixelRect, name: string, depth: number) => {
-    const [l, t, r, b] = bounds;
-    const frame = `interior-piece-${l}-${t}-${r}-${b}`;
-    const sx = source.width / art.width, sy = source.height / art.height;
-    if (!texture.has(frame)) texture.add(frame, 0, l * sx, t * sy, (r - l) * sx, (b - t) * sy);
-    const at = interiorArtPoint(interior, l, t), end = interiorArtPoint(interior, r, b);
-    return scene.add.image(at.x, at.y, key, frame).setOrigin(0)
-      .setDisplaySize(end.x - at.x, end.y - at.y).setDepth(depth).setName(name);
+  const base = texture.get('__BASE');
+  if (base.cutWidth !== width || base.cutHeight !== height) {
+    throw new Error(`Interior ground ${key} must be ${width}×${height} pixels`);
+  }
+  // Convert measured coordinates to native pixel edges so neighbouring crops share the same boundary.
+  const pixelX = (x: number) => Math.round(x * width / art.width);
+  const pixelY = (y: number) => Math.round(y * height / art.height);
+  const piece = ([l, t, r, b]: PixelRect, name: string, depth: number) => {
+    const left = pixelX(l), top = pixelY(t), right = pixelX(r), bottom = pixelY(b);
+    const frame = `interior-piece-${left}-${top}-${right}-${bottom}`;
+    if (!texture.has(frame)) texture.add(frame, 0, left, top, right - left, bottom - top);
+    return scene.add.image(rect.left + left, rect.top + top, key, frame).setOrigin(0).setDepth(depth).setName(name);
   };
   for (const bounds of interiorBackgroundPieces(interior)) piece(bounds, 'map-art-background', -110);
   for (const f of interior.furniture) {
@@ -39,9 +42,9 @@ export function drawInterior(scene: Phaser.Scene, interior: Interior): void {
     const depth = interiorArtPoint(interior, left, bottom).y;
     // 원화 전체(__BASE)를 써야 한다. 프레임을 생략하면 위에서 잘라 붙인 첫 조각이 기본 프레임이 되어
     // 자르기 영역이 엉뚱해지고(높이 0) 계산대 앞면이 그려지지 않아, 그 뒤의 사람이 계산대를 뚫고 서 있는 것처럼 보였다.
-    scene.add.image(rect.left, rect.top, key, '__BASE').setOrigin(0).setDisplaySize(width, height)
-      .setCrop(left / art.width * source.width, top / art.height * source.height,
-        (right - left) / art.width * source.width, (bottom - top) / art.height * source.height)
+    const x = pixelX(left), y = pixelY(top);
+    scene.add.image(rect.left, rect.top, key, '__BASE').setOrigin(0)
+      .setCrop(x, y, pixelX(right) - x, pixelY(bottom) - y)
       .setDepth(depth).setName('map-art-foreground');
   }
 }

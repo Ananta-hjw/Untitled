@@ -7,7 +7,6 @@ import { INTERIORS, interiorArtPoint, type InteriorId } from '../world/interiors
 import type { MapId } from '../world/maps.ts';
 import type { Interactable } from '../world/interactables.ts';
 import { BUILDINGS, LINEA_YARD } from '../world/villageLayout.ts';
-import { fieldPoint } from '../world/maps.ts';
 import { RAID_LEVELS } from '../combat/monsterLevel.ts';
 
 export type ChapterPhase = 'day' | 'raid' | 'aftermath';
@@ -183,7 +182,7 @@ const SPOTS = {
   'south-watch': { id: 'story-south-watch', ...mapPoint({ x: 1180, y: 1340 }), radius: 95, markerHeight: 55 },
   'home-search': { id: 'story-home-search', ...mapPoint({ x: 415, y: 640 }), radius: 85, markerHeight: 55 },
   // 해 질 무렵 남쪽 들판: 나방이 모여 앉았던 풀숲
-  'moth-nest': { id: 'story-moth-nest', ...fieldPoint(1250, 860), radius: 95, markerHeight: 55 },
+  'moth-nest': { id: 'story-moth-nest', x: 1787.5, y: 1229.8, radius: 95, markerHeight: 55 },
   // 습격 중 마을 북쪽: 리네아의 집 옆 골목
   'north-alley': { id: 'story-north-alley', x: LINEA_YARD.x + mapLength(120), y: LINEA_YARD.y + mapLength(70), radius: 95, markerHeight: 55 },
 } satisfies Record<string, Interactable>;
@@ -215,9 +214,9 @@ export const INSPECTION_LINES: Record<string, DialogueLine[]> = {
 /**
  * 해 질 무렵: "해 질 무렵의 순찰"을 받은 뒤부터 축제 전야가 시작되기 전까지
  * 남쪽 들판에 잿빛 나방(소멸의 하급 권속)이 나타난다. 습격 전에 네이룬 계열을 처음 마주하는 복선이다.
- * 좌표는 남쪽 들판 원화 기준(maps.ts의 fieldPoint로 바꾼다). 마을에는 몬스터를 두지 않는다.
+ * 좌표는 남쪽 들판의 월드 픽셀 기준이다. 마을에는 몬스터를 두지 않는다.
  */
-export const DUSK_MOTH_POINTS: ReadonlyArray<readonly [number, number]> = [[860, 720], [1500, 760], [1250, 980], [700, 950]];
+export const DUSK_MOTH_POINTS: ReadonlyArray<readonly [number, number]> = [[1229.8, 1029.6], [2145, 1086.8], [1787.5, 1401.4], [1001, 1358.5]];
 
 export function isDusk(state: QuestState): boolean {
   return !!state['evening-patrol'] && chapterPhase(state) === 'day';

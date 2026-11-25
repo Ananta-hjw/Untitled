@@ -917,6 +917,7 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
     g.step(performance.now(), 0);
     const nameTop = p.list.find(o => o.text === '시온').getBounds().top;
     return { initial, home: !!home, ground: { width: ground.displayWidth, height: ground.displayHeight },
+      nativeGround: ground.width === ground.displayWidth && ground.height === ground.displayHeight,
       oldRoom: s.children.list.some(o => o.texture?.key === 'room'),
       ui: { width: s.scale.gameSize.width, attack: s.attackButton.image.x, dodge: s.dodgeButton.image.x, hp: s.hud.hpText.text,
         block: s.blockButton.image.x, gap: Math.hypot(s.blockButton.image.x - s.dodgeButton.image.x, s.blockButton.image.y - s.dodgeButton.image.y)
@@ -930,6 +931,7 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
   assert.deepEqual(result.initial, { x: PLAYER_SPAWN.x, y: PLAYER_SPAWN.y, walkable: true, safe: true });
   assert.equal(result.home, true);
   assert.deepEqual(result.ground, { width: WORLD_WIDTH, height: WORLD_HEIGHT });
+  assert.equal(result.nativeGround, true);
   assert.equal(result.oldRoom, false);
   assert.equal(result.ui.attack, result.ui.width - 170);
   // 막기는 공격 버튼 왼쪽 아래, 회피는 오른쪽 아래 모서리이며 터치 범위가 겹치지 않는다.
@@ -1980,26 +1982,28 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
   assert.match(result.tracker, /남문의 수레/);
 });
 
-test('원화가 있는 실내 여덟 곳과 남쪽 들판은 해당 그림만 읽고, 전경·충돌·출입을 유지한다', async () => {
-  for (const id of ['home', 'linea', 'chief', 'clinic', 'hall', 'store', 'smithy', 'inn', 'south-field']) {
-    const map = id === 'south-field' ? id : 'in-' + id;
+test('원화가 있는 실내 여덟 곳과 단일 배경 사냥터는 해당 그림만 읽고, 전경·충돌·출입을 유지한다', async () => {
+  for (const id of ['home', 'linea', 'chief', 'clinic', 'hall', 'store', 'smithy', 'inn', 'south-field', 'reed-swamp']) {
+    const map = ['south-field', 'reed-swamp'].includes(id) ? id : 'in-' + id;
     await load(map);
     const art = await evaluate(`(() => {
       const s = window.__game.scene.getScene('game');
       const background = s.children.getByName('map-art-background');
       const foreground = s.children.list.filter(c => c.name === 'map-art-foreground');
       return { key: background.texture.key, width: background.displayWidth, height: background.displayHeight,
+        native: s.children.list.filter(c => c.name.startsWith('map-art-') || c.name.startsWith('interior-furniture-')).every(c => c.displayWidth === c.width && c.displayHeight === c.height),
         textures: Object.keys(s.textures.list).filter(k => k.startsWith('map-art-')),
         foreground: foreground.map(c => ({ width: c.displayWidth, depth: c.depth })),
         walkable: s.walkArea.contains(s.player.x, s.player.y),
-        blocked: s.map.interior ? s.map.interior.furniture.every(f => !s.walkArea.contains(s.map.bounds.left + f.x, s.map.bounds.top + f.y - f.d / 2)) : !s.walkArea.contains(835 * background.displayWidth / 1536, 938 * background.displayHeight / 1024) };
+        blocked: s.map.interior ? s.map.interior.furniture.every(f => !s.walkArea.contains(s.map.bounds.left + f.x, s.map.bounds.top + f.y - f.d / 2)) : !s.walkArea.contains(...(s.map.id === 'south-field' ? [1865.703125, 2095.84375] : [725, 795])) };
     })()`);
     assert.equal(art.key, 'map-art-' + id);
     assert.ok(art.textures.every(k => k === art.key || k.startsWith(art.key + '-foreground-')), id + ': 다른 맵 원화를 미리 읽지 않는다');
     assert.equal(art.walkable, true, id);
     assert.equal(art.blocked, true, id);
     assert.ok(art.width > 0 && art.height > 0, id);
-    if (id === 'south-field') assert.equal(art.foreground.length, 0, '나무·바위는 배경 복사 대신 독립 소품으로 그린다');
+    assert.equal(art.native, true, id);
+    if (id === 'south-field' || id === 'reed-swamp') assert.equal(art.foreground.length, 0, '나무·바위는 배경 복사 대신 독립 소품으로 그린다');
     else {
       assert.ok(art.foreground.length >= 2, id);
       const back = await evaluate(`(async () => {
@@ -4188,12 +4192,41 @@ test('동쪽 고갯길은 개울가에서 왕복하며 큰 카메라·지도·�
     s.passScenery.update(s.now,{x:1800,y:1500});const restored=shelter.alpha===1;
     const fire=s.children.getByName('pass-fire'), before=fire.frame.name;s.passScenery.update(s.now+110,s.player);
     return {painted,faded,restored,fire:fire.frame.name!==before,camera:s.cameras.main.getBounds().width,
-      map:s.minimap.preview.bounds.right,dor:s.npcs.some(n=>n.def.id==='dor'),ground:s.children.getByName('map-art-background').displayWidth};
+      map:s.minimap.preview.bounds.right,dor:s.npcs.some(n=>n.def.id==='dor'),
+      tiles:s.children.list.filter(o=>o.name==='map-art-background').map(o=>[o.x,o.y,o.width,o.height,o.displayWidth,o.displayHeight])};
   })()`);
-  assert.deepEqual(result,{painted:true,faded:true,restored:true,fire:true,camera:4800,map:4800,dor:true,ground:4800});
+  const tiles = [0, 1600].flatMap(y => [0, 1600, 3200].map(x => [x, y, 1600, 1600, 1600, 1600]));
+  assert.deepEqual(result,{painted:true,faded:true,restored:true,fire:true,camera:4800,map:4800,dor:true,tiles});
   await evaluate(`window.__game.scene.getScene('game').player.placeAt(120,2150)`);
   await until(()=>evaluate(`(() => {const g=window.__game;g.step(window.__passTime+=16,16);const s=g.scene.getScene('game');return s.mapId==='east-stream'&&s.sys.isActive()&&!s.passScenery&&s.minimap&&!s.traveling;})()`));
   assert.equal(await evaluate(`window.__game.scene.getScene('game').walkArea.contains(3040,1420)`),true);
+});
+
+test('물안개 나루는 바닥을 1:1로 표시하고 고갯길에서 왕복하며 두 선착장만 강 위로 걸을 수 있다', async () => {
+  await load('east-pass&companion=none');
+  await evaluate(`(() => { const s = window.__game.scene.getScene('game');
+    s.player.placeAt(4680, 1960); window.__ferryTime = performance.now(); })()`);
+  const reached = map => until(() => evaluate(`(() => {
+    const g = window.__game; g.step(window.__ferryTime += 16, 16);
+    const s = g.scene.getScene('game');
+    return s.mapId === ${JSON.stringify(map)} && s.sys.isActive() && !!s.minimap && !s.traveling;
+  })()`));
+  await reached('ferry-village');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), a = s.walkArea;
+    return { tiles: s.children.list.filter(c => c.name === 'map-art-background')
+      .map(c => [c.x, c.y, c.width, c.height, c.displayWidth, c.displayHeight]),
+      bounds: [s.minimap.preview.bounds.right, s.minimap.preview.bounds.bottom],
+      camera: [s.cameras.main.getBounds().width, s.cameras.main.getBounds().height],
+      decks: [1046.875, 2125].map(y => a.hasClearPath(2937.5, y, 3656.25, y)),
+      water: [[3750, 1046.875], [3750, 2125], [3484.375, 1562.5], [3437.5, 921.875]].map(([x,y]) => a.contains(x, y)),
+      spawn: [s.player.x, s.player.y] };
+  })()`);
+  const tiles = [0, 1600].flatMap(y => [0, 1600, 3200].map(x => [x, y, 1600, 1600, 1600, 1600]));
+  assert.deepEqual(result, { tiles, bounds: [4800, 3200], camera: [4800, 3200],
+    decks: [true, true], water: [false, false, false, false], spawn: [593.75, 1609.375] });
+  await evaluate(`window.__game.scene.getScene('game').player.placeAt(181.25, 1609.375)`);
+  await reached('east-pass');
 });
 
 test('나루 여관 주인은 전용 SD·잠든 걸음·대화 초상화를 사용하고 대화하면 깨어난다', async () => {

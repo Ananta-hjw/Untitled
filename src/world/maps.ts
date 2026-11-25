@@ -1,9 +1,10 @@
 import { EAST_PASS } from './eastPass.ts';
+import { FERRY_VILLAGE } from './ferryVillage.ts';
 import { mapLength, mapPoint, mapRect, mapProp } from './mapScale.ts';
 import { VILLAGE_GATES, perimeterObstacles } from './villagePerimeter.ts';
 import type { EnemyKey } from '../combat/monsterTypes.ts';
 import { FIELD_BOUNDS, FIELD_PROPS, FIELD_POLYGON, insidePolygon } from './southFieldLayout.ts';
-import { MAP_SIZE_SCALE, WORLD_HEIGHT, WORLD_WIDTH } from '../config.ts';
+import { WORLD_HEIGHT, WORLD_WIDTH } from '../config.ts';
 import type { DialogueId } from '../story/dialogues.ts';
 import { INTERACTABLES, type Interactable } from './interactables.ts';
 import { insideObstacle, type Obstacle } from './obstacles.ts';
@@ -27,7 +28,7 @@ import {
  * 이 파일은 Phaser를 쓰지 않아 tools/maps.test.mjs가 직접 불러 검사한다.
  */
 
-export type MapId = 'village' | 'village-north' | 'south-field' | 'west-forest' | 'east-stream' | 'east-pass' | 'reed-swamp' | `in-${InteriorId}`;
+export type MapId = 'village' | 'village-north' | 'south-field' | 'west-forest' | 'east-stream' | 'east-pass' | 'reed-swamp' | 'ferry-village' | `in-${InteriorId}`;
 
 export interface Rect { left: number; top: number; right: number; bottom: number }
 export interface Point { x: number; y: number }
@@ -82,8 +83,7 @@ function sign(id: string, x: number, y: number, dialogue: DialogueId): { prop: V
   };
 }
 
-export const fieldPoint = (x: number, y: number): Point => ({ x: Math.round(x * MAP_SIZE_SCALE * 1000) / 1000, y: Math.round(y * MAP_SIZE_SCALE * 1000) / 1000 });
-const southSign = sign('south-field-sign', 1420 * MAP_SIZE_SCALE, 330 * MAP_SIZE_SCALE, 'south-field-sign');
+const southSign = sign('south-field-sign', 2030.6, 471.9, 'south-field-sign');
 const forestSign = sign('west-forest-sign', mapLength(2180), mapLength(900), 'west-forest-sign');
 const streamSign = sign('east-stream-sign', mapLength(260), mapLength(760), 'east-stream-sign');
 
@@ -122,7 +122,7 @@ const VILLAGE: GameMap = {
       arrive: { x: LINK_X, y: mapLength(1440) }, label: '▲ 마을 북쪽 (집)', labelAt: { x: LINK_X, y: mapLength(300) } },
     // 남쪽 입구 아치의 두 기둥 사이로 나간다.
     { to: 'south-field', zone: { left: SOUTH_GATE_PASSAGE.left, top: VILLAGE_GATES.south.y, right: SOUTH_GATE_PASSAGE.right, bottom: WORLD_HEIGHT },
-      arrive: fieldPoint(1180, 420), label: '▼ 남쪽 들판', labelAt: { x: mapLength(1181), y: VILLAGE_GATES.south.y - mapLength(22) } },
+      arrive: { x: 1687.4, y: 600.6 }, label: '▼ 남쪽 들판', labelAt: { x: mapLength(1181), y: VILLAGE_GATES.south.y - mapLength(22) } },
     { to: 'west-forest', zone: mapRect({ left: 0, top: 940, right: 112, bottom: 1160 }),
       arrive: mapPoint({ x: 2150, y: 1050 }), label: '◀ 서쪽 숲길', labelAt: mapPoint({ x: 150, y: 1000 }) },
     { to: 'east-stream', zone: { left: VILLAGE_GATES.east.x, top: VILLAGE_GATES.east.top, right: WORLD_WIDTH, bottom: VILLAGE_GATES.east.bottom },
@@ -141,17 +141,17 @@ const SOUTH_FIELD: GameMap = {
   props: [...FIELD_PROPS, southSign.prop],
   buildings: [],
   npcs: [],
-  spawn: fieldPoint(1180, 420),
+  spawn: { x: 1687.4, y: 600.6 },
   enemies: [
-    ...[[1800, 1000], [600, 1150], [400, 700], [900, 1000], [1700, 900]].map(([x, y]): MapEnemySpawn =>
-      ({ key: 'slime-green', ...fieldPoint(x, y) })),
-    ...[[1600, 1200], [1000, 1430], [500, 1400], [1400, 1080], [1800, 700]].map(([x, y]): MapEnemySpawn =>
-      ({ key: 'waterdrop-mushroom', ...fieldPoint(x, y) })),
+    ...[[2574, 1430], [858, 1644.5], [572, 1001], [1287, 1430], [2431, 1287]].map(([x, y]): MapEnemySpawn =>
+      ({ key: 'slime-green', x, y })),
+    ...[[2288, 1716], [1430, 2044.9], [715, 2002], [2002, 1544.4], [2574, 1001]].map(([x, y]): MapEnemySpawn =>
+      ({ key: 'waterdrop-mushroom', x, y })),
   ],
   exits: [
-    { to: 'village', zone: { left: 1040 * MAP_SIZE_SCALE, top: 0, right: 1320 * MAP_SIZE_SCALE, bottom: 290 * MAP_SIZE_SCALE },
+    { to: 'village', zone: { left: 1487.2, top: 0, right: 1887.6, bottom: 414.7 },
       // 남문 아치(종·들보) 그림 뒤에 가려지지 않도록 아치 안쪽 광장에 선다.
-      arrive: { x: mapLength(1180), y: VILLAGE_GATES.south.y - mapLength(280) }, label: '▲ 로웬 마을', labelAt: fieldPoint(1180, 262) },
+      arrive: { x: mapLength(1180), y: VILLAGE_GATES.south.y - mapLength(280) }, label: '▲ 로웬 마을', labelAt: { x: 1687.4, y: 374.66 } },
   ],
   interactables: [southSign.spot],
 };
@@ -312,6 +312,7 @@ export const MAPS = {
   'east-stream': EAST_STREAM,
   'east-pass': EAST_PASS,
   'reed-swamp': REED_SWAMP,
+  'ferry-village': FERRY_VILLAGE,
   ...Object.fromEntries(INTERIORS.map((i) => [`in-${i.id}`, interiorMap(i)])),
 } as Record<MapId, GameMap>;
 

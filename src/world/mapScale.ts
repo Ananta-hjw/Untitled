@@ -1,7 +1,5 @@
-import { MAP_EXPANSION_SCALE } from '../config.ts';
-
-/** 기존(2640×1760) 배치 좌표를 확장된 월드로 옮긴다. 원화 픽셀 좌표에는 적용하지 않는다. */
-export const mapLength = (value: number): number => Math.round(value * MAP_EXPANSION_SCALE * 1000) / 1000;
+/** 로웬과 인접 지역의 기존 배치 데이터를 현재 월드 픽셀 좌표로 변환한다. */
+export const mapLength = (value: number): number => Math.round(value * 1300) / 1000;
 export function mapPoint<T extends { x: number; y: number }>(point: T): T {
   return { ...point, x: mapLength(point.x), y: mapLength(point.y) };
 }

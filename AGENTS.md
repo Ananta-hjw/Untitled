@@ -41,7 +41,7 @@ For the active hero, run `python3 tools/build_hero_frames.py` after changing mea
 
 Keep generated build directories out of commits.
 
-Asset generators using `PIL` require Python and Pillow. `python3 tools/build_map_art.py` regenerates runtime WebP map backgrounds from source PNGs; preserve the source composition. Keep terrain separate from solid props so collision and depth ordering match the displayed objects.
+Asset generators using `PIL` require Python and Pillow. `python3 tools/build_map_art.py` regenerates runtime WebP map backgrounds from source PNGs; preserve the source composition. Create ground artwork at the intended world dimensions and place each texture pixel at one world pixel. For large maps, cut the source into native-size tiles and use their source pixel offsets for placement. Measure walkable areas, exits, and props in the same world coordinates. Keep terrain separate from solid props so collision and depth ordering match the displayed objects.
 
 ## Character Jobs
 

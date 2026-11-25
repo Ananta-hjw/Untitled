@@ -1,8 +1,51 @@
 {
   "ground": {
-    "sourceWidth": 1536,
-    "sourceHeight": 1024,
-    "file": "ground.webp",
+    "sourceWidth": 4800,
+    "sourceHeight": 3200,
+    "tiles": [
+      {
+        "file": "ground-0.webp",
+        "x": 0,
+        "y": 0,
+        "width": 1600,
+        "height": 1600
+      },
+      {
+        "file": "ground-1.webp",
+        "x": 1600,
+        "y": 0,
+        "width": 1600,
+        "height": 1600
+      },
+      {
+        "file": "ground-2.webp",
+        "x": 3200,
+        "y": 0,
+        "width": 1600,
+        "height": 1600
+      },
+      {
+        "file": "ground-3.webp",
+        "x": 0,
+        "y": 1600,
+        "width": 1600,
+        "height": 1600
+      },
+      {
+        "file": "ground-4.webp",
+        "x": 1600,
+        "y": 1600,
+        "width": 1600,
+        "height": 1600
+      },
+      {
+        "file": "ground-5.webp",
+        "x": 3200,
+        "y": 1600,
+        "width": 1600,
+        "height": 1600
+      }
+    ],
     "containsSolidObjects": false
   },
   "objects": {

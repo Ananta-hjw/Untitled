@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 from PIL import Image
+from build_map_art import encode_ground_tiles
 
 ROOT = Path(__file__).resolve().parents[1] / 'src/assets/maps/east-pass'
 # Origins/size hints are relative to the trimmed runtime art, not global map scale.
@@ -15,10 +16,7 @@ SPECS = {
 
 def main():
     objects = {}
-    with Image.open(ROOT / 'ground.png') as source:
-        source.convert('RGB').save(ROOT / 'ground.webp', quality=90, method=6)
-        ground = {'sourceWidth': source.width, 'sourceHeight': source.height,
-                  'file': 'ground.webp', 'containsSolidObjects': False}
+    ground = {**encode_ground_tiles(ROOT / 'ground.png'), 'containsSolidObjects': False}
     for name, (limit, ox, oy, display_width) in SPECS.items():
         with Image.open(ROOT / f'{name}.png') as source:
             image = source.convert('RGBA')

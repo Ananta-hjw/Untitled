@@ -4,7 +4,7 @@ import { QUESTS, currentObjective, continueMainQuest, markerFor, parseQuests, qu
 import { DUSK_MOTH_POINTS, RAID_WAVES, chapterCanTalk, chapterDialogue, lineaRecovery, chapterPhase, chapterNpcs, chapterSpots, isDusk, raidSpawns, raidSpawnsAnyStep, raidWaveSize } from '../src/story/chapterOne.ts';
 import { NPCS } from '../src/world/npcs.ts';
 import { guardsForMap } from '../src/world/guards.ts';
-import { MAPS, fieldPoint, findExit, walkable } from '../src/world/maps.ts';
+import { MAPS, findExit, walkable } from '../src/world/maps.ts';
 
 const through = id => {
   const result = {};
@@ -125,10 +125,9 @@ test('잿빛 나방은 해 질 무렵의 순찰을 받은 뒤부터 축제 전�
   assert.equal(isDusk(through('festival-eve')), false, '습격이 시작되면 사라진다');
   const field = MAPS['south-field'];
   for (const [x, y] of DUSK_MOTH_POINTS) {
-    const p = fieldPoint(x, y);
-    assert.equal(walkable(field, p.x, p.y), true, `${x},${y}`);
-    assert.equal(findExit(field, p.x, p.y), undefined);
-    assert.ok(Math.hypot(p.x - field.spawn.x, p.y - field.spawn.y) > 300, '들어오자마자 덮치지 않는다');
+    assert.equal(walkable(field, x, y), true, `${x},${y}`);
+    assert.equal(findExit(field, x, y), undefined);
+    assert.ok(Math.hypot(x - field.spawn.x, y - field.spawn.y) > 300, '들어오자마자 덮치지 않는다');
   }
 });
 

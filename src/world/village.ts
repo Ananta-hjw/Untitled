@@ -4,13 +4,13 @@ import perimeter from '../assets/village/rowen/perimeter.webp?url';
 import perimeterFrames from '../assets/village/rowen/perimeter.json';
 import { PERIMETER_TEXTURE, perimeterPieces } from './villagePerimeter';
 import { preloadEastPass } from './eastPassArt';
-import ground from '../assets/village/ground.png?url';
+import ground from '../assets/village/ground.webp?url';
 import buildings from '../assets/village/rowen/buildings.webp?url';
 import buildingFrames from '../assets/village/rowen/buildings.json';
 import props from '../assets/village/props.png?url';
 import frames from '../assets/village/frames.json';
 import { WalkArea } from './walkArea';
-import { drawFieldArt, mapArtKey, preloadMapArt } from './mapArt';
+import { addGroundImage, drawFieldArt, mapArtKey, preloadMapArt } from './mapArt';
 import { drawInterior } from './interiorArt';
 import { mapObstacles, mapPolygon, type GameMap } from './maps';
 
@@ -48,7 +48,7 @@ export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
   }
   if (scene.textures.exists(mapArtKey(map.id))) drawFieldArt(scene, map);
   else {
-    const floor = scene.add.image(0, 0, 'village-ground').setOrigin(0).setDisplaySize(WORLD_WIDTH, WORLD_HEIGHT).setDepth(-100);
+    const floor = addGroundImage(scene, { key: 'village-ground', x: 0, y: 0, width: WORLD_WIDTH, height: WORLD_HEIGHT });
     if (map.groundTint !== undefined) floor.setTint(map.groundTint);
     if (map.water) drawWater(scene, map.water.top, map.water.bottom);
   }

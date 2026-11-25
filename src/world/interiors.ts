@@ -1,5 +1,4 @@
 import { mapPoint } from './mapScale.ts';
-import { INTERIOR_SIZE_SCALE } from '../config.ts';
 import type { Obstacle } from './obstacles.ts';
 import type { BuildingFrame } from './villageLayout.ts';
 
@@ -55,6 +54,7 @@ export type PixelRect = readonly [number, number, number, number];
 export interface InteriorArtwork {
   width: number;
   height: number;
+  textureSize: readonly [width: number, height: number];
   floor: PixelRect;
   /**
    * 실제로 밟을 수 있는 바닥 (원화 픽셀 x, y 쌍). 원화는 뒤로 갈수록 양옆 벽이 안쪽으로 들어오므로
@@ -73,7 +73,7 @@ export interface InteriorArtwork {
 
 export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
   home: {
-    width: 1536, height: 1024, floor: [90, 410, 1445, 840], doorX: 750,
+    width: 1536, height: 1024, textureSize: [1134, 756], floor: [90, 410, 1445, 840], doorX: 750,
     walk: [110, 415, 1425, 415, 1450, 840, 85, 840],
     furniture: [
       ['hearth', [90, 410, 355, 450]], ['shelf', [355, 410, 850, 440]],
@@ -86,7 +86,7 @@ export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
     ],
   },
   linea: {
-    width: 1536, height: 1024, floor: [100, 445, 1445, 850], doorX: 765,
+    width: 1536, height: 1024, textureSize: [1028, 686], floor: [100, 445, 1445, 850], doorX: 765,
     walk: [105, 470, 1100, 470, 1100, 445, 1430, 445, 1450, 850, 85, 850],
     blocked: [[730, 0, 1100, 470]],
     furniture: [
@@ -99,7 +99,7 @@ export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
     ],
   },
   chief: {
-    width: 1774, height: 887, floor: [125, 370, 1650, 735], doorX: 960, doorY: 620,
+    width: 1774, height: 887, textureSize: [1280, 640], floor: [125, 370, 1650, 735], doorX: 960, doorY: 620,
     // 계단 아래와 벽난로 쪽은 뒤쪽 바닥이 조금 더 앞으로 나와 있다.
     walk: [140, 370, 1213, 370, 1213, 433, 1663, 433, 1680, 707, 92, 707],
     furniture: [
@@ -110,7 +110,7 @@ export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
     ],
   },
   clinic: {
-    width: 1536, height: 1024, floor: [170, 445, 1350, 750], doorX: 725, doorY: 720,
+    width: 1536, height: 1024, textureSize: [1432, 955], floor: [170, 445, 1350, 750], doorX: 725, doorY: 720,
     // 오른쪽 온실은 창유리와 화분이 가득해 들어가지 않는다.
     walk: [200, 465, 1105, 465, 1105, 745, 170, 745],
     blocked: [[1105, 0, 1536, 1024]],
@@ -125,7 +125,7 @@ export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
     shop: { x: 850, y: 540, talkY: 540 },
   },
   hall: {
-    width: 1536, height: 1024, floor: [100, 420, 1440, 840], doorX: 750,
+    width: 1536, height: 1024, textureSize: [1376, 918], floor: [100, 420, 1440, 840], doorX: 750,
     walk: [205, 410, 1330, 410, 1450, 835, 85, 835],
     furniture: [
       ['dummy', [330, 420, 410, 440]], ['dummy', [450, 420, 550, 440]], ['dummy', [580, 420, 670, 440]],
@@ -134,7 +134,7 @@ export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
     ],
   },
   store: {
-    width: 1536, height: 1024, floor: [95, 380, 1440, 840], doorX: 750,
+    width: 1536, height: 1024, textureSize: [1143, 762], floor: [95, 380, 1440, 840], doorX: 750,
     // 왼쪽 창가 자리(창턱 의자)는 바닥이 아니다.
     walk: [300, 455, 1420, 455, 1445, 840, 90, 840, 100, 600, 295, 600],
     furniture: [
@@ -146,7 +146,7 @@ export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
     foreground: [[670, 390, 1240, 560]], shop: { x: 1010, y: 445, talkY: 590 },
   },
   smithy: {
-    width: 1536, height: 1024, floor: [90, 510, 1440, 850], doorX: 750,
+    width: 1536, height: 1024, textureSize: [1252, 835], floor: [90, 510, 1440, 850], doorX: 750,
     walk: [95, 515, 1435, 515, 1455, 840, 80, 840],
     furniture: [
       ['forge', [160, 510, 520, 535]], ['anvil', [210, 590, 400, 760], [205, 530, 405, 765]], ['barrel', [95, 630, 200, 840]],
@@ -158,7 +158,7 @@ export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
     shop: { x: 455, y: 720, talkY: 720 },
   },
   inn: {
-    width: 1536, height: 1024, floor: [95, 370, 1440, 840], doorX: 720,
+    width: 1536, height: 1024, textureSize: [1599, 1066], floor: [95, 370, 1440, 840], doorX: 720,
     // 카운터 뒤와 계단 밑은 손님이 들어가는 곳이 아니다.
     walk: [110, 445, 1140, 445, 1140, 470, 1320, 470, 1320, 550, 1440, 550, 1455, 840, 85, 840],
     blocked: [[1320, 370, 1445, 550]],
@@ -187,8 +187,7 @@ const ROOMS: readonly [InteriorId, BuildingFrame, string, number][] = [
   ['smithy', 'smithy', '대장간', 1100], ['inn', 'inn', '여관', 1400],
 ];
 
-export const INTERIORS: Interior[] = ROOMS.map(([id, building, name, baseWidth]) => {
-  const width = baseWidth * INTERIOR_SIZE_SCALE;
+export const INTERIORS: Interior[] = ROOMS.map(([id, building, name, width]) => {
   const art = INTERIOR_ART[id], [left, top, right, bottom] = art.floor;
   const scale = width / (right - left);
   return {
@@ -222,8 +221,9 @@ export function interiorWalkPolygon(interior: Interior): number[] {
 /** 원화 전체의 표시 영역: 카메라가 지붕·벽·문턱을 잘라내지 않게 한다. */
 export function interiorArtRect(interior: Interior) {
   const art = INTERIOR_ART[interior.id];
-  const a = interiorArtPoint(interior, 0, 0), b = interiorArtPoint(interior, art.width, art.height);
-  return { left: a.x, top: a.y, right: b.x, bottom: b.y };
+  const { x, y } = interiorArtPoint(interior, 0, 0);
+  const [width, height] = art.textureSize;
+  return { left: x, top: y, right: x + width, bottom: y + height };
 }
 
 export function interiorShop(id: InteriorId): { x: number; y: number; inside: InteriorId; talkOffset: number } {

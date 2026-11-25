@@ -3,7 +3,7 @@ import { outdoorArtBounds } from '../world/maps';
 import type { GameMap, Rect } from '../world/maps';
 import { interiorArtRect } from '../world/interiors';
 import { PERIMETER_TEXTURE, perimeterPieces } from '../world/villagePerimeter';
-import { mapArtKey } from '../world/mapArt';
+import { fieldArtPieces, mapArtKey } from '../world/mapArt';
 
 export interface MapPreview { key: string; frame: string; bounds: Rect; width: number; height: number }
 const KEY = 'current-area-preview';
@@ -22,8 +22,15 @@ export function mapPreview(scene: Phaser.Scene, map: GameMap): MapPreview {
   ctx.clearRect(0, 0, SIZE, SIZE);
   ctx.fillStyle = '#192019'; ctx.fillRect(0, 0, width, height);
   const art = mapArtKey(map.interior?.id ?? map.id);
-  if (scene.textures.exists(art)) {
+  if (map.interior && scene.textures.exists(art)) {
     ctx.drawImage(scene.textures.get(art).getSourceImage() as CanvasImageSource, 0, 0, width, height);
+  } else if (scene.textures.exists(art)) {
+    for (const piece of fieldArtPieces(map)) {
+      const x = Math.round((piece.x - bounds.left) * scale), y = Math.round((piece.y - bounds.top) * scale);
+      const right = Math.round((piece.x + piece.width - bounds.left) * scale);
+      const bottom = Math.round((piece.y + piece.height - bounds.top) * scale);
+      ctx.drawImage(scene.textures.get(piece.key).getSourceImage() as CanvasImageSource, x, y, right - x, bottom - y);
+    }
   } else {
     ctx.drawImage(scene.textures.get('village-ground').getSourceImage() as CanvasImageSource, 0, 0, width, height);
     if (map.groundTint !== undefined) {

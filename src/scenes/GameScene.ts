@@ -80,7 +80,7 @@ import type { WalkArea } from '../world/walkArea';
 import { NavGrid } from '../world/navGrid';
 import { npcExitPath } from '../world/npcExitPath';
 import { buildMap, preloadVillage } from '../world/village';
-import { MAPS, START_MAP, fieldPoint, findExit, isMapId, type GameMap, type MapExit, type MapId, type Point } from '../world/maps';
+import { MAPS, START_MAP, findExit, isMapId, type GameMap, type MapExit, type MapId, type Point } from '../world/maps';
 import { Hud, ORBS } from '../ui/Hud';
 import { DamageNumbers } from '../ui/DamageNumbers';
 import { DialogueBox, preloadDialogue } from '../ui/DialogueBox';
@@ -498,7 +498,7 @@ export class GameScene extends Phaser.Scene {
    */
   private duskSpawns(): Array<{ key: 'ashen-moth'; x: number; y: number }> {
     if (this.mapId !== 'south-field' || (!isDusk(this.quests) && !fernMothHunt(this.quests))) return [];
-    return DUSK_MOTH_POINTS.map(([x, y]) => ({ key: 'ashen-moth', ...fieldPoint(x, y) }));
+    return DUSK_MOTH_POINTS.map(([x, y]) => ({ key: 'ashen-moth', x, y }));
   }
 
   private resetState(): void {
@@ -1360,12 +1360,7 @@ export class GameScene extends Phaser.Scene {
   private setCameraBounds(): void {
     const camera = this.cameras.main;
     const interior = this.map.interior;
-    if (!interior) {
-      const b = outdoorArtBounds(this.map);
-      camera.setBounds(b.left, b.top, b.right - b.left, b.bottom - b.top);
-      return;
-    }
-    const { left, right, top, bottom } = interiorArtRect(interior);
+    const { left, right, top, bottom } = interior ? interiorArtRect(interior) : outdoorArtBounds(this.map);
     const viewW = this.scale.gameSize.width / camera.zoom, viewH = VIEW_HEIGHT / camera.zoom;
     const width = Math.max(right - left, viewW), height = Math.max(bottom - top, viewH);
     const cx = (left + right) / 2, cy = (top + bottom) / 2;
