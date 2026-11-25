@@ -128,6 +128,71 @@ export class ImpactEffects {
     }
   }
 
+  /** 베인 각도 그대로 적 몸을 가르는 날카로운 참격선(Cut Line) + 치명타·반격 시 십자 섬광 */
+  slashCut(x: number, y: number, angle: number, strength: ImpactStrength, now: number): void {
+    const color = STYLE[strength].color;
+    const scale = strength === 'counter' ? 1.45 : strength === 'finisher' ? 1.25 : strength === 'crit' ? 1.2 : 0.88;
+    const life = strength === 'normal' ? 105 : 145;
+    this.spawn(TEX.slash, now, { x, y, life, scale0: scale, scale1: scale * 0.28, alpha0: 0.96, tint: 0xffffff, rotation: angle, depthOffset: 406 });
+    this.spawn(TEX.slash, now, { x, y, life: life + 35, scale0: scale * 1.18, scale1: scale * 0.35, alpha0: 0.52, tint: color, rotation: angle, depthOffset: 405 });
+    if (strength === 'crit' || strength === 'counter') {
+      this.spawn(TEX.star, now, { x, y, life: 145, scale0: scale * 0.85, scale1: 0.2, alpha0: 0.92, tint: strength === 'counter' ? 0xc2f0ff : 0xffe478, rotation: angle, spin: 0.5, depthOffset: 407 });
+    }
+  }
+
+  /** 3타 마무리 찌르기·반격 돌진 일섬 시 칼끝에서 터지는 관통 돌풍 고리(소닉 콘) */
+  thrustCone(x: number, y: number, dirX: number, dirY: number, color: number, now: number): void {
+    const ang = Math.atan2(dirY, dirX);
+    this.spawn(TEX.ring, now, {
+      x, y, vx: dirX * 90, vy: dirY * 60, life: 175, scale0: 0.25, scale1: 1.35,
+      alpha0: 0.82, tint: color, flat: 0.52, rotation: ang + Math.PI / 2, drag: 5, depthOffset: 404,
+    });
+    for (let i = -1; i <= 1; i += 2) {
+      const a = ang + i * 0.32;
+      this.spawn(TEX.streak, now, {
+        x, y, vx: Math.cos(a) * 620, vy: Math.sin(a) * 520, life: 145, scale0: 0.9, scale1: 0.12,
+        alpha0: 0.85, tint: color, drag: 5, align: true, depthOffset: 403,
+      });
+    }
+  }
+
+  /** 회전 베기(스킬) 발동 시 바닥에 펼쳐지는 2겹 황금 원형 검기 링 + 사방 스파크 */
+  spinRing(x: number, y: number, radius: number, now: number): void {
+    const scale1 = (radius / 60) * 1.05;
+    this.spawn(TEX.ring, now, { x, y: y - 30, life: 240, scale0: 0.45, scale1, alpha0: 0.95, tint: 0xfff0c2, flat: 0.52, depthOffset: 402 });
+    this.spawn(TEX.ring, now, { x, y: y - 30, life: 310, scale0: 0.3, scale1: scale1 * 1.18, alpha0: 0.65, tint: 0xffb347, flat: 0.52, depthOffset: 401 });
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
+      const speed = 520 + Math.random() * 280;
+      this.spawn(TEX.streak, now, {
+        x: x + Math.cos(a) * radius * 0.35, y: y - 30 + Math.sin(a) * radius * 0.2,
+        vx: Math.cos(a) * speed, vy: Math.sin(a) * speed * 0.55,
+        life: 160 + Math.random() * 80, scale0: 0.95, scale1: 0.15,
+        alpha0: 0.95, tint: i % 2 === 0 ? 0xffffff : 0xffcc66, drag: 5, align: true, depthOffset: 403,
+      });
+    }
+    this.dust(x, y, 10, now, radius * 0.45);
+  }
+
+  /** 적 처치(Kill) 피니시 폭발 연출 — 마지막 적·보스 막타에는 웅장한 십자 별빛과 충격파를 더한다. */
+  killBurst(x: number, y: number, color: number, dirX: number, dirY: number, lastKill: boolean, now: number): void {
+    const ang = Math.atan2(dirY, dirX);
+    this.spawn(TEX.ring, now, { x, y, life: lastKill ? 340 : 240, scale0: 0.35, scale1: lastKill ? 2.6 : 1.75, alpha0: 0.85, tint: lastKill ? 0xffe885 : color, flat: 0.45, depthOffset: -1 });
+    if (lastKill) {
+      this.spawn(TEX.star, now, { x, y: y - 55, life: 240, scale0: 1.85, scale1: 0.5, alpha0: 0.98, tint: 0xffffff, rotation: ang, spin: 0.5, depthOffset: 415 });
+      this.spawn(TEX.star, now, { x, y: y - 55, life: 300, scale0: 2.35, scale1: 0.75, alpha0: 0.65, tint: 0xffdd66, rotation: ang + Math.PI / 4, spin: -0.4, depthOffset: 414 });
+    }
+    for (let i = 0; i < (lastKill ? 14 : 8); i++) {
+      const a = ang + (Math.random() - 0.5) * 1.9;
+      const speed = (480 + Math.random() * 440) * (lastKill ? 1.2 : 1);
+      this.spawn(TEX.streak, now, {
+        x, y: y - 50, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed * 0.75,
+        life: 180 + Math.random() * 110, scale0: 0.9 + Math.random() * 0.45, scale1: 0.14,
+        alpha0: 0.95, tint: i % 2 === 0 ? 0xffffff : (lastKill ? 0xffe074 : color), drag: 4.5, align: true, depthOffset: 410,
+      });
+    }
+  }
+
   /**
    * 나인솔즈 스타일 패링 충돌 연출.
    * - 정밀 패링: 짧은 어두운 임팩트 프레임 위로 눈부신 백금/청백·금빛 십자 별빛, X자 검격 섬광, 이중 충격파와 고속 불꽃.

@@ -8,7 +8,7 @@ import { parrySlowOutScale } from './parry.ts';
  */
 
 export type StrikeHitKind = 'normal' | 'crit' | 'finisher' | 'counter';
-export type HitKind = StrikeHitKind | 'parry' | 'chainBreak' | 'unbound' | 'imperfectGuard' | 'hurt';
+export type HitKind = StrikeHitKind | 'kill' | 'parry' | 'chainBreak' | 'unbound' | 'imperfectGuard' | 'hurt';
 
 /** 이 종류의 타격에서 게임 시간을 멈출 길이(실제 시간 ms) */
 export function hitStopMs(kind: HitKind): number {
@@ -16,6 +16,7 @@ export function hitStopMs(kind: HitKind): number {
     case 'crit': return HIT_FEEL.critHitStopMs;
     case 'finisher': return HIT_FEEL.finisherHitStopMs;
     case 'counter': return HIT_FEEL.counterHitStopMs;
+    case 'kill': return HIT_FEEL.killHitStopMs;
     case 'parry': return HIT_FEEL.parryHitStopMs;
     case 'chainBreak': return HIT_FEEL.chainBreakHitStopMs;
     case 'unbound': return HIT_FEEL.unboundHitStopMs;
@@ -67,6 +68,6 @@ export function critMultiplier(crit: boolean): number {
 
 /** 여러 적을 한 번에 베었을 때는 가장 무거운 타격 하나로 연출한다. */
 export function heavierKind<K extends HitKind>(a: K | undefined, b: K): K {
-  const order: HitKind[] = ['normal', 'imperfectGuard', 'crit', 'finisher', 'counter', 'parry', 'chainBreak', 'unbound', 'hurt'];
+  const order: HitKind[] = ['normal', 'imperfectGuard', 'crit', 'kill', 'finisher', 'counter', 'parry', 'chainBreak', 'unbound', 'hurt'];
   return a === undefined || order.indexOf(b) > order.indexOf(a) ? b : a;
 }

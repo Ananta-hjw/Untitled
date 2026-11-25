@@ -7,6 +7,7 @@ import {
   addResonanceParts,
   bossParryOutcome,
   chargeParryProgress,
+  effectivePerfectWindowMs,
   gradeParry,
   imperfectGuardDamage,
   isChargeParryReady,
@@ -16,6 +17,7 @@ import {
   parryPitchRatio,
   parrySlowOutScale,
   parryZoom,
+  recordParryWhiff,
   recoverInternal,
   stepInternalHeal,
 } from '../src/combat/parry.ts';
@@ -162,4 +164,29 @@ test('차지 패링(무량반격): 길게 눌러 충전하고 떼는 창에서 �
   assert.equal(addResonanceParts(0, BLOCK.unboundResonanceParts, maxCharge(RESONANCE)), 3);
   assert.equal(addResonanceParts(14, BLOCK.unboundResonanceParts, maxCharge(RESONANCE)), maxCharge(RESONANCE));
 });
+
+test('헛막기 쿨타임(450ms)과 연타 시 정밀 창 축소(130 → 80 → 60ms) 및 휴식 후 복구', () => {
+  assert.equal(BLOCK.cooldownMs, 450);
+  assert.ok(BLOCK.imperfectCooldownMs < BLOCK.cooldownMs, '불완전 막기 쿨은 헛막기보다 짧다');
+  assert.ok(BLOCK.cooldownMs > BLOCK.windowMs, '막기 창 뒤에 빈틈이 남아 단순 연타는 위험하다');
+
+  let whiff = { count: 0, lastWhiffAt: -Infinity };
+  assert.equal(effectivePerfectWindowMs(whiff, 1000), 130);
+
+  // 1회 헛막기 후 800ms 안에 다시 누르면 정밀 창이 80ms로 축소된다.
+  whiff = recordParryWhiff(whiff, 1260);
+  assert.equal(whiff.count, 1);
+  assert.equal(effectivePerfectWindowMs(whiff, 1450), 80);
+  assert.equal(gradeParry(true, 100, true, effectivePerfectWindowMs(whiff, 1450)), 'imperfect', '연타 시 100ms는 불완전 막기');
+  assert.equal(gradeParry(true, 75, true, effectivePerfectWindowMs(whiff, 1450)), 'perfect', '80ms 안이면 여전히 정밀 패링');
+
+  // 연속으로 한 번 더 헛막으면 60ms까지 축소된다.
+  whiff = recordParryWhiff(whiff, 1710);
+  assert.equal(whiff.count, 2);
+  assert.equal(effectivePerfectWindowMs(whiff, 1900), 60);
+
+  // 800ms 이상 쉬면 즉시 기본 130ms로 복구된다.
+  assert.equal(effectivePerfectWindowMs(whiff, 1710 + BLOCK.whiffMemoryMs + 1), 130);
+});
+
 

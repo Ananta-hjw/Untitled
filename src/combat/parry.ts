@@ -13,6 +13,40 @@ export interface ParryChainState {
   lastAt: number;
 }
 
+export interface WhiffState {
+  count: number;
+  lastWhiffAt: number;
+}
+
+/**
+ * 헛막기 연타 상태에 따른 이번 막기의 정밀 패링 인정 시간(ms).
+ * - 정상: 130ms / 1회 연타: 80ms / 2회 이상 연타: 60ms.
+ * - whiffMemoryMs(800ms) 이상 쉬거나 한 번이라도 막기에 성공하면 즉시 130ms로 복구된다.
+ */
+export function effectivePerfectWindowMs(
+  whiff: WhiffState,
+  now: number,
+  memoryMs = BLOCK.whiffMemoryMs,
+  windows: readonly number[] = BLOCK.whiffPerfectWindowsMs,
+): number {
+  const recent = whiff.count > 0 && Number.isFinite(whiff.lastWhiffAt)
+    && now >= whiff.lastWhiffAt && now - whiff.lastWhiffAt <= memoryMs;
+  const tier = recent ? Math.min(windows.length - 1, whiff.count) : 0;
+  return windows[tier];
+}
+
+/** 아무 공격도 막지 못하고 막기 창이 끝났을 때(헛막기) 연타 누적 단계를 올린다. */
+export function recordParryWhiff(
+  previous: WhiffState,
+  whiffAt: number,
+  memoryMs = BLOCK.whiffMemoryMs,
+  maxTier = BLOCK.whiffPerfectWindowsMs.length - 1,
+): WhiffState {
+  const chained = previous.count > 0 && Number.isFinite(previous.lastWhiffAt)
+    && whiffAt >= previous.lastWhiffAt && whiffAt - previous.lastWhiffAt <= memoryMs + BLOCK.windowMs;
+  return { count: chained ? Math.min(maxTier, previous.count + 1) : 1, lastWhiffAt: whiffAt };
+}
+
 /**
  * 막기 버튼을 누른 뒤 elapsedMs가 지났을 때 앞쪽에서 온 공격을 어떻게 막았는지 판정한다.
  * - 0 ~ perfectWindowMs: 정밀 패링 ('perfect')

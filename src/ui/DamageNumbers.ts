@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { DEPTH_LIGHTING } from '../config';
+import { damageNumberMotion } from '../combat/attackFeel';
 
 /**
- * 떠오르며 사라지는 데미지 숫자.
+ * 떠오르며 사라지는 탄성 데미지 숫자.
  *
  * 숫자 0~9를 시작할 때 한 번만 텍스처로 그려 두고, 타격마다 그 그림을 조합해서 보여 준다.
- * Text 객체를 매번 새로 만들면 그때마다 글자를 그려 GPU로 올려야 해서 전투 중에 끊길 수 있다.
- * 숫자 그림과 표시 항목은 모두 재사용하므로 타격이 이어져도 새로 만드는 것이 없다.
+ * 뜨는 순간 탄성 있게 팝인(1.48~1.75배 → 1배)되고 공격 방향으로 살짝 튕겨 손맛을 높인다.
  */
 
 const TEXTURE = 'damage-digits';
@@ -14,8 +14,9 @@ const TEXTURE = 'damage-digits';
 const GLYPH_SIZE = 92;
 const CELL_WIDTH = 84;
 const CELL_HEIGHT = 124;
-const DURATION_MS = 650;
-const RISE = 60;
+const DURATION_MS = 680;
+const HEAVY_DURATION_MS = 780;
+const RISE = 64;
 
 interface Entry {
   images: Phaser.GameObjects.Image[];
@@ -23,6 +24,10 @@ interface Entry {
   offsets: number[];
   count: number;
   age: number;
+  duration: number;
+  baseScale: number;
+  heavy: boolean;
+  driftX: number;
   x: number;
   y: number;
   active: boolean;
@@ -38,10 +43,11 @@ export class DamageNumbers {
     this.buildTexture();
   }
 
-  /** color는 0xRRGGBB, size는 화면에서의 글자 크기(px). */
-  show(x: number, y: number, amount: number, color: number, size = 34): void {
+  /** color는 0xRRGGBB, size는 화면에서의 글자 크기(px). dirX가 있으면 베는 방향으로 살짝 튕긴다. */
+  show(x: number, y: number, amount: number, color: number, size = 34, dirX = 0): void {
     const text = String(Math.max(0, Math.round(amount)));
     const scale = size / GLYPH_SIZE;
+    const heavy = size >= 46;
     const entry = this.acquire(text.length);
 
     let width = 0;
@@ -58,7 +64,11 @@ export class DamageNumbers {
 
     entry.count = text.length;
     entry.age = 0;
-    entry.x = x + Phaser.Math.Between(-14, 14);
+    entry.duration = heavy ? HEAVY_DURATION_MS : DURATION_MS;
+    entry.baseScale = scale;
+    entry.heavy = heavy;
+    entry.driftX = dirX ? Math.sign(dirX) * (heavy ? 24 : 15) : Phaser.Math.Between(-10, 10);
+    entry.x = x + Phaser.Math.Between(-12, 12);
     entry.y = y;
     entry.active = true;
     this.place(entry, 0);
@@ -68,7 +78,7 @@ export class DamageNumbers {
     for (const entry of this.entries) {
       if (!entry.active) continue;
       entry.age += deltaMs;
-      const t = entry.age / DURATION_MS;
+      const t = entry.age / entry.duration;
       if (t >= 1) {
         entry.active = false;
         for (let i = 0; i < entry.count; i++) entry.images[i].setVisible(false);
@@ -79,11 +89,16 @@ export class DamageNumbers {
   }
 
   private place(entry: Entry, t: number): void {
-    // 처음에 빠르게 올라가고 점점 느려진다.
-    const y = entry.y - RISE * (1 - (1 - t) * (1 - t));
-    const alpha = 1 - t;
+    const { scaleMult, riseRatio, alpha } = damageNumberMotion(t, entry.heavy);
+    const jitter = entry.heavy && t < 0.14 ? Math.sin(t * 140) * 3.5 : 0;
+    const x = entry.x + entry.driftX * riseRatio + jitter;
+    const y = entry.y - (entry.heavy ? RISE * 1.15 : RISE) * riseRatio;
+    const sc = entry.baseScale * scaleMult;
     for (let i = 0; i < entry.count; i++) {
-      entry.images[i].setPosition(entry.x + entry.offsets[i], y).setAlpha(alpha);
+      entry.images[i]
+        .setPosition(x + entry.offsets[i] * scaleMult, y)
+        .setScale(sc)
+        .setAlpha(alpha);
     }
   }
 
@@ -91,7 +106,7 @@ export class DamageNumbers {
   private acquire(digits: number): Entry {
     let entry = this.entries.find((e) => !e.active);
     if (!entry) {
-      entry = { images: [], offsets: [], count: 0, age: 0, x: 0, y: 0, active: false };
+      entry = { images: [], offsets: [], count: 0, age: 0, duration: DURATION_MS, baseScale: 1, heavy: false, driftX: 0, x: 0, y: 0, active: false };
       this.entries.push(entry);
     }
     while (entry.images.length < digits) {
@@ -118,14 +133,14 @@ export class DamageNumbers {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
-    ctx.lineWidth = 16;
     ctx.strokeStyle = '#1a1008';
-    // 흰색으로 그려 두고 표시할 때 색을 곱한다. 어두운 테두리는 곱해도 어둡게 남는다.
+    ctx.lineWidth = 14;
     ctx.fillStyle = '#ffffff';
     for (let digit = 0; digit < 10; digit++) {
       const cx = digit * CELL_WIDTH + CELL_WIDTH / 2;
-      ctx.strokeText(String(digit), cx, CELL_HEIGHT / 2);
-      ctx.fillText(String(digit), cx, CELL_HEIGHT / 2);
+      const cy = CELL_HEIGHT / 2;
+      ctx.strokeText(String(digit), cx, cy);
+      ctx.fillText(String(digit), cx, cy);
       texture.add(String(digit), 0, digit * CELL_WIDTH, 0, CELL_WIDTH, CELL_HEIGHT);
     }
     texture.refresh();

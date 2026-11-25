@@ -22,6 +22,7 @@ export class Hud {
   private readonly goldText: Phaser.GameObjects.Text;
   private readonly levelUpText: Phaser.GameObjects.Text;
   private readonly callout: Phaser.GameObjects.Text;
+  private readonly comboText: Phaser.GameObjects.Text;
   private readonly slowTint: Phaser.GameObjects.Rectangle;
   private hint?: Phaser.GameObjects.Text;
   private readonly orbs: Phaser.GameObjects.Graphics;
@@ -139,6 +140,22 @@ export class Hud {
       .setResolution(2)
       .setVisible(false);
 
+    // 연속 히트 카운터: 골드 표시 아래 왼쪽에 작고 선명하게 띄운다.
+    this.comboText = scene.add
+      .text(BAR.x, XP_BAR.y + XP_BAR.height + 54, '', {
+        fontFamily: FONT,
+        fontSize: '30px',
+        fontStyle: 'bold',
+        color: '#ffe082',
+        stroke: '#241206',
+        strokeThickness: 7,
+      })
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_UI + 3)
+      .setResolution(2)
+      .setVisible(false);
+
     // 느린 화면일 때 화면 전체에 옅은 푸른 빛을 덮는다.
     this.slowTint = scene.add
       .rectangle(0, 0, 10, VIEW_HEIGHT, 0x3a7bd5, 1)
@@ -162,6 +179,39 @@ export class Hud {
         { scale: 1, duration: 140, ease: 'Back.easeOut' },
         { alpha: 0, duration: 350, delay: 600, onComplete: () => label.setVisible(false) },
       ],
+    });
+  }
+
+  /** 연속 히트 카운터를 갱신한다. 2히트 이상부터 탄성 있게 팝인 표시한다. */
+  setCombo(count: number, accent: 'normal' | 'counter' = 'normal'): void {
+    const label = this.comboText;
+    if (count < 2) {
+      this.clearCombo();
+      return;
+    }
+    this.scene.tweens.killTweensOf(label);
+    const color = accent === 'counter' ? '#aeeeff' : count >= 10 ? '#fff2a6' : count >= 5 ? '#ffd45a' : '#ffe8b2';
+    const stroke = accent === 'counter' ? '#0b263d' : count >= 10 ? '#5c1808' : '#261206';
+    label.setColor(color).setStroke(stroke, 7);
+    label.setText(count >= 10 ? `${count} HIT!!` : `${count} HIT!`).setVisible(true).setAlpha(1).setScale(1.38);
+    this.scene.tweens.add({
+      targets: label,
+      scale: 1,
+      duration: 130,
+      ease: 'Back.easeOut',
+    });
+  }
+
+  /** 히트 카운터가 끊겼을 때 부드럽게 지운다. */
+  clearCombo(): void {
+    const label = this.comboText;
+    if (!label.visible) return;
+    this.scene.tweens.killTweensOf(label);
+    this.scene.tweens.add({
+      targets: label,
+      alpha: 0,
+      duration: 220,
+      onComplete: () => label.setVisible(false),
     });
   }
 

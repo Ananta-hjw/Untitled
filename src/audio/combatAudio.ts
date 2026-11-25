@@ -1,4 +1,5 @@
 import { parryPitchRatio } from '../combat/parry';
+import type { StrikeHitKind } from '../combat/hitFeel';
 
 /**
  * 외부 음원 파일 없이 Web Audio API로 합성하는 전투 효과음 + 모바일 진동(햅틱).
@@ -80,15 +81,100 @@ export class CombatAudio {
     }
   }
 
-  /** 패링 뒤 반격 일격을 꽂았을 때의 묵직한 베기음 */
-  playCounterHit(): void {
-    this.vibrate(22);
+  /** 콤보 단계·반격·공명에 따라 달라지는 칼 휘두르기 바람음(Whoosh) */
+  playSwing(stage: number, counter = false, resonating = false): void {
     const ctx = this.ensureContext();
     if (!ctx) return;
     const now = ctx.currentTime;
-    this.playNoise(ctx, now, 0.045, 1900, 'bandpass', 1.2, 0.22);
-    this.playTone(ctx, now, 'sine', 180, 52, 0.15, 0.28);
-    this.playTone(ctx, now, 'triangle', 920, 420, 0.14, 0.11);
+    if (counter) {
+      // 반격 돌진 일섬: 날카로운 고속 관통음 + 맑은 청백 잔향("슈파악!")
+      this.playNoise(ctx, now, 0.085, 2200, 'bandpass', 1.4, 0.19);
+      this.playTone(ctx, now, 'triangle', 1480, 560, 0.11, 0.1);
+      this.playTone(ctx, now, 'sine', 240, 90, 0.09, 0.15);
+      return;
+    }
+    if (stage >= 2) {
+      // 3타 마무리 찌르기: 묵직하고 깊은 관통 바람음("슈우욱—!")
+      this.playNoise(ctx, now, 0.095, 1150, 'bandpass', 1.1, 0.18);
+      this.playTone(ctx, now, 'sine', 260, 88, 0.1, 0.14);
+    } else if (stage === 1) {
+      // 2타 올려 베기: 빠르고 올라가는 경쾌한 바람음("휘익!")
+      this.playNoise(ctx, now, 0.065, 1650, 'bandpass', 1.5, 0.14);
+      this.playTone(ctx, now, 'sine', 420, 720, 0.065, 0.055);
+    } else {
+      // 1타 내려 베기: 깔끔하고 날카로운 하강 바람음("쉭!")
+      this.playNoise(ctx, now, 0.06, 1400, 'bandpass', 1.6, 0.13);
+      this.playTone(ctx, now, 'sine', 520, 260, 0.06, 0.05);
+    }
+    if (resonating) {
+      this.playTone(ctx, now, 'sine', 1320, 1760, 0.08, 0.045);
+    }
+  }
+
+  /** 검 명중 타격음 + 단계별 모바일 진동(일반·치명타·3타 마무리·반격·처치 피니시) */
+  playHit(kind: StrikeHitKind, killed = false, lastKill = false): void {
+    const vib = lastKill ? [20, 24, 34]
+      : killed ? [14, 18, 22]
+      : kind === 'counter' ? 22
+      : kind === 'finisher' ? 18
+      : kind === 'crit' ? 14 : 7;
+    this.vibrate(vib);
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    if (kind === 'counter') {
+      this.playNoise(ctx, now, 0.05, 2100, 'bandpass', 1.2, 0.24);
+      this.playTone(ctx, now, 'sine', 185, 48, 0.16, 0.3);
+      this.playTone(ctx, now, 'triangle', 1240, 620, 0.17, 0.13);
+    } else if (kind === 'finisher') {
+      this.playNoise(ctx, now, 0.05, 1300, 'bandpass', 1.1, 0.22);
+      this.playTone(ctx, now, 'sine', 165, 42, 0.15, 0.29);
+      this.playTone(ctx, now, 'triangle', 680, 290, 0.12, 0.1);
+    } else if (kind === 'crit') {
+      this.playNoise(ctx, now, 0.038, 2400, 'highpass', 1.0, 0.2);
+      this.playTone(ctx, now, 'sine', 175, 56, 0.12, 0.24);
+      this.playTone(ctx, now, 'triangle', 1920, 1340, 0.18, 0.12);
+    } else {
+      this.playNoise(ctx, now, 0.032, 1550, 'bandpass', 1.4, 0.16);
+      this.playTone(ctx, now, 'sine', 150, 62, 0.085, 0.2);
+    }
+
+    if (killed) {
+      // 처치 피니시: 시원하게 터지며 빠지는 잔향(마지막 적/보스 막타는 웅장한 화음 추가)
+      this.playTone(ctx, now + 0.015, 'sine', 125, 34, lastKill ? 0.28 : 0.18, lastKill ? 0.32 : 0.22);
+      this.playTone(ctx, now + 0.02, 'triangle', 1080, 640, lastKill ? 0.32 : 0.18, 0.1);
+      if (lastKill) {
+        this.playTone(ctx, now + 0.035, 'sine', 1620, 1280, 0.36, 0.09);
+      }
+    }
+  }
+
+  /** 회전 베기 광역 칼바람 + 공명음 */
+  playSpinSlash(): void {
+    this.vibrate(16);
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    this.playNoise(ctx, now, 0.14, 1350, 'bandpass', 0.9, 0.22);
+    this.playTone(ctx, now, 'sine', 210, 68, 0.16, 0.24);
+    this.playTone(ctx, now + 0.015, 'triangle', 740, 1180, 0.16, 0.09);
+  }
+
+  /** 서리 딱정벌레 껍질 등 단단한 갑주에 튕겨 나갈 때의 차가운 "깡!" 소리 */
+  playShellBlock(): void {
+    this.vibrate(10);
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    this.playNoise(ctx, now, 0.022, 3200, 'highpass', 1.0, 0.18);
+    this.playTone(ctx, now, 'triangle', 2150, 1840, 0.16, 0.12);
+    this.playTone(ctx, now, 'sine', 3180, 2900, 0.13, 0.08);
+  }
+
+  /** 패링 뒤 반격 일격을 꽂았을 때의 묵직한 베기음 */
+  playCounterHit(): void {
+    this.playHit('counter', false, false);
   }
 
   /** 보스 연속 패링 파훼: 마지막 타를 튕겨내며 터지는 웅장한 금속 화음 + 파열음 */

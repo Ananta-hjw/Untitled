@@ -181,6 +181,8 @@ export const HIT_FEEL = {
   unboundHitStopMs: 135,
   /** 불완전 막기: 정밀 패링보다 짧고 둔탁한 정지 */
   imperfectGuardHitStopMs: 45,
+  /** 적을 쓰러뜨린 막타의 시원한 짧은 정지 */
+  killHitStopMs: 55,
   hurtHitStopMs: 60,
   /** 치명타 확률과 피해 배율 (반격에는 치명타가 붙지 않는다. 반격 자체가 강하다) */
   critChance: 0.15,
@@ -202,6 +204,29 @@ export const HIT_FEEL = {
   heavyKnockback: 1.35,
   squashMs: 280,
   squash: 0.32,
+};
+
+/**
+ * 공격 손맛·반격 돌진 일섬·처치 피니시·히트 카운터 설정.
+ * 패링(1.075~1.12)보다 미세하게 낮은 줌 위계를 써서 전투 전체의 완급을 살린다.
+ */
+export const ATTACK_FEEL = {
+  comboTimeoutMs: 3600,
+  counterRushRange: 280,
+  counterRushStopGap: 72,
+  counterRushMinLunge: 64,
+  counterRushDefaultLunge: 92,
+  counterRushMaxLunge: 155,
+  counterRushDamage: 2.4,
+  critZoomPeak: 1.032,
+  finisherZoomPeak: 1.04,
+  killZoomPeak: 1.045,
+  counterZoomPeak: 1.058,
+  lastKillZoomPeak: 1.085,
+  zoomInMs: 28,
+  zoomOutMs: 160,
+  lastKillSlowMs: 185,
+  lastKillSlowScale: 0.35,
 };
 
 /** 밀려나는 속도가 줄어드는 정도(초당) */
@@ -305,10 +330,13 @@ export const RESONANCE = {
  *  - perfectWindowMs 안(정밀 패링): 피해 0, 공명 충전, 적 대경직(stunMs), 반격 창, 회피 쿨 1초 감소, 막기 쿨 즉시 초기화.
  *  - perfectWindowMs ~ windowMs 사이(불완전 막기): 원래 피해의 일부를 회복 가능한 내상으로만 받고(죽지 않음),
  *    뒤로 밀리며 적은 짧게 멈칫한다. 막기 쿨은 헛막기보다 짧게 돌아온다.
- *  - 헛막으면 cooldownMs 동안 다시 막을 수 없다.
+ *  - 헛막으면 cooldownMs(450ms) 동안 다시 막을 수 없고, whiffMemoryMs(800ms) 안에 또 헛연타하면
+ *    정밀 패링 창만 단계적으로 줄어든다(130 → 80 → 60ms). 성공하거나 잠깐 쉬면 즉시 130ms로 복구된다.
  */
 export const BLOCK = {
   perfectWindowMs: 130,
+  whiffPerfectWindowsMs: [130, 80, 60] as const,
+  whiffMemoryMs: 800,
   windowMs: 260,
   imperfectDamageRatio: 0.4,
   internalHealDelayMs: 2400,
@@ -319,7 +347,7 @@ export const BLOCK = {
   perfectRecoil: 95,
   enemyKnockback: 185,
   imperfectStunMs: 420,
-  imperfectCooldownMs: 360,
+  imperfectCooldownMs: 260,
   chainWindowMs: 1800,
   slowOutMs: 115,
   slowOutScale: 0.5,
@@ -338,7 +366,7 @@ export const BLOCK = {
   chainBreakResonanceBonus: 1,
   unboundResonanceParts: 3,
   glintLeadMs: 240,
-  cooldownMs: 1000,
+  cooldownMs: 450,
   stunMs: 1200,
   moveScale: 0.4,
   dodgeRefundMs: 1000,

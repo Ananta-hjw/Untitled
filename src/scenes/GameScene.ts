@@ -16,16 +16,27 @@ import { critMultiplier, gameTimeScale, heavierKind, hitStopMs, strikeKind, type
 import {
   addResonanceParts,
   chargeParryProgress,
+  effectivePerfectWindowMs,
   gradeParry,
   imperfectGuardDamage,
   isChargeParryReady,
   isUnboundActive,
   nextParryChain,
   parryZoom,
+  recordParryWhiff,
   recoverInternal,
   stepInternalHeal,
   type ParryChainState,
+  type WhiffState,
 } from '../combat/parry';
+import {
+  attackTrailStyle,
+  attackZoomPeak,
+  counterLungeDistance,
+  isHitComboActive,
+  nextHitCombo,
+  type HitComboState,
+} from '../combat/attackFeel';
 import { CombatAudio } from '../audio/combatAudio';
 import { ImpactEffects } from '../combat/ImpactEffects';
 import {
@@ -41,6 +52,7 @@ import {
   VERTICAL_SPEED_RATIO,
   VIEW_HEIGHT,
   HIT_FEEL,
+  ATTACK_FEEL,
   HERO_WALK_NATURAL_SPEED,
   MANA,
   SPIN_SLASH,
@@ -206,13 +218,16 @@ export class GameScene extends Phaser.Scene {
   /** 초반 전투 가이드(story/tutorial.ts): 안내 창과 이미 본 안내 */
   private guideCard?: GuideCard;
   private seenLessons = new Set<LessonId>();
-  private attackTrace?: { startedAt: number; stage: number; direction: { x: number; y: number }; previous: Blade; elapsed: number; hit: Set<Enemy>; effect?: AttackEffect; counter: boolean };
+  private attackTrace?: { startedAt: number; stage: number; direction: { x: number; y: number }; previous: Blade; elapsed: number; hit: Set<Enemy>; effect?: AttackEffect; counter: boolean; coneShown?: boolean; counterCallout?: boolean };
   private nextAttackAt = 0;
   private attackBufferedUntil?: number;
   private keyboardAttackPressed = false;
-  private attackLunge?: { startedAt: number; stage: number; direction: { x: number; y: number }; progress: number };
+  private attackLunge?: { startedAt: number; stage: number; direction: { x: number; y: number }; progress: number; distance: number; counter: boolean; nextGhostAt: number };
   private comboStage = 0;
   private comboExpiresAt = 0;
+  /** 연속 히트 카운터와 반격 돌진 일섬의 우선 목표 적 */
+  private hitCombo: HitComboState = { count: 0, lastAt: -Infinity };
+  private counterTarget?: Enemy;
   private dodgeButton!: ActionButton;
   /** 막기 버튼(누르고 있는 동안 막는다) */
   private blockButton?: ActionButton;
@@ -223,6 +238,10 @@ export class GameScene extends Phaser.Scene {
   private parryStartedAt = -Infinity;
   private parryUntil = 0;
   private parryReadyAt = 0;
+  /** 헛막기 연타 시 정밀 패링 창 축소 추적(130 → 80 → 60ms) */
+  private parryWhiff: WhiffState = { count: 0, lastWhiffAt: -Infinity };
+  private parryPendingWhiff = false;
+  private activePerfectWindowMs = BLOCK.perfectWindowMs;
   /** 연속 정밀 패링 체인(음정 상승·연출 격상) */
   private parryChain: ParryChainState = { count: 0, lastAt: -Infinity };
   /** 정밀 패링·무량반격 히트스톱 뒤 짧은 여운 슬로우아웃(실제 시간 ms) */
@@ -233,9 +252,11 @@ export class GameScene extends Phaser.Scene {
   private chargeHoldStart?: number;
   private chargeParryReady = false;
   private unboundUntil = 0;
-  /** 정밀 패링 카메라 줌 펀치(실제 시간 ms, 비활성 -1) */
+  /** 패링·공격·처치 카메라 줌 펀치(실제 시간 ms, 비활성 -1) */
   private parryZoomElapsed = -1;
   private parryZoomPeak = 1;
+  private parryZoomInMs = BLOCK.zoomInMs;
+  private parryZoomOutMs = BLOCK.zoomOutMs;
   /** 패링 직후 검 리코일 자세를 잠깐 유지하는 기한(게임 시계, 공격·회피·이동 시 즉시 해제) */
   private guardPoseUntil = 0;
   /** 불완전 막기로 쌓인 회복 가능 내상(HP 단위)과 회복 시작 시각·누적 소수 */
@@ -550,6 +571,9 @@ export class GameScene extends Phaser.Scene {
     this.parryStartedAt = -Infinity;
     this.parryUntil = 0;
     this.parryReadyAt = 0;
+    this.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
+    this.parryPendingWhiff = false;
+    this.activePerfectWindowMs = BLOCK.perfectWindowMs;
     this.parryChain = { count: 0, lastAt: -Infinity };
     this.parrySlowOutLeft = 0;
     this.parrySlowOutScaleVal = BLOCK.slowOutScale;
@@ -559,6 +583,10 @@ export class GameScene extends Phaser.Scene {
     this.unboundUntil = 0;
     this.parryZoomElapsed = -1;
     this.parryZoomPeak = 1;
+    this.parryZoomInMs = BLOCK.zoomInMs;
+    this.parryZoomOutMs = BLOCK.zoomOutMs;
+    this.hitCombo = { count: 0, lastAt: -Infinity };
+    this.counterTarget = undefined;
     this.guardPoseUntil = 0;
     this.internalDamage = 0;
     this.internalHealAt = 0;
@@ -859,14 +887,15 @@ export class GameScene extends Phaser.Scene {
     // 수련 연습이 막 시작됐으면 시스템 안내 창을 한 번 띄운다.
     if (this.showLessonIfNew()) return;
 
-    // 패링 카메라 줌 펀치는 실제 시간으로 움직여 히트스톱 순간에도 즉각 반응한다.
+    // 패링·공격·처치 카메라 줌 펀치는 실제 시간으로 움직여 히트스톱 순간에도 즉각 반응한다.
     if (this.parryZoomElapsed >= 0) {
       this.parryZoomElapsed += step;
-      if (this.parryZoomElapsed >= BLOCK.zoomInMs + BLOCK.zoomOutMs) {
+      if (this.parryZoomElapsed >= this.parryZoomInMs + this.parryZoomOutMs) {
         this.parryZoomElapsed = -1;
+        this.parryZoomPeak = 1;
         this.cameras.main.setZoom(1);
       } else {
-        this.cameras.main.setZoom(parryZoom(this.parryZoomElapsed, this.parryZoomPeak, BLOCK.zoomInMs, BLOCK.zoomOutMs));
+        this.cameras.main.setZoom(parryZoom(this.parryZoomElapsed, this.parryZoomPeak, this.parryZoomInMs, this.parryZoomOutMs));
       }
     }
 
@@ -935,6 +964,7 @@ export class GameScene extends Phaser.Scene {
     for (const door of this.doorMarkers) if (door.marker) door.text.setY(door.spot.y - 150 - Math.abs(Math.sin(time / 320)) * 8);
     this.applyKnockback(this.player, dt);
     this.updateInternalHeal(time, dt);
+    if (this.hitCombo.count > 0 && !isHitComboActive(this.hitCombo, time)) this.resetHitCombo();
     this.damageNumbers.update(gameStep);
     this.updatePotion(time);
     this.updateSkill(time, gameStep);
@@ -1475,6 +1505,8 @@ export class GameScene extends Phaser.Scene {
       this.guardPoseUntil = 0;
       this.unboundUntil = 0;
       this.parryStartedAt = time;
+      this.activePerfectWindowMs = effectivePerfectWindowMs(this.parryWhiff, time);
+      this.parryPendingWhiff = true;
       this.parryUntil = time + BLOCK.windowMs;
       this.parryReadyAt = time + BLOCK.cooldownMs;
       this.nextAttackAt = Math.max(this.nextAttackAt, this.parryUntil);
@@ -1498,6 +1530,7 @@ export class GameScene extends Phaser.Scene {
       if (this.chargeParryReady && !player.isAttacking) {
         this.unboundUntil = time + BLOCK.unboundWindowMs;
         this.parryUntil = 0;
+        this.parryPendingWhiff = false;
         this.parryReadyAt = time + BLOCK.cooldownMs;
         this.guardPoseUntil = time + BLOCK.unboundWindowMs;
         this.nextAttackAt = Math.max(this.nextAttackAt, this.unboundUntil);
@@ -1510,6 +1543,13 @@ export class GameScene extends Phaser.Scene {
     }
     const chargingParry = blockHeld && this.chargeHoldStart !== undefined && !player.isAttacking && time >= this.parryUntil;
     this.blocking = time < this.parryUntil && !player.isAttacking;
+    // 막기 창이 아무 공격도 막지 못하고 끝났을 때(차지 홀드 전환 제외) 헛막기로 기록해 연타 시 정밀 창을 줄인다.
+    if (this.parryPendingWhiff && time >= this.parryUntil) {
+      this.parryPendingWhiff = false;
+      if (!chargingParry && !this.chargeParryReady) {
+        this.parryWhiff = recordParryWhiff(this.parryWhiff, time);
+      }
+    }
 
     // 초 단위 애니메이션과 밀리초 시계의 부동소수점 오차로 한 프레임 쉬지 않게 한다.
     if (!this.opening && !this.blocking && !chargingParry && this.wantsAttack(time) && time + 1e-6 >= this.nextAttackAt) {
@@ -1697,25 +1737,41 @@ export class GameScene extends Phaser.Scene {
 
   private startAttack(time: number, inputX: number, inputY = 0): void {
     const player = this.player;
+    const counter = time <= this.counterUntil;
+    if (counter) this.counterUntil = 0;
     if (time > this.comboExpiresAt) this.comboStage = 0;
-    const stage = this.comboStage;
+    // 패링·저스트 회피 직후의 반격은 전용 3타 돌진 일섬으로 발동한다.
+    const stage = counter ? PLAYER.combo.length - 1 : this.comboStage;
     const combo = PLAYER.combo[stage];
     this.nextAttackAt = time + combo.intervalMs;
     this.comboExpiresAt = this.nextAttackAt + PLAYER.comboWindowMs;
-    this.comboStage = (stage + 1) % PLAYER.combo.length;
+    this.comboStage = counter ? 0 : (stage + 1) % PLAYER.combo.length;
     this.dismissHint();
     if (stage === PLAYER.combo.length - 1) this.questEvent({ type: 'finisher' });
 
     const hero = player.sprite;
     if (!(hero instanceof HeroSprite)) return;
     let facing = attackFacingFor(hero.lookDirection, player.facing);
+    let targetDist: number | undefined;
+    const manualInput = Math.hypot(inputX, inputY) > 0.25;
     // Input wins. Otherwise retain the last facing unless an aimable enemy is nearby.
-    if (Math.hypot(inputX, inputY) > 0.25) {
+    if (manualInput) {
       facing = attackFacingFor(movementFacing(inputX, inputY, hero.lookDirection, false), player.facing);
     } else {
-      let nearest = PLAYER.autoFaceRange;
+      let nearest = counter ? ATTACK_FEEL.counterRushRange : PLAYER.autoFaceRange;
+      // 반격 돌진 일섬은 방금 패링·회피한 적을 최우선으로 추적한다.
+      if (counter && this.counterTarget && this.counterTarget.character.alive && !this.counterTarget.untouchable) {
+        const tc = this.counterTarget.character;
+        const dx = tc.x - player.x, dy = (tc.y - player.y) / VERTICAL_SPEED_RATIO;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= ATTACK_FEEL.counterRushRange) {
+          nearest = dist;
+          targetDist = dist;
+          facing = movementFacing(dx, dy, hero.lookDirection, false);
+        }
+      }
       const held = this.mistWeaver?.threads.target;
-      if (held && held !== player) {
+      if (held && held !== player && targetDist === undefined) {
         const dx = held.x - player.x, dy = (held.y - player.y) / VERTICAL_SPEED_RATIO;
         const distance = Math.hypot(dx, dy);
         if (distance < nearest) {
@@ -1723,27 +1779,48 @@ export class GameScene extends Phaser.Scene {
           facing = movementFacing(dx, dy, hero.lookDirection, false);
         }
       }
+      if (targetDist === undefined) {
+        for (const enemy of this.enemies) {
+          const c = enemy.character;
+          if (!c.alive || enemy === this.mistWeaver?.caster) continue;
+          const dx = c.x - player.x, dy = (c.y - player.y) / VERTICAL_SPEED_RATIO;
+          const candidate = movementFacing(dx, dy, hero.lookDirection, false);
+          const distance = Math.hypot(dx, dy);
+          if (distance < nearest) {
+            nearest = distance;
+            if (counter) targetDist = distance;
+            facing = candidate;
+          }
+        }
+      }
+    }
+    this.counterTarget = undefined;
+
+    const direction = attackVector(facing);
+    if (counter && manualInput && targetDist === undefined) {
+      let best = ATTACK_FEEL.counterRushRange;
       for (const enemy of this.enemies) {
         const c = enemy.character;
-        if (!c.alive || enemy === this.mistWeaver?.caster) continue;
+        if (!c.alive || enemy.untouchable) continue;
         const dx = c.x - player.x, dy = (c.y - player.y) / VERTICAL_SPEED_RATIO;
-        const candidate = movementFacing(dx, dy, hero.lookDirection, false);
-        const distance = Math.hypot(dx, dy);
-        if (distance < nearest) {
-          nearest = distance;
-          facing = candidate;
+        const dist = Math.hypot(dx, dy);
+        if (dist < best && (dx * direction.x + dy * direction.y) > 0) {
+          best = dist;
+          targetDist = dist;
         }
       }
     }
 
-    const direction = attackVector(facing);
+    const lungeDistance = counterLungeDistance(combo.lungeDistance, targetDist, counter);
     player.face(direction.x);
     hero.setAttackFacing(facing);
     player.playAttack(stage + 1);
-    this.attackLunge = { startedAt: time, stage, direction, progress: 0 };
-    // 저스트 회피 직후의 첫 공격은 반격이다.
-    const counter = time <= this.counterUntil;
-    if (counter) this.counterUntil = 0;
+    this.combatAudio.playSwing(stage, counter, this.resonating);
+    if (counter) {
+      this.impacts.dust(player.x, player.y, 7, time, 55);
+      this.effects.spawnGhost(hero, player.x, player.y, player.y - 1, time, 0x7ee0ff, 0.45);
+    }
+    this.attackLunge = { startedAt: time, stage, direction, progress: 0, distance: lungeDistance, counter, nextGhostAt: time + 24 };
     this.attackTrace = { startedAt: time, stage, direction, previous: hero.getBlade(), elapsed: 0, hit: new Set(), counter };
   }
 
@@ -1757,11 +1834,21 @@ export class GameScene extends Phaser.Scene {
     }
     const combo = PLAYER.combo[lunge.stage];
     const progress = lungeProgress(time - lunge.startedAt, combo.lungeStartMs, combo.lungeEndMs);
-    const distance = (progress - lunge.progress) * combo.lungeDistance;
+    const distance = (progress - lunge.progress) * lunge.distance;
     lunge.progress = progress;
     const next = this.walkArea.move(this.player.x, this.player.y,
       distance * lunge.direction.x, distance * lunge.direction.y * VERTICAL_SPEED_RATIO, this.scratch);
     this.player.placeAt(next.x, next.y);
+    // 반격 돌진 일섬과 3타 마무리 전진 중 잔상을 남겨 속도감을 살린다.
+    if (progress > 0.05 && progress < 0.95 && time >= lunge.nextGhostAt && this.player.sprite instanceof HeroSprite) {
+      if (lunge.counter) {
+        lunge.nextGhostAt = time + 26;
+        this.effects.spawnGhost(this.player.sprite, this.player.x, this.player.y, this.player.y - 1, time, 0x7ee0ff, 0.44);
+      } else if (lunge.stage >= 2) {
+        lunge.nextGhostAt = time + 44;
+        this.effects.spawnGhost(this.player.sprite, this.player.x, this.player.y, this.player.y - 1, time, 0xffcf82, 0.28);
+      }
+    }
     if (progress === 1) this.attackLunge = undefined;
   }
 
@@ -1793,10 +1880,17 @@ export class GameScene extends Phaser.Scene {
       const upThrust = trace.stage === 2 && rig.activeAttackFacing === 'up';
       const behind = (rig.activeAttackFacing.startsWith('up') && !upThrust) || (trace.stage === 0
         && (rig.activeAttackFacing === 'left' || rig.activeAttackFacing === 'right'));
+      const style = attackTrailStyle(trace.stage, trace.counter, this.resonating);
+      const thrustReach = upThrust ? UP_THRUST_REACH : trace.counter ? 1.38 : 1;
       trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + strikeAt, trace.startedAt + visualEnd,
-        strikeAt, player.y + (behind ? -4 : 4), upThrust ? UP_THRUST_REACH : 1);
+        strikeAt, player.y + (behind ? -4 : 4), thrustReach, style);
       // The samples stop at visualEnd, but the visible end must meet the displayed sword on that render.
       this.effects.drawAttack(trace.effect, visualSweep, time, current);
+      if ((trace.stage === 2 || trace.counter) && !trace.coneShown) {
+        trace.coneShown = true;
+        this.impacts.thrustCone(current.tip.x, current.tip.y, trace.direction.x, trace.direction.y * VERTICAL_SPEED_RATIO,
+          trace.counter ? 0x8ee4ff : this.resonating ? 0xffe066 : 0xffbe6b, time);
+      }
     }
 
     const sweep = attackBladeSweep(previous, current, lastElapsed, elapsed, strikeAt, end);
@@ -1805,6 +1899,12 @@ export class GameScene extends Phaser.Scene {
     const finisher = trace.stage === PLAYER.combo.length - 1;
     let heaviest: StrikeHitKind | undefined;
     let internalRecovered = false;
+    let hitCount = 0;
+    let killedCount = 0;
+    let bossKilled = false;
+    const cutAngle = Math.hypot(sweep.current.tip.x - sweep.previous.tip.x, sweep.current.tip.y - sweep.previous.tip.y) > 4
+      ? Math.atan2(sweep.current.tip.y - sweep.previous.tip.y, sweep.current.tip.x - sweep.previous.tip.x)
+      : Math.atan2(trace.direction.y * VERTICAL_SPEED_RATIO, trace.direction.x);
     for (const enemy of this.enemies) {
       const c = enemy.character;
       if (!c.alive || enemy.untouchable || trace.hit.has(enemy)) continue;
@@ -1821,18 +1921,25 @@ export class GameScene extends Phaser.Scene {
       // 서리 딱정벌레의 얼음 껍질: 정면에서 벤 칼은 튕겨 나간다(반격은 껍질을 뚫는다).
       if (this.shellBlocked(enemy, trace.counter, bounds.centerX, bounds.centerY)) continue;
 
+      hitCount++;
       // 행운(LUK)만큼 치명타 확률이 오른다: 굴린 값을 그만큼 낮춘다.
       const strike = strikeKind(trace.counter, finisher, Math.random() - (this.derived.critChance - HIT_FEEL.critChance));
       heaviest = heavierKind(heaviest, strike.kind);
-      const bonus = trace.counter ? JUST_DODGE.counterDamage : 1;
-      const damage = monsterDamageTaken(Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * combo.damage * bonus * critMultiplier(strike.crit) * this.resonanceDamage()), enemy.stats.defense);
+      // 반격 돌진 일섬은 3타 자세를 쓰되 과도한 4배 대신 전용 2.4배 배율을 적용한다.
+      const stageMultiplier = trace.counter ? ATTACK_FEEL.counterRushDamage : combo.damage;
+      const damage = monsterDamageTaken(Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * stageMultiplier * critMultiplier(strike.crit) * this.resonanceDamage()), enemy.stats.defense);
       const died = c.hurt(damage);
-      if (trace.counter) this.showDamage(c.x, c.y - 100, damage, '#9fdcff', 50);
-      else if (strike.crit) this.showDamage(c.x, c.y - 100, damage, '#ffd23f', finisher ? 58 : 52);
-      else this.showDamage(c.x, c.y - 100, damage, finisher ? '#ffb35a' : '#fff3c4', finisher ? 46 : 34);
-      // 칼이 닿은 자리(몸 가운데)에서 섬광과 불꽃이 튄다.
-      this.impacts.impact(bounds.centerX, bounds.centerY, trace.direction.x, trace.direction.y,
-        strike.crit && strike.kind === 'finisher' ? 'finisher' : strike.kind, this.now, c.y);
+      if (died) {
+        killedCount++;
+        if (enemy === this.boss) bossKilled = true;
+      }
+      if (trace.counter) this.showDamage(c.x, c.y - 100, damage, '#9fdcff', 52, trace.direction.x);
+      else if (strike.crit) this.showDamage(c.x, c.y - 100, damage, '#ffd23f', finisher ? 58 : 52, trace.direction.x);
+      else this.showDamage(c.x, c.y - 100, damage, finisher ? '#ffb35a' : '#fff3c4', finisher ? 46 : 34, trace.direction.x);
+      // 칼이 닿은 자리(몸 가운데)에서 섬광·불꽃과 베인 각도 그대로의 참격선이 튄다.
+      const impactKind = strike.crit && strike.kind === 'finisher' ? 'finisher' : strike.kind;
+      this.impacts.impact(bounds.centerX, bounds.centerY, trace.direction.x, trace.direction.y, impactKind, this.now, c.y);
+      this.impacts.slashCut(bounds.centerX, bounds.centerY, cutAngle, impactKind, this.now);
       // 검으로 벨 때마다 마나가 조금 차고, 쌓여 있던 내상도 일부 즉시 회복된다.
       this.mp = addMana(this.mp, this.maxMp, MANA.perHit);
       if (this.internalDamage > 0) {
@@ -1848,15 +1955,29 @@ export class GameScene extends Phaser.Scene {
       this.resolveEnemyHit(enemy, died, trace.direction.x, trace.direction.y, PLAYER.knockback * combo.knockback * heavy);
     }
     if (internalRecovered) this.drawHud();
+    if (hitCount > 0) this.bumpHitCombo(hitCount, trace.counter ? 'counter' : 'normal');
     if (heaviest) {
+      const killed = killedCount > 0;
+      const lastKill = killed && (bossKilled || this.enemies.every(e => !e.character.alive || e.untouchable));
       const [ms, intensity] = HIT_FEEL.shake[heaviest];
       this.cameras.main.shake(ms, intensity);
-      this.hitStop(heaviest);
+      this.hitStop(killed ? heavierKind(heaviest, 'kill') : heaviest);
+      this.combatAudio.playHit(heaviest, killed, lastKill);
+      const zoomPeak = attackZoomPeak(heaviest, killed, lastKill);
+      if (zoomPeak > 1) this.triggerCameraZoom(zoomPeak, ATTACK_FEEL.zoomInMs, lastKill ? 240 : ATTACK_FEEL.zoomOutMs);
+      if (lastKill) {
+        this.parrySlowOutScaleVal = ATTACK_FEEL.lastKillSlowScale;
+        this.parrySlowOutDur = ATTACK_FEEL.lastKillSlowMs;
+        this.parrySlowOutLeft = ATTACK_FEEL.lastKillSlowMs;
+      }
       if (heaviest === 'counter') {
-        this.combatAudio.playCounterHit();
         this.impacts.screenFlash(0x9fdcff, 0.16);
-      } else if (heaviest !== 'normal') {
-        this.impacts.screenFlash(0xffffff, heaviest === 'finisher' ? 0.1 : 0.07);
+        if (trace.counter && !trace.counterCallout) {
+          trace.counterCallout = true;
+          this.hud.showCallout('반격 일섬!', { color: '#b4f0ff', stroke: '#0a2540', scale: 1.4 });
+        }
+      } else if (heaviest !== 'normal' || lastKill) {
+        this.impacts.screenFlash(0xffffff, lastKill ? 0.14 : heaviest === 'finisher' ? 0.1 : 0.07);
       }
     }
   }
@@ -1869,17 +1990,21 @@ export class GameScene extends Phaser.Scene {
     const c = enemy.character;
     if (!(c.sprite instanceof MonsterSprite)) return false;
     if (!shellBlocks(enemy.kind, c.sprite.facingVector(), this.player.x - c.x, this.player.y - c.y, counter)) return false;
+    this.combatAudio.playShellBlock();
     this.impacts.impact(x, y, Math.sign(c.x - this.player.x) || 1, 0, 'normal', this.now, c.y);
     this.progressEffects.showPopup(c.x, c.y - 140, '막힘', '#bfe8ff');
     return true;
   }
 
-  /** 맞은 적의 뒤처리: 쓰러졌으면 경험치·퀘스트·전리품, 아니면 밀려나고 움찔한다. */
+  /** 맞은 적의 뒤처리: 쓰러졌으면 경험치·퀘스트·전리품·처치 폭발, 아니면 밀려나고 움찔한다. */
   private resolveEnemyHit(enemy: Enemy, died: boolean, dirX: number, dirY: number, push: number): void {
     const c = enemy.character;
     if (died) {
+      const wasBoss = enemy === this.boss;
       enemy.kill();
+      const lastKill = wasBoss || this.enemies.every(e => !e.character.alive || e.untouchable);
       this.impacts.splatter(c.x, c.y, enemy.color, this.now);
+      this.impacts.killBurst(c.x, c.y, enemy.color, dirX, dirY, lastKill, this.now);
       const raid = this.raidEnemies.has(enemy);
       if (!raid && enemy.kind !== 'swamp-lurker') this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
       // 주인공이 몬스터보다 너무 높으면 경험치가 줄어든다.
@@ -2506,34 +2631,52 @@ export class GameScene extends Phaser.Scene {
   private spinHit(): void {
     const player = this.player;
     const now = this.now;
+    this.combatAudio.playSpinSlash();
+    this.impacts.spinRing(player.x, player.y, SPIN_SLASH.radius, now);
     if (this.mistWeaver?.threads.cutWithSpin(player, SPIN_SLASH.radius, SPIN_SLASH.radius * VERTICAL_SPEED_RATIO, now)) {
       this.hud.showCallout('안개 실을 끊었다');
     }
     let hits = 0;
+    let killedCount = 0;
+    let bossKilled = false;
     for (const enemy of this.enemies) {
       const c = enemy.character;
       if (!c.alive || enemy.untouchable) continue;
       const dx = c.x - player.x, dy = c.y - player.y;
       if (!inSpinRadius(dx, dy, SPIN_SLASH.radius, VERTICAL_SPEED_RATIO)) continue;
-      hits++;
       const spinBounds = c.sprite.getBounds(this.boundsScratch);
       if (this.shellBlocked(enemy, false, spinBounds.centerX, spinBounds.centerY)) continue;
+      hits++;
       const length = Math.hypot(dx, dy / VERTICAL_SPEED_RATIO) || 1;
       const dirX = dx / length, dirY = dy / VERTICAL_SPEED_RATIO / length;
       const damage = monsterDamageTaken(Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * SPIN_SLASH.damage * this.derived.skillDamage * this.resonanceDamage()), enemy.stats.defense);
       const died = c.hurt(damage);
-      this.showDamage(c.x, c.y - 100, damage, '#8fc8ff', 46);
+      if (died) {
+        killedCount++;
+        if (enemy === this.boss) bossKilled = true;
+      }
+      this.showDamage(c.x, c.y - 100, damage, '#8fc8ff', 48, dirX);
       const bounds = c.sprite.getBounds(this.boundsScratch);
       this.impacts.impact(bounds.centerX, bounds.centerY, dirX, dirY, 'finisher', now, c.y);
+      this.impacts.slashCut(bounds.centerX, bounds.centerY, Math.atan2(dirY * VERTICAL_SPEED_RATIO, dirX), 'finisher', now);
       this.resolveEnemyHit(enemy, died, dirX, dirY, PLAYER.knockback * SPIN_SLASH.knockback);
     }
     // 빈 곳을 베어도 둘레에 바람과 먼지가 인다.
-    this.impacts.dust(player.x, player.y, 10, now, SPIN_SLASH.radius * 0.8);
     this.impacts.screenFlash(0x8fc8ff, hits ? 0.14 : 0.06);
     if (hits) {
+      const killed = killedCount > 0;
+      const lastKill = killed && (bossKilled || this.enemies.every(e => !e.character.alive || e.untouchable));
+      this.bumpHitCombo(hits);
+      this.combatAudio.playHit('finisher', killed, lastKill);
       const [ms, intensity] = HIT_FEEL.shake.finisher;
       this.cameras.main.shake(ms, intensity);
       this.hitStop('finisher');
+      this.triggerCameraZoom(attackZoomPeak('finisher', killed, lastKill), ATTACK_FEEL.zoomInMs, lastKill ? 240 : ATTACK_FEEL.zoomOutMs);
+      if (lastKill) {
+        this.parrySlowOutScaleVal = ATTACK_FEEL.lastKillSlowScale;
+        this.parrySlowOutDur = ATTACK_FEEL.lastKillSlowMs;
+        this.parrySlowOutLeft = ATTACK_FEEL.lastKillSlowMs;
+      }
     }
   }
 
@@ -2946,11 +3089,13 @@ export class GameScene extends Phaser.Scene {
       this.triggerUnboundCounter(enemy, impactX, impactY, awayX, awayY, enemyPushX, enemyPushY);
       return true;
     }
-    // 2단 패링: 앞쪽(바라보는 쪽)에서 온 공격을 정밀 패링(0~perfectWindowMs) 또는 불완전 막기(그 이후~windowMs)로 받아낸다.
+    // 2단 패링: 앞쪽(바라보는 쪽)에서 온 공격을 정밀 패링(0~activePerfectWindowMs) 또는 불완전 막기(그 이후~windowMs)로 받아낸다.
     const inFront = (sourceX - player.x) * player.facing >= 0;
-    const grade = gradeParry(this.blocking, now - this.parryStartedAt, inFront);
+    const grade = gradeParry(this.blocking, now - this.parryStartedAt, inFront, this.activePerfectWindowMs);
     if (grade !== 'none') {
       const x = impactX, y = impactY;
+      this.parryPendingWhiff = false;
+      this.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
 
       if (grade === 'perfect') {
         this.parryChain = nextParryChain(this.parryChain, now);
@@ -2997,6 +3142,8 @@ export class GameScene extends Phaser.Scene {
           }
         }
         this.focusCompanion(enemy);
+        this.counterTarget = enemy;
+        this.bumpHitCombo(1, 'counter');
         this.counterUntil = now + JUST_DODGE.counterMs;
         this.parryUntil = 0;
         this.parryReadyAt = now;
@@ -3009,8 +3156,7 @@ export class GameScene extends Phaser.Scene {
         this.dodgeReadyAt = Math.max(now, this.dodgeReadyAt - BLOCK.dodgeRefundMs);
         const [shakeMs, shakeIntensity] = chainBreak ? HIT_FEEL.shake.chainBreak : HIT_FEEL.shake.parry;
         this.cameras.main.shake(shakeMs, shakeIntensity);
-        this.parryZoomElapsed = 0;
-        this.parryZoomPeak = chainBreak ? BLOCK.zoomChainBreakPeak : chain >= 2 ? BLOCK.zoomChainPeak : BLOCK.zoomPeak;
+        this.triggerCameraZoom(chainBreak ? BLOCK.zoomChainBreakPeak : chain >= 2 ? BLOCK.zoomChainPeak : BLOCK.zoomPeak);
         this.hitStop(chainBreak ? 'chainBreak' : 'parry');
         this.parrySlowOutScaleVal = BLOCK.slowOutScale;
         this.parrySlowOutDur = chainBreak ? 145 : BLOCK.slowOutMs;
@@ -3084,9 +3230,13 @@ export class GameScene extends Phaser.Scene {
     this.internalDamage = 0;
     this.internalHealCarry = 0;
     this.parryChain = { count: 0, lastAt: -Infinity };
+    this.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
+    this.parryPendingWhiff = false;
     this.chargeHoldStart = undefined;
     this.chargeParryReady = false;
     this.unboundUntil = 0;
+    this.counterTarget = undefined;
+    this.resetHitCombo();
     const taken = resonanceTaken(mitigate(Math.round(damage), this.derived), this.resonating, RESONANCE);
     const died = player.hurt(taken, 0xff5a4a);
     this.damageLog = recordDamage(this.damageLog, { name: source, level: enemy.level }, taken);
@@ -3167,6 +3317,8 @@ export class GameScene extends Phaser.Scene {
     const player = this.player, now = this.now, c = enemy.character;
     this.unboundUntil = 0;
     this.parryUntil = 0;
+    this.parryPendingWhiff = false;
+    this.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
     this.parryReadyAt = now;
     this.chargeHoldStart = undefined;
     this.chargeParryReady = false;
@@ -3207,14 +3359,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.focusCompanion(enemy);
+    this.counterTarget = enemy;
+    this.bumpHitCombo(1, 'counter');
     this.counterUntil = now + JUST_DODGE.counterMs;
     this.dodgeReadyAt = Math.max(now, this.dodgeReadyAt - BLOCK.unboundDodgeRefundMs);
     this.questEvent({ type: 'parry' });
     this.hud.showCallout('무량반격!!', { color: '#fff2a6', stroke: '#5a1408', scale: 1.65 });
     const [shakeMs, shakeIntensity] = HIT_FEEL.shake.unbound;
     this.cameras.main.shake(shakeMs, shakeIntensity);
-    this.parryZoomElapsed = 0;
-    this.parryZoomPeak = BLOCK.zoomUnboundPeak;
+    this.triggerCameraZoom(BLOCK.zoomUnboundPeak, BLOCK.zoomInMs, 240);
     this.hitStop('unbound');
     this.parrySlowOutScaleVal = BLOCK.unboundSlowOutScale;
     this.parrySlowOutDur = BLOCK.unboundSlowOutMs;
@@ -3278,7 +3431,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (Math.hypot(tip.x - base.x, tip.y - base.y) < 1) return;
-    const inPerfect = time - this.parryStartedAt <= BLOCK.perfectWindowMs;
+    const inPerfect = time - this.parryStartedAt <= this.activePerfectWindowMs;
     const palm = hero.getGuardSupportPoint();
     const dx = tip.x - base.x, dy = tip.y - base.y, length = Math.hypot(dx, dy);
     const at = palm ? ((palm.x - base.x) * dx + (palm.y - base.y) * dy) / (length * length) : 0;
@@ -3301,11 +3454,33 @@ export class GameScene extends Phaser.Scene {
     this.hitStopLeft = Math.max(this.hitStopLeft, hitStopMs(kind));
   }
 
+  /** 카메라 줌 펀치(실제 시간 기준). 더 강한 줌이 진행 중이면 약한 줌으로 덮어쓰지 않는다. */
+  private triggerCameraZoom(peak: number, inMs = BLOCK.zoomInMs, outMs = BLOCK.zoomOutMs): void {
+    if (peak <= 1) return;
+    if (this.parryZoomElapsed >= 0 && peak < this.parryZoomPeak) return;
+    this.parryZoomElapsed = 0;
+    this.parryZoomPeak = peak;
+    this.parryZoomInMs = inMs;
+    this.parryZoomOutMs = outMs;
+  }
+
+  private bumpHitCombo(add = 1, accent: 'normal' | 'counter' = 'normal'): void {
+    this.hitCombo = nextHitCombo(this.hitCombo, this.now, add);
+    this.hud.setCombo(this.hitCombo.count, accent);
+  }
+
+  private resetHitCombo(): void {
+    if (this.hitCombo.count === 0) return;
+    this.hitCombo = { count: 0, lastAt: -Infinity };
+    this.hud.clearCombo();
+  }
+
   /** 저스트 회피 성공: 느린 화면, 다음 공격 강화, 회피 재사용 대기 초기화, 피한 적은 멈칫. */
   private onJustDodge(enemy: Enemy): void {
     const now = this.now;
     this.justDodged = true;
     this.slowMotionLeft = JUST_DODGE.slowMs;
+    this.counterTarget = enemy;
     this.counterUntil = now + JUST_DODGE.counterMs;
     this.dodgeReadyAt = now;
     this.dodgeButton.setEnabled(true);
@@ -3321,10 +3496,15 @@ export class GameScene extends Phaser.Scene {
     this.internalDamage = 0;
     this.internalHealCarry = 0;
     this.parryChain = { count: 0, lastAt: -Infinity };
+    this.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
+    this.parryPendingWhiff = false;
     this.chargeHoldStart = undefined;
     this.chargeParryReady = false;
     this.unboundUntil = 0;
+    this.counterTarget = undefined;
+    this.resetHitCombo();
     this.parryZoomElapsed = -1;
+    this.parryZoomPeak = 1;
     this.cameras.main.setZoom(1);
     this.mistWeaver?.threads.clear();
     this.clearAttackInput();
@@ -3725,8 +3905,8 @@ export class GameScene extends Phaser.Scene {
     enemy.respawn(point.x, point.y);
   }
 
-  private showDamage(x: number, y: number, amount: number, color: string, size = 34): void {
-    this.damageNumbers.show(x, y, amount, Number.parseInt(color.slice(1), 16), size);
+  private showDamage(x: number, y: number, amount: number, color: string, size = 34, dirX = 0): void {
+    this.damageNumbers.show(x, y, amount, Number.parseInt(color.slice(1), 16), size, dirX);
   }
 
   // ---------------------------------------------------------------- 디버그

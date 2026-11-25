@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { HeroSprite } from '../entities/HeroSprite';
 import { interpolateSwingBlade, smoothSwingTrail, swingTrailArc, swingTrailEdge } from '../entities/attackMotion';
 import { interpolateBlade, type Blade, type BladeSweep } from './blade';
+import type { TrailStyle } from './attackFeel';
 
 const TRAIL_SAMPLE_MS = 10;
 const ATTACK_FADE_MS = 90;
@@ -9,9 +10,18 @@ const SWING_REVEAL_MS = 60;
 const THRUST_FADE_IN_MS = 45;
 const GHOST_FADE_MS = 220;
 
+const TRAIL_PALETTE: Record<TrailStyle, { outer: number; outerAlpha: number; inner: number; innerAlpha: number; widthScale: number }> = {
+  stage1: { outer: 0xd8be94, outerAlpha: 0.34, inner: 0xfff5e2, innerAlpha: 0.68, widthScale: 1 },
+  stage2: { outer: 0xf0ba5e, outerAlpha: 0.4, inner: 0xfff3c8, innerAlpha: 0.74, widthScale: 1.06 },
+  finisher: { outer: 0xff9a40, outerAlpha: 0.46, inner: 0xfff6d4, innerAlpha: 0.88, widthScale: 1.18 },
+  counter: { outer: 0x5ec8ff, outerAlpha: 0.54, inner: 0xecfbff, innerAlpha: 0.94, widthScale: 1.3 },
+  resonance: { outer: 0xffcc38, outerAlpha: 0.48, inner: 0xfff9c8, innerAlpha: 0.88, widthScale: 1.16 },
+};
+
 export interface AttackEffect {
   graphic: Phaser.GameObjects.Graphics;
   stage: number;
+  style: TrailStyle;
   startedAt: number;
   activeUntil: number;
   nextSampleAt: number;
@@ -25,6 +35,7 @@ interface GhostEffect {
   object: Phaser.GameObjects.Container | Phaser.GameObjects.Image;
   kind: 'hero' | 'sprite';
   startedAt: number;
+  alpha0: number;
 }
 
 /** 효과 객체를 재사용하고, 생성·농도가 렌더 프레임 수에 비례하지 않게 한다. */
@@ -36,14 +47,16 @@ export class CombatEffects {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
   }
 
-  beginAttack(stage: number, startedAt: number, activeUntil: number, sampleStart: number, depth: number, thrustReach = 1): AttackEffect {
+  beginAttack(stage: number, startedAt: number, activeUntil: number, sampleStart: number, depth: number, thrustReach = 1, style?: TrailStyle): AttackEffect {
+    const resolvedStyle: TrailStyle = style ?? (stage >= 2 ? 'finisher' : stage === 1 ? 'stage2' : 'stage1');
     let effect = this.attackPool.find((entry) => !entry.graphic.active);
     if (!effect) {
-      effect = { graphic: this.scene.add.graphics(), stage, startedAt, activeUntil, nextSampleAt: sampleStart, samples: [], arc: [], thrustReach };
+      effect = { graphic: this.scene.add.graphics(), stage, style: resolvedStyle, startedAt, activeUntil, nextSampleAt: sampleStart, samples: [], arc: [], thrustReach };
       this.attackPool.push(effect);
     }
     effect.thrustReach = thrustReach;
     effect.stage = stage;
+    effect.style = resolvedStyle;
     effect.startedAt = startedAt;
     effect.activeUntil = activeUntil;
     effect.nextSampleAt = sampleStart + TRAIL_SAMPLE_MS;
@@ -70,18 +83,18 @@ export class CombatEffects {
 
     effect.graphic.clear().setAlpha(this.alphaOf(effect, time));
     if (effect.stage === 2) {
-      this.renderThrust(effect.graphic, displayed, effect.thrustReach);
+      this.renderThrust(effect.graphic, displayed, effect.thrustReach, effect.style);
     } else {
       // Keep the bright end on the blade while gradually revealing the path behind it.
       const grow = Math.max(0, Math.min(1, (time - effect.startedAt) / SWING_REVEAL_MS));
       const firstVisible = (1 - (0.2 + 0.8 * grow)) * (effect.arc.length - 1);
       const index = Math.floor(firstVisible);
       const tail = interpolateBlade(effect.arc[index], effect.arc[index + 1], firstVisible - index);
-      this.renderSwing(effect.graphic, [tail, ...effect.arc.slice(index + 1), ...effect.samples, displayed]);
+      this.renderSwing(effect.graphic, [tail, ...effect.arc.slice(index + 1), ...effect.samples, displayed], effect.style);
     }
   }
 
-  private renderSwing(g: Phaser.GameObjects.Graphics, trail: Blade[]): void {
+  private renderSwing(g: Phaser.GameObjects.Graphics, trail: Blade[], style: TrailStyle): void {
     if (trail.every(({ base, tip }) => base.x === tip.x && base.y === tip.y)) return;
     // Collapse the tiny lunge samples, then round corners between the stepped poses.
     // Keep both ends exact so the moving end still meets the visible blade.
@@ -94,7 +107,8 @@ export class CombatEffects {
     knots.push(last);
     const edge = swingTrailEdge(smoothSwingTrail(knots));
     if (edge.length === 0) return;
-    for (const [thickness, color, alpha] of [[0.32, 0xe3ab66, 0.36], [0.14, 0xffefd2, 0.64]] as const) {
+    const p = TRAIL_PALETTE[style];
+    for (const [thickness, color, alpha] of [[0.32 * p.widthScale, p.outer, p.outerAlpha], [0.14 * p.widthScale, p.inner, p.innerAlpha]] as const) {
       g.fillStyle(color, alpha).beginPath();
       g.moveTo(first.tip.x, first.tip.y);
       for (let i = 1; i < edge.length; i++) g.lineTo(edge[i].tip.x, edge[i].tip.y);
@@ -106,17 +120,18 @@ export class CombatEffects {
     }
   }
 
-  private renderThrust(g: Phaser.GameObjects.Graphics, { base, tip }: Blade, reach = 1): void {
+  private renderThrust(g: Phaser.GameObjects.Graphics, { base, tip }: Blade, reach = 1, style: TrailStyle = 'finisher'): void {
     if (tip.x === base.x && tip.y === base.y) return;
     const dx = (tip.x - base.x) * reach, dy = (tip.y - base.y) * reach;
     tip = { x: base.x + dx, y: base.y + dy };
     // 늘인 빛줄기는 길이에 비례해 굵어지지 않게 폭을 되돌린다.
-    const thin = 1 / Math.sqrt(reach);
-    for (const [w, color, alpha] of [[0.12, 0xffb966, 0.38], [0.045, 0xffefd2, 0.8]] as const) {
+    const p = TRAIL_PALETTE[style];
+    const thin = (1 / Math.sqrt(reach)) * p.widthScale;
+    for (const [w, color, alpha] of [[0.12, p.outer, p.outerAlpha], [0.048, p.inner, p.innerAlpha]] as const) {
       const width = w * thin;
       g.fillStyle(color, alpha).beginPath().moveTo(base.x, base.y);
       g.lineTo(base.x + dx * 0.72 - dy * width, base.y + dy * 0.72 + dx * width);
-      g.lineTo(tip.x + dx * 0.06, tip.y + dy * 0.06);
+      g.lineTo(tip.x + dx * 0.08, tip.y + dy * 0.08);
       g.lineTo(base.x + dx * 0.72 + dy * width, base.y + dy * 0.72 - dx * width).closePath().fillPath();
     }
   }
@@ -128,24 +143,25 @@ export class CombatEffects {
     return (effect.stage === 2 ? 0.25 + 0.75 * rise : 1) * remaining * remaining * (3 - 2 * remaining);
   }
 
-  spawnGhost(sprite: HeroSprite | Phaser.GameObjects.Sprite, x: number, y: number, depth: number, time: number): void {
+  spawnGhost(sprite: HeroSprite | Phaser.GameObjects.Sprite, x: number, y: number, depth: number, time: number, tint = 0x9fc4ff, alpha = 0.35): void {
     const kind = sprite instanceof HeroSprite ? 'hero' : 'sprite';
     let effect = this.ghostPool.find((entry) => entry.kind === kind && !entry.object.active);
     if (!effect) {
       const object = sprite instanceof HeroSprite
-        ? sprite.spawnGhost(x, y, depth, 0x9fc4ff, 0.35)
+        ? sprite.spawnGhost(x, y, depth, tint, alpha)
         : this.scene.add.image(x, y, sprite.texture.key, sprite.frame.name);
-      effect = { object, kind, startedAt: time };
+      effect = { object, kind, startedAt: time, alpha0: alpha };
       this.ghostPool.push(effect);
       if (sprite instanceof HeroSprite) return; // 새 잔상에는 이미 현재 자세를 복사했다.
     }
     effect.startedAt = time;
+    effect.alpha0 = alpha;
     if (sprite instanceof HeroSprite) {
-      sprite.spawnGhost(x, y, depth, 0x9fc4ff, 0.35, effect.object as Phaser.GameObjects.Container);
+      sprite.spawnGhost(x, y, depth, tint, alpha, effect.object as Phaser.GameObjects.Container);
     } else {
       (effect.object as Phaser.GameObjects.Image).setTexture(sprite.texture.key, sprite.frame.name)
         .setOrigin(0.5, 1).setPosition(x, y).setFlipX(sprite.flipX).setScale(sprite.scaleX, sprite.scaleY)
-        .setAngle(sprite.angle).setTint(0x9fc4ff).setAlpha(0.35).setDepth(depth).setActive(true).setVisible(true);
+        .setAngle(sprite.angle).setTint(tint).setAlpha(alpha).setDepth(depth).setActive(true).setVisible(true);
     }
   }
 
@@ -160,7 +176,7 @@ export class CombatEffects {
       if (!effect.object.active) continue;
       const remaining = 1 - (time - effect.startedAt) / GHOST_FADE_MS;
       if (remaining <= 0) effect.object.setActive(false).setVisible(false);
-      else effect.object.setAlpha(0.35 * remaining);
+      else effect.object.setAlpha(effect.alpha0 * remaining);
     }
   }
 
