@@ -1,6 +1,6 @@
 import { mapLength, mapPoint } from '../world/mapScale.ts';
 import type { DialogueLine } from './dialogues.ts';
-import { currentObjective, questDef, type QuestState } from './quests.ts';
+import { currentObjective, questDef, type QuestId, type QuestState } from './quests.ts';
 import { GUARDS, isGuardId } from '../world/guards.ts';
 import { NPCS, type Direction8, type DutyPoint, type NamedNpcId, type NpcDef, type NpcId } from '../world/npcs.ts';
 import { INTERIORS, interiorArtPoint, type InteriorId } from '../world/interiors.ts';
@@ -207,7 +207,7 @@ export const INSPECTION_LINES: Record<string, DialogueLine[]> = {
     { speaker: '시온', portrait: 'hero-neutral', text: '둘이 여기 있었던 거야. 다친 사람은 치유소로 옮긴다고 했지. 에일라라면 알 거야.' },
   ],
   'story-home-search': [
-    { speaker: '시온', portrait: 'hero-neutral', text: '시아야? …대답이 없어. 집 안이 엉망이야… 시아가 다녀갔는지도 모르겠어.' },
+    { speaker: '시온', portrait: 'hero-neutral', text: '시아야? …대답이 없어. 문은 열려 있는데 집은 비어 있어. 시아가 돌아온 흔적은 없어.' },
     { speaker: '시온', portrait: 'hero-neutral', text: '리네아라면 마지막으로 시아를 봤을 텐데… 에일라에게 가 보자.' },
   ],
 };
@@ -284,9 +284,20 @@ export function raidSpawns(state: QuestState, map: MapId): RaidSpawn[] {
   return [];
 }
 
+/**
+ * 습격 전 첫날, 할 일을 끝낸 뒤의 평소 대사. 첫날 대사(dialogues.ts)가 이미 끝난 일을 다시 말하지 않게 한다.
+ */
+function dayDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined {
+  const done = (id: QuestId) => state[id]?.status === 'done';
+  if (npc === 'ruan' && done('ruan-training')) return [{ speaker: '루안', portrait: 'ruan', text: '오늘은 충분하다. 저녁에 광장에서 보자.' }];
+  if (npc === 'linea' && done('ruan-training')) return [{ speaker: '리네아', portrait: 'linea', text: '수련은 끝났어? 장식은 거의 다 됐어. 이제 저녁만 기다리면 돼.' }];
+  if (npc === 'teon' && done('watch-report')) return [{ speaker: '테온', portrait: 'teon', text: '숲 얘기 고마워. 입구는 내가 더 단단히 지킬게.' }];
+  return undefined;
+}
+
 export function chapterDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined {
   const phase = chapterPhase(state);
-  if (phase === 'day') return undefined;
+  if (phase === 'day') return dayDialogue(npc, state);
   if (npc === 'serena' && phase === 'raid' && (state['village-raid']?.step ?? 0) >= 4) return [{
     speaker: '세레나', portrait: 'serena', text: lineaRecovery(state)
       ? '리네아는 내가 곁에서 볼게. 시온, 시아를 찾아 줘. 너도 무사히 돌아와야 한다.'

@@ -251,3 +251,13 @@ test('습격은 입구(추적자 6) → 여관 앞(3) → 북쪽 길(추적자 4
   const raid = questDef('village-raid');
   for (const wave of RAID_WAVES) assert.equal(raid.steps[wave.step].need, raidWaveSize(wave.step), `step ${wave.step}`);
 });
+
+test('습격 전 첫날: 할 일을 끝낸 뒤에는 루안·리네아·테온이 끝난 일을 다시 말하지 않는다', () => {
+  assert.equal(chapterDialogue('ruan', {}), undefined, '수련 전에는 첫날 대사를 쓴다');
+  const trained = { 'ruan-training': { status: 'done', count: 3 } };
+  assert.match(chapterDialogue('ruan', trained)[0].text, /저녁에 광장/);
+  assert.match(chapterDialogue('linea', trained)[0].text, /저녁만 기다리면/);
+  assert.equal(chapterDialogue('teon', trained), undefined);
+  const reported = { ...trained, 'watch-report': { status: 'done', count: 1 } };
+  assert.match(chapterDialogue('teon', reported)[0].text, /숲 얘기 고마워/);
+});

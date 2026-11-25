@@ -10,7 +10,7 @@ import type { Interactable } from '../world/interactables.ts';
  * 2장 "물안개 나루의 종소리"의 로웬 쪽 진행 (docs/story-chapter2.md).
  * 이 파일은 Phaser를 쓰지 않아 tools/chapter-two.test.mjs가 직접 불러 검사한다.
  *
- * - 2장은 1장 마지막 메인 퀘스트 "도란의 검"을 끝낸 다음 날 아침이다. 그때부터 떠돌이 행상인 페른이
+ * - 2장은 1장 마지막 메인 퀘스트 "도란의 검"을 받은 습격 다음 날 아침에서 바로 이어진다. 그날 아침 떠돌이 행상인 페른이
  *   광장의 남문 안쪽에 수레를 세워 둔다.
  * - 퀘스트 1 "남문의 수레": 페른을 만나고, 수레를 덮쳤던 잿빛 나방(남쪽 들판에 남은 넷)을 쫓고, 다시 페른에게 간다.
  *   끝나면 페른의 수레(상점, items/inventory.ts의 SHOP_STOCK.fern)가 열린다.
@@ -88,7 +88,7 @@ export function chapterTwoSpots(state: QuestState, map: MapId): Interactable[] {
 
 export const CHAPTER_TWO_INSPECTIONS: Record<string, DialogueLine[]> = {
   'story-pass-summit': [
-    { speaker: '고개 꼭대기', text: '아침 해가 등 뒤에서 떠올랐다. 고개 너머로 넓은 강이 굽이쳐 흐른다.' },
+    { speaker: '고개 꼭대기', text: '아침 해가 고개 너머에서 떠올랐다. 그 아래로 넓은 강이 굽이쳐 흐른다.' },
     { speaker: '시온', portrait: 'hero-neutral', text: '저 아래 지붕들… 저게 물안개 나루구나. 그런데 해가 떴는데도 강 위에 안개가 걸려 있어.' },
     { speaker: '시온', portrait: 'hero-neutral', text: '배들이 전부 물가에 묶여 있어. 강에 떠 있는 배가 하나도 없네.' },
   ],
