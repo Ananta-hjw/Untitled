@@ -63,16 +63,21 @@ const BACK_SIX = {
   attack3: { frame: 'attack3-back6', starts: SIDE_SIX.attack3.starts },
 } as const;
 
-// 앞대각선은 첫 타격 뒤 칼이 더 가파르게 내려오므로 명중 구간 안에 마무리 자세도 넣는다.
-const DOWN_DIAG_SIX = { frame: 'attack-down-diag6', starts: [0, 40, 110, 200, 250, 350] } as const;
+/**
+ * 앞대각선(아래 왼쪽·오른쪽) 6자세. 1타는 첫 타격 뒤 칼이 더 가파르게 내려오므로 명중 구간 안에 마무리 자세도 넣는다.
+ * 2·3타는 옆모습과 같은 자세 시각이다.
+ */
+const DOWN_DIAG_SIX = {
+  attack1: { frame: 'attack-down-diag6', starts: [0, 40, 110, 200, 250, 350] },
+  attack2: { frame: 'attack2-down-diag6', starts: SIDE_SIX.attack2.starts },
+  attack3: { frame: 'attack3-down-diag6', starts: SIDE_SIX.attack3.starts },
+} as const;
 
 function sixPoseAttack(action: HeroAction, facing: Facing) {
   if (action === 'idle' || action === 'walk' || action === 'dodge') return undefined;
   if (facing === 'right' || facing === 'left') return SIDE_SIX[action];
   if (facing === 'up') return BACK_SIX[action];
-  if (action === 'attack1' && (facing === 'down-right' || facing === 'down-left')) {
-    return DOWN_DIAG_SIX;
-  }
+  if (facing === 'down-right' || facing === 'down-left') return DOWN_DIAG_SIX[action];
   return facing === 'down' ? FRONT_SIX[action] : undefined;
 }
 
@@ -163,11 +168,6 @@ export function heroFrame(action: HeroAction, facing: Facing, elapsedMs: number)
   if (action === 'dodge' && (facing === 'up' || facing === 'down')) return `dodge-${facing}-${column}`;
   if (action !== 'dodge') {
     if (facing === 'down') return `attack-front-${row * 4 + column}`;
-    if (facing === 'down-right' || facing === 'down-left') {
-      // 3타의 복귀와 1타의 준비에 같은 몸과 칼 좌표를 써서 콤보를 잇는다.
-      if (action === 'attack3' && column === 3) return `${DOWN_DIAG_SIX.frame}-0`;
-      return `attack-down-diag-${row * 4 + column}`;
-    }
     if (facing === 'up') return `attack-back-${row * 4 + column}`;
     if (facing.startsWith('up')) return `attack-up-${row * 4 + column}`;
   }

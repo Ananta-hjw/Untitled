@@ -172,6 +172,56 @@ SHEETS.append(dict(prefix='attack1', view='down-diag', name='attack-down-diag6',
 ]))
 
 
+
+def grip_capsule(guard, pommel, radius=12, gap=3, past_pommel=8):
+    """주먹 마스크: 원화에서 코등이와 칼자루 끝 사이의 손잡이는 주먹에 가려 보이지 않으므로, 그 사이를 덮는 캡슐을 쓴다.
+    코등이 쪽은 gap만큼 비워 무기의 코등이는 보이게 하고, 칼자루 끝 쪽은 past_pommel만큼 더 덮는다.
+    무기 레이어의 손잡이가 원화의 칼자루 끝보다 조금 길어, 덮지 않으면 손목 위로 검은 손잡이가 삐져나온다.
+    덮개는 칼 지운 편집본의 픽셀이라 그 자리가 투명하면(몸 밖) 무기가 그대로 보인다."""
+    dx, dy = pommel[0] - guard[0], pommel[1] - guard[1]
+    length = math.hypot(dx, dy)
+    ux, uy = dx / length, dy / length
+    a = (guard[0] + ux * gap, guard[1] + uy * gap)
+    b = (pommel[0] + ux * past_pommel, pommel[1] + uy * past_pommel)
+    angle = math.atan2(uy, ux)
+    points = []
+    for center, start in ((b, angle - math.pi / 2), (a, angle + math.pi / 2)):
+        for step in range(7):
+            t = start + math.pi * step / 6
+            points.append((round(center[0] + radius * math.cos(t)), round(center[1] + radius * math.sin(t))))
+    return points
+
+
+def down_diag(prefix, name, poses):
+    """앞대각선 2·3타: 1타와 같은 발 기준점(디딘 앞발)과 칼 길이(135px). poses는 칸마다 (코등이, 칼끝, 칼자루 끝)이며
+    원본과 칼 지운 편집본의 차이(칼)에서 잰 값이다(코등이 = 금색 픽셀의 가운데, 칼끝 = 코등이에서 가장 먼 칼 픽셀)."""
+    return dict(prefix=prefix, view='down-diag', name=name, shift=[0] * 6,
+                grip_covers={i: grip_capsule(guard, pommel) for i, (guard, _, pommel) in enumerate(poses)},
+                frames=[(232, 450, guard, toward(guard, tip, 135)) for guard, tip, _ in poses])
+
+
+SHEETS += [
+    # 2타 올려 베기: 4시 → 뒷발 옆 낮게 7~8시 → 앞 아래 4시 반 → 2시 → 머리 위 12~1시 → 2~3시(3타 시작)
+    down_diag('attack2', 'attack2-down-diag6', [
+        ((245, 340), (359, 411), (207, 321)),  # 시작(1타의 끝), 4시
+        ((110, 355), (11, 447), (138, 326)),   # 낮게 뒤로 당김, 7시 반
+        ((232, 374), (326, 469), (201, 344)),  # 낮게 웅크림, 4시 반
+        ((346, 236), (469, 182), (309, 254)),  # 올려 베기(타격), 2시
+        ((293, 176), (333, 47), (283, 216)),   # 마무리, 12시 반
+        ((315, 264), (445, 231), (276, 276)),  # 자세 정리(3타 시작), 2시 반
+    ]),
+    # 3타 찌르기: 2시 반 → 가슴 높이로 당김 4시 → 웅크림 → 찌르기 4시 → 유지 → 1타 시작(4시)
+    down_diag('attack3', 'attack3-down-diag6', [
+        ((315, 264), (445, 231), (276, 276)),  # 시작(2타의 끝)
+        ((200, 288), (316, 355), (166, 269)),  # 당김, 빈손은 앞으로 겨눔
+        ((209, 292), (323, 359), (173, 271)),  # 깊이 웅크림
+        ((338, 366), (453, 434), (291, 341)),  # 찌르기(타격)
+        ((338, 366), (453, 434), (291, 341)),  # 유지
+        ((247, 343), (362, 412), (211, 323)),  # 복귀(1타의 시작)
+    ]),
+]
+
+
 def build_sheet(sheet_def):
     scale = BODY / SOURCE_BODY
     frames, bodies, covers = [], [], []

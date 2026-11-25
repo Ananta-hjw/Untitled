@@ -1,0 +1,184 @@
+{
+  "frames": [
+    {
+      "name": "attack2-down-diag6-0",
+      "texture": "hero-academy-attack2-down-diag6",
+      "w": 206,
+      "h": 305,
+      "originX": 0.59029,
+      "originY": 0.99993,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 134.35,
+          "y": 197.11
+        },
+        "tip": {
+          "x": 246.72,
+          "y": 267.1
+        }
+      },
+      "gripCover": {
+        "name": "attack2-down-diag6-0-grip-cover",
+        "x": 76,
+        "y": 160,
+        "w": 71,
+        "h": 51,
+        "atlasX": 4,
+        "atlasY": 316
+      },
+      "x": 4,
+      "y": 4
+    },
+    {
+      "name": "attack2-down-diag6-1",
+      "texture": "hero-academy-attack2-down-diag6",
+      "w": 214,
+      "h": 286,
+      "originX": 0.60491,
+      "originY": 1.00122,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 9.81,
+          "y": 193.19
+        },
+        "tip": {
+          "x": -87.17,
+          "y": 283.31
+        }
+      },
+      "gripCover": {
+        "name": "attack2-down-diag6-1-grip-cover",
+        "x": 0,
+        "y": 146,
+        "w": 57,
+        "h": 59,
+        "atlasX": 79,
+        "atlasY": 316
+      },
+      "x": 214,
+      "y": 4
+    },
+    {
+      "name": "attack2-down-diag6-2",
+      "texture": "hero-academy-attack2-down-diag6",
+      "w": 215,
+      "h": 278,
+      "originX": 0.60665,
+      "originY": 0.99827,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 130.43,
+          "y": 202.99
+        },
+        "tip": {
+          "x": 223.54,
+          "y": 297.1
+        }
+      },
+      "gripCover": {
+        "name": "attack2-down-diag6-2-grip-cover",
+        "x": 81,
+        "y": 155,
+        "w": 62,
+        "h": 62,
+        "atlasX": 140,
+        "atlasY": 316
+      },
+      "x": 432,
+      "y": 4
+    },
+    {
+      "name": "attack2-down-diag6-3",
+      "texture": "hero-academy-attack2-down-diag6",
+      "w": 245,
+      "h": 303,
+      "originX": 0.53237,
+      "originY": 1.00007,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 242.22,
+          "y": 93.16
+        },
+        "tip": {
+          "x": 363.44,
+          "y": 39.94
+        }
+      },
+      "gripCover": {
+        "name": "attack2-down-diag6-3-grip-cover",
+        "x": 185,
+        "y": 80,
+        "w": 60,
+        "h": 49,
+        "atlasX": 206,
+        "atlasY": 316
+      },
+      "x": 651,
+      "y": 4
+    },
+    {
+      "name": "attack2-down-diag6-4",
+      "texture": "hero-academy-attack2-down-diag6",
+      "w": 223,
+      "h": 308,
+      "originX": 0.62004,
+      "originY": 0.99974,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 198.09,
+          "y": 39.23
+        },
+        "tip": {
+          "x": 237.3,
+          "y": -87.22
+        }
+      },
+      "gripCover": {
+        "name": "attack2-down-diag6-4-grip-cover",
+        "x": 172,
+        "y": 28,
+        "w": 41,
+        "h": 71,
+        "atlasX": 270,
+        "atlasY": 316
+      },
+      "x": 900,
+      "y": 4
+    },
+    {
+      "name": "attack2-down-diag6-5",
+      "texture": "hero-academy-attack2-down-diag6",
+      "w": 221,
+      "h": 308,
+      "originX": 0.60792,
+      "originY": 0.99974,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 215.74,
+          "y": 125.52
+        },
+        "tip": {
+          "x": 344.06,
+          "y": 92.95
+        }
+      },
+      "gripCover": {
+        "name": "attack2-down-diag6-5-grip-cover",
+        "x": 157,
+        "y": 112,
+        "w": 64,
+        "h": 41,
+        "atlasX": 315,
+        "atlasY": 316
+      },
+      "x": 1127,
+      "y": 4
+    }
+  ]
+}

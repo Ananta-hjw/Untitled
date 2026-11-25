@@ -13,7 +13,7 @@ const downDiagData = corrected(JSON.parse(readFileSync(new URL('../src/assets/he
 const perspData = JSON.parse(readFileSync(new URL('../src/assets/hero/weapons/perspective_atlas.json', import.meta.url)));
 const backSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-back_frames.json`, import.meta.url))).frames;
 const frontSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-front_frames.json`, import.meta.url))).frames;
-const downDiagSix = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/attack-six/attack1-down-diag_frames.json', import.meta.url))).frames;
+const downDiagSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-down-diag_frames.json`, import.meta.url))).frames;
 
 test('공격은 8방향 모두 그대로 유지하고 정면·앞대각선은 신규 시트를 선택한다', () => {
   for (const facing of EIGHT_DIRS) {
@@ -28,7 +28,7 @@ test('공격은 8방향 모두 그대로 유지하고 정면·앞대각선은 �
     const t = PLAYER.combo[stage].hitDelayMs + 20;
     // 정면은 6자세 원화(attack-front6, attack2-front6, attack3-front6)의 타격 자세(3번)
     assert.equal(heroFrame(`attack${stage + 1}`, 'down', t), `attack${stage ? stage + 1 : ''}-front6-3`);
-    const diagonalFrame = stage === 0 ? 'attack-down-diag6-3' : `attack-down-diag-${stage * 4 + 2}`;
+    const diagonalFrame = `attack${stage ? stage + 1 : ''}-down-diag6-3`;
     assert.equal(heroFrame(`attack${stage + 1}`, 'down-right', t), diagonalFrame);
     assert.equal(heroFrame(`attack${stage + 1}`, 'down-left', t), diagonalFrame);
   }
@@ -146,21 +146,36 @@ test('검기 시작 시각에 해당 방향의 타격 자세가 처음 표시된
   }
 });
 
-test('앞대각선 1타는 여섯 자세의 검 방향과 길이를 유지한다', () => {
-  const clockHours = [4.5, 12, 10.5, 4, 4.5, 4.5];
-  assert.equal(downDiagSix.length, clockHours.length);
-  for (const [i, frame] of downDiagSix.entries()) {
-    const { base, tip } = frame.blade;
-    const dx = tip.x - base.x, dy = tip.y - base.y;
-    assert.ok(Math.abs(Math.hypot(dx, dy) - 135 * 304 / 310) < 0.02, frame.name);
-    const direction = (clockHours[i] - 3) * Math.PI / 6;
-    assert.ok((dx * Math.cos(direction) + dy * Math.sin(direction)) / Math.hypot(dx, dy) >= Math.cos(Math.PI / 12), frame.name);
-    for (const facing of ['down-right', 'down-left']) {
-      assert.equal(heroFrame('attack1', facing, [0, 40, 110, 200, 250, 440][i]), frame.name);
+test('앞대각선 1·2·3타는 여섯 자세의 검 방향과 길이를 유지한다', () => {
+  // 칸마다 칼끝이 향하는 화면 시계 방향과, 그 자세가 보이는 시각(타격 뒤 멈춤만큼 늦어진 마지막 자세 포함)
+  const poses = [
+    { hours: [4.5, 12, 10.5, 4, 4.5, 4.5], at: [0, 40, 110, 200, 250, 440] },
+    { hours: [4, 7.5, 4.5, 2, 12.5, 2.5], at: [0, 25, 65, 105, 170, 340] },
+    { hours: [2.5, 4, 4, 4, 4, 4], at: [0, 40, 100, 170, 245, 450] },
+  ];
+  for (const [stage, { hours, at }] of poses.entries()) {
+    const frames = downDiagSix(stage + 1);
+    assert.equal(frames.length, hours.length);
+    for (const [i, frame] of frames.entries()) {
+      const { base, tip } = frame.blade;
+      const dx = tip.x - base.x, dy = tip.y - base.y;
+      assert.ok(Math.abs(Math.hypot(dx, dy) - 135 * 304 / 310) < 0.02, frame.name);
+      const direction = (hours[i] - 3) * Math.PI / 6;
+      assert.ok((dx * Math.cos(direction) + dy * Math.sin(direction)) / Math.hypot(dx, dy) >= Math.cos(Math.PI / 12), frame.name);
+      assert.ok(frame.gripCover, `${frame.name} 주먹이 손잡이를 가린다`);
+      for (const facing of ['down-right', 'down-left']) {
+        assert.equal(heroFrame(`attack${stage + 1}`, facing, at[i]), frame.name);
+      }
     }
   }
-  for (const facing of ['down-right', 'down-left']) {
-    assert.equal(heroFrame('attack3', facing, 420), heroFrame('attack1', facing, 0));
+});
+
+test('앞대각선 콤보는 앞 공격의 끝과 다음 공격의 시작이 같은 검 위치를 쓴다', () => {
+  const relative = (frame) => [frame.blade.base, frame.blade.tip]
+    .flatMap(p => [Math.round(p.x - frame.originX * frame.w), Math.round(p.y - frame.originY * frame.h)]);
+  for (const [from, to] of [[1, 2], [2, 3], [3, 1]]) {
+    const end = downDiagSix(from).at(-1), start = downDiagSix(to)[0];
+    relative(end).forEach((v, i) => assert.ok(Math.abs(v - relative(start)[i]) <= 3, `${from}타 끝 → ${to}타 시작 ${i}: ${v} vs ${relative(start)[i]}`));
   }
 });
 

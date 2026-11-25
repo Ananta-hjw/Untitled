@@ -767,7 +767,7 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
   for (const run of result) {
     assert.deepEqual(run.hits, [1, 0, 0, 0], JSON.stringify(run));
     const downDiag = run.facing === 'down-right' || run.facing === 'down-left';
-    const downDiagSix = downDiag && run.stage === 0;
+    const downDiagSix = downDiag;
     const sideSix = run.facing === 'right' || run.facing === 'left';
     const frontSix = run.facing === 'down';
     const backSix = run.facing === 'up';
