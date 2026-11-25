@@ -108,7 +108,7 @@ after(async () => {
   if (profile) await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
-test('2장 여섯 인물은 각자의 SD와 대화 초상화를 쓰고 대화 뒤에도 같은 외형을 유지한다', async () => {
+test('2장 여섯 인물은 각자의 스프라이트와 대화 초상화를 쓰고 대화 뒤에도 같은 외형을 유지한다', async () => {
   await load('east-stream&npcs=chapter2&companion=none');
   const result = await evaluate(`(() => {
     const s = window.__game.scene.getScene('game');
@@ -125,37 +125,76 @@ test('2장 여섯 인물은 각자의 SD와 대화 초상화를 쓰고 대화 �
   })()`);
   assert.deepEqual(result.map(n => n.id).sort(), ['dor', 'evan', 'finn', 'joan', 'marta', 'morgan']);
   for (const n of result) {
-    assert.equal(n.before, `npc-${n.id}-idle`);
-    assert.equal(n.after, n.before);
+    const directional = n.id === 'evan' || n.id === 'joan';
+    assert.equal(n.before, `npc-${n.id}-${directional ? 'cardinal' : 'idle'}`);
+    assert.equal(n.after, directional ? `npc-${n.id}-diagonal` : n.before);
     assert.equal(n.portrait, `portrait-${n.id}`);
     assert.equal(n.name, n.expectedName);
-    assert.ok(Math.abs(n.height - n.expectedHeight) < 1);
+    assert.ok(Math.abs(n.height - n.expectedHeight) < (directional ? 4 : 1));
     assert.ok(n.footOrigin > .98 && n.footOrigin <= 1);
     assert.equal(n.walkable, true);
   }
 });
 
-test('동료 조안은 따라오기·피격·회복 중에도 테온 대신 자신의 SD를 표시한다', async () => {
+test('동료 조안은 따라오기·공격·피격·회복에 자신의 시트를 쓴다', async () => {
   await load('east-stream&npcs=chapter2&companion=none');
   const result = await evaluate(`(() => {
     const s = window.__game.scene.getScene('game');
     s.setCompanion('joan');
-    const c = s.companion, keys = [c.figure.texture.key];
+    const c = s.companion;
+    const pose = () => [c.figure.texture.key, c.figure.frame.name];
+    const guard = pose(), profile = c.fighter.skin;
     c.placeAt(s.player.x - 280, s.player.y);
     const before = c.x;
     for (let i = 0; i < 15; i++) s.updateCompanion(s.now + i * 20, .02);
-    keys.push(c.figure.texture.key);
-    c.receiveCombatHit(s.now + 1000, {x:c.x, y:c.y-100}, 10000);
-    keys.push(c.figure.texture.key);
+    const walking = pose();
+    const targets = [{ id: 0, x: c.x, y: c.y, alive: true, attacking: false }];
+    c.updateCombat(s.now + 900, .02, targets, s.walkArea, () => true, () => {});
+    const attack = pose();
+    c.receiveCombatHit(s.now + 1000, {x:c.x, y:c.y-100}, 1);
+    const hit = pose();
+    c.receiveCombatHit(s.now + 3000, {x:c.x, y:c.y-100}, 10000);
+    const injured = pose();
     const downed = c.downed;
     c.revive();
-    keys.push(c.figure.texture.key);
+    const recovered = pose();
     s.setCompanion(undefined);
-    return { keys, moved: c.x > before, downed };
+    return { guard, profile, walking, attack, hit, injured, recovered, moved: c.x > before, downed };
   })()`);
-  assert.ok(result.keys.every(key => key === 'npc-joan-idle'));
+  assert.equal(result.profile, 'teon');
+  assert.deepEqual(result.guard, ['npc-joan-combat', 'guard']);
+  assert.equal(result.walking[0], 'npc-joan-cardinal');
+  assert.match(result.walking[1], /^right-[1-3]$/);
+  assert.deepEqual(result.attack, ['npc-joan-combat', 'attack']);
+  assert.deepEqual(result.hit, ['npc-joan-combat', 'hit']);
+  assert.deepEqual(result.injured, ['npc-joan-combat', 'injured']);
+  assert.deepEqual(result.recovered, ['npc-joan-cardinal', 'right-0']);
   assert.equal(result.moved, true);
   assert.equal(result.downed, true);
+});
+
+test('조안의 고치는 잠든 자세를 유지하고 깨어나는 동작을 한 번 재생한다', async () => {
+  await load('east-stream&npcs=chapter2&companion=none&action=joan-cocoon');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), j = s.npcs.find(n => n.def.id === 'joan');
+    const advance = dt => j.update(s.now, dt, s.player, s.walkArea);
+    const start = [j.x, j.y], texture = j.figure.texture.key;
+    advance(3);
+    const sleeping = j.figure.frame.name;
+    j.setStoryAction('awaken');
+    const frames = [j.figure.frame.name];
+    for (let i = 0; i < 7; i++) {
+      advance(.334);
+      frames.push(j.figure.frame.name);
+    }
+    advance(4);
+    return { texture, sleeping, frames, end: j.figure.frame.name, still: j.x === start[0] && j.y === start[1] };
+  })()`);
+  assert.equal(result.texture, 'npc-joan-cocoon-awaken');
+  assert.equal(result.sleeping, result.frames[0]);
+  assert.equal(new Set(result.frames).size, 8);
+  assert.equal(result.end, result.frames[7]);
+  assert.equal(result.still, true);
 });
 
 test('순찰 조사 전 테온과 대화하면 테온의 이름과 일러스트가 표시된다', async () => {

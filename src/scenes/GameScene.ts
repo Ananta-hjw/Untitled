@@ -1078,12 +1078,16 @@ export class GameScene extends Phaser.Scene {
       const innkeeper = this.npcs[0];
       innkeeper.startSleepwalk([{ x: innkeeper.x + 260, y: innkeeper.y + 65 }]);
     }
-    if (this.previewNpcGroup === 'support' || this.previewNpcGroup === 'all') {
-      const action = new URLSearchParams(location.search).get('action');
+    const group = this.previewNpcGroup;
+    const action = group && new URLSearchParams(location.search).get('action');
+    if (group === 'support' || group === 'all') {
       for (const npc of this.npcs) {
         if (npc.def.id === 'toby') npc.setStoryAction(action === 'cocoon' ? 'cocoon' : action === 'idle' ? undefined : 'bellows');
         if (npc.def.id === 'bell-ringer' && action !== 'idle') npc.setStoryAction('ring');
       }
+    }
+    if (action === 'joan-cocoon' || action === 'joan-awaken') {
+      this.npcs.find(npc => npc.def.id === 'joan')?.setStoryAction(action === 'joan-cocoon' ? 'cocoon' : 'awaken');
     }
     this.interactables = [...this.map.interactables, ...this.npcs.map((npc) => npc.spot),
       // 시온의 집 침대 앞: 쉬기 (저장)

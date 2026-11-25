@@ -1,0 +1,76 @@
+{
+  "frames": [
+    {
+      "name": "cocoon-asleep",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.894042
+    },
+    {
+      "name": "cocoon-loosen",
+      "x": 384,
+      "y": 0,
+      "w": 384,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.894042
+    },
+    {
+      "name": "cocoon-open",
+      "x": 768,
+      "y": 0,
+      "w": 384,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.894042
+    },
+    {
+      "name": "cocoon-release",
+      "x": 1152,
+      "y": 0,
+      "w": 384,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.894042
+    },
+    {
+      "name": "cocoon-kneel",
+      "x": 0,
+      "y": 384,
+      "w": 384,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.894042
+    },
+    {
+      "name": "cocoon-settle",
+      "x": 384,
+      "y": 384,
+      "w": 384,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.894042
+    },
+    {
+      "name": "cocoon-stir",
+      "x": 768,
+      "y": 384,
+      "w": 384,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.894042
+    },
+    {
+      "name": "cocoon-awake",
+      "x": 1152,
+      "y": 384,
+      "w": 384,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.894042
+    }
+  ]
+}

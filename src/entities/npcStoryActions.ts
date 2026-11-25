@@ -16,6 +16,8 @@ import defenderRecoveryUrl from '../assets/characters/defender-recovery/recovery
 import defenderRecoveryData from '../assets/characters/defender-recovery/recovery-frames.json';
 import reliefUrl from '../assets/characters/village-relief/work.webp?url';
 import reliefData from '../assets/characters/village-relief/work-frames.json';
+import joanCocoonUrl from '../assets/characters/joan/cocoon-awaken.webp?url';
+import joanCocoonData from '../assets/characters/joan/cocoon-awaken-frames.json';
 
 export interface StoryFrame { name: string; x: number; y: number; w: number; h: number; originX: number; originY: number }
 export interface StoryAction {
@@ -24,6 +26,7 @@ export interface StoryAction {
   flipX?: boolean;
   labelOffset?: number;
   activity?: string;
+  loop?: boolean;
 }
 const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
   ...Object.fromEntries(([
@@ -60,6 +63,12 @@ const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
   }])),
   'bell-ringer': {
     ring: { key: 'npc-bell-ringer-ring', url: ringUrl, frames: ringData.frames, fps: ringData.fps, bodyHeight: 296, onTalk: 'stop' },
+  },
+  joan: {
+    cocoon: { key: 'npc-joan-cocoon-awaken', url: joanCocoonUrl, frames: joanCocoonData.frames.slice(0, 1),
+      fps: 0, bodyHeight: 286, labelOffset: 172, onTalk: 'keep' },
+    awaken: { key: 'npc-joan-cocoon-awaken', url: joanCocoonUrl, frames: joanCocoonData.frames,
+      fps: 3, bodyHeight: 286, labelOffset: 172, onTalk: 'keep', loop: false },
   },
   toby: {
     bellows: { key: 'npc-toby-bellows', url: bellowsUrl, frames: bellowsData.frames, fps: 3, bodyHeight: 430, onTalk: 'pause' },

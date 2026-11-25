@@ -11,9 +11,23 @@ SETS = [
         ('attack', 270, 600), ('guard', 260, 600),
         ('hit', 350, 598), ('injured', 345, 595),
     ]),
+    ('characters/joan', 'cocoon-awaken', 4, 2, (384, 384), [
+        ('cocoon-asleep', 235, 412), ('cocoon-loosen', 222, 412),
+        ('cocoon-open', 222, 417), ('cocoon-release', 203, 416),
+        ('cocoon-kneel', 237, 398), ('cocoon-settle', 224, 398),
+        ('cocoon-stir', 212, 398), ('cocoon-awake', 230, 398),
+    ], 12),
     ('characters/evan', 'defense', 2, 2, (512, 384), [
         ('guard', 320, 586), ('knockback', 340, 593),
         ('hit', 260, 598), ('fatigued', 310, 597),
+    ]),
+    ('characters/evan', 'rope-pull', 4, 1, (512, 384), [
+        ('rope-reach', 256, 459), ('rope-pull-down', 256, 459),
+        ('rope-regrip', 256, 459), ('rope-settle', 256, 459),
+    ]),
+    ('characters/evan', 'oar-swing', 4, 1, (512, 384), [
+        ('oar-ready', 256, 459), ('oar-windup', 256, 459),
+        ('oar-strike', 256, 459), ('oar-recover', 256, 459),
     ]),
     ('characters/morgan', 'work', 2, 2, (512, 384), [
         ('lift-ready', 265, 595), ('hammer-wedge', 285, 492),
@@ -25,7 +39,7 @@ SETS = [
 ]
 
 
-def build(folder, stem, columns, rows, tile_size, poses):
+def build(folder, stem, columns, rows, tile_size, poses, alpha_threshold=128):
     directory = ROOT / folder
     with Image.open(directory / f'{stem}-source.png') as source:
         source = source.convert('RGBA')
@@ -35,7 +49,7 @@ def build(folder, stem, columns, rows, tile_size, poses):
             rect = (round(col * source.width / columns), round(row * source.height / rows),
                     round((col + 1) * source.width / columns), round((row + 1) * source.height / rows))
             cell = source.crop(rect)
-            bounds = cell.getchannel('A').point(lambda a: 255 if a >= 128 else 0).getbbox()
+            bounds = cell.getchannel('A').point(lambda a: 255 if a >= alpha_threshold else 0).getbbox()
             assert bounds is not None, (stem, name)
             left, top, right, bottom = bounds
             assert min(left, top, cell.width - right, cell.height - bottom) > 0, (stem, name, 'clipped art')

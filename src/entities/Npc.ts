@@ -46,6 +46,7 @@ export const MARKER_STYLE: Record<QuestMarker, { text: string; color: string }> 
 const sheetKey = (id: NpcSkin, sheet: string) => `npc-${id}-${sheet.startsWith('walk_cardinal') ? 'cardinal' : 'diagonal'}`;
 const sheetUrl = (id: NpcSkin, sheet: string) => SHEET_URLS[`../assets/characters/${id}/${sheet}-60.webp`];
 const walkData = (id: NpcSkin) => FRAME_DATA[`../assets/characters/${id}/walk_frames.json`];
+const combatData = (id: NpcSkin) => COMBAT_DATA[`../assets/characters/${id}/combat-frames.json`];
 
 export function preloadNpcs(scene: Phaser.Scene, npcs: readonly NpcDef[]): void {
   for (const id of new Set(npcs.map(npcSkin))) {
@@ -53,7 +54,7 @@ export function preloadNpcs(scene: Phaser.Scene, npcs: readonly NpcDef[]): void 
     if (id === 'fog-innkeeper' && !scene.textures.exists('npc-fog-innkeeper-sleepwalk')) {
       scene.load.image('npc-fog-innkeeper-sleepwalk', innSleepUrl);
     }
-    if (isFighterSkin(id) && !scene.textures.exists(`npc-${id}-combat`)) {
+    if (combatData(id) && !scene.textures.exists(`npc-${id}-combat`)) {
       scene.load.image(`npc-${id}-combat`, COMBAT_URLS[`../assets/characters/${id}/combat.webp`]);
     }
     if (!walkData(id)) {
@@ -138,9 +139,10 @@ export class Npc extends Phaser.GameObjects.Container {
     registerNpcStoryActions(scene, this.skin);
     const combatSkin = def.skin ?? this.skin;
     if (isFighterSkin(combatSkin)) this.fighter = new NpcFighter(combatSkin);
-    if (isFighterSkin(this.skin)) {
+    const combat = combatData(this.skin);
+    if (combat) {
       const texture = scene.textures.get(`npc-${this.skin}-combat`);
-      for (const f of COMBAT_DATA[`../assets/characters/${this.skin}/combat-frames.json`].frames) {
+      for (const f of combat.frames) {
         if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
       }
     }
@@ -530,7 +532,9 @@ export class Npc extends Phaser.GameObjects.Container {
 
   private showFrame(pose: number, combatWalk = false): void {
     if (this.storyAction) {
-      const a = this.storyAction, f = a.frames[Math.floor(this.storyElapsed * a.fps / 1000) % a.frames.length];
+      const a = this.storyAction;
+      const elapsedFrames = Math.floor(this.storyElapsed * a.fps / 1000);
+      const f = a.frames[a.loop === false ? Math.min(elapsedFrames, a.frames.length - 1) : elapsedFrames % a.frames.length];
       this.figure.setTexture(a.key, f.name).setFlipX(a.flipX ?? false).setOrigin(a.flipX ? 1 - f.originX : f.originX, f.originY)
         .setScale(this.def.height / a.bodyHeight);
       return;
@@ -556,8 +560,8 @@ export class Npc extends Phaser.GameObjects.Container {
   }
 
   private showCombat(pose: NpcCombatPose): void {
-    if (this.idle) { this.showFrame(0, true); return; }
-    const frame = COMBAT_DATA[`../assets/characters/${this.skin}/combat-frames.json`].frames.find(f => f.name === pose)!;
+    const frame = combatData(this.skin)?.frames.find(f => f.name === pose);
+    if (!frame) { this.showFrame(this.walk.idlePose, true); return; }
     this.figure.setTexture(`npc-${this.skin}-combat`, pose).setFlipX(this.fighter!.facingX < 0)
       .setOrigin(frame.originX, frame.originY).setScale(this.def.height / NPC_COMBAT.artHeight);
   }

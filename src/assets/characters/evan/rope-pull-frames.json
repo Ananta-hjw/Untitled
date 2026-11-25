@@ -1,0 +1,40 @@
+{
+  "frames": [
+    {
+      "name": "rope-reach",
+      "x": 0,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955766
+    },
+    {
+      "name": "rope-pull-down",
+      "x": 512,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955766
+    },
+    {
+      "name": "rope-regrip",
+      "x": 1024,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955766
+    },
+    {
+      "name": "rope-settle",
+      "x": 1536,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955766
+    }
+  ]
+}
