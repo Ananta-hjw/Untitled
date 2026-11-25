@@ -63,10 +63,16 @@ const BACK_SIX = {
   attack3: { frame: 'attack3-back6', starts: SIDE_SIX.attack3.starts },
 } as const;
 
-function sideSix(action: HeroAction, facing: Facing) {
+// 앞대각선은 첫 타격 뒤 칼이 더 가파르게 내려오므로 명중 구간 안에 마무리 자세도 넣는다.
+const DOWN_DIAG_SIX = { frame: 'attack-down-diag6', starts: [0, 40, 110, 200, 250, 350] } as const;
+
+function sixPoseAttack(action: HeroAction, facing: Facing) {
   if (action === 'idle' || action === 'walk' || action === 'dodge') return undefined;
   if (facing === 'right' || facing === 'left') return SIDE_SIX[action];
   if (facing === 'up') return BACK_SIX[action];
+  if (action === 'attack1' && (facing === 'down-right' || facing === 'down-left')) {
+    return DOWN_DIAG_SIX;
+  }
   return facing === 'down' ? FRONT_SIX[action] : undefined;
 }
 
@@ -76,7 +82,7 @@ function usesFrontPoses(facing: Facing): boolean {
 
 /** 콤보 단계(0~2)와 방향에 맞는 타격 자세가 나타나는 시각(ms). */
 export function strikePoseStart(stage: number, facing: Facing = 'right'): number {
-  const six = sideSix(`attack${stage + 1}` as HeroAction, facing);
+  const six = sixPoseAttack(`attack${stage + 1}` as HeroAction, facing);
   if (six) return six.starts[3];
   const starts = usesFrontPoses(facing) ? PROTO_POSE_STARTS : POSE_STARTS;
   return starts[`attack${stage + 1}` as 'attack1' | 'attack2' | 'attack3'][2];
@@ -140,7 +146,7 @@ export function heroFrame(action: HeroAction, facing: Facing, elapsedMs: number)
     const diagonal = DIAGONALS.indexOf(facing);
     return diagonal >= 0 ? `diagonal-${diagonal * 4 + column}` : `walk-${DIRECTIONS.indexOf(facing) * 4 + column}`;
   }
-  const six = sideSix(action, facing);
+  const six = sixPoseAttack(action, facing);
   if (six) {
     let pose = 0;
     while (pose < six.starts.length - 1 && time + 1e-6 >= six.starts[pose + 1]) pose++;
@@ -157,7 +163,11 @@ export function heroFrame(action: HeroAction, facing: Facing, elapsedMs: number)
   if (action === 'dodge' && (facing === 'up' || facing === 'down')) return `dodge-${facing}-${column}`;
   if (action !== 'dodge') {
     if (facing === 'down') return `attack-front-${row * 4 + column}`;
-    if (facing === 'down-right' || facing === 'down-left') return `attack-down-diag-${row * 4 + column}`;
+    if (facing === 'down-right' || facing === 'down-left') {
+      // 3타의 복귀와 1타의 준비에 같은 몸과 칼 좌표를 써서 콤보를 잇는다.
+      if (action === 'attack3' && column === 3) return `${DOWN_DIAG_SIX.frame}-0`;
+      return `attack-down-diag-${row * 4 + column}`;
+    }
     if (facing === 'up') return `attack-back-${row * 4 + column}`;
     if (facing.startsWith('up')) return `attack-up-${row * 4 + column}`;
   }

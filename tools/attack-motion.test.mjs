@@ -13,6 +13,7 @@ const downDiagData = corrected(JSON.parse(readFileSync(new URL('../src/assets/he
 const perspData = JSON.parse(readFileSync(new URL('../src/assets/hero/weapons/perspective_atlas.json', import.meta.url)));
 const backSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-back_frames.json`, import.meta.url))).frames;
 const frontSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-front_frames.json`, import.meta.url))).frames;
+const downDiagSix = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/attack-six/attack1-down-diag_frames.json', import.meta.url))).frames;
 
 test('공격은 8방향 모두 그대로 유지하고 정면·앞대각선은 신규 시트를 선택한다', () => {
   for (const facing of EIGHT_DIRS) {
@@ -27,8 +28,9 @@ test('공격은 8방향 모두 그대로 유지하고 정면·앞대각선은 �
     const t = PLAYER.combo[stage].hitDelayMs + 20;
     // 정면은 6자세 원화(attack-front6, attack2-front6, attack3-front6)의 타격 자세(3번)
     assert.equal(heroFrame(`attack${stage + 1}`, 'down', t), `attack${stage ? stage + 1 : ''}-front6-3`);
-    assert.equal(heroFrame(`attack${stage + 1}`, 'down-right', t), `attack-down-diag-${stage * 4 + 2}`);
-    assert.equal(heroFrame(`attack${stage + 1}`, 'down-left', t), `attack-down-diag-${stage * 4 + 2}`);
+    const diagonalFrame = stage === 0 ? 'attack-down-diag6-3' : `attack-down-diag-${stage * 4 + 2}`;
+    assert.equal(heroFrame(`attack${stage + 1}`, 'down-right', t), diagonalFrame);
+    assert.equal(heroFrame(`attack${stage + 1}`, 'down-left', t), diagonalFrame);
   }
 });
 
@@ -137,10 +139,28 @@ test('검기 시작 시각에 해당 방향의 타격 자세가 처음 표시된
   for (const facing of EIGHT_DIRS) for (const stage of [0, 1, 2]) {
     const action = `attack${stage + 1}`, at = strikePoseStart(stage, facing);
     const index = frame => Number(frame.slice(frame.lastIndexOf('-') + 1));
-    // 옆·정면·위쪽 1·2·3타는 6자세(attack[23]?-(side|front|back)6-0..5): 2번 다음이 타격(3)
-    const six = /^attack[23]?-(side|front|back)6-/.test(heroFrame(action, facing, at));
+    // 6자세 시트는 2번 다음이 타격(3)
+    const six = /6-\d$/.test(heroFrame(action, facing, at));
     assert.equal(six ? index(heroFrame(action, facing, at - .001)) : index(heroFrame(action, facing, at - .001)) % 4, six ? 2 : 1, `${facing} ${stage}`);
     assert.equal(six ? index(heroFrame(action, facing, at)) : index(heroFrame(action, facing, at)) % 4, six ? 3 : 2, `${facing} ${stage}`);
+  }
+});
+
+test('앞대각선 1타는 여섯 자세의 검 방향과 길이를 유지한다', () => {
+  const clockHours = [4.5, 12, 10.5, 4, 5.5, 4.5];
+  assert.equal(downDiagSix.length, clockHours.length);
+  for (const [i, frame] of downDiagSix.entries()) {
+    const { base, tip } = frame.blade;
+    const dx = tip.x - base.x, dy = tip.y - base.y;
+    assert.ok(Math.abs(Math.hypot(dx, dy) - 135 * 304 / 310) < 0.02, frame.name);
+    const direction = (clockHours[i] - 3) * Math.PI / 6;
+    assert.ok((dx * Math.cos(direction) + dy * Math.sin(direction)) / Math.hypot(dx, dy) >= Math.cos(Math.PI / 12), frame.name);
+    for (const facing of ['down-right', 'down-left']) {
+      assert.equal(heroFrame('attack1', facing, [0, 40, 110, 200, 250, 440][i]), frame.name);
+    }
+  }
+  for (const facing of ['down-right', 'down-left']) {
+    assert.equal(heroFrame('attack3', facing, 420), heroFrame('attack1', facing, 0));
   }
 });
 

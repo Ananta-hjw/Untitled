@@ -766,20 +766,22 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
   assert.equal(result.length, 192);
   for (const run of result) {
     assert.deepEqual(run.hits, [1, 0, 0, 0], JSON.stringify(run));
-    const corrected = run.facing.startsWith('down') && run.facing !== 'down' && run.stage > 0;
+    const downDiag = run.facing === 'down-right' || run.facing === 'down-left';
+    const downDiagSix = downDiag && run.stage === 0;
     const sideSix = run.facing === 'right' || run.facing === 'left';
     const frontSix = run.facing === 'down';
     const backSix = run.facing === 'up';
-    const texture = sideSix || frontSix || backSix ? `hero-academy-attack${run.stage ? run.stage + 1 : ''}-${sideSix ? 'side' : frontSix ? 'front' : 'back'}6` : corrected ? 'hero-academy-attack-corrections' : `hero-academy-${run.facing === 'down' ? 'attack-front'
-      : run.facing.startsWith('up') ? 'attack-up' : run.facing.startsWith('down') ? 'attack-down-diag' : 'combat'}`;
+    const six = sideSix || frontSix || backSix || downDiagSix;
+    const texture = six
+      ? `hero-academy-attack${run.stage ? run.stage + 1 : ''}-${sideSix ? 'side' : frontSix ? 'front' : backSix ? 'back' : 'down-diag'}6`
+      : downDiag ? 'hero-academy-attack-corrections' : 'hero-academy-attack-up';
     assert.equal(run.texture, texture);
     assert.ok(run.fx, JSON.stringify(run));
-    // 옆 1타의 6자세에서는 3번이 타격 자세
-    assert.equal(Number(run.fx.frame.slice(run.fx.frame.lastIndexOf('-') + 1)) % (sideSix || frontSix || backSix ? 6 : 4), sideSix || frontSix || backSix ? 3 : 2, '검기는 타격 자세부터 나온다: ' + JSON.stringify(run));
+    assert.equal(Number(run.fx.frame.slice(run.fx.frame.lastIndexOf('-') + 1)) % (six ? 6 : 4), six ? 3 : 2, '검기는 타격 자세부터 나온다: ' + JSON.stringify(run));
     assert.ok(run.samples >= 2, JSON.stringify(run));
     assert.ok(run.maxTrailError < 1e-6, JSON.stringify(run));
     if (run.stage !== 2) assert.ok(run.longestPath > run.fx.pathSize, '베기 궤적이 점차 드러난다: ' + JSON.stringify(run));
-    if ((sideSix || frontSix) && run.fps >= 30) assert.equal(run.followThrough, true, '마무리 자세까지 검기를 갱신한다: ' + JSON.stringify(run));
+    if ((sideSix || frontSix || downDiagSix) && run.fps >= 30) assert.equal(run.followThrough, true, '마무리 자세까지 검기를 갱신한다: ' + JSON.stringify(run));
     if (sideSix && run.stage < 2) {
       assert.ok(run.maxFinishTurn < Math.PI / 4, '좌우 베기 검기의 접합부가 꺾이지 않는다: ' + JSON.stringify(run));
       assert.ok(run.maxFinishGap < 1e-6, '올려 베기 검기가 사라질 때 칼끝에서 떨어지지 않는다: ' + JSON.stringify(run));
@@ -896,7 +898,7 @@ test('마지막 대각선과 자동 조준을 사용하고 공격 도중 반대 
   assert.ok(result.before.frame.startsWith('attack-up-'));
   assert.ok(result.before.scale < 0);
   assert.deepEqual(result.after, result.before);
-  assert.equal(result.aimed, 'hero-academy-attack-down-diag');
+  assert.equal(result.aimed, 'hero-academy-attack-down-diag6');
   assert.ok(result.direction.x > 0 && result.direction.y > 0);
 });
 
@@ -3389,7 +3391,7 @@ test('무기 교체·해제는 별도 레이어와 칼집 손잡이·잔상·저
   assert.equal(result.copies[0],'hero-weapons:iron-sword-grip');assert.equal(result.copies[3],'hero-weapons:iron-sword-blade');
 });
 
-test('네 검의 외형이 서로 다르고 정면 찌르기의 손잡이는 주먹 뒤로 들어간다', async () => {
+test('네 검은 정면 찌르기와 좌우·앞대각선 공격에서 주먹에 맞는 손잡이를 표시한다', async () => {
   await load('village');
   const results = await evaluate(`(() => {
     const s=window.__game.scene.getScene('game'), h=s.player.sprite;
@@ -3408,30 +3410,32 @@ test('네 검의 외형이 서로 다르고 정면 찌르기의 손잡이는 주
       const end=sample('attack2',800), start=sample('attack3',0), thrust=sample('attack3',180);
       h.setAttackFacing('right');
       const side=sample('attack1',200);
-      const raised = ['right', 'left'].flatMap(facing => {
+      const grips = ['right', 'left', 'down-right', 'down-left'].flatMap(facing => {
         h.setAttackFacing(facing);
-        return [50, 120].map(time => {
+        const times = facing.startsWith('down') ? [0, 40, 110, 200, 250, 440] : [50, 120];
+        return times.map(time => {
           sample('attack1', time);
           const fist = h.supportHand, grip = h.weaponBack, cover = h.frame.gripCover;
           const pm = grip.getWorldTransformMatrix(), hm = fist.getWorldTransformMatrix();
           const center = hm.transformPoint(cover.w / 2, cover.h / 2);
           const a = pm.transformPoint(-grip.displayOriginX, 0), b = pm.transformPoint(-grip.displayOriginX + grip.width, 0);
           const span = Math.hypot(b.x - a.x, b.y - a.y), dx = (b.x - a.x) / span, dy = (b.y - a.y) / span;
-          return { visible: fist.visible && grip.visible, mirrored: fist.scaleX < 0,
+          return { facing, time, visible: fist.visible && grip.visible, mirrored: fist.scaleX < 0,
             depth: h.list.indexOf(h.image) < h.list.indexOf(grip) && h.list.indexOf(grip) < h.list.indexOf(fist),
             throughFist: Math.abs((center.x - a.x) * dy - (center.y - a.y) * dx),
             alongGrip: ((center.x - a.x) * dx + (center.y - a.y) * dy) / span };
         });
       });
       h.setAttackFacing('down');
-      return {id,end,start,thrust,side,raised};
+      return {id,end,start,thrust,side,grips};
     });
   })()`);
-  for (const {id,end,start,thrust,side,raised} of results) {
-    for (const [i, pose] of raised.entries()) {
+  for (const {id,end,start,thrust,side,grips} of results) {
+    for (const pose of grips) {
       assert.ok(pose.visible && pose.depth, JSON.stringify(pose));
-      assert.equal(pose.mirrored, i >= 2);
-      assert.ok(pose.throughFist < 2 && pose.alongGrip > .2 && pose.alongGrip < .7, JSON.stringify(pose));
+      assert.equal(pose.mirrored, pose.facing.endsWith('left'));
+      const guardSideLimit = pose.facing.startsWith('down') ? .9 : .7;
+      assert.ok(pose.throughFist < 2 && pose.alongGrip > .2 && pose.alongGrip < guardSideLimit, JSON.stringify(pose));
     }
     assert.equal(end.body,'attack2-front6-5');
     assert.equal(start.body,'attack3-front6-0');

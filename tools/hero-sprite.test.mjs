@@ -15,7 +15,8 @@ const sideSixData = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/
 const sideSix2Data = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/attack-six/attack2-side_frames.json', import.meta.url)));
 const sideSix3Data = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/attack-six/attack3-side_frames.json', import.meta.url)));
 const frontSix = [1, 2, 3].map(n => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${n}-front_frames.json`, import.meta.url))));
-const allFrames = [...new Map([...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames, ...correctionData.frames, ...dodgeData.frames, ...sideSixData.frames, ...sideSix2Data.frames, ...sideSix3Data.frames, ...frontSix.flatMap(d => d.frames)].map(f => [f.name, f])).values()];
+const downDiagSix = JSON.parse(readFileSync(new URL('attack-six/attack1-down-diag_frames.json', root)));
+const allFrames = [...new Map([...data.frames, ...attackFrontData.frames, ...attackDownDiagData.frames, ...correctionData.frames, ...dodgeData.frames, ...sideSixData.frames, ...sideSix2Data.frames, ...sideSix3Data.frames, ...frontSix.flatMap(d => d.frames), ...downDiagSix.frames].map(f => [f.name, f])).values()];
 
 test('상하 회피는 정면·뒷면 전용 네 자세를 쓰고 놓은 입력과 작은 좌우 흔들림에도 방향을 유지한다', () => {
   for (const facing of ['up','down','left','right','up-left','up-right','down-left','down-right']) {
@@ -111,8 +112,10 @@ test('각 콤보의 실제 타격 그림은 명중 구간 안에 표시되고 3�
 test('대각선 4방향은 각 콤보에서 전용 타격 그림을 선택한다', () => {
   for (const facing of ['down-left', 'down-right', 'up-left', 'up-right']) {
     for (let stage = 0; stage < 3; stage++) {
-      const frame = heroFrame(`attack${stage + 1}`, facing, PLAYER.combo[stage].hitDelayMs + 30);
-      assert.equal(frame, `${facing.startsWith('up') ? 'attack-up' : 'attack-down-diag'}-${stage * 4 + 2}`);
+      const frame = heroFrame(`attack${stage + 1}`, facing, PLAYER.combo[stage].hitDelayMs + 20);
+      const expected = facing.startsWith('up') ? `attack-up-${stage * 4 + 2}`
+        : stage === 0 ? 'attack-down-diag6-3' : `attack-down-diag-${stage * 4 + 2}`;
+      assert.equal(frame, expected);
       assert.ok(allFrames.find((f) => f.name === frame).blade);
     }
   }
