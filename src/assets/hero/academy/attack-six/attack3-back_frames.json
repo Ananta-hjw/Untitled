@@ -91,18 +91,18 @@
       "name": "attack3-back6-4",
       "texture": "hero-academy-attack3-back6",
       "w": 204,
-      "h": 289,
+      "h": 302,
       "originX": 0.60569,
-      "originY": 0.99761,
+      "originY": 0.99689,
       "scale": 1,
       "blade": {
         "base": {
           "x": 188.28,
-          "y": 28.44
+          "y": 41.19
         },
         "tip": {
           "x": 188.28,
-          "y": -69.63
+          "y": -56.88
         }
       },
       "weaponPerspective": "up",

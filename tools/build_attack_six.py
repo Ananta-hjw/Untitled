@@ -13,7 +13,7 @@ import json
 import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1] / 'src/assets/hero/academy/attack-six'
 CELL = 512
@@ -264,9 +264,10 @@ def build_sheet(sheet_def):
                 mask = Image.new('L', cell.size)
                 ImageDraw.Draw(mask).polygon(sheet_def['grip_covers'][i], fill=255)
                 alpha = mask.crop((left, top, right, bottom)).resize(body.size, Image.Resampling.LANCZOS)
-                cx, cy, cr, cb = alpha.getbbox()
+                combined = ImageChops.multiply(body.getchannel('A'), alpha)
+                cx, cy, cr, cb = combined.getbbox()
                 patch = body.crop((cx, cy, cr, cb))
-                patch.putalpha(alpha.crop((cx, cy, cr, cb)))
+                patch.putalpha(combined.crop((cx, cy, cr, cb)))
                 frame['gripCover'] = dict(name=f'{frame["name"]}-grip-cover', x=cx, y=cy, w=patch.width, h=patch.height)
                 covers.append((patch, frame['gripCover']))
             frames.append(frame)

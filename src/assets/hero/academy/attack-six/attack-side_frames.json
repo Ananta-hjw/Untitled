@@ -41,10 +41,10 @@
       },
       "gripCover": {
         "name": "attack-side6-1-grip-cover",
-        "x": 57,
+        "x": 59,
         "y": 101,
-        "w": 29,
-        "h": 41,
+        "w": 27,
+        "h": 40,
         "atlasX": 4,
         "atlasY": 313
       },
@@ -75,7 +75,7 @@
         "y": 76,
         "w": 32,
         "h": 40,
-        "atlasX": 37,
+        "atlasX": 35,
         "atlasY": 313
       },
       "x": 419,

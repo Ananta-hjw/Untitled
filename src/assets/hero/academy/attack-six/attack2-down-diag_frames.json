@@ -21,9 +21,9 @@
       "gripCover": {
         "name": "attack2-down-diag6-0-grip-cover",
         "x": 76,
-        "y": 160,
-        "w": 71,
-        "h": 51,
+        "y": 161,
+        "w": 70,
+        "h": 50,
         "atlasX": 4,
         "atlasY": 316
       },
@@ -50,11 +50,11 @@
       },
       "gripCover": {
         "name": "attack2-down-diag6-1-grip-cover",
-        "x": 0,
-        "y": 146,
-        "w": 57,
-        "h": 59,
-        "atlasX": 79,
+        "x": 4,
+        "y": 147,
+        "w": 51,
+        "h": 53,
+        "atlasX": 78,
         "atlasY": 316
       },
       "x": 214,
@@ -83,8 +83,8 @@
         "x": 81,
         "y": 155,
         "w": 62,
-        "h": 62,
-        "atlasX": 140,
+        "h": 60,
+        "atlasX": 133,
         "atlasY": 316
       },
       "x": 432,
@@ -111,10 +111,10 @@
       "gripCover": {
         "name": "attack2-down-diag6-3-grip-cover",
         "x": 185,
-        "y": 80,
+        "y": 91,
         "w": 60,
-        "h": 49,
-        "atlasX": 206,
+        "h": 38,
+        "atlasX": 199,
         "atlasY": 316
       },
       "x": 651,
@@ -140,11 +140,11 @@
       },
       "gripCover": {
         "name": "attack2-down-diag6-4-grip-cover",
-        "x": 172,
-        "y": 28,
-        "w": 41,
-        "h": 71,
-        "atlasX": 270,
+        "x": 174,
+        "y": 34,
+        "w": 37,
+        "h": 65,
+        "atlasX": 263,
         "atlasY": 316
       },
       "x": 900,
@@ -171,10 +171,10 @@
       "gripCover": {
         "name": "attack2-down-diag6-5-grip-cover",
         "x": 157,
-        "y": 112,
+        "y": 115,
         "w": 64,
-        "h": 41,
-        "atlasX": 315,
+        "h": 38,
+        "atlasX": 304,
         "atlasY": 316
       },
       "x": 1127,

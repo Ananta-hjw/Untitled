@@ -100,9 +100,9 @@
     {
       "name": "attack3-front6-4",
       "texture": "hero-academy-attack3-front6",
-      "w": 176,
+      "w": 217,
       "h": 315,
-      "originX": 0.53489,
+      "originX": 0.43382,
       "originY": 0.94016,
       "scale": 1,
       "blade": {
@@ -137,7 +137,7 @@
           "y": 305.45
         }
       },
-      "x": 1016,
+      "x": 1057,
       "y": 4
     }
   ]

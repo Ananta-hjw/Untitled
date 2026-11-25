@@ -50,9 +50,9 @@
       },
       "gripCover": {
         "name": "attack-down-diag6-1-grip-cover",
-        "x": 52,
+        "x": 54,
         "y": 96,
-        "w": 30,
+        "w": 28,
         "h": 36,
         "atlasX": 47,
         "atlasY": 313
@@ -81,10 +81,10 @@
       "gripCover": {
         "name": "attack-down-diag6-2-grip-cover",
         "x": 65,
-        "y": 47,
-        "w": 35,
-        "h": 43,
-        "atlasX": 81,
+        "y": 49,
+        "w": 33,
+        "h": 41,
+        "atlasX": 79,
         "atlasY": 313
       },
       "x": 391,
@@ -110,11 +110,11 @@
       },
       "gripCover": {
         "name": "attack-down-diag6-3-grip-cover",
-        "x": 195,
-        "y": 137,
-        "w": 40,
-        "h": 38,
-        "atlasX": 120,
+        "x": 196,
+        "y": 140,
+        "w": 39,
+        "h": 35,
+        "atlasX": 116,
         "atlasY": 313
       },
       "x": 607,
@@ -144,7 +144,7 @@
         "y": 199,
         "w": 39,
         "h": 38,
-        "atlasX": 164,
+        "atlasX": 159,
         "atlasY": 313
       },
       "x": 846,
@@ -174,7 +174,7 @@
         "y": 175,
         "w": 38,
         "h": 35,
-        "atlasX": 207,
+        "atlasX": 202,
         "atlasY": 313
       },
       "x": 1079,
