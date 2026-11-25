@@ -1,0 +1,134 @@
+{
+  "frames": [
+    {
+      "name": "attack3-back6-0",
+      "texture": "hero-academy-attack3-back6",
+      "w": 157,
+      "h": 307,
+      "originX": 0.5372,
+      "originY": 0.99661,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 152.98,
+          "y": 97.08
+        },
+        "tip": {
+          "x": 215.53,
+          "y": -19.59
+        }
+      },
+      "x": 4,
+      "y": 4
+    },
+    {
+      "name": "attack3-back6-1",
+      "texture": "hero-academy-attack3-back6",
+      "w": 157,
+      "h": 303,
+      "originX": 0.65586,
+      "originY": 0.99683,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 145.14,
+          "y": 136.31
+        },
+        "tip": {
+          "x": 144.04,
+          "y": 62.77
+        }
+      },
+      "weaponPerspective": "up",
+      "x": 165,
+      "y": 4
+    },
+    {
+      "name": "attack3-back6-2",
+      "texture": "hero-academy-attack3-back6",
+      "w": 160,
+      "h": 272,
+      "originX": 0.65581,
+      "originY": 0.99507,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 148.08,
+          "y": 129.45
+        },
+        "tip": {
+          "x": 148.08,
+          "y": 55.9
+        }
+      },
+      "weaponPerspective": "up",
+      "x": 326,
+      "y": 4
+    },
+    {
+      "name": "attack3-back6-3",
+      "texture": "hero-academy-attack3-back6",
+      "w": 192,
+      "h": 305,
+      "originX": 0.58224,
+      "originY": 0.99672,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 176.52,
+          "y": 47.07
+        },
+        "tip": {
+          "x": 176.52,
+          "y": -50.99
+        }
+      },
+      "weaponPerspective": "up",
+      "x": 490,
+      "y": 4
+    },
+    {
+      "name": "attack3-back6-4",
+      "texture": "hero-academy-attack3-back6",
+      "w": 204,
+      "h": 289,
+      "originX": 0.60569,
+      "originY": 0.99761,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 188.28,
+          "y": 32.36
+        },
+        "tip": {
+          "x": 188.28,
+          "y": -65.7
+        }
+      },
+      "weaponPerspective": "up",
+      "x": 686,
+      "y": 4
+    },
+    {
+      "name": "attack3-back6-5",
+      "texture": "hero-academy-attack3-back6",
+      "w": 160,
+      "h": 307,
+      "originX": 0.49644,
+      "originY": 0.99661,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 156.9,
+          "y": 151.02
+        },
+        "tip": {
+          "x": 222.59,
+          "y": 36.08
+        }
+      },
+      "x": 894,
+      "y": 4
+    }
+  ]
+}

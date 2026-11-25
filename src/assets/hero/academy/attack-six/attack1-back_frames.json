@@ -1,0 +1,130 @@
+{
+  "frames": [
+    {
+      "name": "attack-back6-0",
+      "texture": "hero-academy-attack-back6",
+      "w": 160,
+      "h": 307,
+      "originX": 0.49644,
+      "originY": 0.99661,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 156.9,
+          "y": 151.02
+        },
+        "tip": {
+          "x": 222.59,
+          "y": 36.08
+        }
+      },
+      "x": 4,
+      "y": 4
+    },
+    {
+      "name": "attack-back6-1",
+      "texture": "hero-academy-attack-back6",
+      "w": 172,
+      "h": 306,
+      "originX": 0.49035,
+      "originY": 0.99667,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 164.75,
+          "y": 105.91
+        },
+        "tip": {
+          "x": 225.99,
+          "y": -11.46
+        }
+      },
+      "x": 168,
+      "y": 4
+    },
+    {
+      "name": "attack-back6-2",
+      "texture": "hero-academy-attack-back6",
+      "w": 175,
+      "h": 305,
+      "originX": 0.47629,
+      "originY": 0.99672,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 173.57,
+          "y": 93.16
+        },
+        "tip": {
+          "x": 276.04,
+          "y": 9.33
+        }
+      },
+      "x": 344,
+      "y": 4
+    },
+    {
+      "name": "attack-back6-3",
+      "texture": "hero-academy-attack-back6",
+      "w": 161,
+      "h": 302,
+      "originX": 0.54211,
+      "originY": 0.99689,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 53.94,
+          "y": 1.96
+        },
+        "tip": {
+          "x": -35.75,
+          "y": -95.42
+        }
+      },
+      "x": 523,
+      "y": 4
+    },
+    {
+      "name": "attack-back6-4",
+      "texture": "hero-academy-attack-back6",
+      "w": 168,
+      "h": 305,
+      "originX": 0.56619,
+      "originY": 0.99672,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": -1.96,
+          "y": 221.63
+        },
+        "tip": {
+          "x": -95.57,
+          "y": 315.24
+        }
+      },
+      "x": 688,
+      "y": 4
+    },
+    {
+      "name": "attack-back6-5",
+      "texture": "hero-academy-attack-back6",
+      "w": 173,
+      "h": 307,
+      "originX": 0.56116,
+      "originY": 0.99661,
+      "scale": 1,
+      "blade": {
+        "base": {
+          "x": 0.98,
+          "y": 218.68
+        },
+        "tip": {
+          "x": -114.64,
+          "y": 283.17
+        }
+      },
+      "x": 860,
+      "y": 4
+    }
+  ]
+}

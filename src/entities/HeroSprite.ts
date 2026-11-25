@@ -25,6 +25,12 @@ import attack2FrontData from '../assets/hero/academy/attack-six/attack2-front_fr
 import attack2FrontSheet from '../assets/hero/academy/attack-six/attack2-front.webp?url';
 import attack3FrontData from '../assets/hero/academy/attack-six/attack3-front_frames.json';
 import attack3FrontSheet from '../assets/hero/academy/attack-six/attack3-front.webp?url';
+import attack1BackData from '../assets/hero/academy/attack-six/attack1-back_frames.json';
+import attack1BackSheet from '../assets/hero/academy/attack-six/attack1-back.webp?url';
+import attack2BackData from '../assets/hero/academy/attack-six/attack2-back_frames.json';
+import attack2BackSheet from '../assets/hero/academy/attack-six/attack2-back.webp?url';
+import attack3BackData from '../assets/hero/academy/attack-six/attack3-back_frames.json';
+import attack3BackSheet from '../assets/hero/academy/attack-six/attack3-back.webp?url';
 import { isAttackFollowPause } from './attackTiming';
 import walkSheet from '../assets/hero/academy/unarmed/player_walk.webp?url';
 import combatSheet from '../assets/hero/academy/unarmed/player_combat.webp?url';
@@ -66,6 +72,9 @@ const FRAMES = new Map<string, SpriteFrame>([
   ...attack1FrontData.frames,
   ...attack2FrontData.frames,
   ...attack3FrontData.frames,
+  ...attack1BackData.frames,
+  ...attack2BackData.frames,
+  ...attack3BackData.frames,
 ].map((f) => [f.name, f]));
 
 export function preloadHeroSprite(scene: Phaser.Scene): void {
@@ -76,6 +85,9 @@ export function preloadHeroSprite(scene: Phaser.Scene): void {
   if (!scene.textures.exists('hero-academy-attack-front6')) scene.load.image('hero-academy-attack-front6', attack1FrontSheet);
   if (!scene.textures.exists('hero-academy-attack2-front6')) scene.load.image('hero-academy-attack2-front6', attack2FrontSheet);
   if (!scene.textures.exists('hero-academy-attack3-front6')) scene.load.image('hero-academy-attack3-front6', attack3FrontSheet);
+  if (!scene.textures.exists('hero-academy-attack-back6')) scene.load.image('hero-academy-attack-back6', attack1BackSheet);
+  if (!scene.textures.exists('hero-academy-attack2-back6')) scene.load.image('hero-academy-attack2-back6', attack2BackSheet);
+  if (!scene.textures.exists('hero-academy-attack3-back6')) scene.load.image('hero-academy-attack3-back6', attack3BackSheet);
   if (!scene.textures.exists('hero-academy-attack-corrections')) scene.load.image('hero-academy-attack-corrections', attackCorrectionsSheet);
   if (!scene.textures.exists('hero-weapons')) scene.load.image('hero-weapons', weaponSheet);
   if (!scene.textures.exists('hero-weapons-perspective')) scene.load.image('hero-weapons-perspective', perspectiveSheet);

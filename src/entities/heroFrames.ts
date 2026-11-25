@@ -56,9 +56,17 @@ const FRONT_SIX = {
   attack3: { frame: 'attack3-front6', starts: SIDE_SIX.attack3.starts },
 } as const;
 
+/** 위쪽(뒷모습) 6자세: 같은 공격 구성이라 자세 시각도 옆모습과 같다. */
+const BACK_SIX = {
+  attack1: { frame: 'attack-back6', starts: SIDE_SIX.attack1.starts },
+  attack2: { frame: 'attack2-back6', starts: SIDE_SIX.attack2.starts },
+  attack3: { frame: 'attack3-back6', starts: SIDE_SIX.attack3.starts },
+} as const;
+
 function sideSix(action: HeroAction, facing: Facing) {
   if (action === 'idle' || action === 'walk' || action === 'dodge') return undefined;
   if (facing === 'right' || facing === 'left') return SIDE_SIX[action];
+  if (facing === 'up') return BACK_SIX[action];
   return facing === 'down' ? FRONT_SIX[action] : undefined;
 }
 

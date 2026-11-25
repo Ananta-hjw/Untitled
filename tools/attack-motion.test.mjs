@@ -11,6 +11,7 @@ const corrected = (data) => ({ frames: data.frames.map(f => correctionData.frame
 const frontData = corrected(JSON.parse(readFileSync(new URL('../src/assets/hero/academy/combo-proto/attack-front_frames.json', import.meta.url))));
 const downDiagData = corrected(JSON.parse(readFileSync(new URL('../src/assets/hero/academy/combo-proto/attack-down-diag_frames.json', import.meta.url))));
 const perspData = JSON.parse(readFileSync(new URL('../src/assets/hero/weapons/perspective_atlas.json', import.meta.url)));
+const backSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-back_frames.json`, import.meta.url))).frames;
 const frontSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-front_frames.json`, import.meta.url))).frames;
 
 test('공격은 8방향 모두 그대로 유지하고 정면·앞대각선은 신규 시트를 선택한다', () => {
@@ -55,12 +56,14 @@ test('신규 정면·앞대각선 시트는 모든 프레임에서 검이 주먹
     assert.ok(tip.x > base.x + 100);
     assert.ok((tip.y - base.y) / (tip.x - base.x) > .65, '대각선 칼끝이 전방 바닥을 향한다');
   }
+  // 위쪽(뒷모습)은 6자세 원화(attack-back6 등)의 타격 자세(3번). 칼끝이 머리 위, 먼 곳(화면 위)을 향한다.
   for (const stage of [0, 1, 2]) {
-    const f = correctionData.frames.find(f => f.name === `attack-back-${stage * 4 + 2}`);
-    assert.equal(heroFrame(`attack${stage + 1}`, 'up', PLAYER.combo[stage].hitDelayMs + 10), f.name);
-    assert.equal(f.blade.base.x, f.blade.tip.x, '위 정면의 검은 옆으로 빗나가지 않는다');
-    assert.ok(f.blade.tip.y < f.blade.base.y - 140);
+    const name = `attack${stage ? stage + 1 : ''}-back6-3`;
+    assert.equal(heroFrame(`attack${stage + 1}`, 'up', PLAYER.combo[stage].hitDelayMs + 10), name);
+    const f = backSix(stage + 1).find(frame => frame.name === name);
+    assert.ok(f.blade.tip.y < f.blade.base.y - 60, `${name} 칼끝이 위를 향한다`);
   }
+  assert.ok(backSix(3).slice(1, 5).every(f => f.weaponPerspective === 'up'), '위쪽 3타 찌르기는 먼 곳을 겨눈 원근 검');
 });
 
 test('정면 콤보에서 이전 공격의 끝과 다음 공격의 시작이 같은 검 위치를 쓴다', () => {
@@ -134,8 +137,8 @@ test('검기 시작 시각에 해당 방향의 타격 자세가 처음 표시된
   for (const facing of EIGHT_DIRS) for (const stage of [0, 1, 2]) {
     const action = `attack${stage + 1}`, at = strikePoseStart(stage, facing);
     const index = frame => Number(frame.slice(frame.lastIndexOf('-') + 1));
-    // 옆·정면 1·2·3타는 6자세(attack[23]?-side6-, attack[23]?-front6-0..5): 2번 다음이 타격(3)
-    const six = /^attack[23]?-(side|front)6-/.test(heroFrame(action, facing, at));
+    // 옆·정면·위쪽 1·2·3타는 6자세(attack[23]?-(side|front|back)6-0..5): 2번 다음이 타격(3)
+    const six = /^attack[23]?-(side|front|back)6-/.test(heroFrame(action, facing, at));
     assert.equal(six ? index(heroFrame(action, facing, at - .001)) : index(heroFrame(action, facing, at - .001)) % 4, six ? 2 : 1, `${facing} ${stage}`);
     assert.equal(six ? index(heroFrame(action, facing, at)) : index(heroFrame(action, facing, at)) % 4, six ? 3 : 2, `${facing} ${stage}`);
   }
@@ -148,4 +151,13 @@ test('정면 사거리: 앞(아래)으로 지면 거리 reach 안만 맞고, 뒤
   assert.equal(insideFrontReach(150 * VERTICAL_SPEED_RATIO, near, VERTICAL_SPEED_RATIO), false);
   assert.equal(insideFrontReach(150 * VERTICAL_SPEED_RATIO, thrust, VERTICAL_SPEED_RATIO), true);
   assert.equal(insideFrontReach(-20, near, VERTICAL_SPEED_RATIO), false);
+});
+
+test('위쪽(뒷모습) 콤보는 앞 공격의 끝과 다음 공격의 시작이 같은 검 위치를 쓴다', () => {
+  const relative = (frame) => [frame.blade.base, frame.blade.tip]
+    .flatMap(p => [Math.round(p.x - frame.originX * frame.w), Math.round(p.y - frame.originY * frame.h)]);
+  for (const [from, to] of [[1, 2], [2, 3], [3, 1]]) {
+    const end = backSix(from).at(-1), start = backSix(to)[0];
+    relative(end).forEach((v, i) => assert.ok(Math.abs(v - relative(start)[i]) <= 3, `${from}타 끝 → ${to}타 시작 ${i}: ${v} vs ${relative(start)[i]}`));
+  }
 });
