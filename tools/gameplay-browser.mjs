@@ -4452,3 +4452,64 @@ test('갈대밭 늪에서 잠복 마물의 물줄기가 조준한 방향으로 �
   })()`);
   for (const [check, passed] of Object.entries(result)) assert.equal(passed, true, check);
 });
+
+test('안개 실 잣기는 바닥을 예고하고 시온·에반을 묶으며 검날에 끊어진다', async () => {
+  const map = 'reed-swamp&companion=none&monsters=mist-weaver';
+  await load(map);
+  const bound = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player;
+    const {threads, caster, evan} = s.mistWeaver;
+    const pattern = s.children.getByName('mist-thread-pattern');
+    const tethers = s.children.getByName('mist-thread-bind');
+    const tick = (n = 1) => { for (let i = 0; i < n; i++) s.update(0, 16); };
+    const until = (condition) => { for (let i = 0; !condition() && i < 450; i++) tick(); return condition(); };
+    until(() => threads.active);
+    const warned = pattern.commandBuffer.length > 0 && !threads.holds(p)
+      && caster.character.sprite.list[0].frame.name === 'attack-left-1';
+    const hp = p.hp, bossHp = caster.character.hp;
+    const caught = until(() => threads.holds(p));
+    const heldArt = tethers.commandBuffer.length > 0;
+    const before = p.x;
+    s.joystick.vector.set(1,0); s.dodgeButton.pressed = true;
+    tick(16);
+    const rooted = p.x === before && s.dodgeProgress === 1 && hp === p.hp;
+    s.joystick.vector.set(0,0);
+    s.onAttackKeyDown();
+    const selfFreed = until(() => !threads.holds(p));
+
+    tick(35); s.joystick.vector.set(1,0); tick(6); s.joystick.vector.set(0,0);
+    const walkingAgain = p.x > before;
+    const evanCaught = until(() => threads.holds(evan));
+    const evanX = evan.x;
+    tick(12);
+    const evanRooted = threads.holds(evan) && evan.x === evanX;
+    p.placeAt(caster.character.x - 92, caster.character.y);
+    s.comboStage = 0;
+    s.onAttackKeyDown(); tick(36);
+    const bodyUnaffected = caster.untouchable && caster.character.hp === bossHp;
+    const missedEvan = threads.holds(evan);
+    p.placeAt(evan.x - 103, evan.y);
+    s.comboStage = 0;
+    s.onAttackKeyDown();
+    const evanFreed = until(() => !threads.holds(evan));
+    tick(8);
+    const evanWalked = evan.x !== evanX;
+    return {warned,caught,heldArt,rooted,selfFreed,walkingAgain,evanCaught,evanRooted,bodyUnaffected,missedEvan,evanFreed,evanWalked};
+  })()`);
+  for (const [key, ok] of Object.entries(bound)) assert.equal(ok, true, key);
+
+  await load(map);
+  const dodged = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player;
+    const {threads} = s.mistWeaver;
+    const tick = (n = 1) => { for (let i = 0; i < n; i++) s.update(0,16); };
+    for (let i = 0; !threads.active && i < 125; i++) tick();
+    const origin = {...threads.weave.at};
+    s.joystick.vector.set(1,0); s.dodgeButton.pressed = true; tick(); s.joystick.vector.set(0,0);
+    tick(25);
+    const fixed = origin.x === threads.weave.at.x && origin.y === threads.weave.at.y;
+    tick(90);
+    return {fixed, moved: p.x > origin.x + 84, escaped: !threads.holds(p)};
+  })()`);
+  assert.deepEqual(dodged, {fixed: true, moved: true, escaped: true});
+});

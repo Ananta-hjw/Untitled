@@ -9,6 +9,7 @@ import { attackBladeSweep, bladeHitsEllipse, type Blade } from '../combat/blade'
 import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
 import { MonsterSprite, preloadMonsters } from '../combat/MonsterSprite';
+import { MistThreads } from '../combat/MistThreads';
 import { ASH_SLOW, MONSTERS, enemyHitReaches, monsterDamageTaken, shellBlocks, type EnemyHit, type EnemyKey } from '../combat/monsterTypes';
 import { isJustDodge, slowMotionScale, strikeReaches } from '../combat/justDodge';
 import { critMultiplier, gameTimeScale, heavierKind, hitStopMs, strikeKind, type HitKind } from '../combat/hitFeel';
@@ -17,6 +18,7 @@ import {
   DEPTH_LIGHTING,
   DODGE,
   JUST_DODGE,
+  MIST_THREADS,
   ENEMY,
   NPC_COMBAT,
   KNOCKBACK_DAMPING,
@@ -276,6 +278,7 @@ export class GameScene extends Phaser.Scene {
   private festivalRaiders: Array<{ enemy: Enemy; path: readonly Point[]; startedAt: number }> = [];
   /** 잿빛 나방의 가루에 닿아 느려진 상태가 끝나는 게임 시각 */
   private slowedUntil = 0;
+  private mistWeaver?: { caster: Enemy; evan: Npc; threads: MistThreads; aimAtEvan: boolean };
   /** 지금 있는 맵. 재시작해도 유지되고, 맵을 옮길 때만 바뀐다. */
   private mapId: MapId = START_MAP;
   private map: GameMap = MAPS[START_MAP];
@@ -376,6 +379,11 @@ export class GameScene extends Phaser.Scene {
       this.map = { ...this.map, name: '2장 인물 확인', hint: '2장 인물 확인 · 가까이 가서 대화해 보세요',
         spawn: { x: at.x, y: at.y + 170 }, npcs: previewCastNpcs(this.previewNpcGroup, at), enemies: [], exits: [],
         props: [], buildings: [], interactables: [], obstacles: [] };
+    } else if (import.meta.env.DEV && this.mapId === 'reed-swamp'
+      && new URLSearchParams(location.search).get('monsters') === 'mist-weaver') {
+      const spawn = this.map.spawn;
+      this.map = { ...this.map, name: '안개를 잣는 자 연습', hint: '안개 실 잣기 · 바닥 무늬 밖으로 회피하세요',
+        spawn: { x: spawn.x + 205, y: spawn.y }, enemies: [] };
     }
     if (data.stress !== undefined) this.stressCount = data.stress;
     this.arrival = data.at;
@@ -438,6 +446,7 @@ export class GameScene extends Phaser.Scene {
 
   private resetState(): void {
     this.slowedUntil = 0;
+    this.mistWeaver = undefined;
     this.enemies = [];
     this.npcs = [];
     this.interactables = [];
@@ -834,6 +843,7 @@ export class GameScene extends Phaser.Scene {
       this.updatePlayer(time, dt);
       this.drawShield(time);
       if (this.checkExit()) return;
+      this.updateMistWeaver(time);
       this.updateAttackTrace(time);
     }
     this.updateNpcCombat(time, dt);
@@ -846,7 +856,11 @@ export class GameScene extends Phaser.Scene {
       this.applyKnockback(enemy.character, dt);
     }
     this.separateEnemies(dt);
-    for (const npc of this.npcs) if (!this.awayNpcs.has(npc)) npc.update(time, dt, this.player, this.walkArea, this.npcCanStand);
+    for (const npc of this.npcs) {
+      if (!this.awayNpcs.has(npc) && !this.mistWeaver?.threads.holds(npc)) {
+        npc.update(time, dt, this.player, this.walkArea, this.npcCanStand);
+      }
+    }
     this.finishSerenaEvacuation();
     for (const door of this.doorMarkers) if (door.marker) door.text.setY(door.spot.y - 150 - Math.abs(Math.sin(time / 320)) * 8);
     this.applyKnockback(this.player, dt);
@@ -862,7 +876,7 @@ export class GameScene extends Phaser.Scene {
     const targets = this.enemies.map((enemy, id) => ({ id, x: enemy.character.x, y: enemy.character.y,
       alive: enemy.character.alive && !enemy.untouchable, attacking: enemy.state === 'windup' }));
     for (const npc of this.npcs) {
-      if (this.awayNpcs.has(npc)) continue;
+      if (this.awayNpcs.has(npc) || this.mistWeaver?.threads.holds(npc)) continue;
       this.syncDefenderRecovery(npc);
       npc.updateCombat(time, dt, targets, this.walkArea, this.npcCanStand, (id, damage) => this.allyStrike(npc, id, damage, time));
     }
@@ -1050,6 +1064,16 @@ export class GameScene extends Phaser.Scene {
       this.syncDefenderRecovery(npc);
       return npc;
     });
+    const weaver = this.enemies.find(enemy => enemy.kind === 'mist-weaver');
+    const weaverSprite = weaver?.character.sprite;
+    if (weaver && weaverSprite instanceof MonsterSprite) {
+      // 안개섬 구현 전에는 갈대밭 미리보기에서 두 대상의 속박을 확인한다.
+      const def = chapterTwoPreviewNpcs({ x: 0, y: 0 }).find(npc => npc.id === 'evan')!;
+      const spawn = this.map.spawn;
+      const evan = new Npc(this, { ...def, x: spawn.x + 145, y: spawn.y + 118 });
+      this.npcs.push(evan);
+      this.mistWeaver = { caster: weaver, evan, threads: new MistThreads(this, weaverSprite, this.now), aimAtEvan: false };
+    }
     if (this.previewNpcGroup === 'innkeeper' && new URLSearchParams(location.search).get('sleepwalk') === '1') {
       const innkeeper = this.npcs[0];
       innkeeper.startSleepwalk([{ x: innkeeper.x + 260, y: innkeeper.y + 65 }]);
@@ -1339,8 +1363,9 @@ export class GameScene extends Phaser.Scene {
 
     const v = this.readInput();
     const force = v.length();
+    const bound = this.mistWeaver?.threads.holds(player);
 
-    this.dodgeButton.setEnabled(time >= this.dodgeReadyAt);
+    this.dodgeButton.setEnabled(!bound && time >= this.dodgeReadyAt);
 
     if (this.dodgeProgress < 1) {
       this.updateDodge(time);
@@ -1349,7 +1374,7 @@ export class GameScene extends Phaser.Scene {
     }
     player.setDodging(false);
 
-    if (dodgePressed && time >= this.dodgeReadyAt) {
+    if (!bound && dodgePressed && time >= this.dodgeReadyAt) {
       this.startDodge(time, v);
       return;
     }
@@ -1380,7 +1405,7 @@ export class GameScene extends Phaser.Scene {
     const fromX = player.x;
     const fromY = player.y;
     // 공격 중에는 조이스틱으로 움직이지 않는다. 앞으로 나가는 것은 공격 자체의 전진(lunge)뿐이다.
-    if (force > 0 && !player.isAttacking) {
+    if (force > 0 && !bound && !player.isAttacking) {
       const speed = PLAYER_SPEED * (this.now < this.slowedUntil ? ASH_SLOW.speedScale : 1)
         * (this.blocking ? BLOCK.moveScale : 1) * resonanceSpeed(this.resonating, RESONANCE);
       const next = this.walkArea.move(
@@ -1406,6 +1431,7 @@ export class GameScene extends Phaser.Scene {
   /** 밀려남을 적용하고 서서히 줄인다. 벽은 통과하지 못한다. */
   private applyKnockback(character: Character, dt: number): void {
     const k = character.knockback;
+    if (this.mistWeaver?.threads.holds(character)) { k.set(0, 0); return; }
     if (k.lengthSq() < 4) {
       k.set(0, 0);
       return;
@@ -1444,6 +1470,32 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------- 전투
+
+  private updateMistWeaver(time: number): void {
+    if (!this.mistWeaver || !this.player.alive) return;
+    const { caster, evan, threads, aimAtEvan } = this.mistWeaver;
+    if (!evan.walking && !threads.holds(evan)) {
+      const x = evan.def.x + (evan.x <= evan.def.x ? 38 : -38);
+      evan.walkTo([{ x, y: evan.def.y }], 0.65);
+    }
+    const target = aimAtEvan ? evan : this.player;
+    if (Math.hypot(this.player.x - caster.character.x, this.player.y - caster.character.y) <= MIST_THREADS.castRange
+      && threads.cast(time, caster.character, target)) {
+      this.mistWeaver.aimAtEvan = !aimAtEvan;
+      this.hud.showCallout(MIST_THREADS.name);
+    }
+    const caught = threads.update(time);
+    if (caught === this.player) {
+      this.dodgeProgress = 1;
+      this.dodgeUntil = 0;
+      this.player.setDodging(false);
+      this.dodgeButton.setEnabled(false);
+      this.player.setMotion(false);
+      this.player.knockback.set(0, 0);
+      this.attackLunge = undefined;
+      this.hud.showCallout('발이 묶였다 · 공격으로 실을 베세요');
+    } else if (caught === evan) this.hud.showCallout('에반이 묶였다 · 가까이서 실을 베세요');
+  }
 
   private onAttackKeyDown(): void {
     // JustDown은 같은 프레임의 keyup에서 지워지므로 눌림 이벤트를 별도로 기억한다.
@@ -1540,9 +1592,18 @@ export class GameScene extends Phaser.Scene {
       facing = attackFacingFor(movementFacing(inputX, inputY, hero.lookDirection, false), player.facing);
     } else {
       let nearest = PLAYER.autoFaceRange;
+      const held = this.mistWeaver?.threads.target;
+      if (held && held !== player) {
+        const dx = held.x - player.x, dy = (held.y - player.y) / VERTICAL_SPEED_RATIO;
+        const distance = Math.hypot(dx, dy);
+        if (distance < nearest) {
+          nearest = distance;
+          facing = movementFacing(dx, dy, hero.lookDirection, false);
+        }
+      }
       for (const enemy of this.enemies) {
         const c = enemy.character;
-        if (!c.alive) continue;
+        if (!c.alive || enemy === this.mistWeaver?.caster) continue;
         const dx = c.x - player.x, dy = (c.y - player.y) / VERTICAL_SPEED_RATIO;
         const candidate = movementFacing(dx, dy, hero.lookDirection, false);
         const distance = Math.hypot(dx, dy);
@@ -1568,7 +1629,7 @@ export class GameScene extends Phaser.Scene {
   private updateAttackLunge(time: number): void {
     const lunge = this.attackLunge;
     if (!lunge) return;
-    if (!this.player.alive || !this.player.isAttacking) {
+    if (!this.player.alive || !this.player.isAttacking || this.mistWeaver?.threads.holds(this.player)) {
       this.attackLunge = undefined;
       return;
     }
@@ -1618,6 +1679,7 @@ export class GameScene extends Phaser.Scene {
 
     const sweep = attackBladeSweep(previous, current, lastElapsed, elapsed, strikeAt, end);
     if (!sweep) return;
+    if (this.mistWeaver?.threads.cutWithBlade(player, sweep, time)) this.hud.showCallout('안개 실을 끊었다');
     const finisher = trace.stage === PLAYER.combo.length - 1;
     let heaviest: Exclude<HitKind, 'hurt'> | undefined;
     for (const enemy of this.enemies) {
@@ -1833,7 +1895,8 @@ export class GameScene extends Phaser.Scene {
 
   /** 싸우는 중에는 말을 걸 수 없다. 대화 중에는 게임이 멈추므로 공격받는 도중에 열리지 않게 한다. */
   private inCombat(): boolean {
-    return this.enemies.some((e) => e.state === 'chase' || e.state === 'windup' || e.state === 'recover' || e.state === 'roar' || e.state === 'retreat' || e.state === 'volley' || e.state === 'veil');
+    return !!this.mistWeaver?.threads.active
+      || this.enemies.some((e) => e.state === 'chase' || e.state === 'windup' || e.state === 'recover' || e.state === 'roar' || e.state === 'retreat' || e.state === 'volley' || e.state === 'veil');
   }
 
   private setPrimaryAction(action: ActionIcon, label: string): void {
@@ -2301,6 +2364,9 @@ export class GameScene extends Phaser.Scene {
   private spinHit(): void {
     const player = this.player;
     const now = this.now;
+    if (this.mistWeaver?.threads.cutWithSpin(player, SPIN_SLASH.radius, SPIN_SLASH.radius * VERTICAL_SPEED_RATIO, now)) {
+      this.hud.showCallout('안개 실을 끊었다');
+    }
     let hits = 0;
     for (const enemy of this.enemies) {
       const c = enemy.character;
@@ -2865,6 +2931,7 @@ export class GameScene extends Phaser.Scene {
 
   private onPlayerDeath(): void {
     const player = this.player;
+    this.mistWeaver?.threads.clear();
     this.clearAttackInput();
     this.dodgeProgress = 1;
     this.dodgeUntil = 0;

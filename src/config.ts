@@ -86,6 +86,24 @@ export const DODGE = {
   graceMs: 80,
 };
 
+/** 안개를 잣는 자 · 안개 실 잣기 (게임 시계 ms, 바닥 좌표 px). */
+export const MIST_THREADS = {
+  name: '안개 실 잣기',
+  firstCastMs: 1500,
+  windupMs: 1050,
+  strikeMs: 220,
+  recoveryMs: 390,
+  cooldownMs: 4900,
+  afterCutMs: 1300,
+  castRange: 620,
+  rx: 84,
+  ry: 57,
+  knotLift: 47,
+  knotRx: 30,
+  knotRy: 35,
+  unravelMs: 380,
+} as const;
+
 /** 습격 때 마을을 지키는 NPC. 시간은 게임 시계 기준이다. */
 export const NPC_COMBAT = {
   engageRadius: 300, attackRange: 105, hitRange: 135, guardRange: 150,
