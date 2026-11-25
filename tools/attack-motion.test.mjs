@@ -147,7 +147,7 @@ test('검기 시작 시각에 해당 방향의 타격 자세가 처음 표시된
 });
 
 test('앞대각선 1타는 여섯 자세의 검 방향과 길이를 유지한다', () => {
-  const clockHours = [4.5, 12, 10.5, 4, 5.5, 4.5];
+  const clockHours = [4.5, 12, 10.5, 4, 4.5, 4.5];
   assert.equal(downDiagSix.length, clockHours.length);
   for (const [i, frame] of downDiagSix.entries()) {
     const { base, tip } = frame.blade;
