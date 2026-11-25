@@ -708,8 +708,8 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
       const { base, tip } = hero.getBlade();
       const distance = (p, q) => p ? Math.hypot(p.x - q.x, p.y - q.y) : Infinity;
       const error = effect.stage === 2
-        // 찌르기 빛줄기는 칼끝 너머(위쪽 3타는 원근으로 짧은 칼이라 thrustReach배)까지 뻗는다
-        ? Math.max(distance(path[0], base), distance(path[2], { x: base.x + (tip.x - base.x) * effect.thrustReach * 1.06, y: base.y + (tip.y - base.y) * effect.thrustReach * 1.06 }))
+        // 찌르기 빛줄기는 칼끝 너머(칼 길이의 8%, 위쪽 3타는 원근으로 짧은 칼이라 thrustReach배)까지 뻗는다
+        ? Math.max(distance(path[0], base), distance(path[2], { x: base.x + (tip.x - base.x) * effect.thrustReach * 1.08, y: base.y + (tip.y - base.y) * effect.thrustReach * 1.08 }))
         : Math.min(...path.map(p => distance(p, tip)));
       maxTrailError = Math.max(maxTrailError, error);
       const frame = hero.image.frame.name;
@@ -2567,7 +2567,7 @@ test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 
   })()`);
   assert.equal(result.warning, true, '보스 등장 경고가 먼저 뜬다');
   assert.ok(result.appearedAfter >= 2700 && result.appearedAfter <= 3000, String(result.appearedAfter));
-  assert.deepEqual(result.spawned, { kind: 'corrosion-executioner', isBoss: true, hp: 500, bar: true });
+  assert.deepEqual(result.spawned, { kind: 'corrosion-executioner', isBoss: true, hp: 1000, bar: true });
   assert.ok(Math.abs(result.gap1 - 1000) <= 40, `연속 돌진 사이 ${result.gap1}ms`);
   assert.ok(result.gap2 >= 1250, `두 번째 돌진 뒤에는 길게 쉰다 ${result.gap2}ms`);
   assert.deepEqual(result.chargePoses, [1, 2, 3], '돌진 준비·타격·제동에 전용 공격 그림을 쓴다');
@@ -3299,7 +3299,8 @@ test('회피·막기·회전베기는 원형 대기가 줄어들고 메뉴에서
     const reset=state(s.dodgeButton);
     s.derived.dodgeCooldown=.5;s.dodgeButton.pressed=true;tick();const dex=state(s.dodgeButton);
     tick(8);s.blockButton.pressed=true;tick();const block=state(s.blockButton);
-    tick(10);const blockHalf=state(s.blockButton);
+    // 헛막기 대기 BLOCK.cooldownMs(450ms)의 절반: 25ms씩 9번
+    for(let i=0;i<9;i++)s.update(0,25);const blockHalf=state(s.blockButton);
     tick(12);const blockDone=state(s.blockButton);
     s.mp=s.maxMp;skillButton.pressed=true;tick();const skill=state(skillButton);
     const labels=[s.dodgeButton,skillButton].every(b=>{
@@ -3401,7 +3402,11 @@ test('네 검은 정면 찌르기와 좌우·앞대각선 공격에서 주먹에
       h.time=time;h.applyFrame();
       const blade=h.getBlade(), front=h.weaponFront, back=h.weaponBack;
       return {body:h.frame.name, blade, front:front.frame.name, grip:back.frame.name,
-        depth:h.list.indexOf(back)<h.list.indexOf(h.image)&&h.list.indexOf(h.image)<h.list.indexOf(front),
+        // 주먹 덮개가 있는 자세는 손잡이를 몸 앞에 두고 원화의 주먹(덮개)으로 가린다: 몸 < 손잡이 < 주먹 < 칼날.
+        depth:h.frame.gripCover
+          ? h.list.indexOf(h.image)<h.list.indexOf(back)&&h.list.indexOf(back)<h.list.indexOf(h.supportHand)
+            &&h.list.indexOf(h.supportHand)<h.list.indexOf(front)&&h.supportHand.visible
+          : h.list.indexOf(back)<h.list.indexOf(h.image)&&h.list.indexOf(h.image)<h.list.indexOf(front),
         visible:front.visible&&back.visible,
         length:Math.hypot(blade.tip.x-blade.base.x,blade.tip.y-blade.base.y)};
     };
@@ -3435,7 +3440,8 @@ test('네 검은 정면 찌르기와 좌우·앞대각선 공격에서 주먹에
       assert.ok(pose.visible && pose.depth, JSON.stringify(pose));
       assert.equal(pose.mirrored, pose.facing.endsWith('left'));
       const guardSideLimit = pose.facing.startsWith('down') ? .9 : .7;
-      assert.ok(pose.throughFist < 2 && pose.alongGrip > .2 && pose.alongGrip < guardSideLimit, JSON.stringify(pose));
+      // 주먹 덮개는 몸의 불투명 픽셀로 잘라 내므로(build_attack_six.py) 덮개 상자의 가운데가 손잡이 선에서 조금 비켜날 수 있다.
+      assert.ok(pose.throughFist < 3 && pose.alongGrip > .2 && pose.alongGrip < guardSideLimit, JSON.stringify(pose));
     }
     assert.equal(end.body,'attack2-front6-5');
     assert.equal(start.body,'attack3-front6-0');
@@ -3557,8 +3563,9 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
   const result = await evaluate(`(() => {
     const s=window.__game.scene.getScene('game'),p=s.player,h=p.sprite,e=s.enemies[0],runs=[];
     s.enemies=[];s.derived.evadeChance=0;
-    const contacts=[],impact=s.impacts.impact;
-    s.impacts.impact=(...args)=>{if(args[4]==='counter')contacts.push({x:args[0],y:args[1]});return impact.apply(s.impacts,args);};
+    // 패링 접점은 parryBurst(x, y, ...)가 그린다(2단 패링 도입 뒤 반격 impact 대신).
+    const contacts=[],burst=s.impacts.parryBurst;
+    s.impacts.parryBurst=(...args)=>{contacts.push({x:args[0],y:args[1]});return burst.apply(s.impacts,args);};
     for(const [facing,dx,dy] of [['right',1,0],['left',-1,0],['down-right',1,1],['down-left',-1,1],['up-right',1,-1],['up-left',-1,-1]]){
       p.revive(1000,650);s.now=1000;s.clearAttackInput();s.joystick.vector.set(0,0);
       s.dodgeProgress=1;s.dodgeUntil=0;s.dodgeReadyAt=0;s.parryUntil=0;s.parryReadyAt=0;
@@ -3582,7 +3589,8 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
       h.setWeapon('wooden-sword');const wood=h.weaponFront.frame.name==='wooden-sword-blade';h.setWeapon('iron-sword');
       e.character.revive(p.x+80*p.facing,p.y);e.character.face(-p.facing);p.invulnerableUntil=0;const hp=p.hp;s.onEnemyStrike(e);
       const contact=contacts.at(-1),error=Math.hypot(contact.x-blade.base.x-(blade.tip.x-blade.base.x)*.55,contact.y-blade.base.y-(blade.tip.y-blade.base.y)*.55);
-      s.now+=5;s.updatePlayer(s.now,0);s.drawShield(s.now);const restored=!h.isGuarding&&h.image.texture.key!=='hero-academy-guard';
+      // 정밀 패링 뒤 막기 자세는 반동(guardPoseUntil, 150ms)만큼 유지되고 그다음 돌아온다.
+      s.now=Math.max(s.now,s.guardPoseUntil??0)+5;s.updatePlayer(s.now,0);s.drawShield(s.now);const restored=!h.isGuarding&&h.image.texture.key!=='hero-academy-guard';
       runs.push({facing,name,texture,mirror,raised,slanted,palmDistance,palmVisible,held,wood,lengths,error,restored,protected:p.hp===hp&&s.counterUntil>s.now});
     }
     const verticalPoses=[];
@@ -3597,7 +3605,7 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
     const unequipped=!h.weaponFront.visible&&!h.weaponBack.visible&&!h.supportHand.visible&&Math.hypot(empty.tip.x-empty.base.x,empty.tip.y-empty.base.y)===0;
     s.dodgeButton.pressed=true;s.updatePlayer(s.now,0);s.drawShield(s.now);
     const dodged=p.dodging&&!h.isGuarding&&h.image.texture.key!=='hero-academy-guard';
-    s.impacts.impact=impact;return {runs,unequipped,dodged,verticalPoses};
+    s.impacts.parryBurst=burst;return {runs,unequipped,dodged,verticalPoses};
   })()`);
   for (const run of result.runs) {
     assert.equal(run.texture, 'hero-academy-guard');
@@ -4498,6 +4506,9 @@ test('갈대밭 늪에서 잠복 마물의 물줄기가 조준한 방향으로 �
 
 test('안개 실 잣기는 바닥을 예고하고 시온·에반을 묶으며 검날에 끊어진다', async () => {
   const map = 'reed-swamp&companion=none&monsters=mist-weaver';
+  await load(map);
+  // 앞선 테스트가 남긴 저장(장비·능력치·레벨·퀘스트 등)이 검의 길이와 피해를 바꾸지 않게 깨끗한 저장으로 시작한다.
+  await evaluate('localStorage.clear()');
   await load(map);
   const bound = await evaluate(`(() => {
     const s = window.__game.scene.getScene('game'), p = s.player;
