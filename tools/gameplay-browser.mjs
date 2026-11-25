@@ -669,7 +669,8 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
       const { base, tip } = hero.getBlade();
       const distance = (p, q) => p ? Math.hypot(p.x - q.x, p.y - q.y) : Infinity;
       const error = effect.stage === 2
-        ? Math.max(distance(path[0], base), distance(path[2], { x: tip.x + (tip.x - base.x) * .06, y: tip.y + (tip.y - base.y) * .06 }))
+        // 찌르기 빛줄기는 칼끝 너머(위쪽 3타는 원근으로 짧은 칼이라 thrustReach배)까지 뻗는다
+        ? Math.max(distance(path[0], base), distance(path[2], { x: base.x + (tip.x - base.x) * effect.thrustReach * 1.06, y: base.y + (tip.y - base.y) * effect.thrustReach * 1.06 }))
         : Math.min(...path.map(p => distance(p, tip)));
       maxTrailError = Math.max(maxTrailError, error);
       const frame = hero.image.frame.name;

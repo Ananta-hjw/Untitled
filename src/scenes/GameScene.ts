@@ -112,6 +112,8 @@ import { ProgressEffects } from '../ui/ProgressEffects';
 
 /** 고개의 쉼터에서 하룻밤을 보낼 때 화면이 어두워지고 밝아지는 시간 (ms, 연출만) */
 const NIGHT_FADE_MS = 900;
+/** 위쪽 3타 찌르기 빛줄기를 원근으로 짧게 그린 칼끝 너머 먼 곳까지 늘이는 배율 */
+const UP_THRUST_REACH = 1.9;
 
 /** Scale shared by all academy frames. */
 /** 기술 칸에 넣을 수 있는 기술 (배우는 방법은 아직 없다) */
@@ -1601,10 +1603,12 @@ export class GameScene extends Phaser.Scene {
     const visualSweep = attackBladeSweep(previous, current, lastElapsed, elapsed, strikeAt, visualEnd);
     if (elapsed >= visualEnd) this.attackTrace = undefined;
     if (visualSweep) {
-      const behind = rig.activeAttackFacing.startsWith('up') || (trace.stage === 0
+      // 위쪽 3타 찌르기는 원근으로 짧은 칼 위에 빛줄기를 얹어야 보인다(칼은 몸 뒤, 빛줄기는 몸 앞).
+      const upThrust = trace.stage === 2 && rig.activeAttackFacing === 'up';
+      const behind = (rig.activeAttackFacing.startsWith('up') && !upThrust) || (trace.stage === 0
         && (rig.activeAttackFacing === 'left' || rig.activeAttackFacing === 'right'));
       trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + strikeAt, trace.startedAt + visualEnd,
-        strikeAt, player.y + (behind ? -4 : 4));
+        strikeAt, player.y + (behind ? -4 : 4), upThrust ? UP_THRUST_REACH : 1);
       // The samples stop at visualEnd, but the visible end must meet the displayed sword on that render.
       this.effects.drawAttack(trace.effect, visualSweep, time, current);
     }

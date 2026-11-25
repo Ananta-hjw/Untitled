@@ -17,6 +17,8 @@ export interface AttackEffect {
   nextSampleAt: number;
   samples: Blade[];
   arc: Blade[];
+  /** 찌르기 빛줄기를 칼끝 너머로 늘이는 배율 (1 = 칼 길이). 원근으로 짧게 그린 칼에 쓴다. */
+  thrustReach: number;
 }
 
 interface GhostEffect {
@@ -34,12 +36,13 @@ export class CombatEffects {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
   }
 
-  beginAttack(stage: number, startedAt: number, activeUntil: number, sampleStart: number, depth: number): AttackEffect {
+  beginAttack(stage: number, startedAt: number, activeUntil: number, sampleStart: number, depth: number, thrustReach = 1): AttackEffect {
     let effect = this.attackPool.find((entry) => !entry.graphic.active);
     if (!effect) {
-      effect = { graphic: this.scene.add.graphics(), stage, startedAt, activeUntil, nextSampleAt: sampleStart, samples: [], arc: [] };
+      effect = { graphic: this.scene.add.graphics(), stage, startedAt, activeUntil, nextSampleAt: sampleStart, samples: [], arc: [], thrustReach };
       this.attackPool.push(effect);
     }
+    effect.thrustReach = thrustReach;
     effect.stage = stage;
     effect.startedAt = startedAt;
     effect.activeUntil = activeUntil;
@@ -67,7 +70,7 @@ export class CombatEffects {
 
     effect.graphic.clear().setAlpha(this.alphaOf(effect, time));
     if (effect.stage === 2) {
-      this.renderThrust(effect.graphic, displayed);
+      this.renderThrust(effect.graphic, displayed, effect.thrustReach);
     } else {
       // Keep the bright end on the blade while gradually revealing the path behind it.
       const grow = Math.max(0, Math.min(1, (time - effect.startedAt) / SWING_REVEAL_MS));
@@ -103,10 +106,14 @@ export class CombatEffects {
     }
   }
 
-  private renderThrust(g: Phaser.GameObjects.Graphics, { base, tip }: Blade): void {
-    const dx = tip.x - base.x, dy = tip.y - base.y;
-    if (dx === 0 && dy === 0) return;
-    for (const [width, color, alpha] of [[0.12, 0xffb966, 0.38], [0.045, 0xffefd2, 0.8]] as const) {
+  private renderThrust(g: Phaser.GameObjects.Graphics, { base, tip }: Blade, reach = 1): void {
+    if (tip.x === base.x && tip.y === base.y) return;
+    const dx = (tip.x - base.x) * reach, dy = (tip.y - base.y) * reach;
+    tip = { x: base.x + dx, y: base.y + dy };
+    // 늘인 빛줄기는 길이에 비례해 굵어지지 않게 폭을 되돌린다.
+    const thin = 1 / Math.sqrt(reach);
+    for (const [w, color, alpha] of [[0.12, 0xffb966, 0.38], [0.045, 0xffefd2, 0.8]] as const) {
+      const width = w * thin;
       g.fillStyle(color, alpha).beginPath().moveTo(base.x, base.y);
       g.lineTo(base.x + dx * 0.72 - dy * width, base.y + dy * 0.72 + dx * width);
       g.lineTo(tip.x + dx * 0.06, tip.y + dy * 0.06);
