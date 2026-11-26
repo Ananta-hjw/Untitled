@@ -76,7 +76,7 @@ import { ActionButton } from '../ui/ActionButton';
 import { actionIcon, createActionIcons, type ActionIcon } from '../ui/actionIcons';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { HERO_SPRITE_HEIGHT, HeroSprite, preloadHeroSprite } from '../entities/HeroSprite';
-import { attackFacingFor, attackVector, dodgeFacingFor, insideAttackLane, insideFrontReach, movementFacing, strikePoseStart } from '../entities/heroFrames';
+import { attackFacingFor, attackVector, dodgeFacingFor, insideAttackLane, insideDiagonalReach, insideFrontReach, movementFacing, strikePoseStart } from '../entities/heroFrames';
 import { createPlaceholderArt } from '../world/placeholderArt';
 import type { WalkArea } from '../world/walkArea';
 import { NavGrid } from '../world/navGrid';
@@ -2193,8 +2193,11 @@ export class GameScene extends Phaser.Scene {
         PLAYER.attackLane, VERTICAL_SPEED_RATIO)) continue;
       const bounds = c.sprite.getBounds(this.boundsScratch);
       // 정면 공격은 원근으로 짧게 그려진 칼 대신 판정 띠 안의 사거리로도 맞는다(PLAYER.frontReach).
-      const frontHit = rig.activeAttackFacing === 'down'
-        && insideFrontReach(c.y - player.y, PLAYER.frontReach[trace.stage], VERTICAL_SPEED_RATIO);
+      // 아래 대각선은 옆모습 자세로 그려져(4방향 통일) 칼날이 대각선 아래 앞까지 내려가지 않으므로 같은 사거리 규칙을 쓴다.
+      const facing = rig.activeAttackFacing;
+      const frontHit = facing === 'down'
+        ? insideFrontReach(c.y - player.y, PLAYER.frontReach[trace.stage], VERTICAL_SPEED_RATIO)
+        : facing.startsWith('down-') && insideDiagonalReach(c.x - player.x, c.y - player.y, PLAYER.frontReach[trace.stage], VERTICAL_SPEED_RATIO);
       if (!frontHit && !bladeHitsEllipse(sweep.previous, sweep.current, { x: bounds.centerX, y: bounds.centerY },
         bounds.width * 0.42 + PLAYER.bladeRadius, bounds.height * 0.42 + PLAYER.bladeRadius)) continue;
       trace.hit.add(enemy);

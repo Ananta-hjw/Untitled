@@ -267,3 +267,13 @@ test('위쪽(뒷모습) 콤보는 앞 공격의 끝과 다음 공격의 시작�
     relative(end).forEach((v, i) => assert.ok(Math.abs(v - relative(start)[i]) <= 3, `${from}타 끝 → ${to}타 시작 ${i}: ${v} vs ${relative(start)[i]}`));
   }
 });
+
+test('아래 대각선 사거리: 지면 거리 reach 안의 앞쪽 아래 적만 맞고, 위쪽이나 더 먼 적은 맞지 않는다', async () => {
+  const { insideDiagonalReach } = await import('../src/entities/heroFrames.ts');
+  const r = VERTICAL_SPEED_RATIO, d = Math.SQRT1_2;
+  assert.equal(insideDiagonalReach(80 * d, 80 * d * r, 120, r), true);
+  assert.equal(insideDiagonalReach(110 * d, 110 * d * r, 120, r), true);
+  assert.equal(insideDiagonalReach(130 * d, 130 * d * r, 120, r), false);
+  assert.equal(insideDiagonalReach(110 * d, 110 * d * r, PLAYER.frontReach[2], r), true);
+  assert.equal(insideDiagonalReach(80 * d, -80 * d * r, 120, r), false);
+});

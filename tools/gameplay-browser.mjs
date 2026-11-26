@@ -785,8 +785,8 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
     const sideSix = run.facing === 'right' || run.facing === 'left';
     const frontSix = run.facing === 'down';
     const backSix = run.facing === 'up';
-    // 8방향 모두 6자세 원화를 쓴다
-    const view = sideSix ? 'side' : frontSix ? 'front' : backSix ? 'back' : downDiagSix ? 'down-diag' : 'up-diag';
+    // 공격 자세는 4방향(옆·정면·뒷면) 6자세 원화로 통일되어 대각선은 옆모습을 쓴다(heroFrames.cardinalPoseFacing)
+    const view = frontSix ? 'front' : backSix ? 'back' : 'side';
     assert.equal(run.texture, `hero-academy-attack${run.stage ? run.stage + 1 : ''}-${view}6`);
     assert.ok(run.fx, JSON.stringify(run));
     assert.equal(Number(run.fx.frame.slice(run.fx.frame.lastIndexOf('-') + 1)), 3, '검기는 타격 자세부터 나온다: ' + JSON.stringify(run));
@@ -796,7 +796,8 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
     if ((sideSix || frontSix || downDiagSix || upDiagSix) && run.fps >= 30) assert.equal(run.followThrough, true, '마무리 자세까지 검기를 갱신한다: ' + JSON.stringify(run));
     if (sideSix && run.stage < 2) {
       assert.ok(run.maxFinishTurn < Math.PI / 4, '좌우 베기 검기의 접합부가 꺾이지 않는다: ' + JSON.stringify(run));
-      assert.ok(run.maxFinishGap < 1e-6, '올려 베기 검기가 사라질 때 칼끝에서 떨어지지 않는다: ' + JSON.stringify(run));
+      // 타격 뒤 몸이 제자리로 기울어 돌아오는 여운(attackBodyMotion, 최대 0.025rad) 동안 칼끝(회전 중심에서 약 150px)이 4px 안쪽으로 움직일 수 있다.
+      assert.ok(run.maxFinishGap < 5, '올려 베기 검기가 사라질 때 칼끝에서 떨어지지 않는다: ' + JSON.stringify(run));
     }
     assert.equal(run.mirrored, run.facing.includes('left'));
     assert.ok(Math.sign(run.dx) === run.signX);
@@ -3522,9 +3523,12 @@ test('무기 교체·해제는 별도 레이어와 칼집 손잡이·잔상·저
       for(const facing of ['left','right','down-left','down-right','up-left','up-right'])for(const action of ['attack1','attack2','attack3','dodge']){
         h.setAttackFacing(facing);h.setFlipX(facing.includes('left'));h.play('hero-'+action);
         for(let i=0;i<8;i++){
-          h.advance(30);const f=h.frame,b=h.getBlade(),matrix=h.image.getWorldTransformMatrix();
+          h.advance(30);const f=h.frame,b=h.getBlade(),matrix=h.image.getWorldTransformMatrix(),body=h.getWorldTransformMatrix();
           const expected=p=>matrix.transformPoint(p.x-f.originX*f.w,p.y-f.originY*f.h);
-          const a=expected(f.blade.base),z=expected(f.blade.tip);
+          // 공격 중 몸이 늘었다 줄어들어도(attackBodyMotion) 코등이는 몸을 따라가고 칼날은 원래 배율(f.scale) 그대로다.
+          const sx=f.scale*(h.image.scaleX<0?-1:1),local={x:(f.blade.base.x-f.originX*f.w)*h.image.scaleX+(f.blade.tip.x-f.blade.base.x)*sx,
+            y:h.image.y+(f.blade.base.y-f.originY*f.h)*h.image.scaleY+(f.blade.tip.y-f.blade.base.y)*f.scale};
+          const a=expected(f.blade.base),z=body.transformPoint(local.x,local.y);
           errors.push(Math.hypot(a.x-b.base.x,a.y-b.base.y),Math.hypot(z.x-b.tip.x,z.y-b.tip.y));
         }
       }
@@ -3572,7 +3576,8 @@ test('네 검은 정면 찌르기와 좌우·앞대각선 공격에서 주먹에
       const side=sample('attack1',200);
       const grips = ['right', 'left', 'down-right', 'down-left'].flatMap(facing => {
         h.setAttackFacing(facing);
-        const times = facing.startsWith('down') ? [0, 40, 110, 200, 250, 440] : [50, 120];
+        // 공격 자세는 4방향으로 통일되어 대각선도 옆모습 자세를 쓴다. 주먹 덮개가 있는 예비·들어 올림 자세를 본다.
+        const times = [50, 120];
         return times.map(time => {
           sample('attack1', time);
           const fist = h.supportHand, grip = h.weaponBack, cover = h.frame.gripCover;

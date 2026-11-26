@@ -119,6 +119,15 @@ export function insideFrontReach(dy: number, reach: number, verticalRatio: numbe
   return dy >= 0 && dy / verticalRatio <= reach;
 }
 
+/**
+ * 아래 대각선 공격의 사거리 판정: 공격 자세가 4방향으로 통일되어 아래 대각선도 옆모습 자세로 그려지므로,
+ * 옆으로 휘두르는 칼날이 대각선 앞쪽 아래의 적까지 내려가지 않는다. 정면처럼 판정 띠 안의 지면 거리 reach까지 맞힌다.
+ * (옆 범위는 insideAttackLane이 본다)
+ */
+export function insideDiagonalReach(dx: number, dy: number, reach: number, verticalRatio: number): boolean {
+  return dy >= 0 && Math.hypot(dx, dy / verticalRatio) <= reach;
+}
+
 /** Compare feet on the ground plane, not screen-space character overlap. */
 export function insideAttackLane(dx: number, dy: number, direction: { x: number; y: number },
   halfWidth: number, verticalRatio: number): boolean {
