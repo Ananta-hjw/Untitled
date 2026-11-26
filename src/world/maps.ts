@@ -274,6 +274,8 @@ function doorSpots(area: VillageArea): Interactable[] {
     if (!interior) return [];
     return [{
       id: `door-${interior.id}`, x: b.door.x, y: b.door.y, radius: 70, markerHeight: 150,
+      // 벽 앞(door.y - 44.2)에 바짝 붙거나 문 좌우로 조금 비켜 서도 편하게 들어가고, 나올 자리(door.y + 80)·시작점(door.y + 78)은 피한다.
+      reach: { rx: 105, up: 72, down: 54 },
       enter: { to: `in-${interior.id}` as MapId, at: arrivalOf(interior), label: interior.name },
     }];
   });
@@ -296,7 +298,9 @@ function interiorMap(interior: Interior): GameMap {
     // 문 근처를 지나가기만 해도 나가지 않도록, 들어올 때처럼 문 앞에서 "나가기" 버튼으로 나간다.
     exits: [],
     interactables: [{
-      id: `exit-${interior.id}`, x: door.x, y: door.y - 15, radius: 90, markerHeight: 150,
+      id: `exit-${interior.id}`, x: door.x, y: door.y - 15, radius: 90, markerHeight: 108,
+      // 문 깔개·아치 좌우 끝과 아래쪽 벽 끝까지 끊기지 않게 감싸고, 입장 자리(door.y - 120)와는 충분한 여유를 둔다.
+      reach: { rx: 135, up: 72, down: 60 },
       // 건물 문 앞(들어가기 지점, 반지름 70)보다 조금 앞에 선다. 나오자마자 "들어가기"가 떠 다시 들어가지 않게.
       enter: { to: building.area, at: { x: building.door.x, y: building.door.y + 80 }, label: '나가기' },
     }],

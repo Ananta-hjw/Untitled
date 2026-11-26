@@ -9,8 +9,16 @@ const PATHS: Record<ActionIcon, string[]> = {
   dodge: ['M27 12 L39 12 L36 31 L48 43 Q51 51 44 52 L24 52 Q19 52 20 46 L25 32 Z', 'M8 22 L20 22 M5 31 L17 31 M9 40 L18 40', 'M43 16 L57 16 L52 11 M57 16 L52 21'],
   block: ['M32 7 L53 15 L50 36 Q46 49 32 57 Q18 49 14 36 L11 15 Z', 'M32 16 L32 46 M22 29 L42 29'],
   talk: ['M10 13 Q7 13 7 20 L7 39 Q7 46 15 46 L21 46 L18 56 L34 46 L49 46 Q57 46 57 39 L57 20 Q57 13 49 13 Z', 'M19 29 L20 29 M31 29 L32 29 M43 29 L44 29'],
-  enter: ['M27 8 L52 8 L52 56 L27 56 M47 33 L48 33', 'M5 32 L37 32 M28 23 L37 32 L28 41'],
-  exit: ['M27 8 L52 8 L52 56 L27 56 M47 33 L48 33', 'M37 32 L5 32 M14 23 L5 32 L14 41'],
+  enter: [
+    'M29 55 L29 22 A12 12 0 0 1 53 22 L53 55 Z',
+    'M24 55 L58 55 M47 36 L48 36',
+    'M7 35 L33 35 M25 27 L33 35 L25 43',
+  ],
+  exit: [
+    'M29 55 L29 22 A12 12 0 0 1 53 22 L53 55 Z',
+    'M24 55 L58 55 M47 36 L48 36',
+    'M37 35 L9 35 M17 27 L9 35 L17 43',
+  ],
   inspect: ['M40 26 A16 16 0 1 1 8 26 A16 16 0 1 1 40 26 Z', 'M36 39 L53 56'],
   rest: ['M9 24 L9 55 M9 43 L55 43 L55 55 M10 35 L55 35 L55 43 M17 26 L28 26 L28 35 L17 35 Z'],
   heal: ['M24 9 L40 9 L40 24 L55 24 L55 40 L40 40 L40 55 L24 55 L24 40 L9 40 L9 24 L24 24 Z'],
@@ -45,6 +53,8 @@ export function createActionIcons(scene: Phaser.Scene): void {
       attack: 'M28 38 L48 14 M20 40 L29 47',
       block: 'M19 20 L27 17 M19 23 L21 35 Q24 41 28 44',
       talk: 'M14 20 L47 20 M14 23 L14 34',
+      enter: 'M34 51 L34 23 A7 7 0 0 1 48 23 L48 51',
+      exit: 'M34 51 L34 23 A7 7 0 0 1 48 23 L48 51',
       resonance: 'M32 27 L37 32 L32 37 L27 32 Z',
     };
     const detail = details[name as ActionIcon];
