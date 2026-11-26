@@ -4404,9 +4404,13 @@ test('미연결 계승자 다섯은 각자의 8방향 이동·초상화를 쓰�
 });
 
 test('복구 상점 주민은 작업 그림을 유지하고 대화·거래·재접속 뒤에도 준비를 이어 간다', async () => {
-  await load('village');
+  await load('in-smithy');
+  assert.equal(await evaluate(`(() => {
+    const doran = window.__game.scene.getScene('game').npcs.find(n => n.def.id === 'doran');
+    return doran.currentStoryAction === 'hammer' && doran.figure.texture.key === 'npc-doran-hammer';
+  })()`), true, '평상시에도 망치질한다');
   await evaluate(`localStorage.setItem('untitled-rpg.quests',JSON.stringify({version:1,quests:{'village-raid':{status:'done',count:0},'doran-gel':{status:'done',count:5}}}))`);
-  for (const [map,id,action] of [['in-smithy','doran','file'],['in-store','merina','supplies'],['in-inn','rosetta','blankets']]) {
+  for (const [map,id,action] of [['in-smithy','doran','hammer'],['in-store','merina','supplies'],['in-inn','rosetta','blankets']]) {
     await load(map);
     const result=await evaluate(`(() => {
       const s=window.__game.scene.getScene('game'),n=s.npcs.find(n=>n.def.id===${JSON.stringify(id)}),frames=new Set();
@@ -4420,8 +4424,10 @@ test('복구 상점 주민은 작업 그림을 유지하고 대화·거래·재�
       return {frames:[...frames],paused,portrait,trade,action:n.currentStoryAction,texture:n.figure.texture.key,resumed:n.storyElapsed>before,
         offset:n.spot.y-n.y,expectedOffset:n.def.talkOffset??0};
     })()`);
-    assert.equal(result.frames.length,2,id);assert.equal(result.paused,true,id);assert.equal(result.resumed,true,id);
-    assert.equal(result.trade,true,id);assert.equal(result.action,action,id);assert.equal(result.texture,'npc-village-relief',id);
+    if (id === 'doran') assert.deepEqual(result.frames, ['ready', 'raise', 'swing', 'strike']);
+    else assert.equal(result.frames.length, 2, id);
+    assert.equal(result.paused,true,id);assert.equal(result.resumed,true,id);
+    assert.equal(result.trade,true,id);assert.equal(result.action,action,id);assert.equal(result.texture, id === 'doran' ? 'npc-doran-hammer' : 'npc-village-relief', id);
     assert.equal(result.portrait,'portrait-'+id);assert.ok(Math.abs(result.offset-result.expectedOffset)<.001,id);
     await load(map);
     assert.equal(await evaluate(`window.__game.scene.getScene('game').npcs.find(n=>n.def.id===${JSON.stringify(id)}).currentStoryAction`),action);

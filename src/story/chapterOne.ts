@@ -119,10 +119,11 @@ function raidNpcs(base: readonly NpcDef[], map: MapId, step: number): NpcDef[] {
     if (n.id === 'rosetta') def.storyAction = 'blankets';
     if ('room' in place) {
       const at = interiorArtPoint(INTERIORS.find((i) => i.id === place.room)!, place.x, place.y);
-      return [{ ...def, ...at, inside: place.room, talkOffset: 0 }];
+      return [{ ...def, ...at, inside: place.room, talkOffsetX: 0, talkOffset: 0 }];
     }
     delete def.inside;
     delete def.talkOffset;
+    delete def.talkOffsetX;
     return [{ ...def, area: map === 'village-north' ? 'village-north' : 'village' }];
   });
   return [...guards, ...people];
@@ -156,7 +157,6 @@ function withDuty(n: NpcDef): NpcDef {
 
 export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: MapId): NpcDef[] {
   const phase = chapterPhase(state);
-  if (phase === 'day') return [...base];
   if (phase === 'raid') {
     if (map === undefined) return base.filter(n => n.id !== 'sia' && n.id !== 'linea').map(n => ({ ...n, wander: undefined }));
     const placed = raidNpcs(base, map, state['village-raid']?.step ?? 0);
@@ -165,9 +165,10 @@ export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: Ma
     return map === 'in-clinic' && care.length
       ? [...placed.filter(n => !care.some(c => c.id === n.id)), ...care] : placed;
   }
-  const placed = base.filter(n => !['sia', 'linea', 'eila', 'serena'].includes(n.id)).map(n => {
+  const people = base.map(n => n.id === 'doran' && n.inside === 'smithy' ? { ...n, storyAction: 'hammer' } : n);
+  if (phase === 'day') return people;
+  const placed = people.filter(n => !['sia', 'linea', 'eila', 'serena'].includes(n.id)).map(n => {
     if (n.id === 'ruan') return { ...n, ...mapPoint({ x: 1080, y: 1150 }), wander: undefined };
-    if (n.id === 'doran') return { ...n, wander: undefined, storyAction: 'file' };
     if (n.id === 'merina') return { ...n, wander: undefined, storyAction: 'supplies' };
     // Fold blankets on the guest side: the tall counter would hide both hands and the blanket.
     // Her feet now occupy the original conversation point, so the reachable talk spot stays unchanged.

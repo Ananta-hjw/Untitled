@@ -102,7 +102,7 @@ test('방 크기를 줄여도 침대의 쉬기·치료 자리와 상인 앞은 �
   for(const point of Object.values(REST_POINTS)) assert.ok(walkable(MAPS[point.map],point.at.x,point.at.y),point.id);
   assert.ok(walkable(MAPS['in-clinic'],CLINIC_BED_SPOT.x,CLINIC_BED_SPOT.y));
   for(const id of ['store','inn','smithy','clinic']){
-    const p=interiorShop(id);assert.ok(walkable(MAPS[`in-${id}`],p.x,p.y+p.talkOffset+20),id);
+    const p=interiorShop(id);assert.ok(walkable(MAPS[`in-${id}`],p.x+p.talkOffsetX,p.y+p.talkOffset+20),id);
   }
 });
 
@@ -113,7 +113,7 @@ test('입구에서 상인·침대 앞까지 가구 사이의 바닥으로 이어
     const map=MAPS[`in-${interior.id}`],start=map.spawn,step=12;
     const targets=[];
     if(['store','inn','smithy','clinic'].includes(interior.id)){
-      const p=interiorShop(interior.id);targets.push({x:p.x,y:p.y+p.talkOffset+20});
+      const p=interiorShop(interior.id);targets.push({x:p.x+p.talkOffsetX,y:p.y+p.talkOffset+20});
     }
     if(interior.id==='home')targets.push(REST_POINTS.home.at);
     if(interior.id==='clinic')targets.push(CLINIC_BED_SPOT);

@@ -18,6 +18,8 @@ import reliefUrl from '../assets/characters/village-relief/work.webp?url';
 import reliefData from '../assets/characters/village-relief/work-frames.json';
 import joanCocoonUrl from '../assets/characters/joan/cocoon-awaken.webp?url';
 import joanCocoonData from '../assets/characters/joan/cocoon-awaken-frames.json';
+import doranHammerUrl from '../assets/characters/doran/hammer.webp?url';
+import doranHammerData from '../assets/characters/doran/hammer-frames.json';
 
 export interface StoryFrame { name: string; x: number; y: number; w: number; h: number; originX: number; originY: number }
 export interface StoryAction {
@@ -30,13 +32,13 @@ export interface StoryAction {
 }
 const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
   ...Object.fromEntries(([
-    ['herman', 'record', '피해 상황 기록 중'], ['doran', 'file', '수리 부품 손질 중'],
+    ['herman', 'record', '피해 상황 기록 중'],
     ['merina', 'supplies', '구호 물품 정리 중'], ['rosetta', 'blankets', '담요 준비 중'],
     ['vernel', 'inspect', '권속 흔적 조사 중'],
   ] as const).map(([skin, name, activity]) => [skin, { [name]: {
     key: 'npc-village-relief', url: reliefUrl,
     frames: reliefData.frames.filter(f => f.name.startsWith(`${skin}-${name}-`)),
-    fps: skin === 'doran' ? 2 : 1, bodyHeight: skin === 'vernel' ? 380 : 304,
+    fps: 1, bodyHeight: skin === 'vernel' ? 380 : 304,
     labelOffset: skin === 'vernel' ? 125 : undefined, onTalk: 'pause' as const, activity,
   } }])),
   ...Object.fromEntries((['ruan', 'teon', 'soldier'] as const).map(skin => [skin,
@@ -46,6 +48,10 @@ const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
       fps: name === 'repair' ? 2 : 1, bodyHeight: skin === 'teon' ? 304 : 380,
       labelOffset: skin === 'teon' ? undefined : 125, onTalk: 'pause' as const,
     }]))])),
+  doran: {
+    hammer: { key: 'npc-doran-hammer', url: doranHammerUrl, frames: doranHammerData.frames,
+      fps: doranHammerData.fps, bodyHeight: doranHammerData.bodyHeight, onTalk: 'pause' },
+  },
   serena: Object.fromEntries(['nurse-left', 'nurse-right', 'wring-cloth'].map(name => [name, {
     key: 'npc-serena-nursing', url: serenaNursingUrl,
     frames: serenaNursingData.frames.filter(f => f.name.startsWith(name === 'wring-cloth' ? 'cloth-' : 'nurse-')),
