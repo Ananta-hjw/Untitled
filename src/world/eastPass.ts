@@ -44,8 +44,6 @@ export const EAST_PASS: GameMap = {
   exits: [
     { to: 'east-stream', zone: { left: 0, top: 2010, right: 170, bottom: 2320 }, arrive: { x: 3040, y: 1420 },
       label: '◀ 동쪽 개울가', labelAt: { x: 250, y: 2340 } },
-    { to: 'reed-swamp', zone: { left: 4620, top: 1330, right: 4800, bottom: 1540 }, arrive: { x: 240, y: 920 },
-      label: '갈대밭 늪 ▶', labelAt: { x: 4470, y: 1430 } },
     { to: 'ferry-village', zone: { left: 4620, top: 1840, right: 4800, bottom: 2080 }, arrive: FERRY_ENTRY,
       label: '물안개 나루 ▶', labelAt: { x: 4470, y: 1960 } },
   ],

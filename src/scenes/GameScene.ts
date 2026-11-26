@@ -1,5 +1,6 @@
 import { outdoorArtBounds } from '../world/maps';
 import { EastPassScenery } from '../world/eastPassArt';
+import { FerryScenery } from '../world/ferryVillageArt';
 import { mapPoint } from '../world/mapScale';
 import { interiorArtRect } from '../world/interiors';
 import Phaser from 'phaser';
@@ -98,11 +99,11 @@ import { DeathPanel } from '../ui/DeathPanel';
 import { deathReport, emptyDamageLog, recordDamage, type DamageLog } from '../combat/damageLog';
 import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings } from '../ui/settingsData';
 import { DIALOGUES, HERO_NAME } from '../story/dialogues';
-import { findInteractable, type Interactable } from '../world/interactables';
+import { findInteractable, talkChoices, type Interactable } from '../world/interactables';
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
 import { chapterTwoPreviewNpcs, isCastPreviewGroup, previewCastNpcs, type CastPreviewGroup } from '../world/chapterTwoNpcs';
-import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
+import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, FERRY_PEOPLE, ferryInnRestOpen, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
 import fernCartDamagedUrl from '../assets/village/rowen/fern-cart-damaged.webp?url';
 import fernCartRepairedUrl from '../assets/village/rowen/fern-cart-repaired.webp?url';
 import { PerfOverlay } from '../ui/PerfOverlay';
@@ -330,6 +331,7 @@ export class GameScene extends Phaser.Scene {
   /** 지금 연출의 걷는 빠르기 (오프닝·축제가 다르다) */
   private cutsceneWalkScale = OPENING_WALK_SCALE;
   private passScenery?: EastPassScenery;
+  private ferryScenery?: FerryScenery;
   private festivalStage?: FestivalStage;
   /** 축제 연출 끝에 남문으로 걸어 들어오는 권속 (싸우지 않는 그림뿐. 연출이 끝나면 광장을 다시 열어 진짜 무리가 나온다) */
   private festivalRaiders: Array<{ enemy: Enemy; path: readonly Point[]; startedAt: number }> = [];
@@ -385,6 +387,8 @@ export class GameScene extends Phaser.Scene {
   private quests: QuestState = {};
   private defenderInjuries = new Set<NpcId>();
   private storyChoice?: StoryChoice;
+  /** 이름표를 정리해 둔 모여 있는 사람들(focusCrowd) */
+  private crowdFocus = new Set<Npc>();
   /** 마지막으로 대화를 넘긴 누름 (onDialoguePointer) */
   private dialogueTap?: { id: number; downTime: number };
   private storyMarkers: Phaser.GameObjects.Text[] = [];
@@ -512,6 +516,7 @@ export class GameScene extends Phaser.Scene {
     this.quests = {};
     this.defenderInjuries = new Set();
     this.storyChoice = undefined;
+    this.crowdFocus = new Set();
     this.dialogueTap = undefined;
     this.storyMarkers = [];
     this.raidEnemies = new Set();
@@ -628,6 +633,7 @@ export class GameScene extends Phaser.Scene {
     this.cutsceneWalkScale = OPENING_WALK_SCALE;
     this.festivalStage = undefined;
     this.passScenery = undefined;
+    this.ferryScenery = undefined;
     this.festivalRaiders = [];
     this.mp = 0;
     this.maxMp = 0;
@@ -654,7 +660,7 @@ export class GameScene extends Phaser.Scene {
     // 습격 중에는 이 맵에 나올 모든 무리의 그림을 미리 읽는다(대화 뒤 다음 무리가 바로 나타난다).
     preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...raidSpawnsAnyStep(this.quests, this.mapId), ...this.previewMonsters()]);
     preloadVillage(this, this.map);
-    preloadNpcs(this, [...NPCS, FERN, ...this.map.npcs, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 })]);
+    preloadNpcs(this, [...NPCS, FERN, ...this.map.npcs, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 }), ...(this.mapId === 'ferry-village' ? FERRY_PEOPLE : [])]);
     if (fernCartVisible(this.quests, this.mapId)) {
       this.load.image('fern-cart-damaged', fernCartDamagedUrl);
       this.load.image('fern-cart-repaired', fernCartRepairedUrl);
@@ -667,6 +673,7 @@ export class GameScene extends Phaser.Scene {
     createPlaceholderArt(this);
     this.walkArea = buildMap(this, this.map);
     if (this.mapId === 'east-pass') this.passScenery = new EastPassScenery(this);
+    if (this.mapId === 'ferry-village') this.ferryScenery = new FerryScenery(this);
     this.placeFernCart();
     const bounds = this.walkArea.bounds;
     this.nav = new NavGrid(bounds.left, bounds.top, bounds.right, bounds.bottom, NAV_CELL,
@@ -928,6 +935,7 @@ export class GameScene extends Phaser.Scene {
     this.opening?.update(time);
     this.festivalStage?.update(time);
     this.passScenery?.update(time, this.player);
+    this.ferryScenery?.update(time);
     this.updateFestivalRaiders(time);
     this.updateRespawns(time);
     this.updateBoss(time, dt);
@@ -2175,6 +2183,8 @@ export class GameScene extends Phaser.Scene {
     }
     const free = player.alive && !player.isAttacking && this.dodgeProgress >= 1 && !this.inCombat();
     const target = free ? findInteractable(player.x, player.y, this.interactables) : undefined;
+    const crowd = free ? talkChoices(player.x, player.y, this.interactables) : [];
+    this.focusCrowd(crowd, target);
     this.attackButton.setVisible(true);
     if (!target) this.setPrimaryAction('attack', '공격');
 
@@ -2202,9 +2212,31 @@ export class GameScene extends Phaser.Scene {
     if (enter && isMapId(enter.to)) {
       this.hud.dismissHint();
       this.travel({ to: enter.to, arrive: enter.at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: enter.at });
+    } else if (crowd.length >= 2) {
+      // 여러 사람이 모여 있으면 누구와 이야기할지 고른다(가장 가까운 사람이 첫 번째).
+      this.joystick.vector.set(0, 0);
+      this.storyChoice?.pick(crowd.map(spot => ({
+        label: this.npcs.find(npc => npc.spot === spot)?.def.name ?? '대화',
+        onPick: () => this.openDialogue(spot),
+      })));
     } else {
       this.openDialogue(target);
     }
+  }
+
+  /** 모여 있는 사람들의 이름표: 대화 버튼이 가리키는 사람만 밝게, 나머지는 흐리게, 하는 일 표시는 숨긴다. */
+  private focusCrowd(crowd: readonly Interactable[], target: Interactable | undefined): void {
+    const focused = new Set<Npc>();
+    if (crowd.length >= 2) {
+      for (const spot of crowd) {
+        const npc = this.npcs.find(n => n.spot === spot);
+        if (!npc) continue;
+        npc.setTalkFocus(spot === target ? 'target' : 'other');
+        focused.add(npc);
+      }
+    }
+    for (const npc of this.crowdFocus) if (!focused.has(npc)) npc.setTalkFocus('none');
+    this.crowdFocus = focused;
   }
 
   private openDialogue(target: Interactable, confirmed = false): void {
@@ -2290,6 +2322,16 @@ export class GameScene extends Phaser.Scene {
           title: '고개 쉼터에서 쉬어 가기',
           text: '도르가 모닥불에 장작을 한 아름 더 얹는다.',
           summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  동쪽 고갯길 고개 쉼터`,
+          hint: '휴식은 무료이며 퀘스트 진행과 시간대는 바뀌지 않습니다.',
+          yes: '쉬어 가기', no: '돌아가기',
+        });
+      }
+      // 나루 여관 주인: 평소 대화나 퀘스트 안내(진행·완료가 아닌 대화) 뒤에 쉬어 갈지 묻는다.
+      if (!quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-fog-innkeeper' && ferryInnRestOpen(this.quests)) {
+        this.storyChoice?.open(() => this.rest('ferry-inn'), {
+          title: '나루 여관에서 쉬어 가기',
+          text: '여관 주인이 강 쪽 창을 닫고 방을 내준다.',
+          summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  물안개 나루 여관`,
           hint: '휴식은 무료이며 퀘스트 진행과 시간대는 바뀌지 않습니다.',
           yes: '쉬어 가기', no: '돌아가기',
         });

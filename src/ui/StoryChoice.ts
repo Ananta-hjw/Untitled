@@ -10,6 +10,10 @@ const FESTIVAL: ChoicePrompt = {
   hint: '준비가 끝났다면 잔치에 참여하세요.',
 };
 
+/** 고르기 창의 한 항목 */
+export interface ChoiceOption { label: string; onPick: () => void }
+const MAX_OPTIONS = 4;
+
 export class StoryChoice {
   private readonly shade: Phaser.GameObjects.Rectangle;
   private readonly panel: Phaser.GameObjects.Graphics;
@@ -19,6 +23,9 @@ export class StoryChoice {
   private readonly hint: Phaser.GameObjects.Text;
   private readonly yes: Phaser.GameObjects.Text;
   private readonly no: Phaser.GameObjects.Text;
+  /** 여러 사람 가운데 대화할 사람을 고르는 버튼들(pick) */
+  private readonly options: Phaser.GameObjects.Text[] = [];
+  private picks: ChoiceOption[] = [];
   private readonly scene: Phaser.Scene;
   private callback?: () => void;
   private width = 0;
@@ -35,6 +42,7 @@ export class StoryChoice {
     this.hint = this.label('', 19, '#b8cbbd');
     this.yes = this.button(() => this.accept(), true);
     this.no = this.button(() => this.cancel(), false);
+    for (let i = 0; i < MAX_OPTIONS; i++) this.options.push(this.button(() => this.choose(i), true));
     this.hide();
   }
 
@@ -49,9 +57,39 @@ export class StoryChoice {
     this.hint.setText(prompt.hint ?? '선택 후 계속 진행합니다.');
     this.yes.setText(prompt.yes);
     this.no.setText(prompt.no);
+    this.picks = [];
     for (const object of this.objects()) object.setVisible(true);
     this.summary.setVisible(this.hasSummary);
     this.layout(this.width || this.scene.scale.gameSize.width);
+  }
+
+  /**
+   * 여러 사람이 한자리에 모여 있을 때 대화할 사람을 고른다(가까운 순서, 최대 4명).
+   * Enter는 첫 번째(가장 가까운) 사람, 취소·Esc·뒤로 가기는 닫기.
+   */
+  pick(options: readonly ChoiceOption[], title = '누구와 이야기할까요?'): void {
+    this.picks = options.slice(0, MAX_OPTIONS);
+    if (this.picks.length === 0) return;
+    this.callback = this.picks[0].onPick;
+    this.hasSummary = false;
+    this.title.setText(title);
+    this.text.setText('');
+    this.hint.setText('가까이 있는 사람이 여럿이에요. 이야기할 사람을 고르세요.');
+    this.no.setText('취소');
+    for (const object of this.objects()) object.setVisible(true);
+    this.summary.setVisible(false);
+    this.yes.setVisible(false);
+    this.options.forEach((button, i) => button.setText(this.picks[i]?.label ?? '').setVisible(i < this.picks.length));
+    this.layout(this.width || this.scene.scale.gameSize.width);
+  }
+
+  /** 고르기 창에서 몇 번째 사람을 골랐는지 */
+  choose(index: number): void {
+    const option = this.picks[index];
+    if (!option || !this.isOpen) return;
+    this.hide();
+    this.onClose();
+    option.onPick();
   }
 
   accept(): void {
@@ -92,6 +130,12 @@ export class StoryChoice {
     }
     this.no.setPosition(left + 36, top + 432);
     this.yes.setPosition(left + 52 + buttonWidth, top + 432);
+    // 고르기: 두 줄 두 칸으로 이름 버튼을 놓는다.
+    this.options.forEach((button, i) => {
+      button.setFixedSize(buttonWidth, 84);
+      button.input?.hitArea.setSize(buttonWidth, 84);
+      button.setPosition(left + 36 + (i % 2) * (16 + buttonWidth), top + 140 + Math.floor(i / 2) * 104);
+    });
   }
 
   private objects(): Phaser.GameObjects.Components.Visible[] {
@@ -100,7 +144,8 @@ export class StoryChoice {
 
   private hide(): void {
     this.callback = undefined;
-    for (const object of this.objects()) object.setVisible(false);
+    this.picks = [];
+    for (const object of [...this.objects(), ...this.options]) object.setVisible(false);
   }
 
   private label(content: string, size: number, color: string): Phaser.GameObjects.Text {

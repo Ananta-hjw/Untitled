@@ -30,7 +30,7 @@ test('세레나는 구조 전 물수건을 준비하고, 구조 뒤에는 리네
     assert.ok(n.duty[0].durationMs >= 30000);
     assert.ok(Math.hypot(n.x - patient.x, n.y - patient.y) < 180, '병상 가까이에서 간호한다');
     assert.ok(Math.hypot(n.x - eila.x, n.y - eila.y) > 60, '에일라의 치료 자리를 비운다');
-    assert.ok(Math.hypot(n.x - patient.x - patient.talkOffsetX, n.y - patient.y - patient.talkOffset) > 60, '리네아와 대화하는 자리를 비운다');
+    assert.ok(Math.hypot(n.x - patient.x - patient.talkOffsetX, n.y - patient.y - patient.talkOffset) > 100, '리네아와 대화하는 자리를 비운다');
     for (let i = 0; i < n.duty.length; i++) {
       const from = n.duty[i], to = n.duty[(i + 1) % n.duty.length];
       for (let sample = 0; sample <= 60; sample++) assert.equal(walkable(MAPS[room],

@@ -5,6 +5,10 @@ import type { FerryObjectId, VillageProp } from './villageLayout.ts';
 const WIDTH = 4800;
 const HEIGHT = 3200;
 export const FERRY_ENTRY = { x: 593.75, y: 1609.375 };
+/** 갈대밭 늪에서 돌아오면 서는 자리: 남서쪽 늪지 길 위, 출구보다 조금 안쪽 */
+export const FERRY_FROM_SWAMP = { x: 740, y: 2860 };
+/** 나루에서 갈대밭 늪으로 들어서는 자리 (늪의 서쪽 끝) */
+const SWAMP_ENTRY = { x: 240, y: 920 };
 
 /** 그림의 세로/가로 비율 (src/assets/maps/ferry-village/objects.json, tools/build_ferry_village_assets.py) */
 const ASPECT: Record<FerryObjectId, number> = {
@@ -103,6 +107,9 @@ export const FERRY_VILLAGE: GameMap = {
   exits: [
     { to: 'east-pass', zone: { left: 75, top: 1528.125, right: 231.25, bottom: 1706.25 }, arrive: { x: 4660, y: 1650 },
       label: '◀ 동쪽 고갯길', labelAt: { x: 343.75, y: 1487.5 } },
+    // 남서쪽 늪지 길 끝: 갈대밭 늪 (퀘스트 "멈춘 나루"의 핀의 연, 훗날 종의 추를 찾는 늪)
+    { to: 'reed-swamp', zone: { left: 560, top: 2990, right: 900, bottom: 3100 }, arrive: SWAMP_ENTRY,
+      label: '갈대밭 늪 ▼', labelAt: { x: 730, y: 2930 } },
   ],
   interactables: [],
 };

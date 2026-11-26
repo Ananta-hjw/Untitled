@@ -30,7 +30,7 @@ export const REGIONS: Region[] = [
   { id: 'east-stream', name: '동쪽 개울가', mapId: 'east-stream', gx: 1, gy: 0, tint: 0xd6e8da },
   { id: 'east-pass', name: '동쪽 고갯길', mapId: 'east-pass', gx: 2, gy: 0 },
   { id: 'ferry-village', name: '물안개 나루', mapId: 'ferry-village', gx: 3, gy: 0 },
-  { id: 'reed-swamp', name: '갈대밭 늪', mapId: 'reed-swamp', gx: 2, gy: 1 },
+  { id: 'reed-swamp', name: '갈대밭 늪', mapId: 'reed-swamp', gx: 3, gy: 1 },
   // 헤르만의 서신 뒤에 열리는 베르넬의 유적 (docs/story-chapter1.md). 아직 맵이 없다.
   { id: 'north-ruins', name: '북쪽 유적', gx: 0, gy: -1 },
 ];
@@ -42,8 +42,8 @@ export const ROUTES: Array<[RegionId, RegionId]> = [
   ['village', 'east-stream'],
   ['village', 'north-ruins'],
   ['east-stream', 'east-pass'],
-  ['east-pass', 'reed-swamp'],
   ['east-pass', 'ferry-village'],
+  ['ferry-village', 'reed-swamp'],
 ];
 
 /** 맵이 속한 지역. 건물 실내와 마을 북쪽도 로웬 마을이다. */

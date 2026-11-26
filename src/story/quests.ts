@@ -20,7 +20,7 @@ export type QuestId = 'ruan-training' | 'ruan-dodge' | 'ruan-parry' | 'ruan-fiel
   | 'watch-report' | 'festival-supplies' | 'sia-knot' | 'harvest-help' | 'evening-patrol' | 'moth-trail'
   | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter' | 'first-sword'
   // 2장 (docs/story-chapter2.md, story/chapterTwo.ts)
-  | 'fern-cart' | 'farewell' | 'mountain-pass' | 'pass-shelter';
+  | 'fern-cart' | 'farewell' | 'mountain-pass' | 'pass-shelter' | 'still-ferry';
 
 /** 게임에서 일어나서 퀘스트 목표를 채우는 일 */
 export type QuestEvent =
@@ -35,7 +35,7 @@ export type QuestEvent =
   | { type: 'inspect'; spot: InspectSpot; map: MapId };
 
 /** 살펴보기 지점 (story/chapterOne.ts의 SPOTS) */
-export type InspectSpot = 'south-watch' | 'home-search' | 'moth-nest' | 'north-alley' | 'pass-summit';
+export type InspectSpot = 'south-watch' | 'home-search' | 'moth-nest' | 'north-alley' | 'pass-summit' | 'ferry-forge' | 'reed-kite';
 
 export interface QuestObjective {
   /** 추적 표시에 나오는 글 (예: "남쪽 들판의 슬라임") */
@@ -100,6 +100,10 @@ const line = (npc: NamedNpcId, speaker: string, text: string): DialogueLine => (
 const ruan = (text: string) => line('ruan', '루안', text);
 const fern = (text: string) => line('fern', '페른', text);
 const dor = (text: string): DialogueLine => ({ speaker: '도르', portrait: 'dor', text });
+const evan = (text: string): DialogueLine => ({ speaker: '에반', portrait: 'evan', text });
+const marta = (text: string): DialogueLine => ({ speaker: '마르타', portrait: 'marta', text });
+const finn = (text: string): DialogueLine => ({ speaker: '핀', portrait: 'finn', text });
+const innkeeper = (text: string): DialogueLine => ({ speaker: '여관 주인', portrait: 'fog-innkeeper', text });
 
 export const QUESTS: QuestDef[] = [
   {
@@ -453,6 +457,60 @@ export const QUESTS: QuestDef[] = [
     offer: [dor('…그런데 하나 부탁하세. 해가 기울면 안개 까마귀들이 쉼터 둘레를 맴돌아. 불씨를 노리는 건지, 사람을 노리는 건지. 좀 쫓아 주겠나?')],
     reminder: [dor('까마귀들은 동쪽 바위 쪽에 모여 있어. 날개 치는 소리가 들리면 몸을 낮추게.')],
     done: [dor('나루까지는 내리막으로 반나절이야. 쉼터는 늘 비워 두마. 오가는 길에 쉬어 가게.')],
+  },
+  {
+    // 퀘스트 5 (docs/story-chapter2.md "멈춘 나루"): 배를 얻지 못한 채 나루의 일상과 공포를 겪고, 첫 단서(종 그림, 놋쇠 종)를 줍는다.
+    id: 'still-ferry', title: '멈춘 나루', giver: 'evan', main: true, requires: 'pass-shelter', completeOnTarget: true,
+    objective: { label: '물안개 나루의 사공 에반에게 배 부탁하기', need: 1, event: 'talk', npc: 'evan' },
+    steps: [
+      { label: '물안개 나루의 사공 에반에게 배 부탁하기', need: 1, event: 'talk', npc: 'evan', lines: [
+        hero('강을 건너야 해요. 배를 띄워 주실 수 있나요?'),
+        evan('배는 안 띄워. …밤이 오면 너도 귀를 막고 자라.'),
+        hero('누구를 기다리세요?'),
+        evan('…딸.'),
+        hero('저도 동생을 찾고 있어요. 검은 짐승 무리를 못 보셨어요? 누굴 데려가듯 줄을 맞춰 가는 무리요.'),
+        evan('어젯밤 저 위 얕은 여울을 건너가더군. 배도 없이. …한가운데 하나는 등에 짐 같은 걸 지고 유난히 천천히 건너더군.'),
+        hero('그 여울로 가면—'),
+        evan('사람은 못 건너. 물살이 사람 허리를 꺾지. 그것들은 사람이 아니니 건넌 거다.'),
+        evan('…여관에 가 봐. 묵을 데는 거기뿐이야.'),
+        { speaker: HERO_NAME, portrait: 'hero-neutral', text: '(강을 건너려면 결국 배가 있어야 해. 일단 여관에 가 보자.)' }] },
+      { label: '나루 여관에서 소문 듣기', need: 1, event: 'talk', npc: 'fog-innkeeper', lines: [
+        innkeeper('손님이라니, 오랜만이네. 방은 남아돌아. 요즘 누가 이 나루에 오겠어.'),
+        { speaker: '구석의 손님', text: '(사당 종에 저주가 내렸대. 옛날엔 안개를 쫓던 종이 이젠 사람을 부른다잖아…)' },
+        innkeeper('쉿, 그 얘긴 크게 하지 말게. …밤에 종이 울리면 들은 사람이 강으로 걸어 들어가. 벌써 다섯이야.'),
+        innkeeper('모르간 나리가 쌀이며 등불을 나눠 주시니 다들 겨우 버티는 거지. 곧 괜찮아질 거라시더군.'),
+        innkeeper('배를 기다릴 거면 마을 일이나 좀 거들어 주게. 대장간 마르타 할멈은 풀무질할 손이 모자라고, 우리 핀 녀석은 연을 잃어버렸다고 난리야.')] },
+      { label: '대장간의 마르타 돕기', need: 1, event: 'talk', npc: 'marta', lines: [
+        marta('여관에서 보냈느냐? 마침 잘 왔다. 이 늙은 팔로는 풀무를 오래 못 밟아.'),
+        marta('화덕 옆 풀무를 좀 밟아 다오. 불이 죽지 않을 만큼만.')] },
+      { label: '대장간 화덕의 풀무 밟기', need: 1, event: 'inspect', map: 'ferry-village', spot: 'ferry-forge' },
+      { label: '마르타에게 벽의 종 그림 묻기', need: 1, event: 'talk', npc: 'marta', lines: [
+        hero('벽에 걸린 그림, 커다란 종이던데요.'),
+        marta('…우리 집안이 예전에 종을 부었지.'),
+        marta('옛날 얘기다. 불 봐 줘서 고맙구나. 쇠 다루는 손이 제법이야.')] },
+      { label: '여관 앞의 핀 만나기', need: 1, event: 'talk', npc: 'finn', lines: [
+        finn('형이 아빠가 말한 그 손님이지? 내 연 좀 찾아 줘! 바람에 날아가서 갈대밭 늪에 걸렸어.'),
+        finn('나 혼자는 못 가. 갈대 사이에 뭔가 숨어 있다가 덤벼. 물도 막 쏘고.'),
+        hero('늪은 어느 쪽이야?'),
+        finn('마을 남서쪽 길로 쭉 내려가면 돼. 갈대가 사람 키만 해.')] },
+      { label: '갈대밭 늪의 마물 쫓기', need: 3, event: 'kill', map: 'reed-swamp' },
+      { label: '갈대에 걸린 핀의 연 찾기', need: 1, event: 'inspect', map: 'reed-swamp', spot: 'reed-kite' },
+      { label: '핀에게 연 돌려주기', need: 1, event: 'talk', npc: 'finn', lines: [
+        finn('내 연! 찢어지지도 않았네. 형 최고야!'),
+        hero('연 옆 진흙 속에 이런 게 있었어. 작은 놋쇠 종.'),
+        finn('…종? 몰라, 처음 봐. 늪에 왜 그런 게 있지?'),
+        finn('…형, 오늘 밤엔 여관에서 자. 귀 꼭 막고. 밤엔 절대 밖에 나가면 안 돼.'),
+        { speaker: HERO_NAME, portrait: 'hero-neutral', text: '(사당의 종은 강 건너 섬에 있다던데… 늪 진흙 속의 이 종은 뭐지.)' }] },
+    ],
+    rewardXp: 80, rewardGold: 40, rewardItems: [{ id: 'potion', count: 2 }],
+    offer: [dor('내리막으로 반나절이면 나루야. 사공 에반을 찾게. 말수는 없어도 강은 그 사람이 제일 잘 알아.')],
+    reminder: [evan('…배는 안 띄운다고 했다. 여관에나 가 봐.')],
+    remindersByNpc: {
+      'fog-innkeeper': [innkeeper('마르타 할멈과 우리 핀 녀석 일 좀 봐 주게. 밤이 오기 전에.')],
+      marta: [marta('풀무는 화덕 오른쪽이다. 불이 죽지 않게만 밟아 다오.')],
+      finn: [finn('연은 갈대밭 늪에 걸렸어. 마을 남서쪽 길로 내려가!')],
+    },
+    done: [finn('이 연, 조안 누나가 만들어 준 거야. …누나도 곧 돌아올 거야. 그치?')],
   },
   {
     id: 'doran-gel', title: '담금질 재료', giver: 'doran',

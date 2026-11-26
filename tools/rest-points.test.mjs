@@ -4,11 +4,12 @@ import { MAPS, findExit, walkable } from '../src/world/maps.ts';
 import { findInteractable } from '../src/world/interactables.ts';
 import { CLINIC_BED_SPOT, HERB_BONUS_RATIO, HOME_BED_SPOT, herbBonus, REST_POINTS, canRest, parseRestPoint, serializeRestPoint } from '../src/story/restPoints.ts';
 
-test('쉬는 곳(여관·시온의 집·고개 쉼터)에서 다시 시작하는 자리는 걸을 수 있는 곳이고, 출구나 나가기 버튼 바로 앞이 아니다', () => {
+test('쉬는 곳(여관·시온의 집·고개 쉼터·나루 여관)에서 다시 시작하는 자리는 걸을 수 있는 곳이고, 출구나 나가기 버튼 바로 앞이 아니다', () => {
   for (const point of Object.values(REST_POINTS)) {
     const map = MAPS[point.map];
-    // 마을의 쉬는 곳은 실내, 2장의 고개 쉼터는 동쪽 고갯길 바깥
-    assert.ok(point.id === 'shelter' ? point.map === 'east-pass' : map?.interior, point.id);
+    // 마을의 쉬는 곳은 실내, 2장의 고개 쉼터와 나루 여관(실내가 아직 없어 여관 앞)은 바깥
+    const outside = { shelter: 'east-pass', 'ferry-inn': 'ferry-village' }[point.id];
+    assert.ok(outside ? point.map === outside : map?.interior, point.id);
     assert.equal(walkable(map, point.at.x, point.at.y), true, point.id);
     assert.equal(findExit(map, point.at.x, point.at.y), undefined, point.id);
     assert.notEqual(findInteractable(point.at.x, point.at.y, map.interactables)?.enter?.label, '나가기', point.id);

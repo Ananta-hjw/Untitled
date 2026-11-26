@@ -14,7 +14,7 @@ import type { QuestState } from './quests.ts';
  * 이 파일은 Phaser를 쓰지 않아 tools/rest-points.test.mjs가 직접 불러 검사한다.
  */
 
-export type RestPointId = 'inn' | 'home' | 'shelter';
+export type RestPointId = 'inn' | 'home' | 'shelter' | 'ferry-inn';
 
 export interface RestPoint {
   id: RestPointId;
@@ -35,6 +35,8 @@ export const REST_POINTS: Record<RestPointId, RestPoint> = {
   home: { id: 'home', name: '시온의 집', map: 'in-home', at: interiorArtPoint(home, 1000, 530) },
   // 2장: 동쪽 고갯길의 돌 쉼터, 도르의 모닥불 앞 (퀘스트 "고개의 쉼터" 뒤로 도르에게 말해 쉬어 간다)
   shelter: { id: 'shelter', name: '고개 쉼터', map: 'east-pass', at: { x: PASS_FIRE.x - 70, y: PASS_FIRE.y + 80 } },
+  // 2장: 물안개 나루 여관 앞, 여관 주인 곁 (퀘스트 "멈춘 나루"를 받은 뒤 여관 주인에게 말해 쉬어 간다). 건물 실내는 아직 없다.
+  'ferry-inn': { id: 'ferry-inn', name: '물안개 나루 여관', map: 'ferry-village', at: { x: 2170, y: 1400 } },
 };
 
 /** 시온의 집 침대 앞의 "쉬기" 자리 */

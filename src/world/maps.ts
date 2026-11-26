@@ -1,5 +1,5 @@
 import { EAST_PASS } from './eastPass.ts';
-import { FERRY_VILLAGE } from './ferryVillage.ts';
+import { FERRY_FROM_SWAMP, FERRY_VILLAGE } from './ferryVillage.ts';
 import { mapLength, mapPoint, mapRect, mapProp } from './mapScale.ts';
 import { VILLAGE_GATES, perimeterObstacles } from './villagePerimeter.ts';
 import type { EnemyKey } from '../combat/monsterTypes.ts';
@@ -261,8 +261,8 @@ const REED_SWAMP: GameMap = {
     { key: 'reed-stalker', x: 1750, y: 1100 },
   ],
   exits: [
-    { to: 'east-pass', zone: { left: 0, top: 805, right: 155, bottom: 1040 }, arrive: { x: 4510, y: 1440 },
-      label: '◀ 동쪽 고갯길', labelAt: { x: 185, y: 1040 } },
+    { to: 'ferry-village', zone: { left: 0, top: 805, right: 155, bottom: 1040 }, arrive: FERRY_FROM_SWAMP,
+      label: '◀ 물안개 나루', labelAt: { x: 185, y: 1040 } },
   ],
   interactables: [],
 };

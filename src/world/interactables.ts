@@ -46,3 +46,23 @@ export function findInteractable(x: number, y: number, list: readonly Interactab
   }
   return best;
 }
+
+/** (x, y)에서 닿는 대상 모두, 가까운 순서로 */
+export function interactablesInReach(x: number, y: number, list: readonly Interactable[] = INTERACTABLES): Interactable[] {
+  const reach = (item: Interactable) => {
+    const nx = (x - item.x) / item.radius, ny = (y - item.y) / (item.radius * VERTICAL_RATIO);
+    return nx * nx + ny * ny;
+  };
+  return list.filter(item => reach(item) <= 1).sort((a, b) => reach(a) - reach(b));
+}
+
+/**
+ * 대화 버튼을 눌렀을 때 고를 사람들: 가장 가까운 대상이 사람이고 손이 닿는 사람이 둘 이상이면 그 사람들(가까운 순).
+ * 문·살펴보기 자리가 가장 가까우면 고르지 않고 그 대상을 쓴다.
+ */
+export function talkChoices(x: number, y: number, list: readonly Interactable[]): Interactable[] {
+  const near = interactablesInReach(x, y, list);
+  if (!near[0]?.id.startsWith('npc-')) return [];
+  const people = near.filter(item => item.id.startsWith('npc-'));
+  return people.length >= 2 ? people : [];
+}

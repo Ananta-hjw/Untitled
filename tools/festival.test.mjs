@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { BONFIRE, FESTIVAL, FESTIVAL_HERO_START, FESTIVAL_RAIDERS, festivalLineCount, festivalNpcs, shouldPlayFestival } from '../src/story/festival.ts';
-import { MAPS, walkable } from '../src/world/maps.ts';
+import { BONFIRE, FEAST_TABLES, FESTIVAL, FESTIVAL_HERO_START, FESTIVAL_RAIDERS, festivalLineCount, festivalNpcs, shouldPlayFestival } from '../src/story/festival.ts';
+import { MAPS, mapObstacles, walkable } from '../src/world/maps.ts';
 import { NPCS } from '../src/world/npcs.ts';
 
 const raid = (count = 0, step = 0) => ({ 'festival-eve': { status: 'done', count: 1 }, 'village-raid': { status: 'active', count, step } });
@@ -56,5 +57,35 @@ test('잔치에는 마을 사람 열한 명이 모두 광장에 나와 모닥불
     const from = r.path[0], to = r.path.at(-1);
     assert.ok(from.y > to.y, '문 밖(아래)에서 안으로');
     assert.equal(walkable(map, to.x, to.y), true);
+  }
+});
+
+test('잔치 연출에서 시온이 걷는 길은 걸을 수 있고, 잔칫상·표지판 그림 뒤로 지나가지 않는다', async () => {
+  const frames = JSON.parse(readFileSync(new URL('../src/assets/village/frames.json', import.meta.url))).frames;
+  const tableArt = JSON.parse(readFileSync(new URL('../src/assets/festival/props.json', import.meta.url))).frames['feast-table'].frame;
+  const map = MAPS.village, obstacles = mapObstacles(map);
+  // 그림이 발보다 아래쪽(앞)에서 그 사람을 덮는 영역: 그림의 가로 범위 × (그림 꼭대기 ~ 바닥)
+  const covers = [
+    ...FEAST_TABLES.map(t => ({ name: '잔칫상', left: t.x - t.w / 2, right: t.x + t.w / 2, top: t.y - t.w * tableArt.h / tableArt.w, bottom: t.y })),
+    ...map.props.filter(p => p.frame === 'sign').map(p => {
+      const f = frames.find(f => f.name === 'sign');
+      return { name: '표지판', left: p.x - p.width / 2, right: p.x + p.width / 2, top: p.y - p.width * f.h / f.w, bottom: p.y };
+    }),
+  ];
+  let at;
+  for (const step of FESTIVAL) {
+    if (step.type === 'placeHero') at = step.at;
+    if (step.type !== 'hero') continue;
+    for (const to of step.path) {
+      const n = Math.ceil(Math.hypot(to.x - at.x, to.y - at.y) / 4);
+      for (let i = 0; i <= n; i++) {
+        const x = at.x + (to.x - at.x) * i / n, y = at.y + (to.y - at.y) * i / n;
+        assert.equal(walkable(map, x, y, obstacles), true, `걸을 수 없는 곳 ${Math.round(x)},${Math.round(y)}`);
+        // 시온의 몸 폭(좌우 25px)까지 그림에 걸리면 안 된다
+        for (const c of covers) assert.ok(!(x > c.left - 25 && x < c.right + 25 && y > c.top && y < c.bottom),
+          `${c.name} 그림 뒤 ${Math.round(x)},${Math.round(y)}`);
+      }
+      at = to;
+    }
   }
 });

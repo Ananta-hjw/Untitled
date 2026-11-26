@@ -31,8 +31,8 @@ export const DIALOGUES = {
   'npc-kairen': [{ speaker: '카이렌', portrait: 'kairen', text: '길을 지키는 것이 우리의 임무다. 목적지를 말해라.' }],
   'npc-velka': [{ speaker: '벨카', portrait: 'velka', text: '내 앞길은 내가 정해. 너도 남의 말만 듣고 걷지는 마.' }],
   'npc-razen': [{ speaker: '라젠', portrait: 'razen', text: '어떤 소식을 찾나? 듣고 싶은 말과 필요한 말은 다를 수 있지.' }],
-  'east-pass-sign': [{ speaker: '이정표', text: '동쪽 고갯길 · 서쪽: 동쪽 개울가 · 동쪽: 갈대밭 늪\n고개 쉼터에서 쉬어 가세요. 안개 까마귀 무리를 조심하세요.' }],
-  'npc-fog-innkeeper': [{ speaker: '여관 주인', portrait: 'fog-innkeeper', text: '잠깐 눈을 붙였을 뿐인데… 어머니가 부르는 소리가 들렸어. 분명 강 건너에서.' }],
+  'east-pass-sign': [{ speaker: '이정표', text: '동쪽 고갯길 · 서쪽: 동쪽 개울가 · 동쪽: 물안개 나루\n고개 쉼터에서 쉬어 가세요. 안개 까마귀 무리를 조심하세요.' }],
+  'npc-fog-innkeeper': [{ speaker: '여관 주인', portrait: 'fog-innkeeper', text: '방은 남아돌아. 묵어 갈 거면 밤엔 귀를 꼭 막고, 문 밖으로는 한 발짝도 나가지 말게.' }],
   'village-sign': [
     { speaker: '표지판', text: '로웬 마을 광장\n북쪽: 집들 · 남쪽: 들판 · 서쪽: 숲길 · 동쪽: 개울가' },
     { speaker: HERO_NAME, portrait: 'hero-neutral', text: '표지판에 누가 수확제 리본을 묶어 놨네. 리네아 솜씨다.' },

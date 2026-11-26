@@ -23,11 +23,16 @@ test('에일라는 구조 전에는 응급 약품을 준비하고, 구조 뒤에
     const all = Object.entries(MAPS).flatMap(([map, data]) => chapterNpcs(data.npcs, state, map).filter(n => n.id === 'eila').map(n => ({ ...n, map })));
     assert.equal(all.length, 1); assert.equal(all[0].map, room);
     const e = all[0], patient = chapterNpcs(MAPS[room].npcs, state, room).find(n => n.id === 'linea');
-    assert.equal(e.duty[0].action, action);
-    assert.equal(e.duty[1].action, 'mix-herbs');
-    assert.ok(e.duty[0].durationMs >= e.duty[1].durationMs * 3, '치료가 준비보다 길다');
+    // 침대 곁은 세레나가 지키고, 에일라는 약을 준비하다 짧게 치료하러 다녀간다(세 사람이 한자리에 겹치지 않게).
+    assert.equal(e.duty[0].action, 'mix-herbs');
+    assert.equal(e.duty[1].action, action);
+    assert.ok(e.duty[0].durationMs >= e.duty[1].durationMs * 3, '준비가 치료보다 길다');
     assert.deepEqual([e.x, e.y], [e.duty[0].x, e.duty[0].y]);
-    assert.ok(Math.hypot(patient.x + patient.talkOffsetX - e.x, patient.y + patient.talkOffset - e.y) > 60, '환자와 대화하는 자리를 비운다');
+    const serena = chapterNpcs(MAPS[room].npcs, state, room).find(n => n.id === 'serena');
+    const talkSpot = { x: patient.x + patient.talkOffsetX, y: patient.y + patient.talkOffset };
+    assert.ok(Math.hypot(talkSpot.x - e.x, talkSpot.y - e.y) > 220, '준비 자리는 리네아와 대화하는 자리에서 떨어져 있다');
+    assert.ok(Math.hypot(serena.x - e.x, serena.y - e.y) > 220, '준비 자리는 세레나의 간호 자리에서 떨어져 있다');
+    assert.ok(Math.hypot(talkSpot.x - e.duty[1].x, talkSpot.y - e.duty[1].y) > 60, '치료하러 와도 대화 자리를 비운다');
     for (let i = 0; i < e.duty.length; i++) {
       const from = e.duty[i], to = e.duty[(i + 1) % e.duty.length];
       for (let sample = 0; sample <= 40; sample++) {

@@ -167,3 +167,67 @@ test('고개 꼭대기 살펴보기 자리와 고개 쉼터에서 다시 시작�
   assert.equal(walkable(pass, shelter.at.x, shelter.at.y), true);
   assert.equal(findExit(pass, shelter.at.x, shelter.at.y), undefined);
 });
+
+test('고개의 쉼터 뒤 "멈춘 나루": 에반 → 여관 → 마르타와 풀무 → 핀 → 갈대밭 늪의 마물과 연 → 핀 순서로 이어진다', () => {
+  const shelterDone = Object.fromEntries(QUESTS.slice(0, QUESTS.findIndex(q => q.id === 'pass-shelter') + 1)
+    .filter(q => q.main).map(q => [q.id, { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) }]));
+  // 도르에게 마지막 인사를 하면 나루로 가라는 말과 함께 이어진다
+  const before = { ...shelterDone, 'pass-shelter': { status: 'active', count: 0, step: 3 } };
+  const farewell = talkTo('dor', before);
+  assert.equal(farewell.completed?.id, 'pass-shelter');
+  assert.equal(farewell.next?.id, 'still-ferry');
+  let state = farewell.state;
+  assert.deepEqual(state['still-ferry'], { status: 'active', count: 0 });
+  // 나루 사람들은 나루에만, 퀘스트를 받은 뒤에만 있다
+  assert.deepEqual(chapterTwoNpcs(state, 'ferry-village').map(n => n.id), ['evan', 'marta', 'fog-innkeeper', 'finn', 'morgan']);
+  assert.deepEqual(chapterTwoNpcs(before, 'ferry-village'), []);
+  assert.deepEqual(chapterTwoNpcs(state, 'east-pass'), []);
+
+  const talk = npc => { const r = talkTo(npc, state); state = r.state; return r; };
+  const inspect = (spot, map) => {
+    assert.deepEqual(chapterTwoSpots(state, map).map(s => s.id), [`story-${spot}`]);
+    state = recordEvent(state, { type: 'inspect', spot, map }).state;
+  };
+  // 아직 마르타에게 가도 퀘스트가 앞서 나가지 않는다
+  assert.equal((talkTo('marta', state)?.state ?? state)['still-ferry'].step ?? 0, 0);
+  talk('evan');
+  assert.equal(state['still-ferry'].step, 1);
+  talk('fog-innkeeper');
+  talk('marta');
+  assert.deepEqual(chapterTwoSpots(state, 'reed-swamp'), []);
+  inspect('ferry-forge', 'ferry-village');
+  assert.ok(CHAPTER_TWO_INSPECTIONS['story-ferry-forge'].some(l => l.text.includes('종')));
+  talk('marta');
+  talk('finn');
+  assert.equal(state['still-ferry'].step, 6);
+  for (let i = 0; i < 3; i++) state = recordEvent(state, { type: 'kill', map: 'reed-swamp', monster: 'reed-stalker' }).state;
+  assert.equal(state['still-ferry'].step, 7);
+  inspect('reed-kite', 'reed-swamp');
+  assert.ok(CHAPTER_TWO_INSPECTIONS['story-reed-kite'].some(l => l.text.includes('놋쇠 종')));
+  const done = talk('finn');
+  assert.equal(done.completed?.id, 'still-ferry');
+  assert.equal(state['still-ferry'].status, 'done');
+  assert.deepEqual(serializeQuests(state) && parseQuests(serializeQuests(state))['still-ferry'], state['still-ferry']);
+});
+
+test('물안개 나루 사람들은 걸을 수 있는 곳에 따로 서고, 살펴보기·쉬는 자리·늪 출구는 닿을 수 있다', () => {
+  const ferry = MAPS['ferry-village'];
+  const state = { 'pass-shelter': { status: 'done', count: 1 }, 'still-ferry': { status: 'active', count: 0 } };
+  const people = chapterTwoNpcs(state, 'ferry-village');
+  for (const n of people) assert.equal(walkable(ferry, n.x, n.y), true, n.id);
+  for (let i = 0; i < people.length; i++) for (let j = i + 1; j < people.length; j++) {
+    const a = people[i], b = people[j];
+    assert.ok(Math.hypot(a.x - b.x, a.y - b.y) > 220, `${a.id}·${b.id}: 대화 자리가 겹치지 않는다`);
+  }
+  for (const [map, spot] of [['ferry-village', 'story-ferry-forge'], ['reed-swamp', 'story-reed-kite']]) {
+    const s = { 'story-ferry-forge': { x: 1420, y: 1430 }, 'story-reed-kite': { x: 1780, y: 1250 } }[spot];
+    assert.equal(walkable(MAPS[map], s.x, s.y), true, spot);
+    assert.equal(findExit(MAPS[map], s.x, s.y), undefined, spot);
+  }
+  const inn = REST_POINTS['ferry-inn'];
+  assert.equal(walkable(ferry, inn.at.x, inn.at.y), true);
+  // 갈대밭 늪은 나루 남서쪽 길에서 오가고, 동쪽 고갯길에는 늪 출구가 없다
+  assert.ok(ferry.exits.some(e => e.to === 'reed-swamp'));
+  assert.ok(MAPS['reed-swamp'].exits.every(e => e.to === 'ferry-village'));
+  assert.ok(MAPS['east-pass'].exits.every(e => e.to !== 'reed-swamp'));
+});

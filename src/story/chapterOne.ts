@@ -64,40 +64,40 @@ function lineaCareNpcs(state: QuestState): NpcDef[] {
   const action = lineaRecovery(state);
   if (!action) return [];
   const inside: InteriorId = action === 'journal' ? 'linea' : 'clinic';
+  const clinic = inside === 'clinic';
   const room = INTERIORS.find(i => i.id === inside)!;
   const at = ([x, y]: readonly [number, number]) => interiorArtPoint(room, x, y);
-  const body = at(inside === 'clinic' ? [340, 432] : [1340, 650]);
-  const bedside = at(inside === 'clinic' ? [540, 615] : [1130, 700]);
+  // 침대 곁에는 세레나 한 사람만 오래 머물고, 에일라는 약을 준비하다 짧게 치료하러 다녀간다.
+  // 리네아와 대화하는 자리는 세레나의 반대쪽(치유소는 침대 발치, 집은 침대 앞)에 두어 세 사람의 대화 자리가 겹치지 않는다.
+  const body = at(clinic ? [340, 432] : [1340, 650]);
+  const bedside = at(clinic ? [545, 490] : [1150, 830]);
   const patient: NpcDef = {
     ...NPCS.find(n => n.id === 'linea')!, ...body, inside, wander: undefined,
-    storyAction: action, shadow: false, labelOffset: inside === 'clinic' ? 75 : 200,
-    depthOffset: inside === 'clinic' ? at([340, 515]).y - body.y : 0,
+    storyAction: action, shadow: false, labelOffset: clinic ? 75 : 200,
+    depthOffset: clinic ? at([340, 515]).y - body.y : 0,
     talkOffsetX: bedside.x - body.x, talkOffset: bedside.y - body.y,
   };
-  const serenaDuty: DutyPoint[] = inside === 'clinic' ? [
-    { ...at([330, 530]), label: '리네아 간호 중', action: 'nurse-left', facing: 'up-left', durationMs: 30000 },
-    { ...at([550, 530]), label: '물수건 챙기는 중', durationMs: 0 },
-    { ...at([650, 650]), label: '물수건 준비 중', action: 'wring-cloth', durationMs: 5000 },
-    { ...at([550, 530]), label: '병상으로 돌아가는 중', durationMs: 0 },
+  const serenaDuty: DutyPoint[] = clinic ? [
+    { ...at([430, 530]), label: '리네아 간호 중', action: 'nurse-left', facing: 'up-left', durationMs: 30000 },
+    { ...at([520, 528]), label: '물수건 챙기는 중', durationMs: 0 },
+    { ...at([650, 660]), label: '물수건 준비 중', action: 'wring-cloth', durationMs: 5000 },
+    { ...at([520, 528]), label: '병상으로 돌아가는 중', durationMs: 0 },
   ] : [
-    { ...at([1250, 780]), label: '리네아 간호 중', action: 'nurse-right', facing: 'up-right', durationMs: 30000 },
+    { ...at([1190, 610]), label: '리네아 간호 중', action: 'nurse-right', facing: 'up-right', durationMs: 30000 },
     { ...at([930, 680]), label: '물수건 준비 중', action: 'wring-cloth', durationMs: 5000 },
   ];
-  const carers = (['eila', 'serena'] as const).map(id => ({
-    ...NPCS.find(n => n.id === id)!, inside, wander: undefined,
-    facing: (inside === 'clinic' ? id === 'eila' ? 'left' : 'up-left' : id === 'eila' ? 'right' : 'up-right') as Direction8,
-    ...at(inside === 'clinic'
-      ? id === 'eila' ? [505, 520] as const : [330, 530] as const
-      : id === 'eila' ? [1230, 640] as const : [1250, 780] as const),
-    talkOffset: 0,
-    ...(id === 'eila' ? { duty: [
-      { ...at(inside === 'clinic' ? [505, 520] : [1230, 640]), label: '리네아 치료 중',
-        facing: inside === 'clinic' ? 'left' as const : 'right' as const,
-        action: inside === 'clinic' ? 'treat-left' : 'treat-right', durationMs: 20000 },
-      { ...at(inside === 'clinic' ? [675, 520] : [1100, 600]), label: '약초와 붕대 준비 중',
-        facing: 'up-left' as const, action: 'mix-herbs', durationMs: 5000 },
-    ] } : { duty: serenaDuty }),
-  }));
+  const eilaDuty: DutyPoint[] = [
+    { ...at(clinic ? [850, 540] : [600, 505]), label: '약초와 붕대 준비 중', facing: 'up-left', action: 'mix-herbs', durationMs: 20000 },
+    { ...at(clinic ? [520, 600] : [1120, 700]), label: '리네아 치료 중', facing: clinic ? 'up-left' : 'right',
+      action: clinic ? 'treat-left' : 'treat-right', durationMs: 6000 },
+  ];
+  const carers = (['eila', 'serena'] as const).map(id => {
+    const duty = id === 'eila' ? eilaDuty : serenaDuty;
+    return {
+      ...NPCS.find(n => n.id === id)!, inside, wander: undefined,
+      facing: duty[0].facing ?? 'down', x: duty[0].x, y: duty[0].y, talkOffset: 0, duty,
+    };
+  });
   return [patient, ...carers];
 }
 

@@ -1735,7 +1735,7 @@ test('세레나는 치유소와 자택에서 간호·물수건 준비를 반복�
       };
       const until = check => { for (let i = 0; i < 1400 && !check(); i++) step(); return check(); };
       const talk = () => {
-        s.player.placeAt(n.spot.x, n.spot.y); s.attackButton.pressed = true; s.updateInteraction(s.now);
+        s.player.placeAt(n.spot.x, n.spot.y); s.attackButton.pressed = true; s.updateInteraction(s.now); if (s.storyChoice.isOpen) s.storyChoice.choose(0);
         const opened = s.dialogue.isOpen, ownPortrait = s.dialogue.lines.some(l => l.portrait === 'serena');
         const before = n.currentStoryAction;
         while (s.dialogue.isOpen) s.dialogue.advance();
@@ -1770,7 +1770,50 @@ test('세레나는 치유소와 자택에서 간호·물수건 준비를 반복�
   }
 });
 
-test('에일라는 병상 치료와 약품 준비를 반복하고, 대화·이동·재접속 뒤에도 올바른 동작을 유지한다', async () => {
+test('여러 사람이 모여 손이 닿으면 이름표를 정리하고 대화 버튼으로 이야기할 사람을 고른다', async () => {
+  await load('village');
+  await evaluate(`(async () => {
+    const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
+    for (const q of QUESTS.filter(q => q.main)) {
+      seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+      if (q.id === 'first-sword') break;
+    }
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+    localStorage.setItem('untitled-rpg.festival', 'seen');
+  })()`);
+  await load('in-linea');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    const linea = s.npcs.find(n => n.def.id === 'linea'), serena = s.npcs.find(n => n.def.id === 'serena');
+    const eila = s.npcs.find(n => n.def.id === 'eila');
+    // 에일라가 치료하러 와서 리네아와 대화하는 자리 곁에 선 순간: 시온은 리네아 쪽에 조금 더 가깝게 선다.
+    eila.placeAt(linea.spot.x + 90, linea.spot.y);
+    s.player.placeAt(linea.spot.x + 30, linea.spot.y); s.updateInteraction(s.now);
+    const labels = { target: linea.nameLabel.style.color, other: eila.nameLabel.alpha, activity: eila.activity.alpha };
+    s.attackButton.pressed = true; s.updateInteraction(s.now);
+    const picking = s.storyChoice.isOpen && s.menuOpen();
+    const names = s.storyChoice.options.filter(b => b.visible).map(b => b.text);
+    s.storyChoice.choose(1);
+    const portrait = s.dialogue.isOpen && s.dialogue.lines[0].portrait;
+    while (s.dialogue.isOpen) s.dialogue.advance();
+    if (s.storyChoice.isOpen) s.storyChoice.cancel();
+    // 한 사람만 닿는 자리에서는 고르지 않고 바로 대화하며, 이름표도 평소대로 돌아온다.
+    s.player.placeAt(s.map.spawn.x, s.map.spawn.y); s.updateInteraction(s.now);
+    const restored = eila.nameLabel.alpha === 1 && eila.activity.alpha === 1;
+    s.player.placeAt(serena.spot.x, serena.spot.y); s.attackButton.pressed = true; s.updateInteraction(s.now);
+    const direct = !s.storyChoice.isOpen && s.dialogue.isOpen;
+    while (s.dialogue.isOpen) s.dialogue.advance();
+    return { labels, picking, names, portrait, restored, direct };
+  })()`);
+  assert.deepEqual(result.labels, { target: '#ffe46b', other: .5, activity: 0 });
+  assert.equal(result.picking, true);
+  assert.deepEqual(result.names, ['리네아', '에일라']);
+  assert.equal(result.portrait, 'eila');
+  assert.equal(result.restored, true);
+  assert.equal(result.direct, true);
+});
+
+test('에일라는 약품 준비와 짧은 병상 치료를 반복하고, 대화·이동·재접속 뒤에도 올바른 동작을 유지한다', async () => {
   await load('village');
   for (const [through, map, treatment] of [['village-raid', 'in-clinic', 'treat-left'], ['first-sword', 'in-linea', 'treat-right']]) {
     await evaluate(`(async () => {
@@ -1793,7 +1836,7 @@ test('에일라는 병상 치료와 약품 준비를 반복하고, 대화·이�
       };
       const until = check => { for (let i = 0; i < 900 && !check(); i++) step(); return check(); };
       const talk = () => {
-        s.player.placeAt(e.spot.x, e.spot.y); s.attackButton.pressed = true; s.updateInteraction(s.now);
+        s.player.placeAt(e.spot.x, e.spot.y); s.attackButton.pressed = true; s.updateInteraction(s.now); if (s.storyChoice.isOpen) s.storyChoice.choose(0);
         const opened = s.dialogue.isOpen, ownPortrait = s.dialogue.lines.some(l => l.portrait === 'eila');
         const before = e.currentStoryAction;
         while (s.dialogue.isOpen) s.dialogue.advance();
@@ -1804,24 +1847,26 @@ test('에일라는 병상 치료와 약품 준비를 반복하고, 대화·이�
         s.player.placeAt(s.map.spawn.x, s.map.spawn.y);
         return { opened, ownPortrait, before, after: e.currentStoryAction, paused };
       };
+      // 약을 준비하다(duty[0]) 병상으로 가서 짧게 치료하고(duty[1]) 다시 준비 자리로 돌아온다.
       const start = e.currentStoryAction;
-      for (let i = 0; i < 40; i++) { frames.add(e.figure.frame.name); step(); }
-      const treatingTalk = talk();
-      const startedWalking = until(() => e.currentStoryAction === undefined);
-      const walkingTalk = talk();
-      const reachedMedicine = until(() => e.currentStoryAction === 'mix-herbs');
       const medicine = { x: e.x, y: e.y, frame: e.figure.frame.name };
       for (let i = 0; i < 12; i++) step();
       const medicineAnimates = medicine.frame !== e.figure.frame.name;
       const medicineTalk = talk();
+      const startedWalking = until(() => e.currentStoryAction === undefined);
+      const walkingTalk = talk();
+      const reachedBed = until(() => e.currentStoryAction === ${JSON.stringify(treatment)});
+      const bed = { x: e.x, y: e.y };
+      for (let i = 0; i < 40; i++) { frames.add(e.figure.frame.name); step(); }
+      const treatingTalk = talk(), flipX = e.figure.flipX;
       const returned = until(() => e.currentStoryAction === start);
-      return { start, frames: [...frames], treatingTalk, walkingTalk, startedWalking, medicineTalk, reachedMedicine, medicineAnimates,
-        returned, blocked, walking: [...walking], atBed: Math.hypot(e.x - e.def.duty[0].x, e.y - e.def.duty[0].y),
-        patientAction: patient.currentStoryAction, flipX: e.figure.flipX,
-        atMedicine: Math.hypot(medicine.x - e.def.duty[1].x, medicine.y - e.def.duty[1].y) };
+      return { start, frames: [...frames], treatingTalk, walkingTalk, startedWalking, medicineTalk, reachedBed, medicineAnimates,
+        returned, blocked, walking: [...walking], atBed: Math.hypot(bed.x - e.def.duty[1].x, bed.y - e.def.duty[1].y),
+        patientAction: patient.currentStoryAction, flipX,
+        atMedicine: Math.hypot(medicine.x - e.def.duty[0].x, medicine.y - e.def.duty[0].y) };
     })()`);
-    assert.equal(result.start, treatment); assert.equal(result.frames.length, 4);
-    assert.equal(result.startedWalking, true); assert.equal(result.reachedMedicine, true); assert.equal(result.medicineAnimates, true); assert.equal(result.returned, true);
+    assert.equal(result.start, 'mix-herbs'); assert.equal(result.frames.length, 4);
+    assert.equal(result.startedWalking, true); assert.equal(result.reachedBed, true); assert.equal(result.medicineAnimates, true); assert.equal(result.returned, true);
     assert.equal(result.blocked, false); assert.ok(result.walking.length > 0); assert.ok(result.atBed < .01); assert.ok(result.atMedicine < .01);
     assert.equal(result.flipX, treatment === 'treat-right');
     for (const talk of [result.treatingTalk, result.walkingTalk, result.medicineTalk]) {
@@ -1829,7 +1874,7 @@ test('에일라는 병상 치료와 약품 준비를 반복하고, 대화·이�
     }
     assert.equal(result.patientAction, map === 'in-clinic' ? 'unconscious' : 'journal');
     await load(map);
-    assert.equal(await evaluate(`window.__game.scene.getScene('game').npcs.find(n => n.def.id === 'eila').currentStoryAction`), treatment);
+    assert.equal(await evaluate(`window.__game.scene.getScene('game').npcs.find(n => n.def.id === 'eila').currentStoryAction`), 'mix-herbs');
   }
 });
 
@@ -1858,6 +1903,7 @@ test('리네아는 구조 후 병상에서 의식을 되찾고 출발 전 집에
       s.player.placeAt(n.spot.x, n.spot.y);
       const reachable = s.walkArea.contains(n.spot.x, n.spot.y);
       s.attackButton.pressed = true; s.updateInteraction(s.now);
+      const picked = s.storyChoice.isOpen; if (picked) s.storyChoice.choose(0);
       const opened = s.dialogue.isOpen;
       const lines = s.dialogue.lines.map(l => ({ speaker: l.speaker, portrait: l.portrait }));
       while (s.dialogue.isOpen) s.dialogue.advance();
@@ -4259,6 +4305,52 @@ test('물안개 나루는 바닥을 1:1로 표시하고 고갯길에서 왕복�
   await reached('east-pass');
 });
 
+test('멈춘 나루: 나루 사람들이 제 그림으로 서고, 에반에게 말을 걸면 다음 단계로, 여관 주인에게는 쉬어 갈 수 있다', async () => {
+  await load('east-pass&companion=none');
+  await evaluate(`(async () => {
+    const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
+    for (const q of QUESTS.filter(q => q.main)) {
+      seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+      if (q.id === 'pass-shelter') break;
+    }
+    seed['still-ferry'] = { status: 'active', count: 0 };
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+    localStorage.removeItem('untitled-rpg.rest');
+  })()`);
+  await load('ferry-village&companion=none');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    const people = s.npcs.map(n => ({ id: n.def.id, texture: n.figure.texture.key }));
+    const talk = id => {
+      const n = s.npcs.find(n => n.def.id === id);
+      s.player.placeAt(n.spot.x, n.spot.y + 10); s.attackButton.pressed = true; s.updateInteraction(s.now);
+      if (s.storyChoice.isOpen && !s.dialogue.isOpen) s.storyChoice.choose(0);
+      const lines = [...s.dialogue.lines];
+      while (s.dialogue.isOpen) s.dialogue.advance();
+      return lines;
+    };
+    const evanMarker = s.npcs.find(n => n.def.id === 'evan').questMarker;
+    const evanLines = talk('evan');
+    const step = s.quests['still-ferry'].step;
+    const innLines = talk('fog-innkeeper');
+    const afterInn = s.quests['still-ferry'].step;
+    // 진행이 아닌 안내 대화 뒤에는 쉬어 갈지 묻는다
+    talk('fog-innkeeper');
+    const restOffered = s.storyChoice.isOpen;
+    if (restOffered) s.storyChoice.accept();
+    return { people, evanMarker, evanSpeaks: evanLines.some(l => l.portrait === 'evan'), step, innSpeaks: innLines.some(l => l.portrait === 'fog-innkeeper'),
+      afterInn, restOffered, rest: localStorage.getItem('untitled-rpg.rest'), fog: s.children.list.filter(o => o.name === 'ferry-river-fog').length };
+  })()`);
+  assert.deepEqual(result.people.map(p => p.id).sort(), ['evan', 'finn', 'fog-innkeeper', 'marta', 'morgan']);
+  for (const p of result.people) assert.notEqual(p.texture, '__MISSING', p.id);
+  assert.equal(result.evanMarker, 'target');
+  assert.equal(result.evanSpeaks, true); assert.equal(result.step, 1);
+  assert.equal(result.innSpeaks, true); assert.equal(result.afterInn, 2);
+  assert.equal(result.restOffered, true);
+  assert.equal(JSON.parse(result.rest).point, 'ferry-inn');
+  assert.ok(result.fog >= 10, '강 위 안개');
+});
+
 test('나루 여관 주인은 전용 SD·잠든 걸음·대화 초상화를 사용하고 대화하면 깨어난다', async () => {
   await load('east-stream&npcs=innkeeper&sleepwalk=1&companion=none');
   const result=await evaluate(`(() => {
@@ -4503,7 +4595,8 @@ test('위아래 회피는 입력을 놓거나 스틱이 조금 흔들려도 직�
 });
 
 test('갈대밭 늪에서 잠복 마물의 물줄기가 조준한 방향으로 나가며 벽과 공격 중단을 반영한다', async () => {
-  await load('east-pass&companion=none');
+  // 갈대밭 늪은 물안개 나루 남서쪽 길에서 들어간다.
+  await load('ferry-village&companion=none');
   assert.equal(await evaluate(`(() => {
     const game = window.__game, scene = game.scene.getScene('game');
     const exit = scene.map.exits.find(exit => exit.to === 'reed-swamp');

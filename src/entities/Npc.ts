@@ -189,6 +189,20 @@ export class Npc extends Phaser.GameObjects.Container {
     this.setDepth(def.y + (this.def.depthOffset ?? 0));
   }
 
+  /**
+   * 여러 사람이 한자리에 모여 시온의 손이 닿을 때 이름표를 정리한다.
+   * 'target'은 대화 버튼이 가리키는 사람(이름을 밝게), 'other'는 함께 모인 사람(흐리게),
+   * 둘 다 하는 일 표시는 잠깐 숨겨 이름표가 겹쳐 쌓이지 않게 한다. 'none'은 평소대로.
+   */
+  setTalkFocus(focus: 'none' | 'target' | 'other'): void {
+    if (this.talkFocus === focus) return;
+    this.talkFocus = focus;
+    this.nameLabel.setColor(focus === 'target' ? '#ffe46b' : this.def.shop ? '#ffe09a' : '#f5ead2')
+      .setAlpha(focus === 'other' ? 0.5 : 1);
+    this.activity.setAlpha(focus === 'none' ? 1 : 0);
+  }
+  private talkFocus: 'none' | 'target' | 'other' = 'none';
+
   setQuestMarker(marker: QuestMarker | undefined): void {
     this.questMarker = marker;
     if (!marker) {

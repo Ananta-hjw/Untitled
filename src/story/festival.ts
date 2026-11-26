@@ -129,7 +129,9 @@ export const FESTIVAL: OpeningStep[] = [
   ] },
   { type: 'emote', who: 'merina', text: '…' },
   { type: 'camera', to: 'hero', ms: 1400 },
-  { type: 'hero', path: [P(1360, 990), P(1240, 1030)] },
+  // 광장의 표지판 위쪽(그림 꼭대기보다 북쪽)으로 돌아 헤르만에게 간다.
+  // 곧장 가면 표지판 받침에 걸리고, 표지판과 오른쪽 잔칫상 사이로 가면 로제타 자리를 가로지른다.
+  { type: 'hero', path: [P(1392, 878), P(1250, 880), P(1240, 1030)] },
   // 헤르만의 건배
   { type: 'face', id: 'herman' },
   { type: 'face', id: 'rosetta', to: 'herman' },
@@ -152,7 +154,8 @@ export const FESTIVAL: OpeningStep[] = [
     line('herman', '헤르만', '허허, 오늘만큼은 봐주게. 일 년 내내 고생했잖나.'),
   ] },
   // 가족과 리네아
-  { type: 'hero', path: [P(1110, 1080), P(1010, 1120)] },
+  // 왼쪽 잔칫상 앞쪽으로 내려와 가족에게 간다(상 뒤로 지나가면 상에 가린다).
+  { type: 'hero', path: [P(1110, 1080), P(1095, 1140), P(1010, 1140)] },
   { type: 'face', id: 'serena' },
   { type: 'face', id: 'sia' },
   { type: 'face', id: 'linea' },
