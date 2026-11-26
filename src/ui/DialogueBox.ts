@@ -6,6 +6,11 @@ import mirelPortrait from '../assets/characters/mirel/dialogue-768.webp?url';
 import bramPortrait from '../assets/characters/bram/dialogue-768.webp?url';
 import bellRingerMotherPortrait from '../assets/characters/bell-ringer-mother/dialogue-768.webp?url';
 import bellRingerPortrait from '../assets/characters/bell-ringer/dialogue-768.webp?url';
+import ferryFisherPortrait from '../assets/characters/ferry-fisher/dialogue-768.webp?url';
+import innkeeperWifePortrait from '../assets/characters/innkeeper-wife/dialogue-768.webp?url';
+import millApprenticePortrait from '../assets/characters/mill-apprentice/dialogue-768.webp?url';
+import fisherDaughterPortrait from '../assets/characters/fisher-daughter/dialogue-768.webp?url';
+import herbalistElderPortrait from '../assets/characters/herbalist-elder/dialogue-768.webp?url';
 import tobyPortrait from '../assets/characters/toby/dialogue-768.webp?url';
 import heroNeutral from '../assets/hero/dialogue/neutral-768.png?url';
 import serenaPortrait from '../assets/characters/serena/dialogue-768.webp?url';
@@ -44,6 +49,11 @@ const PORTRAITS: Record<Portrait, { key: string; url: string }> = {
   'toby': { key: 'portrait-toby', url: tobyPortrait },
   'bell-ringer': { key: 'portrait-bell-ringer', url: bellRingerPortrait },
   'bell-ringer-mother': { key: 'portrait-bell-ringer-mother', url: bellRingerMotherPortrait },
+  'ferry-fisher': { key: 'portrait-ferry-fisher', url: ferryFisherPortrait },
+  'innkeeper-wife': { key: 'portrait-innkeeper-wife', url: innkeeperWifePortrait },
+  'mill-apprentice': { key: 'portrait-mill-apprentice', url: millApprenticePortrait },
+  'fisher-daughter': { key: 'portrait-fisher-daughter', url: fisherDaughterPortrait },
+  'herbalist-elder': { key: 'portrait-herbalist-elder', url: herbalistElderPortrait },
   'bram': { key: 'portrait-bram', url: bramPortrait },
   'mirel': { key: 'portrait-mirel', url: mirelPortrait },
   'kairen': { key: 'portrait-kairen', url: kairenPortrait },

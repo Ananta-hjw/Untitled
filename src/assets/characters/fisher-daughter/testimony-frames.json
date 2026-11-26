@@ -1,0 +1,40 @@
+{
+  "frames": [
+    {
+      "name": "hold-float",
+      "x": 0,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955283
+    },
+    {
+      "name": "fidget-twine",
+      "x": 512,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955283
+    },
+    {
+      "name": "tell-story",
+      "x": 0,
+      "y": 384,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955283
+    },
+    {
+      "name": "lower-gaze",
+      "x": 512,
+      "y": 384,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955283
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "frames": [
+    {
+      "name": "prepare-cup",
+      "x": 0,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955278
+    },
+    {
+      "name": "add-herb",
+      "x": 512,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955278
+    },
+    {
+      "name": "offer-cup",
+      "x": 0,
+      "y": 384,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955278
+    },
+    {
+      "name": "reassuring-nod",
+      "x": 512,
+      "y": 384,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955278
+    }
+  ]
+}

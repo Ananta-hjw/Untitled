@@ -42,4 +42,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 tools/build_bell_ringer_assets.py
 같은 배율과 발 위치로 패키징했으며 손종을 포함한 실루엣·투명 여백을 검사했다.
 NPC·대화 초상화·종 울리기 4자세를 연결했다. `npcs=support` 확인 모드에서 볼 수 있고,
 말을 걸면 종을 멈춘다. 가짜 종 본편 사건은 해당 지역이 구현될 때 배치한다.
-일반 방향별 걷기나 전투 동작은 포함하지 않는다.
+
+## 이동과 발각 장면
+
+- `walk_cardinal.png`은 아래·왼쪽·오른쪽·위, `walk_diagonal.png`은 아래 왼쪽·아래 오른쪽·위 왼쪽·위 오른쪽 순이다. 각 줄에는 대기 1컷과 걷기 3컷이 있다. 게임용 60% WebP와 `walk_frames.json`에 방향별 발 기준점을 담았다. 이동 중에는 양손을 비워 두었다.
+- `caught-source.png`는 발각되어 놀람 → 종을 내림 → 시선을 피함 → 고개를 숙이고 침묵하는 순서다. 기존 손종을 오른손에 든 채 한 번 재생하는 장면이다. `caught.webp`와 `caught-frames.json`은 발 기준점을 맞춘 게임용 사본이다.
