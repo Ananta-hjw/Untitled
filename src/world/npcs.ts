@@ -21,7 +21,7 @@ export type NamedNpcId =
   | 'fern';
 
 export type ChapterTwoNpcId = 'evan' | 'joan' | 'marta' | 'morgan' | 'finn' | 'dor' | 'fog-innkeeper' | 'toby' | 'bell-ringer' | 'bell-ringer-mother'
-  | 'mill-apprentice' | 'fisher-daughter' | 'herbalist-elder';
+  | 'mill-apprentice' | 'fisher-daughter' | 'herbalist-elder' | 'innkeeper-wife' | 'ferry-fisher';
 export type SuccessorNpcId = 'bram' | 'mirel' | 'kairen' | 'velka' | 'razen';
 export type NpcSkin = NamedNpcId | ChapterTwoNpcId | SuccessorNpcId | 'soldier';
 export type NpcId = NamedNpcId | ChapterTwoNpcId | SuccessorNpcId | `guard-${string}` | `companion-${string}`;

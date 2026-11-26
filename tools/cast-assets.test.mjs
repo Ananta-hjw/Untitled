@@ -24,7 +24,7 @@ test('추가 조연과 계승자의 기본 대화는 자기 초상화를 쓰며 
     const lines=DIALOGUES['npc-'+n.id];assert.ok(lines?.some(l=>l.portrait===n.id),n.id);
   }
   const all=previewCastNpcs('all',{x:1820,y:1625});
-  assert.equal(all.length,18);assert.equal(new Set(all.map(n=>n.id)).size,all.length);
+  assert.equal(all.length,20);assert.equal(new Set(all.map(n=>n.id)).size,all.length);
   assert.equal(new Set(all.map(n=>n.x+','+n.y)).size,all.length);
   assert.equal(previewCastNpcs('chapter2',{x:0,y:0}).length,6);
   for(const n of SUCCESSOR_CAST) {

@@ -4630,7 +4630,7 @@ test('미연결 조연: 토비·종 사내·어머니는 전용 외형과 초상
     const clock=t.storyElapsed;t.update(s.now,0,s.player,s.walkArea);const frozen=t.storyElapsed===clock;
     const ring=r.figure.frame.name;r.update(s.now,.26,s.player,s.walkArea);const ringing=r.figure.frame.name!==ring;
     const portraits=[];
-    const witnesses=['fisher-daughter','herbalist-elder','mill-apprentice'].map(id=>s.npcs.find(n=>n.def.id===id));
+    const witnesses=['fisher-daughter','herbalist-elder','mill-apprentice','innkeeper-wife','ferry-fisher'].map(id=>s.npcs.find(n=>n.def.id===id));
     for(const n of [r,m,t,...witnesses]){s.openDialogue(n.spot);portraits.push(s.dialogue.portrait.texture.key);while(s.dialogue.isOpen)s.dialogue.advance();}
     const stopped=r.currentStoryAction===undefined&&['npc-bell-ringer-cardinal','npc-bell-ringer-diagonal'].includes(r.figure.texture.key);
     const paused=t.storyElapsed;t.update(s.now,.3,s.player,s.walkArea);const talkPause=t.storyElapsed===paused;
@@ -4641,9 +4641,9 @@ test('미연결 조연: 토비·종 사내·어머니는 전용 외형과 초상
     return {ids:s.npcs.map(n=>n.def.id).sort(),bellows,frozen,ringing,portraits,stopped,talkPause,resumed,set,cocoon,hero,asleep,idle,normalTalk,
       mother:m.figure.texture.key,motherHeight:m.figure.displayHeight,unsupported:m.setStoryAction('ring'),unknown:r.setStoryAction('toString')};
   })()`);
-  assert.deepEqual(result.ids,['bell-ringer','bell-ringer-mother','fisher-daughter','fog-innkeeper','herbalist-elder','mill-apprentice','toby']);
+  assert.deepEqual(result.ids,['bell-ringer','bell-ringer-mother','ferry-fisher','fisher-daughter','fog-innkeeper','herbalist-elder','innkeeper-wife','mill-apprentice','toby']);
   for(const key of ['bellows','frozen','ringing','stopped','talkPause','resumed','set','asleep'])assert.equal(result[key],true,key);
-  assert.deepEqual(result.portraits,['portrait-bell-ringer','portrait-bell-ringer-mother','portrait-toby','portrait-fisher-daughter','portrait-herbalist-elder','portrait-mill-apprentice']);
+  assert.deepEqual(result.portraits,['portrait-bell-ringer','portrait-bell-ringer-mother','portrait-toby','portrait-fisher-daughter','portrait-herbalist-elder','portrait-mill-apprentice','portrait-innkeeper-wife','portrait-ferry-fisher']);
   assert.equal(result.cocoon,'npc-toby-cocoon');assert.equal(result.hero,'portrait-hero-neutral');assert.equal(result.idle,'npc-toby-idle');assert.equal(result.normalTalk,'npc-toby');
   assert.equal(result.mother,'npc-bell-ringer-mother-idle');assert.equal(result.motherHeight,118);assert.equal(result.unsupported,false);assert.equal(result.unknown,false);
   await load('east-stream&npcs=support&companion=none');
