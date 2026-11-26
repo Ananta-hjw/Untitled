@@ -4,6 +4,7 @@ import perimeter from '../assets/village/rowen/perimeter.webp?url';
 import perimeterFrames from '../assets/village/rowen/perimeter.json';
 import { PERIMETER_TEXTURE, perimeterPieces } from './villagePerimeter';
 import { preloadEastPass } from './eastPassArt';
+import { preloadFerryVillage } from './ferryVillageArt';
 import ground from '../assets/village/ground.webp?url';
 import buildings from '../assets/village/rowen/buildings.webp?url';
 import buildingFrames from '../assets/village/rowen/buildings.json';
@@ -19,6 +20,7 @@ const FONT = 'system-ui, "Noto Sans KR", sans-serif';
 export function preloadVillage(scene: Phaser.Scene, map: GameMap): void {
   preloadMapArt(scene, map);
   if (map.id === 'east-pass') preloadEastPass(scene);
+  if (map.id === 'ferry-village') preloadFerryVillage(scene);
   if (perimeterPieces(map.id).length && !scene.textures.exists(PERIMETER_TEXTURE)) scene.load.image(PERIMETER_TEXTURE, perimeter);
   for (const [key, url] of [['village-ground', ground], ['village-buildings', buildings], ['village-props', props]]) {
     if (!scene.textures.exists(key)) scene.load.image(key, url);
@@ -63,22 +65,26 @@ export function buildMap(scene: Phaser.Scene, map: GameMap): WalkArea {
     const texture = scene.textures.get(p.texture ?? 'village-props');
     const image = scene.add.image(p.x, p.y, texture.key, texture.has(p.frame) ? p.frame : '__BASE').setOrigin(.5, 1).setDepth(p.y).setName(`village-prop-${p.frame}`);
     image.setScale(p.width / image.width);
+    if (p.label) addBuildingLabel(scene, p.x, p.y - image.displayHeight - 4, p.y, p.label);
   }
   for (const b of map.buildings) {
     const image = scene.add.image(b.x, b.y, 'village-buildings', b.frame).setOrigin(.5, 1).setDepth(b.y);
     image.setScale(b.width / image.width);
-    if (b.label) {
-      scene.add.text(b.x, b.y - image.displayHeight - 4, b.label, {
-        fontFamily: FONT, fontSize: '20px', fontStyle: 'bold',
-        color: '#ffe6b5', stroke: '#392416', strokeThickness: 4,
-      }).setOrigin(.5, 0).setDepth(b.y + 1).setResolution(2);
-    }
+    if (b.label) addBuildingLabel(scene, b.x, b.y - image.displayHeight - 4, b.y, b.label);
   }
 
 
   return new WalkArea(mapPolygon(map), mapObstacles(map));
 }
 
+
+/** 건물 이름: 지붕 위 */
+function addBuildingLabel(scene: Phaser.Scene, x: number, top: number, depth: number, label: string): void {
+  scene.add.text(x, top, label, {
+    fontFamily: FONT, fontSize: '20px', fontStyle: 'bold',
+    color: '#ffe6b5', stroke: '#392416', strokeThickness: 4,
+  }).setOrigin(.5, 0).setDepth(depth + 1).setResolution(2);
+}
 
 /** 개울: 걸을 수 있는 영역 위쪽에 물결 띠를 그린다. 그림이 생기면 바꾼다. */
 function drawWater(scene: Phaser.Scene, top: number, bottom: number): void {

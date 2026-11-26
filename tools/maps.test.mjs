@@ -3,6 +3,7 @@ import test from 'node:test';
 import { FIELD_PROPS } from '../src/world/southFieldLayout.ts';
 import { DIALOGUES } from '../src/story/dialogues.ts';
 import { findInteractable } from '../src/world/interactables.ts';
+import { FERRY_BUILDINGS } from '../src/world/ferryVillage.ts';
 import { MAPS, START_MAP, findExit, insideRect, isMapId, mapObstacles, walkable } from '../src/world/maps.ts';
 
 const maps = Object.values(MAPS);
@@ -162,4 +163,17 @@ test('맵을 옮겨 도착한 자리는 들어가기·나가기 지점 밖이고
   }
   const south = MAPS['south-field'].exits.find((e) => e.to === 'village').arrive;
   assert.ok(south.y < VILLAGE_GATES.south.y - 300, '남문 아치(종·들보) 그림 뒤가 아니라 그 안쪽 광장');
+});
+
+test('물안개 나루의 건물은 벽으로 막히고, 입구에서 모든 건물 앞까지 걸어갈 수 있다', () => {
+  const ferry = MAPS['ferry-village'];
+  const points = reachable(ferry, ferry.spawn);
+  const near = (x, y) => points.some(p => Math.hypot(p.x - x, p.y - y) <= 40);
+  for (const b of FERRY_BUILDINGS) {
+    assert.equal(walkable(ferry, b.x, b.y - 20), false, `${b.id} 벽`);
+    assert.ok(near(b.x, b.y + 50), `${b.id} 앞까지 갈 수 있다`);
+    assert.ok(ferry.props.some(p => p.frame === b.id && p.x === b.x && p.y === b.y), `${b.id} 그림`);
+  }
+  // 두 잔교 끝까지 걸어갈 수 있다
+  assert.ok(near(3650, 1045) && near(3650, 2120));
 });

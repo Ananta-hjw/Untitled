@@ -105,13 +105,21 @@ export const LINEA_HOME = BUILDINGS.find((b) => b.frame === 'linea-house')!;
 /** 문 옆의 앞마당. 평상시 대화와 습격 뒤 간호 인물들이 같은 집 앞을 기준으로 선다. */
 export const LINEA_YARD = { x: LINEA_HOME.door.x + mapLength(220), y: LINEA_HOME.door.y };
 
+/** 물안개 나루의 건물·소품 그림 (src/assets/maps/ferry-village/objects/, tools/build_ferry_village_assets.py) */
+export type FerryObjectId = 'inn' | 'marta-smithy' | 'morgan-warehouse' | 'watchtower' | 'evan-cottage' | 'watermill'
+  | 'fisherman-house' | 'herbalist-shop' | 'village-house-a' | 'village-house-b'
+  | 'rowboat' | 'ferry-boat' | 'crates' | 'net-rack' | 'reeds' | 'mooring-post' | 'lamp-post' | 'well';
+
 export interface VillageProp {
-  frame: 'oak' | 'pine' | 'boulders' | 'shrub' | 'rock' | 'flowers' | 'sign' | 'stump' | 'dead-tree' | 'cliff-straight' | 'cliff-corner' | 'stone-shelter';
+  frame: 'oak' | 'pine' | 'boulders' | 'shrub' | 'rock' | 'flowers' | 'sign' | 'stump' | 'dead-tree' | 'cliff-straight' | 'cliff-corner' | 'stone-shelter'
+    | FerryObjectId;
   texture?: string;
   x: number;
   y: number;
   width: number;
   footprint?: { rx: number; ry: number };
+  /** 그림 위에 띄우는 이름(건물 그림을 소품으로 놓을 때, 예: 물안개 나루) */
+  label?: string;
 }
 
 /** 광장(village)의 소품. 수관 전체가 좌우 돌담 안에 들어오도록 둔다. */

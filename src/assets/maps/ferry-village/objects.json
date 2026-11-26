@@ -1,0 +1,200 @@
+{
+  "inn": {
+    "file": "objects/inn.webp",
+    "width": 1024,
+    "height": 724,
+    "sourceCrop": [
+      230,
+      132,
+      1305,
+      892
+    ]
+  },
+  "marta-smithy": {
+    "file": "objects/marta-smithy.webp",
+    "width": 1024,
+    "height": 657,
+    "sourceCrop": [
+      230,
+      167,
+      1305,
+      857
+    ]
+  },
+  "morgan-warehouse": {
+    "file": "objects/morgan-warehouse.webp",
+    "width": 1024,
+    "height": 520,
+    "sourceCrop": [
+      230,
+      239,
+      1305,
+      785
+    ]
+  },
+  "watchtower": {
+    "file": "objects/watchtower.webp",
+    "width": 331,
+    "height": 768,
+    "sourceCrop": [
+      603,
+      128,
+      934,
+      896
+    ]
+  },
+  "evan-cottage": {
+    "file": "objects/evan-cottage.webp",
+    "width": 1024,
+    "height": 646,
+    "sourceCrop": [
+      230,
+      173,
+      1305,
+      851
+    ]
+  },
+  "watermill": {
+    "file": "objects/watermill.webp",
+    "width": 1024,
+    "height": 734,
+    "sourceCrop": [
+      233,
+      129,
+      1303,
+      896
+    ]
+  },
+  "fisherman-house": {
+    "file": "objects/fisherman-house.webp",
+    "width": 1021,
+    "height": 766,
+    "sourceCrop": [
+      257,
+      129,
+      1278,
+      895
+    ]
+  },
+  "herbalist-shop": {
+    "file": "objects/herbalist-shop.webp",
+    "width": 880,
+    "height": 768,
+    "sourceCrop": [
+      328,
+      128,
+      1208,
+      896
+    ]
+  },
+  "village-house-a": {
+    "file": "objects/village-house-a.webp",
+    "width": 926,
+    "height": 766,
+    "sourceCrop": [
+      305,
+      129,
+      1231,
+      895
+    ]
+  },
+  "village-house-b": {
+    "file": "objects/village-house-b.webp",
+    "width": 981,
+    "height": 767,
+    "sourceCrop": [
+      277,
+      129,
+      1258,
+      896
+    ]
+  },
+  "rowboat": {
+    "file": "objects/rowboat.webp",
+    "width": 270,
+    "height": 282,
+    "sourceCrop": [
+      58,
+      81,
+      328,
+      363
+    ]
+  },
+  "ferry-boat": {
+    "file": "objects/ferry-boat.webp",
+    "width": 320,
+    "height": 262,
+    "sourceCrop": [
+      404,
+      83,
+      746,
+      363
+    ]
+  },
+  "crates": {
+    "file": "objects/crates.webp",
+    "width": 320,
+    "height": 245,
+    "sourceCrop": [
+      799,
+      116,
+      1122,
+      363
+    ]
+  },
+  "net-rack": {
+    "file": "objects/net-rack.webp",
+    "width": 320,
+    "height": 259,
+    "sourceCrop": [
+      1183,
+      105,
+      1503,
+      364
+    ]
+  },
+  "reeds": {
+    "file": "objects/reeds.webp",
+    "width": 255,
+    "height": 320,
+    "sourceCrop": [
+      63,
+      425,
+      320,
+      748
+    ]
+  },
+  "mooring-post": {
+    "file": "objects/mooring-post.webp",
+    "width": 135,
+    "height": 263,
+    "sourceCrop": [
+      508,
+      485,
+      643,
+      748
+    ]
+  },
+  "lamp-post": {
+    "file": "objects/lamp-post.webp",
+    "width": 178,
+    "height": 320,
+    "sourceCrop": [
+      868,
+      415,
+      1052,
+      746
+    ]
+  },
+  "well": {
+    "file": "objects/well.webp",
+    "width": 290,
+    "height": 320,
+    "sourceCrop": [
+      1191,
+      410,
+      1497,
+      748
+    ]
+  }
+}
