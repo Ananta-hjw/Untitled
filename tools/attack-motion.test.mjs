@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { swingTrailArc, swingTrailEdge } from '../src/entities/attackMotion.ts';
+import { attackBodyMotion } from '../src/entities/attackBodyMotion.ts';
 import { PLAYER, VERTICAL_SPEED_RATIO } from '../src/config.ts';
-import { attackFacingFor, attackVector, heroFrame, insideAttackLane, insideFrontReach, strikePoseStart } from '../src/entities/heroFrames.ts';
+import { attackFacingFor, attackVector, cardinalPoseFacing, heroFrame, insideAttackLane, insideFrontReach, strikePoseStart } from '../src/entities/heroFrames.ts';
+import { weaponSmearStyle } from '../src/entities/weaponPose.ts';
 
 const EIGHT_DIRS = ['right', 'down-right', 'down', 'down-left', 'left', 'up-left', 'up', 'up-right'];
 const correctionData = JSON.parse(readFileSync(new URL('../src/assets/hero/academy/combo-proto/attack-corrections_frames.json', import.meta.url)));
@@ -16,7 +18,7 @@ const frontSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/
 const downDiagSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-down-diag_frames.json`, import.meta.url))).frames;
 const upDiagSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-up-diag_frames.json`, import.meta.url))).frames;
 
-test('공격은 8방향 모두 그대로 유지하고 정면·앞대각선은 신규 시트를 선택한다', () => {
+test('공격 판정·벡터는 8방향을 유지하고 캐릭터 포즈는 고퀄리티 4방향 6자세로 통일한다', () => {
   for (const facing of EIGHT_DIRS) {
     assert.equal(attackFacingFor(facing, 1), facing);
     const dir = attackVector(facing);
@@ -25,16 +27,19 @@ test('공격은 8방향 모두 그대로 유지하고 정면·앞대각선은 �
     assert.equal(insideAttackLane(x, y, dir, PLAYER.attackLane, VERTICAL_SPEED_RATIO), true, facing);
     assert.equal(insideAttackLane(-x, -y, dir, PLAYER.attackLane, VERTICAL_SPEED_RATIO), false, facing);
   }
+  assert.equal(cardinalPoseFacing('down'), 'down');
+  assert.equal(cardinalPoseFacing('up'), 'up');
+  for (const facing of ['right', 'down-right', 'up-right']) assert.equal(cardinalPoseFacing(facing), 'right');
+  for (const facing of ['left', 'down-left', 'up-left']) assert.equal(cardinalPoseFacing(facing), 'left');
   for (let stage = 0; stage < 3; stage++) {
     const t = PLAYER.combo[stage].hitDelayMs + 20;
-    // 정면은 6자세 원화(attack-front6, attack2-front6, attack3-front6)의 타격 자세(3번)
-    assert.equal(heroFrame(`attack${stage + 1}`, 'down', t), `attack${stage ? stage + 1 : ''}-front6-3`);
-    const diagonalFrame = `attack${stage ? stage + 1 : ''}-down-diag6-3`;
-    assert.equal(heroFrame(`attack${stage + 1}`, 'down-right', t), diagonalFrame);
-    assert.equal(heroFrame(`attack${stage + 1}`, 'down-left', t), diagonalFrame);
-    const upDiagonalFrame = `attack${stage ? stage + 1 : ''}-up-diag6-3`;
-    assert.equal(heroFrame(`attack${stage + 1}`, 'up-right', t), upDiagonalFrame);
-    assert.equal(heroFrame(`attack${stage + 1}`, 'up-left', t), upDiagonalFrame);
+    const prefix = `attack${stage ? stage + 1 : ''}`;
+    // 정면·뒷면은 각 6자세 원화, 좌/우와 대각선 4방향은 옆 6자세 원화의 타격 자세(3번)
+    assert.equal(heroFrame(`attack${stage + 1}`, 'down', t), `${prefix}-front6-3`);
+    assert.equal(heroFrame(`attack${stage + 1}`, 'up', t), `${prefix}-back6-3`);
+    for (const facing of ['right', 'left', 'down-right', 'down-left', 'up-right', 'up-left']) {
+      assert.equal(heroFrame(`attack${stage + 1}`, facing, t), `${prefix}-side6-3`, `${stage} ${facing}`);
+    }
   }
 });
 
@@ -150,14 +155,13 @@ test('검기 시작 시각에 해당 방향의 타격 자세가 처음 표시된
   }
 });
 
-test('앞대각선 1·2·3타는 여섯 자세의 검 방향과 길이를 유지한다', () => {
-  // 칸마다 칼끝이 향하는 화면 시계 방향과, 그 자세가 보이는 시각(타격 뒤 멈춤만큼 늦어진 마지막 자세 포함)
+test('앞대각선 6자세 시트 자산 자체도 검 방향·길이와 주먹 덮개를 유지한다', () => {
   const poses = [
-    { hours: [4.5, 12, 10.5, 4, 4.5, 4.5], at: [0, 40, 110, 200, 250, 440] },
-    { hours: [4, 7.5, 4.5, 2, 12.5, 2.5], at: [0, 25, 65, 105, 170, 340] },
-    { hours: [2.5, 4, 4, 4, 4, 4], at: [0, 40, 100, 170, 245, 450] },
+    { hours: [4.5, 12, 10.5, 4, 4.5, 4.5] },
+    { hours: [4, 7.5, 4.5, 2, 12.5, 2.5] },
+    { hours: [2.5, 4, 4, 4, 4, 4] },
   ];
-  for (const [stage, { hours, at }] of poses.entries()) {
+  for (const [stage, { hours }] of poses.entries()) {
     const frames = downDiagSix(stage + 1);
     assert.equal(frames.length, hours.length);
     for (const [i, frame] of frames.entries()) {
@@ -167,21 +171,17 @@ test('앞대각선 1·2·3타는 여섯 자세의 검 방향과 길이를 유지
       const direction = (hours[i] - 3) * Math.PI / 6;
       assert.ok((dx * Math.cos(direction) + dy * Math.sin(direction)) / Math.hypot(dx, dy) >= Math.cos(Math.PI / 12), frame.name);
       assert.ok(frame.gripCover, `${frame.name} 주먹이 손잡이를 가린다`);
-      for (const facing of ['down-right', 'down-left']) {
-        assert.equal(heroFrame(`attack${stage + 1}`, facing, at[i]), frame.name);
-      }
     }
   }
 });
 
-test('위대각선 1·2·3타는 여섯 자세의 검 방향과 길이를 유지한다', () => {
-  // 칸마다 칼끝이 향하는 화면 시계 방향과, 그 자세가 보이는 시각(타격 뒤 멈춤만큼 늦어진 마지막 자세 포함)
+test('위대각선 6자세 시트 자산 자체도 검 방향·길이와 주먹 덮개를 유지한다', () => {
   const poses = [
-    { hours: [1.5, 12, 7.5, 1.75, 3.5, 4], at: [0, 40, 110, 200, 280, 440] },
-    { hours: [4, 7.5, 5, 2, 12.5, 2.5], at: [0, 25, 65, 105, 170, 340] },
-    { hours: [2.5, 1.5, 1.5, 1.5, 1.5, 1.5], at: [0, 40, 100, 170, 245, 450] },
+    { hours: [1.5, 12, 7.5, 1.75, 3.5, 4] },
+    { hours: [4, 7.5, 5, 2, 12.5, 2.5] },
+    { hours: [2.5, 1.5, 1.5, 1.5, 1.5, 1.5] },
   ];
-  for (const [stage, { hours, at }] of poses.entries()) {
+  for (const [stage, { hours }] of poses.entries()) {
     const frames = upDiagSix(stage + 1);
     assert.equal(frames.length, hours.length);
     for (const [i, frame] of frames.entries()) {
@@ -191,9 +191,6 @@ test('위대각선 1·2·3타는 여섯 자세의 검 방향과 길이를 유지
       const direction = (hours[i] - 3) * Math.PI / 6;
       assert.ok((dx * Math.cos(direction) + dy * Math.sin(direction)) / Math.hypot(dx, dy) >= Math.cos(Math.PI / 12), frame.name);
       assert.ok(frame.gripCover, `${frame.name} 주먹이 손잡이를 가린다`);
-      for (const facing of ['up-right', 'up-left']) {
-        assert.equal(heroFrame(`attack${stage + 1}`, facing, at[i]), frame.name);
-      }
     }
   }
 });
@@ -205,6 +202,43 @@ test('위대각선 콤보는 앞 공격의 끝과 다음 공격의 시작이 같
     const end = upDiagSix(from).at(-1), start = upDiagSix(to)[0];
     relative(end).forEach((v, i) => assert.ok(Math.abs(v - relative(start)[i]) <= 3, `${from}타 끝 → ${to}타 시작 ${i}: ${v} vs ${relative(start)[i]}`));
   }
+});
+
+test('공격 신체 탄성과 고속 스윙 스미어 블렌드: 예비 압축 → 타격 스냅 신장 + 1·2타 검 투명화 → 잔심 안착', () => {
+  for (const stage of [0, 1, 2]) {
+    const strikeAt = strikePoseStart(stage, 'right');
+    const windup = attackBodyMotion(stage, strikeAt * 0.6, 'right');
+    const windupLeft = attackBodyMotion(stage, strikeAt * 0.6, 'left');
+    assert.equal(windupLeft.bodyAngle, -windup.bodyAngle, `stage ${stage} 좌우 대칭`);
+    assert.ok(windup.bodyAngle < 0, `stage ${stage} 예비 동작은 뒤로 젖힌다`);
+    assert.equal(windup.weaponAlpha, 1, `stage ${stage} 예비 구간은 실물 검 유지`);
+
+    const snap = attackBodyMotion(stage, strikeAt + 22, 'right');
+    assert.ok(snap.scaleX > 1.02 && snap.scaleY < 0.99, `stage ${stage} 옆 타격 스냅은 앞으로 신장`);
+    assert.ok(snap.bodyAngle > 0, `stage ${stage} 타격 스냅은 상체를 앞으로 싣는다`);
+    if (stage < 2) {
+      assert.ok(snap.weaponAlpha < 0.65, `stage ${stage} 고속 베기 피크에서 일자 검을 스미어와 블렌드`);
+    } else {
+      assert.equal(snap.weaponAlpha, 1, '3타 찌르기는 실물 칼날을 또렷하게 유지');
+      assert.ok(windup.offsetY > 1 && windup.scaleY < 0.97, '3타 예비는 깊게 웅크린다');
+    }
+
+    const settled = attackBodyMotion(stage, strikeAt + 260, 'right');
+    assert.equal(settled.scaleX, 1);
+    assert.equal(settled.scaleY, 1);
+    assert.equal(settled.weaponAlpha, 1);
+  }
+  const frontSnap = attackBodyMotion(0, strikePoseStart(0, 'down') + 22, 'down');
+  assert.equal(frontSnap.bodyAngle, 0);
+  assert.ok(frontSnap.scaleY > 1.02, '정면 타격 스냅은 세로로 신장');
+});
+
+test('4종 무기는 각기 구분되는 스미어 팔레트와 폭 배율을 가진다', () => {
+  const weapons = ['wooden-sword', 'short-sword', 'long-sword', 'iron-sword'];
+  const outers = new Set(weapons.map(id => weaponSmearStyle(id).outer));
+  assert.equal(outers.size, 4, '4종 무기 스미어 외곽색이 모두 구분된다');
+  assert.ok(weaponSmearStyle('long-sword').widthScale > weaponSmearStyle('short-sword').widthScale);
+  assert.deepEqual(weaponSmearStyle(null), weaponSmearStyle('wooden-sword'));
 });
 
 test('앞대각선 콤보는 앞 공격의 끝과 다음 공격의 시작이 같은 검 위치를 쓴다', () => {

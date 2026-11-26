@@ -257,11 +257,11 @@ export class GameScene extends Phaser.Scene {
   private activePerfectWindowMs = BLOCK.perfectWindowMs;
   /** 연속 정밀 패링 체인(음정 상승·연출 격상) */
   private parryChain: ParryChainState = { count: 0, lastAt: -Infinity };
-  /** 정밀 패링·무량반격 히트스톱 뒤 짧은 여운 슬로우아웃(실제 시간 ms) */
+  /** 정밀 패링·차지 패링 히트스톱 뒤 짧은 여운 슬로우아웃(실제 시간 ms) */
   private parrySlowOutLeft = 0;
   private parrySlowOutScaleVal = BLOCK.slowOutScale;
   private parrySlowOutDur = BLOCK.slowOutMs;
-  /** 차지 패링(무량반격) 홀드 시작 시각, 충전 완료 여부, 릴리즈 발동 창 기한(게임 시계) */
+  /** 차지 패링 홀드 시작 시각, 충전 완료 여부, 릴리즈 발동 창 기한(게임 시계) */
   private chargeHoldStart?: number;
   private chargeParryReady = false;
   private unboundUntil = 0;
@@ -1768,7 +1768,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // 막기는 공격보다 우선한다. 짧게 누르면 2단 패링, 길게 눌러(chargeHoldMs) 충전 후 떼면 무량반격이 발동한다.
+    // 막기는 공격보다 우선한다. 짧게 누르면 2단 패링, 길게 눌러(chargeHoldMs) 충전 후 떼면 차지 패링이 발동한다.
     const blockHeld = !this.opening && ((this.blockButton?.isDown ?? false) || this.blockKeys.some(k => k.isDown));
     this.blockButton?.setEnabled(time >= this.parryReadyAt || this.chargeHoldStart !== undefined);
     if (parryPressed && time >= this.parryReadyAt) {
@@ -2156,12 +2156,12 @@ export class GameScene extends Phaser.Scene {
     if (visualSweep) {
       // 위쪽 3타 찌르기는 원근으로 짧은 칼 위에 빛줄기를 얹어야 보인다(칼은 몸 뒤, 빛줄기는 몸 앞).
       const upThrust = trace.stage === 2 && rig.activeAttackFacing === 'up';
-      const behind = (rig.activeAttackFacing.startsWith('up') && !upThrust) || (trace.stage === 0
-        && (rig.activeAttackFacing === 'left' || rig.activeAttackFacing === 'right'));
+      const behind = (rig.activeAttackFacing === 'up' && !upThrust) || (trace.stage === 0
+        && rig.activeAttackFacing !== 'down' && rig.activeAttackFacing !== 'up');
       const style = attackTrailStyle(trace.stage, trace.counter, this.resonating);
       const thrustReach = upThrust ? UP_THRUST_REACH : trace.counter ? 1.38 : 1;
       trace.effect ??= this.effects.beginAttack(trace.stage, trace.startedAt + strikeAt, trace.startedAt + visualEnd,
-        strikeAt, player.y + (behind ? -4 : 4), thrustReach, style);
+        strikeAt, player.y + (behind ? -4 : 4), thrustReach, style, rig.equippedWeapon);
       // The samples stop at visualEnd, but the visible end must meet the displayed sword on that render.
       this.effects.drawAttack(trace.effect, visualSweep, time, current);
       if ((trace.stage === 2 || trace.counter) && !trace.coneShown) {
@@ -3558,7 +3558,7 @@ export class GameScene extends Phaser.Scene {
       this.impacts.dust(player.x, player.y, 3, now, 30);
       return true;
     }
-    // 0) 차지 패링(무량반격): 충전 후 뗀 판정 창 안에서는 전방위 모든 공격을 압도적으로 파훼한다.
+    // 0) 차지 패링: 충전 후 뗀 판정 창 안에서는 전방위 모든 공격을 압도적으로 파훼한다.
     const sourceX = hit ? player.x - hit.dx : c.x;
     const awayX = sourceX >= player.x ? -1 : 1;
     const awayY = Math.sign(player.y - c.y) * 0.25;
@@ -3737,12 +3737,12 @@ export class GameScene extends Phaser.Scene {
   /**
    * 보스 2페이즈의 부식: 웅덩이 틱(작은 피해와 짧은 둔화, 무적 시간을 주지 않는다)과
    * 부식의 장막(터질 때 범위 안이면 큰 피해와 넉백).
-   * 일반 패링으로는 장막을 막지 못하지만, 회피 무적 또는 차지 패링(무량반격) 릴리즈로 파훼할 수 있다.
+   * 일반 패링으로는 장막을 막지 못하지만, 회피 무적 또는 차지 패링 릴리즈로 파훼할 수 있다.
    */
   private readonly onBossHazard = (enemy: Enemy, kind: 'pool' | 'veil', hit: boolean, dirX: number, dirY: number): void => {
     const player = this.player, now = this.now;
     const veil = kind === 'veil';
-    // 차지 패링(무량반격): 붉은 안광의 부식의 장막 폭발을 정면으로 받아쳐 보스를 대경직시킨다.
+    // 차지 패링: 붉은 안광의 부식의 장막 폭발을 정면으로 받아쳐 보스를 대경직시킨다.
     if (veil && hit && player.alive && !this.dialogue.isOpen && isUnboundActive(now, this.unboundUntil)) {
       const c = enemy.character;
       const awayX = dirX || (c.x >= player.x ? -1 : 1);
@@ -3787,7 +3787,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 차지 패링(무량반격) 파훼 연출과 보상:
+   * 차지 패링 파훼 연출과 보상:
    * 0 피해, 부식의 장막 포함 적 강공격 파훼 + 초대형 경직 + 반사 충격 피해 + 공명 구슬 1칸 통째 충전 + 내상 전량 회복.
    */
   private triggerUnboundCounter(
@@ -3831,7 +3831,7 @@ export class GameScene extends Phaser.Scene {
       this.internalDamage = healed.internal;
     }
 
-    // 보스·적 초대형 경직 + 무량반격 반사 충격파 피해
+    // 보스·적 초대형 경직 + 차지 패링 반사 충격파 피해
     enemy.onUnboundParried(now, BOSS.unboundStunMs, enemyPushX, enemyPushY, BLOCK.enemyKnockback);
     if (c.alive && !enemy.untouchable) {
       const shockDamage = monsterDamageTaken(
@@ -3850,7 +3850,7 @@ export class GameScene extends Phaser.Scene {
     this.counterUntil = now + JUST_DODGE.counterMs;
     this.dodgeReadyAt = Math.max(now, this.dodgeReadyAt - BLOCK.unboundDodgeRefundMs);
     this.questEvent({ type: 'parry' });
-    this.hud.showCallout('무량반격!!', { color: '#fff2a6', stroke: '#5a1408', scale: 1.65 });
+    this.hud.showCallout('차지 패링!!', { color: '#fff2a6', stroke: '#5a1408', scale: 1.65 });
     const [shakeMs, shakeIntensity] = HIT_FEEL.shake.unbound;
     this.cameras.main.shake(shakeMs, shakeIntensity);
     this.triggerCameraZoom(BLOCK.zoomUnboundPeak, BLOCK.zoomInMs, 240);
@@ -3882,7 +3882,7 @@ export class GameScene extends Phaser.Scene {
     if (changed) this.drawHud();
   }
 
-  /** 전용 검 막기 자세, 검날 반사광, 차지 패링(무량반격) 충전 고리를 표시한다. */
+  /** 전용 검 막기 자세, 검날 반사광, 차지 패링 충전 고리를 표시한다. */
   private drawShield(time: number): void {
     const shield = this.shield, player = this.player;
     if (!shield) return;
@@ -3890,7 +3890,15 @@ export class GameScene extends Phaser.Scene {
     const charging = this.chargeHoldStart !== undefined && !player.isAttacking && this.dodgeProgress === 1 && !this.blocking;
     const unboundActive = isUnboundActive(time, this.unboundUntil) && !player.isAttacking;
     const recoilPose = time < this.guardPoseUntil && !player.isAttacking && this.dodgeProgress === 1;
-    if (hero instanceof HeroSprite) hero.setGuarding(this.blocking || charging || unboundActive || recoilPose);
+    if (hero instanceof HeroSprite) {
+      const active = this.blocking || charging || unboundActive || recoilPose;
+      hero.setGuarding(active);
+      if (active) {
+        hero.setGuardMode(
+          unboundActive ? 'unboundRelease' : charging ? (this.chargeParryReady ? 'chargeReady' : 'charging') : 'guard',
+        );
+      }
+    }
     shield.clear();
     const visible = this.blocking || charging || unboundActive;
     shield.setVisible(visible);
@@ -3900,7 +3908,7 @@ export class GameScene extends Phaser.Scene {
     const pulse = 0.75 + 0.25 * Math.sin(time / (this.chargeParryReady || unboundActive ? 55 : 90));
     shield.setDepth(player.y + (hero.guardWeaponBehind ? -0.1 : 1));
 
-    // 차지 패링(무량반격) 충전 진행 원 및 완료 황금-붉은 오라
+    // 차지 패링 충전 진행 원 및 완료 황금-붉은 오라
     if (charging || unboundActive) {
       const progress = unboundActive ? 1 : chargeParryProgress(time - (this.chargeHoldStart ?? time));
       const ready = this.chargeParryReady || unboundActive;
@@ -3923,7 +3931,7 @@ export class GameScene extends Phaser.Scene {
     const at = palm ? ((palm.x - base.x) * dx + (palm.y - base.y) * dy) / (length * length) : 0;
     const gap = 22 * Math.abs(hero.scaleY) / length;
     const segments = palm ? [[0, Math.max(0, at - gap)], [Math.min(1, at + gap), 1]] : [[0, 1]];
-    // 무량반격 준비/발동은 찬란한 금빛, 정밀 패링 구간은 밝은 청백빛, 불완전 막기 꼬리는 따뜻한 주황빛
+    // 차지 패링 준비/발동은 찬란한 금빛, 정밀 패링 구간은 밝은 청백빛, 불완전 막기 꼬리는 따뜻한 주황빛
     const readyGlow = this.chargeParryReady || unboundActive;
     const sheenColor = readyGlow ? 0xffe478 : inPerfect ? 0xeef9ff : 0xffcb8a;
     const sheenScale = readyGlow ? 1.35 : inPerfect ? 1.15 : 0.65;

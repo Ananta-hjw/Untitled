@@ -201,18 +201,18 @@ export function bossParryOutcome(
   return 'normalBreak';
 }
 
-/** 막기 버튼을 길게 누른 시간(heldMs)에 따른 차지 패링(무량반격) 충전 비율(0~1). */
+/** 막기 버튼을 길게 누른 시간(heldMs)에 따른 차지 패링 충전 비율(0~1). */
 export function chargeParryProgress(heldMs: number, chargeHoldMs = BLOCK.chargeHoldMs): number {
   if (heldMs <= 0 || chargeHoldMs <= 0) return 0;
   return Math.min(1, heldMs / chargeHoldMs);
 }
 
-/** 차지 패링(무량반격) 발사 준비가 끝났는지. */
+/** 차지 패링 발사 준비가 끝났는지. */
 export function isChargeParryReady(heldMs: number, chargeHoldMs = BLOCK.chargeHoldMs): boolean {
   return heldMs >= chargeHoldMs;
 }
 
-/** 충전한 막기 버튼을 뗀 직후 무량반격 판정 창 안에 있는지. */
+/** 충전한 막기 버튼을 뗀 직후 차지 패링 판정 창 안에 있는지. */
 export function isUnboundActive(now: number, unboundUntil: number): boolean {
   return now < unboundUntil;
 }

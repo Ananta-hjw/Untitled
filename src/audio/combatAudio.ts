@@ -190,7 +190,7 @@ export class CombatAudio {
     }
   }
 
-  /** 차지 패링(무량반격) 충전 완료 알림: 검날에 기가 응축되는 짧고 맑은 공명음 */
+  /** 차지 패링 충전 완료 알림: 검날에 기가 응축되는 짧고 맑은 공명음 */
   playChargeReady(): void {
     this.vibrate(12);
     const ctx = this.ensureContext();
@@ -200,7 +200,7 @@ export class CombatAudio {
     this.playTone(ctx, now + 0.03, 'triangle', 1320, 1760, 0.18, 0.08);
   }
 
-  /** 차지 패링 버튼을 떼어 무량반격을 전개할 때의 짧은 기류 방출음 */
+  /** 차지 패링 버튼을 떼어 전개할 때의 짧은 기류 방출음 */
   playUnboundRelease(): void {
     const ctx = this.ensureContext();
     if (!ctx) return;
@@ -209,7 +209,7 @@ export class CombatAudio {
     this.playTone(ctx, now, 'sine', 420, 880, 0.09, 0.1);
   }
 
-  /** 차지 패링(무량반격) 파훼 성공: 종소리 공명 + 묵직한 충격파 베이스 + 찬란한 화음 */
+  /** 차지 패링 파훼 성공: 종소리 공명 + 묵직한 충격파 베이스 + 찬란한 화음 */
   playUnboundCounter(): void {
     this.vibrate([20, 26, 46]);
     const ctx = this.ensureContext();

@@ -17,6 +17,25 @@ export function weaponLengthScale(id: WeaponId): number {
   return BLADE_LENGTH_SCALE[id];
 }
 
+export interface WeaponSmearStyle {
+  outer: number;
+  mid: number;
+  core: number;
+  widthScale: number;
+}
+
+/** 4종 무기마다 스윙 스미어·검기의 색감과 두께 개성을 부여한다(B안). */
+const WEAPON_SMEAR: Record<WeaponId, WeaponSmearStyle> = {
+  'wooden-sword': { outer: 0xd9a85b, mid: 0xffe0a3, core: 0xfff8e6, widthScale: 0.96 },
+  'short-sword': { outer: 0x7ac5f0, mid: 0xd8f2ff, core: 0xffffff, widthScale: 0.92 },
+  'long-sword': { outer: 0xb4c7e4, mid: 0xeef5ff, core: 0xffffff, widthScale: 1.16 },
+  'iron-sword': { outer: 0xe8c776, mid: 0xfff2c2, core: 0xffffff, widthScale: 1.1 },
+};
+
+export function weaponSmearStyle(id: WeaponId | null | undefined): WeaponSmearStyle {
+  return id ? WEAPON_SMEAR[id] : WEAPON_SMEAR['wooden-sword'];
+}
+
 // Empty scabbard mouths in the 313.5px cells of the unarmed walk sheet, in row/pose order
 // (measured on the armed sheet, then moved with its poses: UNARMED_WALK_SHIFT in tools/build_hero_frames.py).
 const WALK = [

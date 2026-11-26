@@ -47,9 +47,9 @@ export const PLAYER = {
    *  - lungeStartMs / lungeEndMs: 전진 구간(공격 시작 기준)
    */
   combo: [
-    { intervalMs: 426, followPauseAtMs: 300, followPauseMs: 90, hitDelayMs: 220, damage: 1, knockback: 0.7, lungeDistance: 13, lungeStartMs: 168, lungeEndMs: 265 },
-    { intervalMs: 327, followPauseAtMs: 200, followPauseMs: 90, hitDelayMs: 105, damage: 1.1, knockback: 0.8, lungeDistance: 17, lungeStartMs: 64, lungeEndMs: 186 },
-    { intervalMs: 520, followPauseAtMs: 260, followPauseMs: 120, hitDelayMs: 180, damage: 2, knockback: 1.7, lungeDistance: 46, lungeStartMs: 112, lungeEndMs: 200 },
+    { intervalMs: 345, followPauseAtMs: 225, followPauseMs: 95, hitDelayMs: 145, damage: 1, knockback: 0.7, lungeDistance: 16, lungeStartMs: 100, lungeEndMs: 190 },
+    { intervalMs: 300, followPauseAtMs: 190, followPauseMs: 85, hitDelayMs: 108, damage: 1.15, knockback: 0.85, lungeDistance: 20, lungeStartMs: 70, lungeEndMs: 168 },
+    { intervalMs: 505, followPauseAtMs: 258, followPauseMs: 125, hitDelayMs: 170, damage: 2, knockback: 1.75, lungeDistance: 50, lungeStartMs: 105, lungeEndMs: 195 },
   ],
   /** 이 시간 안에 다음 공격을 이어야 콤보가 유지된다 (이전 공격이 끝난 뒤부터) */
   comboWindowMs: 380,
@@ -173,7 +173,7 @@ export const HIT_FEEL = {
   parryHitStopMs: 95,
   /** 보스 연속 패링 파훼: 마지막 타를 받아냈을 때의 묵직한 정지 */
   chainBreakHitStopMs: 115,
-  /** 차지 패링(무량반격): 붉은 강공격·장막을 파훼하는 최고 등급 정지 */
+  /** 차지 패링: 붉은 강공격·장막을 파훼하는 최고 등급 정지 */
   unboundHitStopMs: 135,
   /** 불완전 막기: 정밀 패링보다 짧고 둔탁한 정지 */
   imperfectGuardHitStopMs: 45,

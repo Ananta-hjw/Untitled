@@ -731,8 +731,8 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
       longestPath = Math.max(longestPath, path.length);
       if (frame !== fx.frame) followThrough = true;
       if (frame === 'attack-side6-4' || frame === 'attack2-side6-4') {
-        // Two filled ribbons, each with an outward and return edge. Measure the visible tip edge.
-        const edge = path.slice(0, path.length / 4);
+        // Three filled smear ribbons, each with an outward and return edge. Measure the visible tip edge.
+        const edge = path.slice(0, path.length / 6);
         lastTip = edge.at(-1);
         let heading;
         for (let i = 1; i < edge.length; i++) {
@@ -907,10 +907,10 @@ test('마지막 대각선과 자동 조준을 사용하고 공격 도중 반대 
     s.startAttack(2000, 0, 0);
     return { before, after, aimed: hero.image.texture.key, direction: s.attackTrace.direction };
   })()`);
-  assert.ok(result.before.frame.startsWith('attack-up-diag6-'));
+  assert.ok(result.before.frame.startsWith('attack-side6-'));
   assert.ok(result.before.scale < 0);
   assert.deepEqual(result.after, result.before);
-  assert.equal(result.aimed, 'hero-academy-attack-down-diag6');
+  assert.equal(result.aimed, 'hero-academy-attack-side6');
   assert.ok(result.direction.x > 0 && result.direction.y > 0);
 });
 
@@ -3736,10 +3736,8 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
       const palm=m.transformPoint(f.supportGrip.x-f.originX*f.w,f.supportGrip.y-f.h);
       const vx=blade.tip.x-blade.base.x,vy=blade.tip.y-blade.base.y;
       const palmDistance=Math.abs((palm.x-blade.base.x)*vy-(palm.y-blade.base.y)*vx)/Math.hypot(vx,vy);
-      const rear=facing==='up-left'||facing==='up-right';
-      const palmVisible=rear
-        ? !h.supportHand.visible&&h.list.indexOf(h.weaponFront)<h.list.indexOf(h.image)&&s.shield.depth<p.depth
-        : h.supportHand.visible&&h.list.indexOf(h.weaponFront)>h.list.indexOf(h.supportHand);
+      // 4방향 막기 통일(A안): 좌·우와 대각선 모두 guard-side 포즈를 좌우 반전해 사용한다.
+      const palmVisible=h.supportHand.visible&&h.list.indexOf(h.weaponFront)>h.list.indexOf(h.supportHand);
       const held=h.isGuarding&&s.shield.visible&&!p.isAttacking&&h.weaponFront.frame.name==='iron-sword-blade';
       h.setWeapon('wooden-sword');const wood=h.weaponFront.frame.name==='wooden-sword-blade';h.setWeapon('iron-sword');
       e.character.revive(p.x+80*p.facing,p.y);e.character.face(-p.facing);p.invulnerableUntil=0;const hp=p.hp;s.onEnemyStrike(e);
@@ -3764,7 +3762,7 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
   })()`);
   for (const run of result.runs) {
     assert.equal(run.texture, 'hero-academy-guard');
-    assert.equal(run.name, `guard-${run.facing.startsWith('up')?'up-back':run.facing.startsWith('down')?'down':'side'}`);
+    assert.equal(run.name, 'guard-side');
     assert.equal(run.mirror, run.facing.includes('left'));
     for (const key of ['raised','slanted','palmVisible','held','wood','restored','protected']) assert.equal(run[key],true,JSON.stringify({key,...run}));
     assert.ok(run.error<.001,JSON.stringify(run));

@@ -1,27 +1,29 @@
 import Phaser from 'phaser';
 import { HeroSprite } from '../entities/HeroSprite';
 import { interpolateSwingBlade, smoothSwingTrail, swingTrailArc, swingTrailEdge } from '../entities/attackMotion';
+import { weaponSmearStyle, type WeaponId } from '../entities/weaponPose';
 import { interpolateBlade, type Blade, type BladeSweep } from './blade';
 import type { TrailStyle } from './attackFeel';
 
 const TRAIL_SAMPLE_MS = 10;
-const ATTACK_FADE_MS = 90;
-const SWING_REVEAL_MS = 60;
-const THRUST_FADE_IN_MS = 45;
+const ATTACK_FADE_MS = 105;
+const SWING_REVEAL_MS = 48;
+const THRUST_FADE_IN_MS = 38;
 const GHOST_FADE_MS = 220;
 
-const TRAIL_PALETTE: Record<TrailStyle, { outer: number; outerAlpha: number; inner: number; innerAlpha: number; widthScale: number }> = {
-  stage1: { outer: 0xd8be94, outerAlpha: 0.34, inner: 0xfff5e2, innerAlpha: 0.68, widthScale: 1 },
-  stage2: { outer: 0xf0ba5e, outerAlpha: 0.4, inner: 0xfff3c8, innerAlpha: 0.74, widthScale: 1.06 },
-  finisher: { outer: 0xff9a40, outerAlpha: 0.46, inner: 0xfff6d4, innerAlpha: 0.88, widthScale: 1.18 },
-  counter: { outer: 0x5ec8ff, outerAlpha: 0.54, inner: 0xecfbff, innerAlpha: 0.94, widthScale: 1.3 },
-  resonance: { outer: 0xffcc38, outerAlpha: 0.48, inner: 0xfff9c8, innerAlpha: 0.88, widthScale: 1.16 },
+const TRAIL_PALETTE: Record<TrailStyle, { outer: number; outerAlpha: number; inner: number; innerAlpha: number; core: number; widthScale: number }> = {
+  stage1: { outer: 0xd8be94, outerAlpha: 0.36, inner: 0xfff2d6, innerAlpha: 0.72, core: 0xffffff, widthScale: 1.04 },
+  stage2: { outer: 0xf0ba5e, outerAlpha: 0.42, inner: 0xfff3c8, innerAlpha: 0.78, core: 0xffffff, widthScale: 1.12 },
+  finisher: { outer: 0xff9a40, outerAlpha: 0.48, inner: 0xfff6d4, innerAlpha: 0.9, core: 0xffffff, widthScale: 1.24 },
+  counter: { outer: 0x5ec8ff, outerAlpha: 0.56, inner: 0xecfbff, innerAlpha: 0.95, core: 0xffffff, widthScale: 1.36 },
+  resonance: { outer: 0xffcc38, outerAlpha: 0.5, inner: 0xfff9c8, innerAlpha: 0.9, core: 0xffffff, widthScale: 1.22 },
 };
 
 export interface AttackEffect {
   graphic: Phaser.GameObjects.Graphics;
   stage: number;
   style: TrailStyle;
+  weapon: WeaponId | null;
   startedAt: number;
   activeUntil: number;
   nextSampleAt: number;
@@ -47,16 +49,17 @@ export class CombatEffects {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
   }
 
-  beginAttack(stage: number, startedAt: number, activeUntil: number, sampleStart: number, depth: number, thrustReach = 1, style?: TrailStyle): AttackEffect {
+  beginAttack(stage: number, startedAt: number, activeUntil: number, sampleStart: number, depth: number, thrustReach = 1, style?: TrailStyle, weapon: WeaponId | null = null): AttackEffect {
     const resolvedStyle: TrailStyle = style ?? (stage >= 2 ? 'finisher' : stage === 1 ? 'stage2' : 'stage1');
     let effect = this.attackPool.find((entry) => !entry.graphic.active);
     if (!effect) {
-      effect = { graphic: this.scene.add.graphics(), stage, style: resolvedStyle, startedAt, activeUntil, nextSampleAt: sampleStart, samples: [], arc: [], thrustReach };
+      effect = { graphic: this.scene.add.graphics(), stage, style: resolvedStyle, weapon, startedAt, activeUntil, nextSampleAt: sampleStart, samples: [], arc: [], thrustReach };
       this.attackPool.push(effect);
     }
     effect.thrustReach = thrustReach;
     effect.stage = stage;
     effect.style = resolvedStyle;
+    effect.weapon = weapon;
     effect.startedAt = startedAt;
     effect.activeUntil = activeUntil;
     effect.nextSampleAt = sampleStart + TRAIL_SAMPLE_MS;
@@ -83,18 +86,37 @@ export class CombatEffects {
 
     effect.graphic.clear().setAlpha(this.alphaOf(effect, time));
     if (effect.stage === 2) {
-      this.renderThrust(effect.graphic, displayed, effect.thrustReach, effect.style);
+      const age = Math.max(0, time - effect.startedAt);
+      this.renderThrust(effect.graphic, displayed, effect.thrustReach, effect.style, effect.weapon, age);
     } else {
       // Keep the bright end on the blade while gradually revealing the path behind it.
       const grow = Math.max(0, Math.min(1, (time - effect.startedAt) / SWING_REVEAL_MS));
-      const firstVisible = (1 - (0.2 + 0.8 * grow)) * (effect.arc.length - 1);
+      const firstVisible = (1 - (0.25 + 0.75 * grow)) * (effect.arc.length - 1);
       const index = Math.floor(firstVisible);
       const tail = interpolateBlade(effect.arc[index], effect.arc[index + 1], firstVisible - index);
-      this.renderSwing(effect.graphic, [tail, ...effect.arc.slice(index + 1), ...effect.samples, displayed], effect.style);
+      this.renderSwing(effect.graphic, [tail, ...effect.arc.slice(index + 1), ...effect.samples, displayed], effect.style, effect.weapon);
     }
   }
 
-  private renderSwing(g: Phaser.GameObjects.Graphics, trail: Blade[], style: TrailStyle): void {
+  private paletteOf(style: TrailStyle, weapon: WeaponId | null) {
+    const base = TRAIL_PALETTE[style];
+    const ws = weaponSmearStyle(weapon);
+    const useWeaponTint = style === 'stage1' || style === 'stage2';
+    return {
+      outer: useWeaponTint ? ws.outer : base.outer,
+      outerAlpha: base.outerAlpha,
+      inner: useWeaponTint ? ws.mid : base.inner,
+      innerAlpha: base.innerAlpha,
+      core: useWeaponTint ? ws.core : base.core,
+      widthScale: base.widthScale * ws.widthScale,
+    };
+  }
+
+  /**
+   * 3단 초승달 스미어 아크(외곽 잔상 → 밝은 칼날 스미어 몸통 → 백색 예리한 날 끝).
+   * 고속 스윙 중 일자 무기 이미지가 반투명해지는 순간 그 자리를 풍성하고 날카로운 호(Arc)로 메운다.
+   */
+  private renderSwing(g: Phaser.GameObjects.Graphics, trail: Blade[], style: TrailStyle, weapon: WeaponId | null): void {
     if (trail.every(({ base, tip }) => base.x === tip.x && base.y === tip.y)) return;
     // Collapse the tiny lunge samples, then round corners between the stepped poses.
     // Keep both ends exact so the moving end still meets the visible blade.
@@ -107,8 +129,12 @@ export class CombatEffects {
     knots.push(last);
     const edge = swingTrailEdge(smoothSwingTrail(knots));
     if (edge.length === 0) return;
-    const p = TRAIL_PALETTE[style];
-    for (const [thickness, color, alpha] of [[0.32 * p.widthScale, p.outer, p.outerAlpha], [0.14 * p.widthScale, p.inner, p.innerAlpha]] as const) {
+    const p = this.paletteOf(style, weapon);
+    for (const [thickness, color, alpha] of [
+      [0.46 * p.widthScale, p.outer, p.outerAlpha],
+      [0.24 * p.widthScale, p.inner, p.innerAlpha],
+      [0.08 * p.widthScale, p.core, 0.92],
+    ] as const) {
       g.fillStyle(color, alpha).beginPath();
       g.moveTo(first.tip.x, first.tip.y);
       for (let i = 1; i < edge.length; i++) g.lineTo(edge[i].tip.x, edge[i].tip.y);
@@ -120,19 +146,44 @@ export class CombatEffects {
     }
   }
 
-  private renderThrust(g: Phaser.GameObjects.Graphics, { base, tip }: Blade, reach = 1, style: TrailStyle = 'finisher'): void {
+  /** 3타 관통 일섬: 3단 직선 광선 + 찌르기 시작점 풍압 링(Shock Collar). */
+  private renderThrust(g: Phaser.GameObjects.Graphics, { base, tip }: Blade, reach = 1, style: TrailStyle = 'finisher', weapon: WeaponId | null = null, age = 0): void {
     if (tip.x === base.x && tip.y === base.y) return;
     const dx = (tip.x - base.x) * reach, dy = (tip.y - base.y) * reach;
+    const len = Math.hypot(dx, dy);
+    if (len < 1) return;
     tip = { x: base.x + dx, y: base.y + dy };
     // 늘인 빛줄기는 길이에 비례해 굵어지지 않게 폭을 되돌린다.
-    const p = TRAIL_PALETTE[style];
+    const p = this.paletteOf(style, weapon);
     const thin = (1 / Math.sqrt(reach)) * p.widthScale;
-    for (const [w, color, alpha] of [[0.12, p.outer, p.outerAlpha], [0.048, p.inner, p.innerAlpha]] as const) {
+    for (const [w, color, alpha, tipExt] of [
+      [0.16, p.outer, p.outerAlpha, 0.08],
+      [0.085, p.inner, p.innerAlpha, 0.11],
+      [0.032, p.core, 0.96, 0.16],
+    ] as const) {
       const width = w * thin;
       g.fillStyle(color, alpha).beginPath().moveTo(base.x, base.y);
-      g.lineTo(base.x + dx * 0.72 - dy * width, base.y + dy * 0.72 + dx * width);
-      g.lineTo(tip.x + dx * 0.08, tip.y + dy * 0.08);
-      g.lineTo(base.x + dx * 0.72 + dy * width, base.y + dy * 0.72 - dx * width).closePath().fillPath();
+      g.lineTo(base.x + dx * 0.68 - dy * width, base.y + dy * 0.68 + dx * width);
+      g.lineTo(tip.x + dx * tipExt, tip.y + dy * tipExt);
+      g.lineTo(base.x + dx * 0.68 + dy * width, base.y + dy * 0.68 - dx * width).closePath().fillPath();
+    }
+    // 찌르기 직후 칼자루 앞쪽으로 수직 타원형 풍압 고리가 번지며 관통감을 강조한다.
+    const ringT = Math.min(1, age / 130);
+    if (ringT < 1) {
+      const ux = dx / len, uy = dy / len;
+      const px = -uy, py = ux;
+      const cx = base.x + dx * (0.28 + 0.22 * ringT), cy = base.y + dy * (0.28 + 0.22 * ringT);
+      const rx = (18 + 26 * ringT) * p.widthScale, ry = (6 + 7 * ringT) * p.widthScale;
+      const ringAlpha = (1 - ringT) * 0.82;
+      g.lineStyle(3.2 * (1 - ringT * 0.5), p.inner, ringAlpha).beginPath();
+      for (let i = 0; i <= 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const ox = px * Math.cos(a) * rx + ux * Math.sin(a) * ry;
+        const oy = py * Math.cos(a) * rx + uy * Math.sin(a) * ry;
+        if (i === 0) g.moveTo(cx + ox, cy + oy);
+        else g.lineTo(cx + ox, cy + oy);
+      }
+      g.closePath().strokePath();
     }
   }
 

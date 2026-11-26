@@ -110,11 +110,11 @@ test('각 콤보의 실제 타격 그림은 명중 구간 안에 표시되고 3�
   assert.equal(ACTION_DURATION.attack3, PLAYER.combo[2].intervalMs);
 });
 
-test('대각선 4방향은 각 콤보에서 전용 타격 그림을 선택한다', () => {
+test('대각선 4방향 공격은 고퀄리티 옆 6자세 타격 그림을 좌우 반전해 사용한다', () => {
   for (const facing of ['down-left', 'down-right', 'up-left', 'up-right']) {
     for (let stage = 0; stage < 3; stage++) {
       const frame = heroFrame(`attack${stage + 1}`, facing, PLAYER.combo[stage].hitDelayMs + 20);
-      const expected = `attack${stage ? stage + 1 : ''}-${facing.startsWith('up') ? 'up' : 'down'}-diag6-3`;
+      const expected = `attack${stage ? stage + 1 : ''}-side6-3`;
       assert.equal(frame, expected);
       assert.ok(allFrames.find((f) => f.name === frame).blade);
     }
@@ -140,7 +140,7 @@ test('각 타격 뒤 여섯 방향의 자세를 잠깐 유지하고 명중 구�
     assert.ok(start > combo.hitDelayMs + PLAYER.hitWindowMs);
     assert.ok(start > combo.lungeEndMs);
     assert.ok(combo.intervalMs >= end);
-    assert.equal(ACTION_DURATION[action], [420, 320, 400][stage] + combo.followPauseMs);
+    assert.equal(ACTION_DURATION[action], [350, 300, 380][stage] + combo.followPauseMs);
     for (const facing of ['left', 'right', 'up-left', 'up-right', 'down-left', 'down-right']) {
       const held = heroFrame(action, facing, start);
       for (let elapsed = start; elapsed < end; elapsed += 5) {
@@ -159,8 +159,9 @@ test('검 막기는 50도 기울인 칼날 중간을 왼손으로 받치고 오�
   assert.equal(guard.frames.length, 5);
   assert.equal(guardFrame('down'), 'guard-front');
   assert.equal(guardFrame('up'), 'guard-back');
-  assert.notEqual(guardFrame('down'), guardFrame('down-right'));
-  assert.notEqual(guardFrame('up'), guardFrame('up-right'));
+  for (const facing of ['left', 'right', 'down-left', 'down-right', 'up-left', 'up-right']) {
+    assert.equal(guardFrame(facing), 'guard-side', `${facing} 막기는 4방향 옆 포즈`);
+  }
   for (const facing of ['left','right','down','up','down-left','down-right','up-left','up-right']) {
     assert.ok(guard.frames.some(f => f.name === guardFrame(facing)));
   }

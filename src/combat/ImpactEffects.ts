@@ -197,7 +197,7 @@ export class ImpactEffects {
    * 나인솔즈 스타일 패링 충돌 연출.
    * - 정밀 패링: 짧은 어두운 임팩트 프레임 위로 눈부신 백금/청백·금빛 십자 별빛, X자 검격 섬광, 이중 충격파와 고속 불꽃.
    * - 연속 파훼('chainBreak'): 보스 연타 마지막 타 파훼 시 금빛-백금 대형 폭발.
-   * - 무량반격('unbound'): 붉은 강공격·장막을 부수는 초대형 암적·금빛 임팩트 프레임과 전방위 충격파.
+   * - 차지 패링('unbound'): 붉은 강공격·장막을 부수는 초대형 암적·금빛 임팩트 프레임과 전방위 충격파.
    * - 불완전 막기: 임팩트 프레임 없이 둔탁한 주황 불꽃과 흙먼지만 튄다.
    */
   parryBurst(
@@ -258,7 +258,7 @@ export class ImpactEffects {
     this.spawn(TEX.flash, now, {
       x, y, life: unbound ? 300 : 220, scale0: 0.85 * boost, scale1: 2.5 * boost, alpha0: 0.52, tint: secondary, depthOverride: popDepth,
     });
-    // X자(무량반격은 4방향) 충돌 빛줄기
+    // X자(차지 패링은 4방향) 충돌 빛줄기
     const tilts = unbound ? [0, Math.PI / 4, Math.PI / 2, (Math.PI * 3) / 4]
       : chainBreak ? [-0.65, 0, 0.65] : [-0.58, 0.58];
     for (const tilt of tilts) {
@@ -272,7 +272,7 @@ export class ImpactEffects {
     this.spawn(TEX.ring, now, { x, y, life: unbound ? 360 : 280, scale0: 0.35, scale1: 2.8 * boost, alpha0: 0.72, tint: secondary, depthOffset: 400 });
     this.spawn(TEX.ring, now, { x, y: groundY, life: unbound ? 380 : 290, scale0: 0.3, scale1: 2.8 * boost, alpha0: 0.88, tint: color, flat: 0.4, depthOffset: -1 });
 
-    // 고속 스파크(정밀 18줄기 / 연속 파훼 24줄기 / 무량반격 30줄기)
+    // 고속 스파크(정밀 18줄기 / 연속 파훼 24줄기 / 차지 패링 30줄기)
     const sparkCount = unbound ? 30 : chainBreak ? 24 : 18;
     for (let i = 0; i < sparkCount; i++) {
       const spread = (!unbound && i < 12) ? base + (Math.random() - 0.5) * 2.1 : Math.random() * Math.PI * 2;
@@ -286,7 +286,7 @@ export class ImpactEffects {
     this.dust(x, groundY, unbound ? 15 : chainBreak ? 12 : 9, now, unbound ? 115 : 80);
   }
 
-  /** 차지 패링(무량반격) 버튼을 뗄 때 주인공 주변으로 퍼지는 짧은 황금 기류 고리 */
+  /** 차지 패링 버튼을 뗄 때 주인공 주변으로 퍼지는 짧은 황금 기류 고리 */
   unboundReleasePulse(x: number, y: number, now: number): void {
     this.spawn(TEX.ring, now, { x, y, life: 220, scale0: 0.35, scale1: 1.85, alpha0: 0.9, tint: 0xffe074, depthOffset: 410 });
     this.spawn(TEX.flash, now, { x, y, life: 140, scale0: 0.35, scale1: 1.15, alpha0: 0.55, tint: 0xfff3b0, depthOffset: 409 });
