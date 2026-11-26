@@ -53,7 +53,7 @@ export class TitleScene extends Phaser.Scene {
       settings: loadSettings(storage), onResume: () => undefined,
       onSettingsChange: settings => { saveSettings(storage, settings); },
       canExit: false, onExit: () => undefined, stressLabel: () => '',
-      onStress: () => undefined, onBag: () => undefined,
+      onStress: () => undefined, onCharacter: () => false,
     });
     this.input.keyboard?.on('keydown-ENTER', () => { if (!this.menu.isOpen) this.start(); });
     this.input.keyboard?.on('keydown-SPACE', () => { if (!this.menu.isOpen) this.start(); });

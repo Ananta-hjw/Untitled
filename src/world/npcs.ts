@@ -7,7 +7,7 @@ import { LINEA_YARD, type VillageArea } from './villageLayout.ts';
  * 로웬 마을 사람들 (docs/story.md 마을 사람들, docs/rowen-village.md 배치).
  *
  * 모두 8방향 걷기 그림(walk_cardinal/walk_diagonal 시트)으로 그린다.
- * 장사를 하는 사람(도란, 메리나, 로제타)은 가게 안(실내 맵)에 서서 시온 쪽을 돌아볼 뿐 걷지 않는다.
+ * 장사를 하는 사람(도란, 메리나, 로제타)은 가게 안(실내 맵)에서 자기 자리를 지키며, 도란은 모루 앞에서 망치질한다.
  * 치유사 에일라는 낮에는 치유소 안에서 지낸다(가게 주인은 아니라 조금씩 오간다).
  * 나머지는 자기 자리 주변을 천천히 돌아다닌다.
  * 페른은 습격 다음 날 도착하므로(docs/story-chapter1.md) 첫날에는 없다.
@@ -52,7 +52,7 @@ export interface NpcDef {
   area?: VillageArea;
   /** 카운터 뒤처럼 바로 다가갈 수 없는 자리면, 말을 거는 자리를 이만큼 앞(아래)으로 옮긴다. */
   talkOffset?: number;
-  /** Bedside interaction can sit beside a stationary patient rather than on the mattress. */
+  /** Horizontal offset from the character to a reachable interaction point. */
   talkOffsetX?: number;
   /** A fixed story pose, restored from the quest-derived NPC definition. */
   storyAction?: string;

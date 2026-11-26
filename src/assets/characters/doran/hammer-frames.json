@@ -1,0 +1,42 @@
+{
+  "fps": 4,
+  "bodyHeight": 294,
+  "frames": [
+    {
+      "name": "ready",
+      "x": 4,
+      "y": 6,
+      "w": 176,
+      "h": 294,
+      "originX": 0.49858,
+      "originY": 1
+    },
+    {
+      "name": "raise",
+      "x": 252,
+      "y": 6,
+      "w": 186,
+      "h": 294,
+      "originX": 0.52681,
+      "originY": 1
+    },
+    {
+      "name": "swing",
+      "x": 4,
+      "y": 310,
+      "w": 218,
+      "h": 294,
+      "originX": 0.595183,
+      "originY": 1
+    },
+    {
+      "name": "strike",
+      "x": 252,
+      "y": 318,
+      "w": 230,
+      "h": 286,
+      "originX": 0.618478,
+      "originY": 1
+    }
+  ]
+}

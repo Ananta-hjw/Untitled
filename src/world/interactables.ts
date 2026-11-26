@@ -9,12 +9,24 @@ import { PROPS } from './villageLayout.ts';
  * 이 파일은 Phaser를 쓰지 않아 tools/dialogue.test.mjs가 직접 불러 검사한다.
  */
 
+/** 문처럼 벽에 바짝 붙거나 좌우로 조금 비켜 서도 편하게 닿아야 하는 사각 문턱 범위 (기준점 상대 오프셋). */
+export interface InteractableReach {
+  /** 좌우 반폭 */
+  rx: number;
+  /** 기준점 위(안쪽·벽 쪽)로 닿는 거리 */
+  up: number;
+  /** 기준점 아래(바깥·앞마당 쪽)로 닿는 거리 */
+  down: number;
+}
+
 export interface Interactable {
   id: string;
   /** 바닥 기준 위치 (발이 닿는 곳) */
   x: number;
   y: number;
   radius: number;
+  /** 지정하면 기본 타원 대신 모서리가 깎이지 않는 비대칭 문턱 범위로 판정한다. */
+  reach?: InteractableReach;
   /** 말풍선을 띄울 높이 (바닥에서 위로) */
   markerHeight: number;
   /** 말을 걸면 나오는 대사 */
@@ -36,9 +48,23 @@ export function findInteractable(x: number, y: number, list: readonly Interactab
   let best: Interactable | undefined;
   let bestDistance = 1;
   for (const item of list) {
-    const nx = (x - item.x) / item.radius;
-    const ny = (y - item.y) / (item.radius * VERTICAL_RATIO);
-    const distance = nx * nx + ny * ny;
+    let distance: number;
+    if (item.reach) {
+      const { rx, up, down } = item.reach;
+      const dx = x - item.x;
+      const dy = y - item.y;
+      if (Math.abs(dx) > rx || dy < -up || dy > down) continue;
+      // 문턱 사각형 안에서는 모서리 사각지대 없이 항상 닿고, 문 중심에 가까울수록 우선권을 갖는다.
+      const midY = (down - up) / 2;
+      const halfH = (up + down) / 2;
+      const nx = Math.abs(dx) / rx;
+      const ny = Math.abs(dy - midY) / halfH;
+      distance = Math.min(1, Math.max(nx, ny) ** 2);
+    } else {
+      const nx = (x - item.x) / item.radius;
+      const ny = (y - item.y) / (item.radius * VERTICAL_RATIO);
+      distance = nx * nx + ny * ny;
+    }
     if (distance <= bestDistance) {
       best = item;
       bestDistance = distance;

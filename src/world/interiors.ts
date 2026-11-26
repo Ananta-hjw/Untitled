@@ -67,7 +67,7 @@ export interface InteriorArtwork {
   furniture: readonly (readonly [FurnitureKind, PixelRect, PixelRect?])[];
   /** 문·창가·계단 등 영구 출입 금지 영역 (원화 픽셀). */
   blocked?: readonly PixelRect[];
-  shop?: { x: number; y: number; talkY: number };
+  shop?: { x: number; y: number; talkX?: number; talkY: number };
 }
 
 export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
@@ -153,8 +153,8 @@ export const INTERIOR_ART: Record<InteriorId, InteriorArtwork> = {
       ['table', [810, 510, 1230, 530], [800, 340, 1235, 535]],
       ['bench', [1240, 510, 1430, 550], [1230, 395, 1440, 555]],
     ],
-    // 도란은 모루 오른쪽 옆에 선다.
-    shop: { x: 455, y: 720, talkY: 720 },
+    // 도란은 모루 오른쪽에서 망치질한다. 대화는 기존 통로 쪽에서 건다.
+    shop: { x: 425, y: 616, talkX: 455, talkY: 720 },
   },
   inn: {
     width: 1536, height: 1024, textureSize: [1599, 1066], floor: [95, 370, 1440, 840], doorX: 720,
@@ -225,11 +225,11 @@ export function interiorArtRect(interior: Interior) {
   return { left: x, top: y, right: x + width, bottom: y + height };
 }
 
-export function interiorShop(id: InteriorId): { x: number; y: number; inside: InteriorId; talkOffset: number } {
+export function interiorShop(id: InteriorId): { x: number; y: number; inside: InteriorId; talkOffsetX: number; talkOffset: number } {
   const interior = INTERIORS.find(i => i.id === id)!, shop = INTERIOR_ART[id].shop!;
   const at = interiorArtPoint(interior, shop.x, shop.y);
-  const talk = interiorArtPoint(interior, shop.x, shop.talkY);
-  return { ...at, inside: id, talkOffset: talk.y - at.y };
+  const talk = interiorArtPoint(interior, shop.talkX ?? shop.x, shop.talkY);
+  return { ...at, inside: id, talkOffsetX: talk.x - at.x, talkOffset: talk.y - at.y };
 }
 
 /** 실내를 월드 좌표에 놓는 곳: 방 가운데 */

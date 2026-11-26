@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { INTERIORS, WALKABLE_FURNITURE, arrivalOf, furnitureAt, furnitureObstacles, interiorFor, roomRect } from '../src/world/interiors.ts';
+import { INTERIORS, WALKABLE_FURNITURE, arrivalOf, doorOf, furnitureAt, furnitureObstacles, interiorFor, roomRect } from '../src/world/interiors.ts';
 import { MAPS, findExit, walkable } from '../src/world/maps.ts';
 import { findInteractable } from '../src/world/interactables.ts';
-import { BUILDINGS } from '../src/world/villageLayout.ts';
+import { BUILDINGS, PLAYER_SPAWN } from '../src/world/villageLayout.ts';
 
 test('남쪽 입구를 뺀 여덟 건물에 실내가 있고, 그 건물이 있는 마을 맵의 문 앞에 "들어가기"가 있다', () => {
   for (const b of BUILDINGS) {
@@ -102,7 +102,7 @@ test('방 크기를 줄여도 침대의 쉬기·치료 자리와 상인 앞은 �
   for(const point of Object.values(REST_POINTS)) assert.ok(walkable(MAPS[point.map],point.at.x,point.at.y),point.id);
   assert.ok(walkable(MAPS['in-clinic'],CLINIC_BED_SPOT.x,CLINIC_BED_SPOT.y));
   for(const id of ['store','inn','smithy','clinic']){
-    const p=interiorShop(id);assert.ok(walkable(MAPS[`in-${id}`],p.x,p.y+p.talkOffset+20),id);
+    const p=interiorShop(id);assert.ok(walkable(MAPS[`in-${id}`],p.x+p.talkOffsetX,p.y+p.talkOffset+20),id);
   }
 });
 
@@ -113,7 +113,7 @@ test('입구에서 상인·침대 앞까지 가구 사이의 바닥으로 이어
     const map=MAPS[`in-${interior.id}`],start=map.spawn,step=12;
     const targets=[];
     if(['store','inn','smithy','clinic'].includes(interior.id)){
-      const p=interiorShop(interior.id);targets.push({x:p.x,y:p.y+p.talkOffset+20});
+      const p=interiorShop(interior.id);targets.push({x:p.x+p.talkOffsetX,y:p.y+p.talkOffset+20});
     }
     if(interior.id==='home')targets.push(REST_POINTS.home.at);
     if(interior.id==='clinic')targets.push(CLINIC_BED_SPOT);
@@ -127,5 +127,39 @@ test('입구에서 상인·침대 앞까지 가구 사이의 바닥으로 이어
       }
     }
     for(const p of targets)assert.ok(queue.some(([x,y])=>Math.hypot(start.x+x*step-p.x,start.y+y*step-p.y)<24),`${interior.id}: 입구에서 접근 가능`);
+  }
+});
+
+test('건물 벽 앞까지 바짝 다가가거나 좌우로 비켜 서도 들어가기가 끊기지 않는다', () => {
+  assert.equal(findInteractable(PLAYER_SPAWN.x, PLAYER_SPAWN.y, MAPS['village-north'].interactables), undefined);
+  for (const b of BUILDINGS) {
+    const interior = interiorFor(b.frame);
+    if (!interior) continue;
+    const map = MAPS[b.area];
+    const wall = b.footprint[0];
+    const wallBottom = wall.y + wall.ry;
+    for (const dx of [-70, 0, 70]) {
+      const hit = findInteractable(b.door.x + dx, wallBottom + 0.5, map.interactables);
+      assert.equal(hit?.id, `door-${interior.id}`, `${b.frame} 벽 앞 dx=${dx}`);
+    }
+    const exitBack = MAPS[`in-${interior.id}`].interactables.find((i) => i.enter).enter.at;
+    assert.equal(findInteractable(exitBack.x, exitBack.y, map.interactables), undefined, `${b.frame} 나온 자리`);
+  }
+});
+
+test('실내 문턱 바닥 끝과 좌우 가장자리까지 바짝 다가가도 나가기가 유지된다', () => {
+  for (const interior of INTERIORS) {
+    const map = MAPS[`in-${interior.id}`];
+    const door = doorOf(interior);
+    const arrival = arrivalOf(interior);
+    let maxWalkY = arrival.y;
+    for (let y = arrival.y; y <= map.bounds.bottom + 100; y += 1) {
+      if (walkable(map, door.x, y)) maxWalkY = y;
+    }
+    for (const dx of [-90, 0, 90]) {
+      const hit = findInteractable(door.x + dx, maxWalkY, map.interactables);
+      assert.equal(hit?.id, `exit-${interior.id}`, `${interior.id} 문턱 끝 dx=${dx}`);
+    }
+    assert.equal(findInteractable(arrival.x, arrival.y, map.interactables), undefined, `${interior.id} 입장 자리`);
   }
 });

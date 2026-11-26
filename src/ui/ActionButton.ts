@@ -38,7 +38,9 @@ export class ActionButton {
   /** 설정의 버튼 크기 배율 */
   private sizeScale = 1;
 
+  private readonly scene: Phaser.Scene;
   private readonly radius: number;
+  private color: number;
   private readonly image: Phaser.GameObjects.Image;
   private readonly icon?: Phaser.GameObjects.Image;
   private readonly text: Phaser.GameObjects.Text;
@@ -50,8 +52,10 @@ export class ActionButton {
   private cooldownSeconds = 0;
 
   constructor(scene: Phaser.Scene, options: ActionButtonOptions) {
+    this.scene = scene;
     this.radius = options.radius ?? 78;
     const color = options.color ?? 0x8a2c2c;
+    this.color = color;
     const key = buttonSkin(scene, this.radius, color);
     this.image = scene.add.image(options.x, options.y, key).setScrollFactor(0).setDepth(DEPTH_UI).setScale(.5).setAlpha(.88);
     if (options.icon) this.icon = scene.add.image(options.x, options.y - this.radius * .2, options.icon.texture, options.icon.frame)
@@ -185,6 +189,13 @@ export class ActionButton {
     if (frame) this.icon?.setTexture(texture, frame);
     this.icon?.setVisible(this.shown && this.iconAssigned);
     this.refresh();
+  }
+
+  /** 주 행동 전환(공격 ↔ 들어가기·나가기·대화)에 맞춰 금속 버튼 바탕 색감을 바꾼다. */
+  setColor(color: number): void {
+    if (this.color === color) return;
+    this.color = color;
+    this.image.setTexture(buttonSkin(this.scene, this.radius, color));
   }
 
   /** 원형 암부가 시계 방향으로 줄어든다. 각도·남은 초가 바뀔 때만 다시 그린다. */
