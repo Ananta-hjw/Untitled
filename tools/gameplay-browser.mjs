@@ -2197,6 +2197,61 @@ test('도마뱀은 준비 중 멈추고 잠근 방향으로 돌진하며 한 번
   assert.equal(r.miss.damage,0);assert.equal(r.miss.y,700);assert.equal(r.interrupted,true);
 });
 
+test('일시정지에서 정보와 가방을 터치로 열고, 다음 가방 페이지를 확인한 뒤 일시정지로 돌아간다', async () => {
+  await load('village-north');
+  const before = await evaluate(`(async () => {
+    const { GEAR_IDS } = await import('/src/items/equipment.ts');
+    const { ITEM_IDS } = await import('/src/items/inventory.ts');
+    const s = window.__game.scene.getScene('game');
+    s.inventory.items = Object.fromEntries(ITEM_IDS.map(id => [id, 1]));
+    s.character.gear.bag = Object.fromEntries(GEAR_IDS.map(id => [id, 1]));
+    s.openPause();
+    return s.now;
+  })()`);
+  const tap = async selector => {
+    const at = await evaluate(`(() => {
+      const g = window.__game, s = g.scene.getScene('game'), box = s.${selector}.getBounds();
+      const canvas = g.canvas.getBoundingClientRect(), size = g.scale.gameSize;
+      return { x: canvas.left + (box.left + 8) * canvas.width / size.width,
+        y: canvas.top + box.centerY * canvas.height / size.height };
+    })()`);
+    for (const type of ['mousePressed', 'mouseReleased']) {
+      await send('Input.dispatchMouseEvent', { type, ...at, button: 'left', clickCount: 1 });
+      await evaluate('window.__game.step(performance.now(), 16)');
+    }
+  };
+  await tap('pauseMenu.characterButton');
+  assert.equal(await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    return s.characterPanel.currentTab === 'status' && s.characterPanel.isOpen && !s.pauseMenu.isOpen;
+  })()`), true);
+  await tap('characterPanel.tabs.equip');
+  await tap('characterPanel.slots[3].hit');
+  assert.equal(await evaluate(`window.__game.scene.getScene('game').characterPanel.selectedSlot`), 'hands');
+  for (const type of ['keyDown', 'keyUp']) {
+    await send('Input.dispatchKeyEvent', { type, key: 'i', code: 'KeyI', windowsVirtualKeyCode: 73 });
+    await evaluate('window.__game.step(performance.now(), 16)');
+  }
+  assert.equal(await evaluate(`window.__game.scene.getScene('game').characterPanel.currentTab`), 'items');
+  await tap('characterPanel.closeButton');
+  await tap('pauseMenu.bagButton');
+  await tap('characterPanel.next');
+  const page = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), panel = s.characterPanel;
+    return { page: panel.pageLabel.text, entries: panel.cells.filter(c => c.shown).length, frozen: s.now === ${before} };
+  })()`);
+  assert.deepEqual(page, { page: '2 / 2', entries: 3, frozen: true });
+  await tap('characterPanel.cellNames[0]');
+  assert.ok(await evaluate(`window.__game.scene.getScene('game').characterPanel.selectedEntry`));
+  await evaluate(`window.__game.scene.getScene('game').onBackButton()`);
+  assert.equal(await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    return s.pauseMenu.isOpen && !s.characterPanel.isOpen;
+  })()`), true);
+  await tap('pauseMenu.resumeButton');
+  assert.equal(await evaluate(`window.__game.scene.getScene('game').pauseMenu.isOpen`), false);
+});
+
 test('새 몬스터도 실제 검날에 맞아 쓰러지고 종류별 경험치를 주며 버섯 물방울은 일시정지 중 멈춘다', async () => {
   await load('south-field');
   const kills=[];

@@ -314,6 +314,7 @@ export class GameScene extends Phaser.Scene {
   /** 레벨·능력치·장비로 계산한 전투 수치. 바뀔 때마다 recomputeStats()로 다시 만든다. */
   private derived: DerivedStats = deriveStats(1, totalStats(newCharacter().alloc));
   private characterPanel?: CharacterPanel;
+  private returnToPause = false;
   private characterButton?: ActionButton;
   private characterKeys: Phaser.Input.Keyboard.Key[] = [];
   private storage?: SaveStorage;
@@ -563,6 +564,7 @@ export class GameScene extends Phaser.Scene {
     this.character = newCharacter();
     this.derived = deriveStats(1, totalStats(this.character.alloc));
     this.characterPanel = undefined;
+    this.returnToPause = false;
     this.characterButton = undefined;
     this.characterKeys = [];
     this.blockButton = undefined;
@@ -733,7 +735,12 @@ export class GameScene extends Phaser.Scene {
       use: (id) => this.onItemAction({ type: 'use', id }),
       buy: (id) => this.tradeGear(id, 'buy'),
       sell: (id) => this.tradeGear(id, 'sell'),
-      close: () => this.onResume(),
+      close: () => {
+        if (this.returnToPause) {
+          this.returnToPause = false;
+          this.openPause();
+        } else this.onResume();
+      },
     });
     // 공명 버튼: 물약 칸 위(자리는 layout). 키 F.
     this.resonanceButton = new ActionButton(this, {
@@ -846,14 +853,16 @@ export class GameScene extends Phaser.Scene {
       if (escape) this.itemPanel.close();
       return;
     }
-    // 캐릭터 창(상태·장비·아이템)도 열려 있으면 게임 시계를 멈춘다. Esc나 같은 키로 닫는다.
-    const characterKey = this.characterKeys.find((key) => Phaser.Input.Keyboard.JustDown(key));
+    // C/I는 정보 탭으로 이동하고, 같은 키나 Esc는 이전 화면으로 돌아간다.
+    const characterKey = this.characterKeys.find(key => Phaser.Input.Keyboard.JustDown(key));
+    const shortcut = characterKey?.keyCode === Phaser.Input.Keyboard.KeyCodes.I ? 'items' : 'status';
     if (this.characterPanel?.isOpen) {
-      if (escape || characterKey) this.characterPanel.close();
+      if (escape) this.characterPanel.close();
+      else if (characterKey) this.characterPanel.shortcut(shortcut);
       return;
     }
     if (this.characterButton?.consumePress()) this.openCharacterPanel('status');
-    else if (characterKey) this.openCharacterPanel(characterKey.keyCode === Phaser.Input.Keyboard.KeyCodes.I ? 'items' : 'status');
+    else if (characterKey) this.openCharacterPanel(shortcut);
     if (this.characterPanel?.isOpen) return;
     // 전체 지도도 열려 있으면 게임 시계를 멈춘다. Esc나 M으로 닫는다.
     let mapKey = false;
@@ -2062,7 +2071,7 @@ export class GameScene extends Phaser.Scene {
       stressLabel: () => `성능 테스트: ${this.stressCount ? `${this.stressCount}명` : '끔'}`,
       // 마을에서 사람 수를 바꿔 다시 시작한다. 끔 → 50 → 100 → 200 → 끔.
       onStress: () => this.scene.restart({ map: 'village', stress: nextStressCount(this.stressCount) }),
-      onBag: () => this.openCharacterPanel('items'),
+      onCharacter: tab => this.openCharacterPanel(tab, false, true),
     });
     this.pauseKeys = this.input.keyboard ? [this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)] : [];
     // 안드로이드 뒤로가기: 바로 앱을 끄지 않고 일시정지 메뉴를 연다 (웹에서는 아무 일도 없다).
@@ -2097,6 +2106,7 @@ export class GameScene extends Phaser.Scene {
     if (this.guideCard?.isOpen) { this.guideCard.close(); return; }
     if (this.quickSlotPanel?.isOpen) { this.quickSlotPanel.close(); return; }
     if (this.storyChoice?.isOpen) { this.storyChoice.cancel(); return; }
+    if (this.characterPanel?.isOpen) { this.characterPanel.close(); return; }
     if (this.pauseMenu.isOpen) this.pauseMenu.back();
     else this.openPause();
   }
@@ -2104,7 +2114,7 @@ export class GameScene extends Phaser.Scene {
   private openPause(): void {
     if (this.opening || this.deathPanel?.isOpen || this.guideCard?.isOpen) return;
     if (this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return;
-    if (!this.pauseMenu || this.pauseMenu.isOpen) return;
+    if (!this.pauseMenu || this.pauseMenu.isOpen || this.characterPanel?.isOpen) return;
     this.pauseButton.setVisible(false);
     this.characterButton?.setVisible(false);
     this.setQuickButtonsVisible(false);
@@ -2902,10 +2912,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 캐릭터 창을 연다. smithy면 도란의 대장간(장비 구매·판매). 대화·메뉴·이동 중에는 열지 않는다. */
-  private openCharacterPanel(tab: CharacterTab, smithy = false): void {
-    if (this.opening) return;
+  private openCharacterPanel(tab: CharacterTab, smithy = false, fromPause = false): boolean {
+    if (this.opening) return false;
     if (!this.characterPanel || this.characterPanel.isOpen || this.traveling || this.pauseMenu.isOpen || this.dialogue.isOpen
-      || this.itemPanel?.isOpen || this.worldMap?.isOpen || this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return;
+      || this.itemPanel?.isOpen || this.worldMap?.isOpen || this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return false;
+    this.returnToPause = fromPause;
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
     this.attackButton.setVisible(false);
@@ -2914,7 +2925,8 @@ export class GameScene extends Phaser.Scene {
     this.characterButton?.setVisible(false);
     this.setQuickButtonsVisible(false);
     if (smithy) this.characterPanel.showSmithy(this.characterView());
-    else this.characterPanel.show(tab, this.characterView());
+    else this.characterPanel.show(tab, this.characterView(), fromPause);
+    return true;
   }
 
   private loadCharacter(): CharacterData {
