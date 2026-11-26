@@ -1,0 +1,40 @@
+{
+  "frames": [
+    {
+      "name": "river-awake",
+      "x": 0,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.899054
+    },
+    {
+      "name": "river-slip",
+      "x": 512,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.899054
+    },
+    {
+      "name": "river-step-back",
+      "x": 0,
+      "y": 384,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.899054
+    },
+    {
+      "name": "river-steady",
+      "x": 512,
+      "y": 384,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.899054
+    }
+  ]
+}

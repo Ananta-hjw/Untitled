@@ -125,12 +125,11 @@ test('2장 여섯 인물은 각자의 스프라이트와 대화 초상화를 쓰
   })()`);
   assert.deepEqual(result.map(n => n.id).sort(), ['dor', 'evan', 'finn', 'joan', 'marta', 'morgan']);
   for (const n of result) {
-    const directional = n.id !== 'dor';
-    assert.equal(n.before, `npc-${n.id}-${directional ? 'cardinal' : 'idle'}`);
-    assert.equal(n.after, directional ? `npc-${n.id}-diagonal` : n.before);
+    assert.equal(n.before, `npc-${n.id}-cardinal`);
+    assert.equal(n.after, `npc-${n.id}-diagonal`);
     assert.equal(n.portrait, `portrait-${n.id}`);
     assert.equal(n.name, n.expectedName);
-    assert.ok(Math.abs(n.height - n.expectedHeight) < (directional ? 4 : 1));
+    assert.ok(Math.abs(n.height - n.expectedHeight) < 4);
     assert.ok(n.footOrigin > .98 && n.footOrigin <= 1);
     assert.equal(n.walkable, true);
   }
@@ -4422,7 +4421,7 @@ test('나루 여관 주인은 전용 SD·잠든 걸음·대화 초상화를 사�
     return {sleeping,texture,poses:poses.size,moved,safe,paused,portrait,awake,idle};
   })()`);
   assert.deepEqual(result,{sleeping:true,texture:'npc-fog-innkeeper-sleepwalk',poses:4,moved:true,safe:true,paused:true,
-    portrait:'portrait-fog-innkeeper',awake:true,idle:'npc-fog-innkeeper-idle'});
+    portrait:'portrait-fog-innkeeper',awake:true,idle:'npc-fog-innkeeper-cardinal'});
 });
 
 test('2장 동쪽 고갯길 퀘스트: 떠날 채비 뒤 고갯길로 가서 딱정벌레 셋을 쫓고 쉼터의 도르를 만난다', async () => {

@@ -99,6 +99,18 @@ MORGAN_MARTA_SCENES = [
 ]
 
 
+INNKEEPER_DOR_SCENES = [
+    ('fog-innkeeper', 'river-wake', [
+        ('river-awake', 324, 598), ('river-slip', 288, 561),
+        ('river-step-back', 290, 591), ('river-steady', 277, 597),
+    ]),
+    ('dor', 'tend-fire', [
+        ('fire-kindling', 242, 561), ('fire-prepare', 242, 561),
+        ('fire-strike', 241, 561), ('fire-shield', 242, 561),
+    ]),
+]
+
+
 def build(folder, stem, columns, rows, tile_size, poses, alpha_threshold=128,
           *, row_edges=None, individual_poses=True):
     directory = ROOT / folder
@@ -165,12 +177,18 @@ def build_morgan_marta_scenes():
         build(f'characters/{character}', stem, 2, 2, (512, 384), poses, individual_poses=False)
 
 
+def build_innkeeper_dor_scenes():
+    for character, stem, poses in INNKEEPER_DOR_SCENES:
+        build(f'characters/{character}', stem, 2, 2, (512, 384), poses, individual_poses=False)
+
+
 def main():
     for args in SETS:
         build(*args)
     build_evan_scenes()
     build_finn_scenes()
     build_morgan_marta_scenes()
+    build_innkeeper_dor_scenes()
     with Image.open(ROOT / 'chapter2/shrine-bell.png') as image:
         bounds = image.getchannel('A').point(lambda a: 255 if a >= 128 else 0).getbbox()
         image = image.crop(bounds)
