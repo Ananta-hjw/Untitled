@@ -65,7 +65,12 @@ import { addMana, inSpinRadius, regenMana } from '../combat/mana';
 import { DUSK_MOTH_LEVEL, levelHint, spawnLevel, xpForKill } from '../combat/monsterLevel';
 import { allocate, deriveStats, mitigate, pointsLeft, totalStats, type DerivedStats, type StatId } from '../entities/attributes';
 import { CHARACTER_SAVE_KEY, newCharacter, parseCharacter, serializeCharacter, type CharacterData } from '../entities/characterData';
-import { GEAR, SLOT_INFO, addGear, buyGear, equip, gearBonus, sellGear, unequip, type GearId, type GearShopId } from '../items/equipment';
+import {
+  GEAR, MAX_RANK, SLOT_INFO, addGear, armorAppearanceRank, buyGear, enhanceSlot, equip, gearBonus,
+  grantSlotRank, promoteSlotWithCost, promotionRecipe, rankLabel, sellGear, unequip, weaponAppearanceLabel,
+  type EnhanceSlotId, type GearId, type GearShopId,
+} from '../items/equipment';
+import { weaponVisualForRank } from '../entities/weaponPose';
 import { CharacterPanel, type CharacterTab, type CharacterView } from '../ui/CharacterPanel';
 import { preloadIcons } from '../ui/icons';
 import { dodgeDistanceRatio, lungeProgress, locomotionRate } from '../entities/movement';
@@ -138,8 +143,8 @@ import { ExitHint } from '../ui/ExitHint';
 import { DoorVisuals } from '../ui/DoorVisuals';
 import { VISITED_SAVE_KEY, parseVisited, regionOf, serializeVisited, type RegionId } from '../world/worldMap';
 import {
-  INVENTORY_SAVE_KEY, ITEMS, USE_COOLDOWN_MS, addGold, addItem, applyDrop, buy, canUse, countOf, parseInventory,
-  sell, serializeInventory, slimeDrop, useConsumable, type Inventory, type ItemId, type ShopId, type UseStatus,
+  INVENTORY_SAVE_KEY, ITEMS, USE_COOLDOWN_MS, addGold, addItem, applyDrop, buy, canUse, countOf, enemyDrop, parseInventory,
+  sell, serializeInventory, useConsumable, type Inventory, type ItemId, type ShopId, type UseStatus,
 } from '../items/inventory';
 import { ProgressEffects } from '../ui/ProgressEffects';
 
@@ -778,8 +783,10 @@ export class GameScene extends Phaser.Scene {
     }, () => this.onResume());
     this.characterPanel = new CharacterPanel(this, {
       allocate: (stat) => this.allocateStat(stat),
+      enhance: (slot) => this.enhanceGearSlot(slot),
+      promote: (slot) => this.promoteGearSlot(slot),
       equip: (id, slot) => this.changeGear(equip(this.character.gear, id, slot), `${GEAR[id].name} 장착`),
-      unequip: (slot) => this.changeGear(unequip(this.character.gear, slot), `${SLOT_INFO[slot].name} 장비 해제`),
+      unequip: (slot) => this.changeGear(unequip(this.character.gear, slot), `${SLOT_INFO[slot].name} 장신구 해제`),
       use: (id) => this.onItemAction({ type: 'use', id }),
       buy: (id) => this.tradeGear(id, 'buy'),
       sell: (id) => this.tradeGear(id, 'sell'),
@@ -1388,7 +1395,10 @@ export class GameScene extends Phaser.Scene {
       shadowWidth: 110,
       maxHp: this.stats.maxHp,
     });
-    if (this.player.sprite instanceof HeroSprite) this.player.sprite.setWeapon(this.character.gear.equipped.weapon);
+    if (this.player.sprite instanceof HeroSprite) {
+      this.player.sprite.setWeapon(weaponVisualForRank(this.character.gear.rank.weapon));
+      this.player.sprite.setArmorRank(armorAppearanceRank(this.character.gear));
+    }
     if (this.carriedHerb) {
       // 맵을 옮겨도 약초 기운은 이어진다.
       this.herb = herbBonus(this.stats.maxHp);
@@ -2633,7 +2643,12 @@ export class GameScene extends Phaser.Scene {
       if (quest?.completed) {
         this.hud.showCallout(`퀘스트 완료: ${quest.completed.title}${quest.next ? ` → ${quest.next.title}` : ''}`);
         this.gainXp(quest.completed.rewardXp, player.x, player.y - 185);
-        this.giveRewards(quest.completed.rewardGold ?? 0, quest.completed.rewardItems ?? [], quest.completed.rewardGear ?? []);
+        this.giveRewards(
+          quest.completed.rewardGold ?? 0,
+          quest.completed.rewardItems ?? [],
+          quest.completed.rewardGear ?? [],
+          quest.completed.rewardPromote ?? [],
+        );
         if (quest.completed.rewardSkill) this.learnSkill(quest.completed.rewardSkill);
         // 종소리의 밤이 끝나면 여관에서 아침을 맞는다.
         if (quest.completed.id === 'night-bell') {
@@ -3242,9 +3257,9 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  /** 몬스터 보상을 바로 줍는다. 점액은 슬라임만 떨어뜨린다. */
+  /** 몬스터 보상을 바로 줍는다. 슬라임은 점액, 권속·나방·늪 마물 등은 승급 재료를 떨어뜨린다. */
   private collectDrop(x: number, y: number, enemy: Enemy): void {
-    const rolled = enemy.kind === 'slime' ? slimeDrop(Math.random) : { gold: Phaser.Math.Between(5, 9), items: [] };
+    const rolled = enemyDrop(enemy.kind, Math.random);
     // 행운(LUK)만큼 골드를 더 줍는다.
     const drop = { ...rolled, gold: Math.round(rolled.gold * this.derived.goldGain) };
     this.inventory = applyDrop(this.inventory, drop);
@@ -3254,17 +3269,41 @@ export class GameScene extends Phaser.Scene {
     this.refreshInventory();
   }
 
-  private giveRewards(gold: number, items: Array<{ id: ItemId; count: number }>, gear: GearId[] = []): void {
-    if (gold === 0 && items.length === 0 && gear.length === 0) return;
+  private giveRewards(
+    gold: number,
+    items: Array<{ id: ItemId; count: number }>,
+    gear: GearId[] = [],
+    promote: Array<{ slot: EnhanceSlotId; targetRank: number }> = [],
+  ): void {
+    if (gold === 0 && items.length === 0 && gear.length === 0 && promote.length === 0) return;
     this.inventory = addGold(this.inventory, gold);
     for (const item of items) this.inventory = addItem(this.inventory, item.id, item.count);
-    if (gear.length) {
-      // 보상 장비는 가방에 들어간다. 장비 창에서 낀다.
-      for (const id of gear) this.character = { ...this.character, gear: addGear(this.character.gear, id) };
-      this.saveCharacter();
+    const promoteLabels: string[] = [];
+    if (promote.length) {
+      let nextGear = this.character.gear;
+      for (const req of promote) {
+        const res = grantSlotRank(nextGear, req.slot, req.targetRank);
+        nextGear = res.gear;
+        const label = req.slot === 'weapon'
+          ? `무기 승급 · ${weaponAppearanceLabel(res.rank)}!`
+          : `${SLOT_INFO[req.slot].name} 승급 · ${rankLabel(res.rank)}!`;
+        promoteLabels.push(label);
+      }
+      this.character = { ...this.character, gear: nextGear };
     }
+    if (gear.length) {
+      // 보상 장신구는 가방에 들어간다. 장비 창에서 장신구 칸에 낀다.
+      for (const id of gear) this.character = { ...this.character, gear: addGear(this.character.gear, id) };
+    }
+    if (promote.length) this.applyCharacterChange();
+    else if (gear.length) this.saveCharacter();
     const player = this.player;
-    const labels = [gold ? `+${gold} G` : '', ...items.map((i) => `${ITEMS[i.id].name} +${i.count}`), ...gear.map((id) => `${GEAR[id].name} 획득`)].filter(Boolean);
+    const labels = [
+      gold ? `+${gold} G` : '',
+      ...items.map((i) => `${ITEMS[i.id].name} +${i.count}`),
+      ...promoteLabels,
+      ...gear.map((id) => `${GEAR[id].name} 획득`),
+    ].filter(Boolean);
     labels.forEach((label, i) => this.progressEffects.showPopup(player.x, player.y - 150 + i * 28, label, i === 0 && gold ? '#ffd23f' : '#a8f0ff'));
     this.saveInventory();
     this.refreshInventory();
@@ -3322,7 +3361,10 @@ export class GameScene extends Phaser.Scene {
     const beforeHp = player?.maxHp ?? 0, beforeMp = this.maxMp;
     this.recomputeStats();
     if (player) {
-      if (player.sprite instanceof HeroSprite) player.sprite.setWeapon(this.character.gear.equipped.weapon);
+      if (player.sprite instanceof HeroSprite) {
+        player.sprite.setWeapon(weaponVisualForRank(this.character.gear.rank.weapon));
+        player.sprite.setArmorRank(armorAppearanceRank(this.character.gear));
+      }
       const max = this.stats.maxHp + this.herb;
       player.setMaxHp(max, false);
       if (max > beforeHp && player.alive) player.hp = Math.min(max, player.hp + (max - beforeHp));
@@ -3355,6 +3397,46 @@ export class GameScene extends Phaser.Scene {
     this.characterPanel?.setStatus(message);
   }
 
+  private enhanceGearSlot(slot: EnhanceSlotId): void {
+    const shop = this.characterPanel?.shop ?? 'doran';
+    const result = enhanceSlot(this.inventory, this.character.gear, slot, shop);
+    if (!result) {
+      this.characterPanel?.setStatus('골드가 부족해 강화할 수 없어요.', true);
+      return;
+    }
+    this.inventory = result.inventory;
+    this.character = { ...this.character, gear: result.gear };
+    this.saveInventory();
+    this.refreshInventory();
+    this.applyCharacterChange();
+    this.characterPanel?.setStatus(`${SLOT_INFO[slot].name} +${result.level} 강화 · −${result.cost} G`);
+  }
+
+  private promoteGearSlot(slot: EnhanceSlotId): void {
+    const shop = this.characterPanel?.shop ?? 'doran';
+    const current = this.character.gear.rank[slot];
+    if (current >= MAX_RANK) {
+      this.characterPanel?.setStatus(`${SLOT_INFO[slot].name} 칸은 이미 최대 승급(${rankLabel(MAX_RANK)})입니다.`, true);
+      return;
+    }
+    const recipe = promotionRecipe(slot, current);
+    const result = promoteSlotWithCost(this.inventory, this.character.gear, slot, shop);
+    if (!result) {
+      const needGold = recipe && this.inventory.gold < recipe.gold;
+      this.characterPanel?.setStatus(needGold ? '승급에 필요한 골드가 부족해요.' : '승급에 필요한 재료가 부족해요.', true);
+      return;
+    }
+    this.inventory = result.inventory;
+    this.character = { ...this.character, gear: result.gear };
+    this.saveInventory();
+    this.refreshInventory();
+    this.applyCharacterChange();
+    const visualNote = result.appearanceChanged
+      ? (slot === 'weapon' ? ` · ${weaponAppearanceLabel(result.rank)} 외형 해금!` : ` · 방어구 4부위 일치 → ${rankLabel(result.armorStage)} 외형 해금!`)
+      : '';
+    this.characterPanel?.setStatus(`${SLOT_INFO[slot].name} ${rankLabel(result.rank)} 승급 · −${result.gold} G${visualNote}`);
+  }
+
   private tradeGear(id: GearId, type: 'buy' | 'sell'): void {
     const result = type === 'buy' ? buyGear(this.inventory, this.character.gear, id, this.characterPanel?.shop ?? 'doran') : sellGear(this.inventory, this.character.gear, id);
     if (!result) {
@@ -3368,7 +3450,7 @@ export class GameScene extends Phaser.Scene {
     this.saveCharacter();
     this.characterPanel?.refresh(this.characterView());
     const def = GEAR[id];
-    this.characterPanel?.setStatus(type === 'buy' ? `${def.name} 구매 · −${def.price} G · 장비 탭에서 낄 수 있어요` : `${def.name} 판매 · +${def.sellPrice} G`);
+    this.characterPanel?.setStatus(type === 'buy' ? `${def.name} 구매 · −${def.price} G · 장비 탭 장신구 칸에 낄 수 있어요` : `${def.name} 판매 · +${def.sellPrice} G`);
   }
 
   private characterView(): CharacterView {
@@ -3435,11 +3517,11 @@ export class GameScene extends Phaser.Scene {
     this.itemPanel?.show(mode, this.inventory, shop, this.shopExtra());
   }
 
-  /** 페른의 수레: 여행 물품(아이템 창)과 여행 장비(장비 상점 창) 가운데 고른다. */
+  /** 페른의 수레: 여행 물품(아이템 창)과 여행 장신구(장신구 상점 창) 가운데 고른다. */
   private openFernShop(): void {
     this.storyChoice?.pick([
       { label: '여행 물품', onPick: () => this.openItemPanel('shop', 'fern') },
-      { label: '여행 장비', onPick: () => { this.openCharacterPanel('items', true, false, 'fern'); } },
+      { label: '여행 장신구', onPick: () => { this.openCharacterPanel('items', true, false, 'fern'); } },
     ], '페른의 수레', '무엇을 볼까요?');
   }
 

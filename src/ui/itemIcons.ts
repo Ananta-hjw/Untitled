@@ -155,6 +155,82 @@ function drawCustomIcon(ctx: CanvasRenderingContext2D, x: number, y: number, id:
     ctx.restore();
     return true;
   }
+  if (id === 'iron-shard') {
+    // 깎인 철광석 결정 조각
+    ctx.fillStyle = '#7c8796';
+    ctx.strokeStyle = '#252c36';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(cx - 8, cy - 38);
+    ctx.lineTo(cx + 28, cy - 16);
+    ctx.lineTo(cx + 34, cy + 20);
+    ctx.lineTo(cx - 4, cy + 36);
+    ctx.lineTo(cx - 34, cy + 12);
+    ctx.lineTo(cx - 28, cy - 22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#bcc7d6';
+    ctx.beginPath();
+    ctx.moveTo(cx - 6, cy - 30);
+    ctx.lineTo(cx + 18, cy - 14);
+    ctx.lineTo(cx - 2, cy + 4);
+    ctx.lineTo(cx - 22, cy - 14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    return true;
+  }
+  if (id === 'bronze-ingot') {
+    // 사다리꼴 청동 주괴
+    ctx.fillStyle = '#b98348';
+    ctx.strokeStyle = '#3f2612';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(cx - 34, cy + 22);
+    ctx.lineTo(cx - 18, cy - 22);
+    ctx.lineTo(cx + 26, cy - 22);
+    ctx.lineTo(cx + 38, cy + 22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#e5b878';
+    ctx.beginPath();
+    ctx.moveTo(cx - 14, cy - 16);
+    ctx.lineTo(cx + 20, cy - 16);
+    ctx.lineTo(cx + 26, cy + 2);
+    ctx.lineTo(cx - 22, cy + 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    return true;
+  }
+  if (id === 'resonance-ore') {
+    // 금청빛으로 울리는 공명 결정 광석
+    const grad = ctx.createRadialGradient(cx, cy - 6, 4, cx, cy, 38);
+    grad.addColorStop(0, '#fff7cf');
+    grad.addColorStop(0.5, '#6ec5e8');
+    grad.addColorStop(1, '#315282');
+    ctx.fillStyle = grad;
+    ctx.strokeStyle = '#1b2b4a';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 40);
+    ctx.lineTo(cx + 28, cy - 6);
+    ctx.lineTo(cx + 16, cy + 34);
+    ctx.lineTo(cx - 18, cy + 34);
+    ctx.lineTo(cx - 28, cy - 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = '#ffe596';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    return true;
+  }
   ctx.restore();
   return false;
 }

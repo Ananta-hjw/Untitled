@@ -1,16 +1,30 @@
 import type { Blade } from '../combat/blade.ts';
-import type { GearId } from '../items/equipment.ts';
+import { clampRank } from '../items/equipment.ts';
 
 const BLADE_LENGTH_SCALE = {
   'wooden-sword': 1,
   'iron-sword': 1,
   'short-sword': 0.82,
   'long-sword': 1.14,
-} as const satisfies Partial<Record<GearId, number>>;
+} as const;
 export type WeaponId = keyof typeof BLADE_LENGTH_SCALE;
 
-export function weaponId(id: GearId | undefined): WeaponId | null {
+export function weaponId(id: string | undefined): WeaponId | null {
   return id && Object.hasOwn(BLADE_LENGTH_SCALE, id) ? id as WeaponId : null;
+}
+
+/**
+ * 무기 칸 승급 단계(rank)에 대응하는 인게임 검 외형 ID.
+ * 강화(+N)로는 외형이 바뀌지 않고 오직 승급 단계에 의해서만 바뀐다.
+ * - 기본(0): 나무검
+ * - 1단계 진화(1): 도란의 검 (철검 외형)
+ * - 2~5단계 진화(2~5): 임시 장검 외형 (세부 외형은 추후 확정 시 단계별 교체)
+ */
+export function weaponVisualForRank(rank: number): WeaponId {
+  const r = clampRank(rank);
+  if (r <= 0) return 'wooden-sword';
+  if (r === 1) return 'iron-sword';
+  return 'long-sword';
 }
 
 export function weaponLengthScale(id: WeaponId): number {

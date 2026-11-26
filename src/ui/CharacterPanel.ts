@@ -2,16 +2,20 @@ import type Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 import { STAT_IDS, STAT_INFO, statGain, type DerivedStats, type StatBlock, type StatId } from '../entities/attributes';
 import {
-  GEAR, GEAR_IDS, SLOT_IDS, SLOT_INFO, fits, gearCount, gearForSale, type Gear, type GearId, type GearShopId, type SlotId,
+  ENHANCE_SLOT_IDS, GEAR, GEAR_IDS, MAX_RANK, SLOT_IDS, SLOT_INFO,
+  armorAppearanceLabel, armorAppearanceRank, armorPromotionStatus, canAffordPromotion, canSmithyWork,
+  enhanceCost, fits, gearCount, gearForSale, isEnhanceSlot, promotionRecipe, rankLabel,
+  slotDisplayName, slotIconId, slotStats, weaponAppearanceLabel,
+  type AccessorySlotId, type EnhanceSlotId, type Gear, type GearId, type GearShopId, type SlotId,
 } from '../items/equipment';
 import { ITEMS, ITEM_IDS, canUse, countOf, itemEffectText, type Inventory, type ItemId } from '../items/inventory';
 import { IconView, type IconFallback } from './icons';
 import { MENU_COLOR, drawMenuCard, drawMenuFrame, menuButton, menuText, placeMenuButton } from './menuSkin';
 
 /**
- * 캐릭터 창: 상태(능력치 분배) · 장비(일곱 칸) · 아이템(가방) 탭.
- * 도란의 대장간에서는 같은 창을 장비 상점(구매·판매)으로 쓴다.
- * 창은 보여 주기만 하고, 실제 변경은 장면(GameScene)이 콜백을 받아 한 뒤 refresh()로 다시 그린다.
+ * 캐릭터 창: 상태(능력치 분배) · 장비(5개 기본 칸 + 장신구 2칸) · 아이템(가방) 탭.
+ * 대장간(도란·마르타)에서는 같은 창에 [강화](골드 전용·상한 없음)와 [승급](골드+재료·외형 진화),
+ * 장신구 거래 탭을 함께 띄운다. 페른의 수레는 장신구 구매·판매 전용.
  * 열린 동안 게임은 멈춘다.
  */
 
@@ -22,7 +26,7 @@ const CELL_STEP = CELL + 10;
 const GRID_CELLS = GRID_COLUMNS * 3;
 
 export type CharacterTab = 'status' | 'equip' | 'items';
-export type ShopTab = 'buy' | 'sell';
+export type ShopTab = 'enhance' | 'promote' | 'buy' | 'sell';
 
 export interface CharacterView {
   name: string;
@@ -42,6 +46,8 @@ export interface CharacterView {
 
 export interface CharacterActions {
   allocate(stat: StatId): void;
+  enhance(slot: EnhanceSlotId): void;
+  promote(slot: EnhanceSlotId): void;
   equip(id: GearId, slot: SlotId): void;
   unequip(slot: SlotId): void;
   use(id: ItemId): void;
@@ -63,11 +69,11 @@ export function itemFallback(entry: Entry): IconFallback {
 }
 
 function statsText(stats: Partial<StatBlock>): string {
-  return (Object.entries(stats) as [StatId, number][]).map(([id, v]) => `${STAT_INFO[id].short} +${v}`).join('  ');
+  return (Object.entries(stats) as [StatId, number][]).filter(([, v]) => v > 0).map(([id, v]) => `${STAT_INFO[id].short} +${v}`).join('  ');
 }
 
-/** 장비 상점 창의 제목 */
-const GEAR_SHOP_TITLE: Record<GearShopId, string> = { doran: '도란의 대장간', fern: '페른의 수레 · 여행 장비', marta: '마르타의 대장간' };
+/** 대장간·상점 창의 제목 */
+const GEAR_SHOP_TITLE: Record<GearShopId, string> = { doran: '도란의 대장간', fern: '페른의 수레 · 여행 장신구', marta: '마르타의 대장간' };
 
 export class CharacterPanel {
   private readonly scene: Phaser.Scene;
@@ -85,7 +91,7 @@ export class CharacterPanel {
   private readonly statRows: { icon: IconView; name: Phaser.GameObjects.Text; value: Phaser.GameObjects.Text; gain: Phaser.GameObjects.Text; plus: Phaser.GameObjects.Text }[] = [];
   private readonly summaryTitle: Phaser.GameObjects.Text;
   private readonly metrics: { label: Phaser.GameObjects.Text; value: Phaser.GameObjects.Text }[] = [];
-  // 장비 탭
+  // 장비·강화·승급 칸 (일곱 칸: 0~4는 기본 칸, 5~6은 장신구 칸)
   private readonly slots: { icon: IconView; label: Phaser.GameObjects.Text; hit: Phaser.GameObjects.Zone }[] = [];
   // 가방·상점 격자와 설명
   private readonly cells: IconView[] = [];
@@ -102,10 +108,10 @@ export class CharacterPanel {
 
   private open = false;
   private mode: 'character' | 'smithy' = 'character';
-  /** 장비 상점 모드에서 지금 연 상점 (도란·페른·마르타) */
+  /** 대장간·상점 모드에서 지금 연 상점 (도란·페른·마르타) */
   private gearShop: GearShopId = 'doran';
   private tab: CharacterTab = 'status';
-  private shopTab: ShopTab = 'buy';
+  private shopTab: ShopTab = 'enhance';
   private view?: CharacterView;
   private entries: Entry[] = [];
   private selectedEntry?: Entry;
@@ -129,7 +135,9 @@ export class CharacterPanel {
       items: this.button('아이템', () => this.switchTab('items')),
     };
     this.shopTabs = {
-      buy: this.button('구매', () => this.switchShopTab('buy')),
+      enhance: this.button('강화', () => this.switchShopTab('enhance')),
+      promote: this.button('승급', () => this.switchShopTab('promote')),
+      buy: this.button('장신구', () => this.switchShopTab('buy')),
       sell: this.button('판매', () => this.switchShopTab('sell')),
     };
 
@@ -179,6 +187,7 @@ export class CharacterPanel {
 
   get isOpen(): boolean { return this.open; }
   get currentTab(): CharacterTab { return this.tab; }
+  get currentShopTab(): ShopTab { return this.shopTab; }
 
   shortcut(tab: CharacterTab): void {
     if (this.mode === 'smithy' || tab === this.tab) this.close();
@@ -193,15 +202,15 @@ export class CharacterPanel {
     this.openWith(view);
   }
 
-  /** 지금 연 장비 상점 */
+  /** 지금 연 대장간·장신구 상점 */
   get shop(): GearShopId { return this.gearShop; }
 
-  /** 장비 상점(도란의 대장간·페른의 수레·마르타의 대장간): 장비를 사고판다. */
+  /** 대장간·장신구 상점: 도란·마르타는 강화가 기본 탭(승급 탭 별도), 페른은 장신구 구매가 기본 탭이다. */
   showSmithy(view: CharacterView, shop: GearShopId = 'doran'): void {
     this.mode = 'smithy';
     this.gearShop = shop;
     this.closeButton.setText('닫기');
-    this.shopTab = 'buy';
+    this.shopTab = canSmithyWork(shop) ? 'enhance' : 'buy';
     this.openWith(view);
   }
 
@@ -221,7 +230,6 @@ export class CharacterPanel {
     this.view = view;
     if (!this.open) return;
     this.entries = this.collectEntries(view);
-    // 선택한 것이 사라졌으면(다 쓰거나 끼었으면) 선택을 푼다.
     const kept = this.selectedEntry && this.entries.find((e) => e.type === this.selectedEntry!.type && e.id === this.selectedEntry!.id);
     this.selectedEntry = kept;
     this.page = kept ? Math.floor(this.entries.indexOf(kept) / this.pageSize) : Math.min(this.page, this.pageCount - 1);
@@ -257,8 +265,10 @@ export class CharacterPanel {
 
   private switchShopTab(tab: ShopTab): void {
     if (!this.open || this.mode !== 'smithy' || tab === this.shopTab) return;
+    if ((tab === 'enhance' || tab === 'promote') && !canSmithyWork(this.gearShop)) return;
     this.shopTab = tab;
     this.selectedEntry = undefined;
+    if ((tab === 'enhance' || tab === 'promote') && !isEnhanceSlot(this.selectedSlot)) this.selectedSlot = 'weapon';
     this.page = 0;
     this.setStatus('');
     if (this.view) this.refresh(this.view);
@@ -299,11 +309,13 @@ export class CharacterPanel {
     const gearEntries = (ids: GearId[], counts: (id: GearId) => number) =>
       ids.map((id): Entry => ({ type: 'gear', id, count: counts(id) }));
     if (this.mode === 'smithy') {
+      if (this.shopTab === 'enhance' || this.shopTab === 'promote') return [];
       return this.shopTab === 'buy'
         ? gearEntries(gearForSale(this.gearShop), (id) => gearCount(view.gear, id))
         : gearEntries(GEAR_IDS.filter((id) => gearCount(view.gear, id) > 0 && GEAR[id].sellPrice > 0), (id) => gearCount(view.gear, id));
     }
     if (this.tab === 'equip') {
+      if (isEnhanceSlot(this.selectedSlot)) return [];
       return gearEntries(GEAR_IDS.filter((id) => gearCount(view.gear, id) > 0 && fits(id, this.selectedSlot)), (id) => gearCount(view.gear, id));
     }
     const items = ITEM_IDS.filter((id) => countOf(view.inventory, id) > 0)
@@ -317,22 +329,32 @@ export class CharacterPanel {
     const entry = this.selectedEntry, view = this.view;
     if (!view) return;
     if (this.mode === 'smithy') {
+      if (this.shopTab === 'enhance') {
+        const slot: EnhanceSlotId = isEnhanceSlot(this.selectedSlot) ? this.selectedSlot : 'weapon';
+        this.actions.enhance(slot);
+        return;
+      }
+      if (this.shopTab === 'promote') {
+        const slot: EnhanceSlotId = isEnhanceSlot(this.selectedSlot) ? this.selectedSlot : 'weapon';
+        this.actions.promote(slot);
+        return;
+      }
       if (entry?.type === 'gear') (this.shopTab === 'buy' ? this.actions.buy : this.actions.sell)(entry.id);
       return;
     }
     if (entry?.type === 'item') this.actions.use(entry.id);
-    else if (entry?.type === 'gear') this.actions.equip(entry.id, this.tab === 'equip' ? this.selectedSlot : this.slotForEntry(entry.id, view.gear));
-    else if (this.tab === 'equip' && view.gear.equipped[this.selectedSlot]) this.actions.unequip(this.selectedSlot);
+    else if (entry?.type === 'gear') this.actions.equip(entry.id, this.tab === 'equip' && !isEnhanceSlot(this.selectedSlot) ? this.selectedSlot : this.slotForEntry(view.gear));
+    else if (this.tab === 'equip' && !isEnhanceSlot(this.selectedSlot) && view.gear.equipped[this.selectedSlot]) this.actions.unequip(this.selectedSlot);
   }
 
   private secondary(): void {
     const view = this.view;
-    if (view && this.mode === 'character' && this.tab === 'equip' && view.gear.equipped[this.selectedSlot]) this.actions.unequip(this.selectedSlot);
+    if (view && this.mode === 'character' && this.tab === 'equip' && !isEnhanceSlot(this.selectedSlot) && view.gear.equipped[this.selectedSlot]) {
+      this.actions.unequip(this.selectedSlot);
+    }
   }
 
-  private slotForEntry(id: GearId, gear: Gear): SlotId {
-    const kind = GEAR[id].kind;
-    if (kind !== 'accessory') return kind;
+  private slotForEntry(gear: Gear): AccessorySlotId {
     return !gear.equipped.accessory1 ? 'accessory1' : !gear.equipped.accessory2 ? 'accessory2' : 'accessory1';
   }
 
@@ -358,9 +380,16 @@ export class CharacterPanel {
     const navY = top + 107;
     const contentY = top + 149;
     if (this.mode === 'smithy') {
-      (['buy', 'sell'] as const).forEach((tab, i) => placeMenuButton(g, this.shopTabs[tab], x + 62 + i * 134,
-        navY, 124, 46, this.shopTab === tab ? 'selected' : 'quiet'));
-      this.renderInventory(view, x, right, contentY);
+      const smithy = canSmithyWork(this.gearShop);
+      this.shopTabs.buy.setText(smithy ? '장신구' : '구매');
+      const visibleTabs: readonly ShopTab[] = smithy ? ['enhance', 'promote', 'buy', 'sell'] : ['buy', 'sell'];
+      const tabW = smithy ? 114 : 124;
+      const tabStep = tabW + 10;
+      visibleTabs.forEach((tab, i) => placeMenuButton(g, this.shopTabs[tab], x + tabW / 2 + i * tabStep,
+        navY, tabW, 46, this.shopTab === tab ? 'selected' : 'quiet'));
+      if (this.shopTab === 'enhance') this.renderSmithySlots(view, x, right, contentY, 'enhance');
+      else if (this.shopTab === 'promote') this.renderSmithySlots(view, x, right, contentY, 'promote');
+      else this.renderInventory(view, x, right, contentY);
     } else {
       (['status', 'equip', 'items'] as const).forEach((tab, i) => placeMenuButton(g, this.tabs[tab], x + 62 + i * 134,
         navY, 124, 46, this.tab === tab ? 'selected' : 'quiet'));
@@ -409,35 +438,166 @@ export class CharacterPanel {
     });
   }
 
-  private renderEquip(view: CharacterView, x: number, right: number, y: number): void {
+  private renderSlotCard(slot: SlotId, index: number, view: CharacterView, left: number, top: number, tileWidth: number): void {
     const g = this.panel;
-    const listX = x + Math.floor((right - x) * .505);
-    const tileWidth = (listX - x - 30) / 2;
-    this.header.setText('착용 장비').setPosition(x, y + 17).setVisible(true);
-    SLOT_IDS.forEach((slot, i) => {
-      const left = x + (i % 2) * (tileWidth + 10), top = y + 42 + Math.floor(i / 2) * 86;
-      const id = view.gear.equipped[slot], info = SLOT_INFO[slot], cell = this.slots[i];
-      drawMenuCard(g, left, top, tileWidth, 76, slot === this.selectedSlot);
+    const info = SLOT_INFO[slot], cell = this.slots[index];
+    drawMenuCard(g, left, top, tileWidth, 76, slot === this.selectedSlot);
+    if (isEnhanceSlot(slot)) {
+      const lv = view.gear.enhance[slot];
+      const rk = view.gear.rank[slot];
+      const armorStage = armorAppearanceRank(view.gear);
+      const dim = lv === 0 && rk === 0 && slot !== 'weapon' && slot !== 'body';
+      cell.icon.set('items', slotIconId(slot, rk, armorStage), { glyph: info.name.slice(0, 2), color: 0x5a4a32 }, undefined, dim);
+      cell.label.setText(`${info.name}  +${lv}\n${rankLabel(rk)}`)
+        .setColor(rk > 0 ? MENU_COLOR.gold : dim ? MENU_COLOR.muted : MENU_COLOR.ink);
+    } else {
+      const id = view.gear.equipped[slot];
       if (id) cell.icon.set('items', id, itemFallback({ type: 'gear', id, count: 1 }));
       else cell.icon.set('slots', info.kind, { glyph: info.name.slice(0, 2), color: 0x352e24 }, undefined, true);
-      cell.icon.setSelected(false).setPosition(left + 34, top + 38).setVisible(true);
-      cell.label.setText(`${info.name}\n${id ? GEAR[id].name : '비어 있음'}`).setColor(id ? MENU_COLOR.ink : MENU_COLOR.muted)
-        .setWordWrapWidth(tileWidth - 75, true).setPosition(left + 64, top + 38).setVisible(true);
-      cell.hit.setSize(tileWidth, 76).setPosition(left, top).setVisible(true);
-      if (cell.hit.input) {
-        cell.hit.input.hitArea.setSize(tileWidth, 76);
-        cell.hit.input.enabled = true;
-      }
+      cell.label.setText(`${info.name}\n${id ? GEAR[id].name : '비어 있음'}`).setColor(id ? MENU_COLOR.ink : MENU_COLOR.muted);
+    }
+    cell.icon.setSelected(false).setPosition(left + 34, top + 38).setVisible(true);
+    cell.label.setWordWrapWidth(tileWidth - 75, true).setPosition(left + 64, top + 38).setVisible(true);
+    cell.hit.setSize(tileWidth, 76).setPosition(left, top).setVisible(true);
+    if (cell.hit.input) {
+      cell.hit.input.hitArea.setSize(tileWidth, 76);
+      cell.hit.input.enabled = true;
+    }
+  }
+
+  private renderEquip(view: CharacterView, x: number, right: number, y: number): void {
+    const listX = x + Math.floor((right - x) * .505);
+    const tileWidth = (listX - x - 30) / 2;
+    this.header.setText('칸 강화 · 승급 · 장신구').setPosition(x, y + 17).setVisible(true);
+    SLOT_IDS.forEach((slot, i) => {
+      const left = x + (i % 2) * (tileWidth + 10), top = y + 42 + Math.floor(i / 2) * 86;
+      this.renderSlotCard(slot, i, view, left, top, tileWidth);
     });
 
+    if (isEnhanceSlot(this.selectedSlot)) {
+      this.renderSlotDetail(view, this.selectedSlot, listX, right, y, y + 426, 'inspect');
+      return;
+    }
     const equipped = view.gear.equipped[this.selectedSlot];
-    this.renderGrid(listX, right, y, `${SLOT_INFO[this.selectedSlot].name}에 낄 수 있는 장비`, 4);
+    this.renderGrid(listX, right, y, `${SLOT_INFO[this.selectedSlot].name}에 낄 수 있는 장신구`, 4);
     this.renderDetail(view, listX, right, y + 207, y + 426, equipped);
+  }
+
+  private renderSmithySlots(view: CharacterView, x: number, right: number, y: number, kind: 'enhance' | 'promote'): void {
+    const listX = x + Math.floor((right - x) * .505);
+    const tileWidth = (listX - x - 30) / 2;
+    const heading = kind === 'enhance'
+      ? '강화할 칸 선택 (골드만 필요 · 상한 없음)'
+      : '승급할 칸 선택 (골드 + 재료 필요 · 외형 진화)';
+    this.header.setText(heading).setPosition(x, y + 17).setVisible(true);
+    ENHANCE_SLOT_IDS.forEach((slot, i) => {
+      const left = x + (i % 2) * (tileWidth + 10), top = y + 42 + Math.floor(i / 2) * 86;
+      this.renderSlotCard(slot, i, view, left, top, tileWidth);
+    });
+    const slot: EnhanceSlotId = isEnhanceSlot(this.selectedSlot) ? this.selectedSlot : 'weapon';
+    this.renderSlotDetail(view, slot, listX, right, y, y + 426, kind);
+  }
+
+  private renderSlotDetail(
+    view: CharacterView,
+    slot: EnhanceSlotId,
+    x: number,
+    right: number,
+    y: number,
+    bottom: number,
+    mode: 'inspect' | 'enhance' | 'promote',
+  ): void {
+    const g = this.panel;
+    drawMenuCard(g, x, y, right - x, bottom - y);
+    const lv = view.gear.enhance[slot];
+    const rk = view.gear.rank[slot];
+    const armor = armorPromotionStatus(view.gear);
+    const dim = lv === 0 && rk === 0 && slot !== 'weapon' && slot !== 'body';
+    this.detailIcon.set('items', slotIconId(slot, rk, armor.stage), { glyph: SLOT_INFO[slot].name.slice(0, 2), color: 0x5a4a32 }, undefined, dim)
+      .setPosition(x + 49, y + 48).setVisible(true);
+    this.detailName.setText(slotDisplayName(slot, lv, rk)).setPosition(x + 90, y + 28)
+      .setWordWrapWidth(right - x - 102, true).setVisible(true);
+
+    const curText = statsText(slotStats(slot, lv, rk)) || '없음';
+    const lines: string[] = [`현재 효과  ${curText}`];
+
+    if (mode === 'inspect') {
+      lines.push(`다음 강화 (+${lv + 1})  ${statsText(slotStats(slot, lv + 1, rk))}`);
+      if (slot === 'weapon') {
+        lines.push(`무기 외형  ${weaponAppearanceLabel(rk)}`);
+      } else {
+        lines.push(`방어구 외형  ${armorAppearanceLabel(armor.stage)}`);
+        if (armor.nextStage !== null) {
+          const miss = armor.missing.map((s) => SLOT_INFO[s].name).join('·');
+          lines.push(`4부위 일치 (${rankLabel(armor.nextStage)}): ${armor.readyCount}/${armor.total} · 미달: ${miss}`);
+        }
+      }
+      lines.push(SLOT_INFO[slot].description);
+      lines.push('대장간 [강화]는 골드로 능력치 상승(상한 없음), [승급]은 골드+재료로 외형 진화.');
+      this.detailText.setText(lines.join('\n')).setPosition(x + 18, y + 98)
+        .setWordWrapWidth(right - x - 36, true).setVisible(true);
+      return;
+    }
+
+    if (mode === 'enhance') {
+      const cost = enhanceCost(slot, lv);
+      const enabled = view.inventory.gold >= cost;
+      lines.push(`강화 시 (+${lv + 1})  ${statsText(slotStats(slot, lv + 1, rk))}`);
+      lines.push(`필요 골드  ${cost.toLocaleString()} G (재료 불필요 · 상한 없음)`);
+      lines.push('강화는 능력치만 올리며 외형은 바뀌지 않습니다.');
+      lines.push(SLOT_INFO[slot].description);
+      if (!enabled) lines.push('골드가 부족합니다.');
+      this.detailText.setText(lines.join('\n')).setPosition(x + 18, y + 98)
+        .setWordWrapWidth(right - x - 36, true).setVisible(true);
+      const buttonY = bottom - 36, buttonWidth = right - x - 36;
+      this.actionButton.setText(`강화 (+${lv + 1})  ${cost.toLocaleString()} G`);
+      placeMenuButton(g, this.actionButton, x + 18 + buttonWidth / 2, buttonY, buttonWidth, 48, enabled ? 'primary' : 'disabled');
+      return;
+    }
+
+    // 승급 모드 (골드 + 재료 필요, 무기 즉시 외형 변화 / 방어구 4부위 일치 시 외형 변화)
+    const recipe = promotionRecipe(slot, rk);
+    if (!recipe) {
+      lines.push(`최대 승급(${rankLabel(MAX_RANK)})에 도달했습니다.`);
+      if (slot === 'weapon') lines.push(`현재 무기 외형  ${weaponAppearanceLabel(rk)}`);
+      else lines.push(`현재 방어구 외형  ${armorAppearanceLabel(armor.stage)}`);
+      this.detailText.setText(lines.join('\n')).setPosition(x + 18, y + 98)
+        .setWordWrapWidth(right - x - 36, true).setVisible(true);
+      const buttonY = bottom - 36, buttonWidth = right - x - 36;
+      this.actionButton.setText(`최대 승급 (${rankLabel(MAX_RANK)})`);
+      placeMenuButton(g, this.actionButton, x + 18 + buttonWidth / 2, buttonY, buttonWidth, 48, 'disabled');
+      return;
+    }
+
+    lines.push(`승급 시 (${rankLabel(recipe.targetRank)})  ${statsText(slotStats(slot, lv, recipe.targetRank))}`);
+    if (slot === 'weapon') {
+      lines.push(`외형 변화  ${weaponAppearanceLabel(rk)} → ${weaponAppearanceLabel(recipe.targetRank)}`);
+    } else {
+      lines.push(`방어구 외형  ${armorAppearanceLabel(armor.stage)}`);
+      if (armor.nextStage !== null) {
+        const miss = armor.missing.map((s) => SLOT_INFO[s].name).join('·');
+        lines.push(`4부위 모두 ${rankLabel(armor.nextStage)} 시 외형 변화 (${armor.readyCount}/${armor.total} · 미달: ${miss})`);
+      }
+    }
+    const matText = recipe.materials
+      .map((m) => `${ITEMS[m.id].name} ${countOf(view.inventory, m.id)}/${m.count}`)
+      .join(' · ');
+    lines.push(`필요 골드  ${recipe.gold.toLocaleString()} G`);
+    lines.push(`필요 재료  ${matText}`);
+    const enabled = canAffordPromotion(view.inventory, slot, rk);
+    if (!enabled) {
+      lines.push(view.inventory.gold < recipe.gold ? '골드가 부족합니다.' : '승급 재료가 부족합니다.');
+    }
+    this.detailText.setText(lines.join('\n')).setPosition(x + 18, y + 98)
+      .setWordWrapWidth(right - x - 36, true).setVisible(true);
+    const buttonY = bottom - 36, buttonWidth = right - x - 36;
+    this.actionButton.setText(`승급 (${rankLabel(recipe.targetRank)})  ${recipe.gold.toLocaleString()} G`);
+    placeMenuButton(g, this.actionButton, x + 18 + buttonWidth / 2, buttonY, buttonWidth, 48, enabled ? 'primary' : 'disabled');
   }
 
   private renderInventory(view: CharacterView, x: number, right: number, y: number): void {
     const detailX = x + Math.max(410, Math.floor((right - x) * .49));
-    const title = this.mode === 'smithy' ? this.shopTab === 'buy' ? '판매 목록' : '판매 가능한 장비' : '가방';
+    const title = this.mode === 'smithy' ? this.shopTab === 'buy' ? '판매 장신구' : '판매 가능한 장신구' : '가방';
     this.renderGrid(x, detailX - 16, y, title, GRID_COLUMNS);
     this.renderDetail(view, detailX, right, y, y + 426);
   }
@@ -478,8 +638,8 @@ export class CharacterPanel {
     const shown: Entry | undefined = entry ?? (equipped ? { type: 'gear', id: equipped, count: 1 } : undefined);
     if (!shown) {
       const empty = this.entries.length === 0;
-      this.detailName.setText(empty ? (this.equipmentView ? '착용할 장비 없음' : this.mode === 'smithy' ? '판매할 장비 없음' : '빈 가방')
-        : this.equipmentView ? '장비 선택' : '아이템 선택').setPosition(x + 18, y + 21).setVisible(true);
+      this.detailName.setText(empty ? (this.equipmentView ? '착용할 장신구 없음' : this.mode === 'smithy' ? '판매할 장신구 없음' : '빈 가방')
+        : this.equipmentView ? '장신구 선택' : '아이템 선택').setPosition(x + 18, y + 21).setVisible(true);
       if (!empty) this.detailText.setText('아이콘을 누르면 상세 정보가 표시됩니다.').setPosition(x + 18, y + 58)
         .setWordWrapWidth(right - x - 36).setVisible(true);
       return;
@@ -510,7 +670,7 @@ export class CharacterPanel {
         if (buying && !enabled) lines.push('골드가 부족합니다.');
       } else if (!entry && equipped) {
         lines.unshift('착용 중');
-        label = '장비 해제';
+        label = '장신구 해제';
       } else {
         label = '장착';
         canRemove = this.equipmentView && !!equipped;
@@ -533,7 +693,7 @@ export class CharacterPanel {
     this.actionButton.setText(label);
     placeMenuButton(g, this.actionButton, x + 18 + buttonWidth / 2, buttonY, buttonWidth, 48, enabled ? 'primary' : 'disabled');
     if (canRemove) {
-      this.secondButton.setText('현재 장비 해제');
+      this.secondButton.setText('현재 장신구 해제');
       placeMenuButton(g, this.secondButton, right - 18 - buttonWidth / 2, buttonY, buttonWidth, 48);
     }
   }

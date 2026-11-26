@@ -14,7 +14,9 @@
 export type ItemId = 'potion' | 'lunch' | 'slime-gel' | 'travel-biscuit' | 'blue-dew' | 'antidote-herb'
   | 'serena-lunch' | 'sia-pebble' | 'vernel-memo'
   // 2장 서브 퀘스트: 페른이 새로 파는 말린 무화과, 리네아의 편지지, 도르의 약초 주머니
-  | 'dried-fig' | 'linea-letter-paper' | 'dor-herb-pouch' | 'dried-fish';
+  | 'dried-fig' | 'linea-letter-paper' | 'dor-herb-pouch' | 'dried-fish'
+  // 대장간 승급 재료: 철광석 조각(1단계), 청동 주괴(2단계), 공명 광석(3~5단계)
+  | 'iron-shard' | 'bronze-ingot' | 'resonance-ore';
 
 export interface ItemDef {
   id: ItemId;
@@ -53,6 +55,9 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   'linea-letter-paper': { id: 'linea-letter-paper', name: '리네아의 편지지', description: '리네아가 새 공책에서 떼어 준 편지지. "가는 곳마다 한 장씩 써 보내."', kind: 'keepsake', sellPrice: 0 },
   'dor-herb-pouch': { id: 'dor-herb-pouch', name: '도르의 약초 주머니', description: '도르가 말린 약초를 채워 준 작은 주머니. 회복 물약에 약초를 한 줌 섞어 마신다.', kind: 'keepsake', sellPrice: 0,
     note: `가방에 있으면 회복 물약이 체력을 ${HERB_POUCH_BONUS} 더 채운다 · 팔 수 없다` },
+  'iron-shard': { id: 'iron-shard', name: '철광석 조각', description: '단단한 철광석 조각. 대장간에서 장비 승급 재료로 쓴다.', kind: 'material', sellPrice: 12 },
+  'bronze-ingot': { id: 'bronze-ingot', name: '청동 주괴', description: '불순물을 걷어 낸 청동 주괴. 대장간에서 2단계 이상 승급 재료로 쓴다.', kind: 'material', sellPrice: 25 },
+  'resonance-ore': { id: 'resonance-ore', name: '공명 광석', description: '은은한 울림이 배어 있는 희귀 광석. 대장간에서 고단계 승급 재료로 쓴다.', kind: 'material', sellPrice: 45 },
 };
 
 /** 이 아이템을 쓸 때 더 채우는 체력 (도르의 약초 주머니 + 회복 물약) */
@@ -190,6 +195,25 @@ export function slimeDrop(rand: () => number): Drop {
   const items: Drop['items'] = [];
   if (rand() < 0.35) items.push({ id: 'slime-gel', count: 1 });
   if (rand() < 0.04) items.push({ id: 'potion', count: 1 });
+  return { gold, items };
+}
+
+/** 몬스터 종류별 전리품(골드 + 승급 재료). */
+export function enemyDrop(kind: string | undefined, rand: () => number): Drop {
+  if (kind === 'slime') return slimeDrop(rand);
+  const gold = 5 + Math.floor(rand() * 5);
+  const items: Drop['items'] = [];
+  if (kind === 'corrosion-executioner') {
+    items.push({ id: 'iron-shard', count: 3 });
+  } else if (kind === 'swamp-lurker') {
+    items.push({ id: 'bronze-ingot', count: 2 });
+  } else if (kind === 'reed-stalker' || kind === 'mist-wraith') {
+    if (rand() < 0.35) items.push({ id: 'bronze-ingot', count: 1 });
+  } else if (kind === 'ashen-moth' || kind === 'corrosion-tracker') {
+    if (rand() < 0.35) items.push({ id: 'iron-shard', count: 1 });
+  } else if (rand() < 0.2) {
+    items.push({ id: 'iron-shard', count: 1 });
+  }
   return { gold, items };
 }
 

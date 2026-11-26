@@ -2036,9 +2036,9 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     inspect('story-home-search'); await restart('in-clinic'); talk('eila'); talk('linea');
     await restart('village-north'); talk('herman');
     await restart('village'); talk('vernel');
-    // 도란의 검: 도란이 철검을 건넨다(가방에 들어온다).
+    // 도란의 검: 도란이 무기 칸을 1단계 진화(도란의 검)로 승급해 준다.
     await restart('in-smithy'); talk('doran'); s.characterPanel.close();
-    const sword = s.character.gear.bag['iron-sword'] ?? 0;
+    const sword = s.character.gear.rank.weapon;
     await restart('village');
     // 1장의 메인 퀘스트는 모두 끝나고, 2장의 첫 퀘스트(남문의 수레)가 이어진다.
     const complete = mains.slice(0, mains.findIndex(q => q.id === 'first-sword') + 1).every(q => s.quests[q.id]?.status === 'done');
@@ -2374,36 +2374,38 @@ test('캐릭터 창: 포인트로 능력치를 올리고, 도란에게 장비를
       s.openDialogue(doran.spot);
       while (s.dialogue.isOpen) s.dialogue.advance();
     }
-    const smithy = s.characterPanel.isOpen && s.characterPanel.mode === 'smithy';
-    // 철검은 팔지 않는다(습격 뒤 도란이 건넨다). 가죽 장갑을 사서 장갑 칸에 낀다.
-    const noSword = !s.characterPanel.entries.some(e => e.id === 'iron-sword');
-    s.tradeGear('leather-gloves', 'buy');
+    const smithy = s.characterPanel.isOpen && s.characterPanel.mode === 'smithy' && s.characterPanel.currentShopTab === 'enhance';
+    // 도란의 대장간에서 장갑 칸을 강화(+1)하고, 장신구 탭에서 네잎 부적을 사서 장신구 칸에 낀다.
+    s.enhanceGearSlot('hands');
+    s.characterPanel.switchShopTab('buy');
+    s.tradeGear('clover-charm', 'buy');
     const gold = s.inventory.gold;
     s.characterPanel.close();
     s.openCharacterPanel('equip');
-    s.characterPanel.selectSlot('hands');
+    s.characterPanel.selectSlot('accessory1');
     s.characterPanel.selectCell(0);
     s.characterPanel.primary();
-    const equipped = s.character.gear.equipped.hands;
+    const hands = s.character.gear.enhance.hands;
+    const equipped = s.character.gear.equipped.accessory1;
     s.characterPanel.close();
-    return { before, opened, frozen, vit, smithy, noSword, gold, equipped, damage: s.stats.damageMax };
+    return { before, opened, frozen, vit, smithy, gold, hands, equipped, damage: s.stats.damageMax };
   })()`);
   assert.equal(result.opened, true);
   assert.equal(result.frozen, true);
   assert.equal(result.before.points, 6);
   assert.deepEqual(result.vit, { maxHp: result.before.maxHp + 20, points: 4 });
   assert.equal(result.smithy, true, JSON.stringify(result));
-  assert.equal(result.noSword, true);
-  assert.equal(result.gold, 410);
-  assert.equal(result.equipped, 'leather-gloves');
+  assert.equal(result.gold, 310);
+  assert.equal(result.hands, 1);
+  assert.equal(result.equipped, 'clover-charm');
   assert.ok(result.damage > result.before.damage, JSON.stringify(result));
-  // 다시 불러와도 분배와 장비가 남는다.
+  // 다시 불러와도 분배·강화·장신구가 남는다.
   await load('in-smithy');
   const reloaded = await evaluate(`(() => { const s = window.__game.scene.getScene('game');
-    const r = { hands: s.character.gear.equipped.hands, vit: s.character.alloc.vit };
+    const r = { hands: s.character.gear.enhance.hands, accessory1: s.character.gear.equipped.accessory1, vit: s.character.alloc.vit };
     localStorage.removeItem('untitled-rpg.character'); localStorage.removeItem('untitled-rpg.save'); localStorage.removeItem('untitled-rpg.inventory'); localStorage.removeItem('untitled-rpg.quests');
     return r; })()`);
-  assert.deepEqual(reloaded, { hands: 'leather-gloves', vit: 2 });
+  assert.deepEqual(reloaded, { hands: 1, accessory1: 'clover-charm', vit: 2 });
 });
 
 test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공격은 피해가 없고 적이 휘청이며 반격이 열리고, 늦거나 뒤에서 오면 그대로 맞으며, 민첩이 높으면 피하기도 한다', async () => {
@@ -3477,48 +3479,53 @@ test('회피·막기·회전베기는 원형 대기가 줄어들고 메뉴에서
   assert.equal(result.noMana.visible,false);assert.equal(result.labels,true);
 });
 
-test('캐릭터 창·장비창·대장간은 기존 아이템과 새 철검·가죽 갑옷 아이콘을 원본 비율로 재사용한다', async () => {
+test('캐릭터 창·장비창·대장간은 기존 아이템과 승급·장신구 아이콘을 원본 비율로 재사용한다', async () => {
   await load('village');
   const result=await evaluate(`(()=>{
     const s=window.__game.scene.getScene('game');
     s.inventory={gold:1000,items:{potion:3,lunch:2,'slime-gel':4}};
-    s.character.gear={bag:{'wooden-sword':1,'iron-sword':1,'leather-armor':1,'cloth-hood':1},equipped:{weapon:'iron-sword',body:'leather-armor'}};
+    s.character.gear={enhance:{weapon:0,head:0,body:0,hands:0,feet:0},rank:{weapon:1,head:1,body:1,hands:1,feet:1},bag:{'clover-charm':1,'blue-bead':1},equipped:{accessory1:'wildflower-bracelet'}};
     s.openCharacterPanel('items');const m=s.characterPanel;
     const read=c=>({key:c.image.texture.key,frame:c.image.frame.name,image:c.image.visible,glyph:c.glyph.text,
       fits:Math.abs(Math.max(c.image.displayWidth,c.image.displayHeight)-c.size*.82)<.01});
     const cells=Object.fromEntries(m.entries.map((e,i)=>[e.id,read(m.cells[i])]));
     const details={};m.entries.forEach((e,i)=>{m.selectCell(i);details[e.id]=read(m.detailIcon);});
     m.close();s.openCharacterPanel('equip');
-    const weapon=read(m.slots[0].icon),body=read(m.slots[2].icon);
+    const weapon=read(m.slots[0].icon),body=read(m.slots[2].icon),acc=read(m.slots[5].icon);
     m.close();s.openCharacterPanel('items',true);
+    m.switchShopTab('buy');
     const shop=Object.fromEntries(m.entries.map((e,i)=>[e.id,read(m.cells[i])]));m.close();
     const textures=Object.keys(s.textures.list).length;
     for(let i=0;i<3;i++){s.openCharacterPanel('items');m.close();}
-    return {cells,details,weapon,body,shop,reused:Object.keys(s.textures.list).length===textures};
+    return {cells,details,weapon,body,acc,shop,reused:Object.keys(s.textures.list).length===textures};
   })()`);
-  for(const id of ['potion','lunch','slime-gel','iron-sword','leather-armor']){
+  for(const id of ['potion','lunch','slime-gel']){
     for(const group of [result.cells,result.details]){
       assert.deepEqual(group[id],{key:'item-icons',frame:id,image:true,glyph:'',fits:true});
     }
   }
-  assert.equal(result.cells['wooden-sword'].key,'icon:items/wooden-sword');
-  assert.equal(result.cells['wooden-sword'].image,true);
-  // 천 두건도 이제 아이콘이 있다 (src/assets/icons/items/cloth-hood.webp)
-  assert.equal(result.cells['cloth-hood'].key,'icon:items/cloth-hood');assert.equal(result.cells['cloth-hood'].image,true);
-  for(const [cell,id] of [[result.weapon,'iron-sword'],[result.body,'leather-armor'],[result.shop['leather-armor'],'leather-armor']]){
+  assert.equal(result.cells['clover-charm'].image,true);
+  assert.equal(result.cells['blue-bead'].image,true);
+  for(const [cell,id] of [[result.weapon,'iron-sword'],[result.body,'leather-armor']]){
     assert.equal(cell.key,'item-icons');assert.equal(cell.frame,id);assert.equal(cell.image,true);assert.equal(cell.fits,true);
   }
-  assert.equal(result.shop['iron-sword'],undefined,'철검은 대장간에서 팔지 않는다');
+  assert.equal(result.acc.image,true);
+  assert.equal(result.shop['clover-charm'].image,true);
   assert.equal(result.reused,true);
 });
 
-test('무기 교체·해제는 별도 레이어와 칼집 손잡이·잔상·저장에 반영되고 검날과 타격 기준점이 일치한다', async () => {
+test('무기 강화는 외형을 바꾸지 않고, 무기 승급이 별도 레이어와 칼집 손잡이·잔상·저장에 반영된다', async () => {
   await load('village');
   const result=await evaluate(`(()=>{
     const g=window.__game,s=g.scene.getScene('game'),h=s.player.sprite;
-    s.character.gear.bag={'iron-sword':1};s.openCharacterPanel('items');
-    const m=s.characterPanel;m.selectCell(m.entries.findIndex(e=>e.id==='iron-sword'));m.primary();m.close();
-    h.play('hero-idle');const equipped=h.weapon==='iron-sword'&&h.weaponFront.frame.name==='iron-sword-hilt'&&!h.weaponBack.visible;
+    s.inventory={gold:2000,items:{'iron-shard':4,'slime-gel':4}};
+    s.openCharacterPanel('items',true);
+    for(let i=0;i<3;i++)s.enhanceGearSlot('weapon');
+    const enhanceKeepsWood=h.weapon==='wooden-sword'&&s.character.gear.enhance.weapon===3;
+    s.characterPanel.switchShopTab('promote');
+    s.promoteGearSlot('weapon');
+    s.characterPanel.close();
+    h.play('hero-idle');const promoted=h.weapon==='iron-sword'&&h.weaponFront.frame.name==='iron-sword-hilt'&&!h.weaponBack.visible;
     const errors=[];
     for(const weapon of ['wooden-sword','iron-sword']){
       h.setWeapon(weapon);
@@ -3542,12 +3549,10 @@ test('무기 교체·해제는 별도 레이어와 칼집 손잡이·잔상·저
     // 무기를 뺀 잔상: 무기 그림 조각은 모두 숨는다(손잡이를 덮는 주먹 그림이 있는 자세는 조각 순서가 달라 순서로 찾지 않는다).
     const weaponCopies=ghost.list.filter(o=>o.texture.key.startsWith('hero-weapons'));const emptyGhost=weaponCopies.length===2&&weaponCopies.every(o=>!o.visible);ghost.destroy();
     s.scene.restart();g.step(performance.now(),16);g.step(performance.now()+16,16);
-    const restored=s.player.sprite.weapon==='iron-sword';
-    s.openCharacterPanel('equip');s.characterPanel.selectSlot('weapon');s.characterPanel.primary();s.characterPanel.close();
-    const unequipped=s.player.sprite.weapon===null&&!s.player.sprite.weaponFront.visible;
-    return {equipped,maxError:Math.max(...errors),copies,empty,emptyGhost,restored,unequipped};
+    const restored=s.player.sprite.weapon==='iron-sword'&&s.character.gear.rank.weapon===1&&s.character.gear.enhance.weapon===3;
+    return {enhanceKeepsWood,promoted,maxError:Math.max(...errors),copies,empty,emptyGhost,restored};
   })()`);
-  for(const key of ['equipped','empty','emptyGhost','restored','unequipped'])assert.equal(result[key],true,key);
+  for(const key of ['enhanceKeepsWood','promoted','empty','emptyGhost','restored'])assert.equal(result[key],true,key);
   assert.ok(result.maxError<.001,JSON.stringify(result));
   // 잔상은 무기의 손잡이와 칼날 조각을 함께 복사한다(조각 순서는 자세마다 다르다).
   assert.ok(result.copies.includes('hero-weapons:iron-sword-grip')&&result.copies.includes('hero-weapons:iron-sword-blade'),JSON.stringify(result.copies));
@@ -4576,7 +4581,7 @@ test('행상인의 짐: 메리나의 천을 페른에게 가져가면 그 자리
     const choice = s.storyChoice.isOpen;
     s.storyChoice.choose(1);
     const gearShop = { open: s.characterPanel.isOpen, title: s.characterPanel.title.text,
-      boots: s.characterPanel.collectEntries(s.characterView()).some(e => e.id === 'heron-feather-boots') };
+      bracelet: s.characterPanel.collectEntries(s.characterView()).some(e => e.id === 'reed-knot-bracelet') };
     s.characterPanel.close();
     s.openItemPanel('shop', 'fern');
     const names = s.itemPanel.rows.filter(r => r.name.visible).map(r => r.name.text);
@@ -4588,10 +4593,10 @@ test('행상인의 짐: 메리나의 천을 페른에게 가져가면 그 자리
     return { before, marker, after, status, choice, gearShop, fig: names.some(n => n.includes('말린 무화과')) };
   })()`);
   assert.deepEqual(result, { before: 'fern-cart-damaged', marker: 'target', after: 'fern-cart-repaired', status: 'done', choice: true,
-    gearShop: { open: true, title: '페른의 수레 · 여행 장비', boots: true }, fig: true });
+    gearShop: { open: true, title: '페른의 수레 · 여행 장신구', bracelet: true }, fig: true });
 });
 
-test('마르타는 나루 대장간 안에 서 있고, 멈춘 나루를 끝낸 뒤 대화하면 청동 장비를 판다', async () => {
+test('마르타는 나루 대장간 안에 서 있고, 멈춘 나루를 끝낸 뒤 대화하면 2단계 강화와 청동 장신구를 연다', async () => {
   await load('east-pass&companion=none');
   await evaluate(`(async () => {
     const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
@@ -4608,21 +4613,26 @@ test('마르타는 나루 대장간 안에 서 있고, 멈춘 나루를 끝낸 �
     const placed = { people: s.npcs.map(n => n.def.id), texture: marta.figure.texture.key, spot: s.walkArea.contains(marta.spot.x, marta.spot.y) };
     s.player.placeAt(marta.spot.x - 60, marta.spot.y + 20);
     s.openDialogue(marta.spot); while (s.dialogue.isOpen) s.dialogue.advance();
-    const panel = s.characterPanel, open = panel.isOpen, title = panel.title.text;
+    const panel = s.characterPanel, open = panel.isOpen, title = panel.title.text, tab = panel.currentShopTab;
+    s.enhanceGearSlot('body');
+    const bodyLv = s.character.gear.enhance.body;
+    panel.switchShopTab('buy');
     const ids = panel.collectEntries(s.characterView()).map(e => e.id);
-    s.tradeGear('scale-armor', 'buy');
-    const bought = { gold: s.inventory.gold, bag: s.character.gear.bag['scale-armor'] };
+    s.tradeGear('bronze-bell-earring', 'buy');
+    const bought = { gold: s.inventory.gold, bag: s.character.gear.bag['bronze-bell-earring'] };
     panel.close();
-    localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.inventory');
-    return { placed, open, title, ids, bought };
+    localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.inventory'); localStorage.removeItem('untitled-rpg.character');
+    return { placed, open, title, tab, bodyLv, ids, bought };
   })()`);
   assert.deepEqual(result.placed.people, ['marta']);
   assert.notEqual(result.placed.texture, '__MISSING');
   assert.equal(result.placed.spot, true);
   assert.equal(result.open, true);
   assert.equal(result.title, '마르타의 대장간');
-  assert.deepEqual(result.ids, ['bronze-helm', 'scale-armor', 'bronze-bracers', 'bronze-bell-earring']);
-  assert.deepEqual(result.bought, { gold: 420, bag: 1 });
+  assert.equal(result.tab, 'enhance');
+  assert.equal(result.bodyLv, 1);
+  assert.deepEqual(result.ids, ['bronze-bell-earring']);
+  assert.deepEqual(result.bought, { gold: 660, bag: 1 });
 });
 
 test('사라진 다섯·새는 지붕·엉킨 그물: 증인은 각자 집에서 증언하고, 늪의 갈대와 그물을 모으면 여관 지붕이 고쳐진다', { timeout: 120000 }, async () => {

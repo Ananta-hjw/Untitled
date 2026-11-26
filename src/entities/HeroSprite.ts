@@ -57,7 +57,6 @@ import weaponSheet from '../assets/hero/weapons/weapons.webp?url';
 import perspectiveAtlas from '../assets/hero/weapons/perspective_atlas.json';
 import perspectiveSheet from '../assets/hero/weapons/perspective.png?url';
 import { weaponId, weaponLengthScale, weaponPose, type WeaponId } from './weaponPose';
-import type { GearId } from '../items/equipment';
 import { ACTION_DURATION, attackFacingFor, guardFrame, heroFrame, movementFacing, type AttackFacing, type Facing, type HeroAction } from './heroFrames';
 
 export const HERO_SPRITE_HEIGHT = data.height;
@@ -139,6 +138,8 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   private readonly weaponFront: Phaser.GameObjects.Image;
   private readonly supportHand: Phaser.GameObjects.Image;
   private weapon: WeaponId | null = 'wooden-sword';
+  /** 방어구 4부위(머리·몸·장갑·신발) 승급 일치로 결정되는 외형 단계 (0: 기본, 1~5: N단계 진화, 세부 색·외형 추후 확정). */
+  private armorRank = 0;
   private animation: HeroAction = 'idle';
   private facing: Facing = 'down';
   private attackFacing: AttackFacing = 'right';
@@ -197,6 +198,8 @@ export class HeroSprite extends Phaser.GameObjects.Container {
 
   get equippedWeapon(): WeaponId | null { return this.weapon; }
 
+  get currentArmorRank(): number { return this.armorRank; }
+
   get lookDirection(): Facing { return this.facing; }
 
   get isGuarding(): boolean { return this.guarding; }
@@ -244,9 +247,14 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     return this;
   }
 
-  setWeapon(id: GearId | undefined): void {
+  setWeapon(id: string | undefined): void {
     this.weapon = weaponId(id);
     this.applyWeapon();
+  }
+
+  /** 방어구 4부위가 모두 같은 승급 단계 이상에 도달했을 때 외형 단계(0~5)를 반영한다. */
+  setArmorRank(rank: number): void {
+    this.armorRank = Math.max(0, Math.floor(rank));
   }
 
   setTint(color: number): this { for (const part of this.parts) part.setTint(color); return this; }

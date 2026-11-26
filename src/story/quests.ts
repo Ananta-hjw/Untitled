@@ -3,7 +3,7 @@ import { HERO_NAME, type DialogueLine } from './dialogues.ts';
 import type { NpcId, NamedNpcId } from '../world/npcs.ts';
 import type { MapId } from '../world/maps.ts';
 import type { ItemId } from '../items/inventory.ts';
-import type { GearId } from '../items/equipment.ts';
+import type { EnhanceSlotId, GearId } from '../items/equipment.ts';
 import type { SkillId } from '../entities/skills.ts';
 
 /**
@@ -94,8 +94,10 @@ export interface QuestDef {
   rewardXp: number;
   rewardGold?: number;
   rewardItems?: Array<{ id: ItemId; count: number }>;
-  /** 보상 장비 (가방에 들어간다) */
+  /** 보상 장신구 (가방에 들어간다) */
   rewardGear?: GearId[];
+  /** 보상 칸 승급 (1장 완료 '도란의 검' 등 스토리 이벤트 전용: 지정 칸을 최소 targetRank까지 무료 승급) */
+  rewardPromote?: Array<{ slot: EnhanceSlotId; targetRank: number }>;
   /** 보상 기술 (entities/skills.ts). 비어 있는 첫 기술 칸에 들어간다. */
   rewardSkill?: SkillId;
   offer: DialogueLine[];
@@ -384,7 +386,7 @@ export const QUESTS: QuestDef[] = [
     id: 'first-sword', title: '도란의 검', giver: 'vernel', main: true, requires: 'sealed-letter',
     turnIn: 'doran', completeOnTarget: true,
     objective: { label: '대장간의 도란 찾아가기', need: 1, event: 'talk', npc: 'doran' },
-    rewardXp: 20, rewardGear: ['iron-sword'],
+    rewardXp: 20, rewardPromote: [{ slot: 'weapon', targetRank: 1 }],
     offer: [line('vernel', '베르넬', '대장간에 들러 봐. 도란은 말보다 망치가 먼저인 사람이니까.')],
     reminder: [line('vernel', '베르넬', '도란이 대장간에서 기다리고 있을 거야.')],
     target: [
@@ -395,7 +397,7 @@ export const QUESTS: QuestDef[] = [
       line('doran', '도란', '아, 에일라가 전해 달라더라. 리네아가 좀 안정돼서 이제 자기 집에서 쉬게 할 거래. 세레나랑 함께 옮긴다더군.'),
       line('doran', '도란', '시아 데려와라. 리네아도 고칠 방법 찾고. 날이 무뎌지면 언제든 돌아와서 맡겨.'),
     ],
-    done: [line('doran', '도란', '장비 창에서 무기 칸에 끼워라. 손에 익을 때까지 휘둘러 보고.')],
+    done: [line('doran', '도란', '무기 칸을 1단계 진화(도란의 검)로 승급해 뒀다. 강화나 추가 승급이 필요하면 언제든 대장간으로 와라.')],
   },
   // ---------------------------------------------------------------- 2장: 물안개 나루의 종소리
   {
