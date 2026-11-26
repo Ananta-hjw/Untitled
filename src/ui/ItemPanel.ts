@@ -118,7 +118,8 @@ export class ItemPanel {
     if (!this.open) return;
     this.inventory = inventory;
     const all = this.mode === 'shop' && this.tab === 'buy'
-      ? SHOP_STOCK[this.shop] : ITEM_IDS.filter(id => countOf(inventory, id) > 0);
+      ? SHOP_STOCK[this.shop]
+      : ITEM_IDS.filter(id => countOf(inventory, id) > 0 && (this.mode !== 'shop' || (ITEMS[id].sellPrice > 0 && ITEMS[id].kind !== 'keepsake')));
     this.pages = Math.max(1, Math.ceil(all.length / ROWS_PER_PAGE));
     this.page = Math.min(this.page, this.pages - 1);
     const ids = all.slice(this.page * ROWS_PER_PAGE, (this.page + 1) * ROWS_PER_PAGE);
@@ -143,7 +144,7 @@ export class ItemPanel {
         : capped ? `보유 ${count}개 · 골드 보관 한도에 도달해요`
         : `보유 ${count}개${type === 'sell' ? ` · 1개당 ${def.sellPrice} G` : ''}`)
         .setColor(full || short || capped ? '#f0b5a0' : '#aebfb2');
-      row.button.setText(type === 'buy' ? `구매 ${def.price} G` : type === 'sell' ? `판매 ${def.sellPrice} G` : usable ? '1개 사용' : '재료')
+      row.button.setText(type === 'buy' ? `구매 ${def.price} G` : type === 'sell' ? `판매 ${def.sellPrice} G` : usable ? '1개 사용' : def.kind === 'keepsake' ? '기념품' : '재료')
         .setBackgroundColor(enabled ? '#dfc18a' : '#344a40').setColor(enabled ? '#1a302a' : '#bac8bd');
       if (enabled) {
         row.action = { type, id };

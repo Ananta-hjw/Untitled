@@ -182,7 +182,11 @@ export class Npc extends Phaser.GameObjects.Container {
 
     // 카운터 뒤의 사람은 카운터 앞에서 말을 건다. 말풍선은 그래도 그 사람 머리 위에 뜬다.
     const offset = def.talkOffset ?? 0;
-    this.spot = { id: `npc-${def.id}`, x: def.x + (def.talkOffsetX ?? 0), y: def.y + offset, radius: 110, markerHeight: labelHeight + 44 + offset, dialogue: def.dialogue };
+    const offsetX = def.talkOffsetX ?? 0;
+    this.spot = {
+      id: `npc-${def.id}`, x: def.x + offsetX, y: def.y + offset, radius: 110,
+      markerHeight: labelHeight + 44 + offset, ...(offsetX ? { markerOffsetX: -offsetX } : {}), dialogue: def.dialogue,
+    };
     const initialAction = def.storyAction ?? def.duty?.[0].action;
     if (initialAction) this.setStoryAction(initialAction);
     scene.add.existing(this);
@@ -296,6 +300,9 @@ export class Npc extends Phaser.GameObjects.Container {
   /** 연출: (x, y) 쪽을 본다. */
   faceTowards(x: number, y: number): void {
     this.direction = direction8(x - this.x, y - this.y, this.direction);
+    if (this.fighter && this.combatControlled && this.fighter.pose !== 'injured' && Math.abs(x - this.x) > 4) {
+      this.fighter.facingX = x < this.x ? -1 : 1;
+    }
     this.showFrame(this.walk.idlePose);
   }
 
@@ -326,7 +333,10 @@ export class Npc extends Phaser.GameObjects.Container {
 
   setBattle(enabled: boolean, injured = false): void {
     if (!this.fighter) return;
-    if (enabled && !this.battle) this.fighter = new NpcFighter(this.fighter.skin);
+    if (enabled && !this.battle) {
+      this.fighter = new NpcFighter(this.fighter.skin);
+      if (this.direction.includes('left')) this.fighter.facingX = -1;
+    }
     const changed = enabled !== this.battle || injured !== this.storyInjured;
     this.battle = enabled;
     this.storyInjured = injured;
@@ -336,6 +346,13 @@ export class Npc extends Phaser.GameObjects.Container {
       this.scriptPath = [];
       this.showFrame(this.walk.idlePose);
     }
+  }
+
+  /** 수확제 연출 끝(cue: 'ready')에서 시온과 함께 검을 들고 경계 태세를 취한다. */
+  setCutsceneReady(targetX: number): void {
+    if (!this.fighter) return;
+    this.fighter.facingX = targetX < this.x ? -1 : 1;
+    this.showCombat('guard');
   }
 
   updateCombat(now: number, dt: number, targets: readonly NpcCombatTarget[], area: WalkArea,
@@ -525,6 +542,14 @@ export class Npc extends Phaser.GameObjects.Container {
         this.setPosition(next.x, next.y).setDepth(next.y + (this.def.depthOffset ?? 0));
         this.spot.x = this.x + (this.def.talkOffsetX ?? 0);
         this.spot.y = this.y + (this.def.talkOffset ?? 0);
+      }
+      // durationMs === 0은 모서리를 돌아가는 순수 경유지이므로 멈칫거리지 않고 곧바로 다음 지점으로 이어 걷는다.
+      if (point.durationMs === 0 && points.length > 1) {
+        this.dutyIndex = (this.dutyIndex + 1) % points.length;
+        this.target = points[this.dutyIndex];
+        this.walkStartedAt = now;
+        this.atDuty = false;
+        return;
       }
       this.target = undefined;
       this.restUntil = now + (point.durationMs ?? dutyPauseMs(this.rand));

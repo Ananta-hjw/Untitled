@@ -88,3 +88,15 @@ test('여행자의 망토는 페른이 팔고 도란의 대장간에는 없다',
   assert.equal(buyGear(rich, gear, 'travel-cloak'), null, '대장간에서는 못 산다');
   assert.equal(buyGear(rich, gear, 'travel-cloak', 'fern').inventory.gold, 280);
 });
+
+test('리네아의 들꽃 팔찌는 장신구 칸에 끼워 VIT +2를 얻고 상점에서 사거나 팔 수 없다', () => {
+  assert.equal(GEAR['wildflower-bracelet'].kind, 'accessory');
+  assert.deepEqual(GEAR['wildflower-bracelet'].stats, { vit: 2 });
+  assert.equal(GEAR['wildflower-bracelet'].price, undefined);
+  const bag = addGear(startingGear(), 'wildflower-bracelet');
+  assert.equal(buyGear({ gold: 9999, items: {} }, bag, 'wildflower-bracelet'), null);
+  assert.equal(sellGear({ gold: 0, items: {} }, bag, 'wildflower-bracelet'), null, '기념품 장신구는 팔 수 없다');
+  const worn = equip(bag, 'wildflower-bracelet');
+  assert.equal(worn.equipped.accessory1, 'wildflower-bracelet');
+  assert.equal(gearBonus(worn).vit, 2);
+});

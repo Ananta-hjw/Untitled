@@ -46,7 +46,7 @@ export const DIALOGUES = {
     { speaker: HERO_NAME, portrait: 'hero-neutral', text: '나무가 빽빽해서 낮인데도 어둑하다. 길을 잃지 않게 조심하자.' },
   ],
   'east-stream-sign': [
-    { speaker: '표지판', text: '동쪽 개울가\n서쪽: 로웬 마을' },
+    { speaker: '표지판', text: '동쪽 개울가\n서쪽: 로웬 마을 · 동쪽: 동쪽 고갯길' },
     { speaker: HERO_NAME, portrait: 'hero-neutral', text: '물소리가 시원하다. 발을 헛디디지 않게 조심하자.' },
   ],
 

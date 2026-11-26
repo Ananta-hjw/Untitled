@@ -64,7 +64,9 @@ export class QuickSlotPanel {
       g.fillStyle(0x20392d, 1).fillRoundedRect(tx, y + 96, tile, 300, 10);
       r.icon.setPosition(cx, y + 150).setDisplaySize(76, 76);
       r.text.setPosition(cx, y + 196).setWordWrapWidth(tile - 12);
-      r.button.setPosition(cx, y + 356).setFixedSize(Math.min(140, tile - 16), 60);
+      const buttonWidth = Math.min(140, tile - 16);
+      r.button.setPosition(cx, y + 356).setFixedSize(buttonWidth, 60);
+      r.button.input?.hitArea.setSize(buttonWidth, 60);
     });
     this.hint.setPosition(x + 36, y + 410).setWordWrapWidth(w - 72);
     this.clear.setPosition(x + 132, y + 494);

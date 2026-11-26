@@ -10,10 +10,21 @@ def build():
     atlas = Image.new('RGBA', (1024, 640))
     frames = []
     with Image.open(ROOT / 'nursing-source.png') as source:
+        # 두 행 사이의 투명 빈 줄을 찾아 정확히 분할한다 (절반 고정 분할 시 2행 정수리가 1행 바닥에 잘려 붙는 문제 방지).
+        full_alpha = source.getchannel('A').point(lambda a: 255 if a >= 8 else 0)
+        mid = source.height // 2
+        empty_rows = [
+            y for y in range(mid - 80, mid + 80)
+            if full_alpha.crop((0, y, source.width, y + 1)).getbbox() is None
+        ]
+        assert empty_rows, '두 행 사이의 빈 간격을 찾지 못했습니다'
+        split_y = (empty_rows[0] + empty_rows[-1]) // 2
+        row_bounds = [(0, split_y), (split_y, source.height)]
         for i in range(8):
             col, row = i % 4, i // 4
-            body = source.crop((round(col * source.width / 4), round(row * source.height / 2),
-                                round((col + 1) * source.width / 4), round((row + 1) * source.height / 2)))
+            top_y, bottom_y = row_bounds[row]
+            body = source.crop((round(col * source.width / 4), top_y,
+                                round((col + 1) * source.width / 4), bottom_y))
             alpha = body.getchannel('A').point(lambda a: 255 if a >= 8 else 0)
             bounds = alpha.getbbox()
             assert bounds

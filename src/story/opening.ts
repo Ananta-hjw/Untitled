@@ -75,8 +75,9 @@ export const OPENING: OpeningStep[] = [
     line('serena', '세레나', '오늘 저녁은 축제 전야 잔치야. 해 지기 전엔 꼭 들어오렴.'),
     hero('네, 어머니.'),
   ] },
-  { type: 'npc', id: 'serena', path: [mapPoint({ x: 720, y: 700 })] },
-  { type: 'hero', path: [mapPoint({ x: 720, y: 690 }), mapPoint({ x: 1000, y: 700 }), byHerman] },
+  // 세레나가 집 앞 위쪽 화단 쪽으로 비켜 서며 시온과 동선이 겹치지 않게 한다.
+  { type: 'npc', id: 'serena', path: [mapPoint({ x: 720, y: 635 })] },
+  { type: 'hero', path: [mapPoint({ x: 720, y: 705 }), mapPoint({ x: 1000, y: 700 }), byHerman] },
   { type: 'face', id: 'herman' },
   { type: 'say', lines: [
     line('herman', '헤르만', '오, 시온이구먼. 올해는 수확이 넉넉해서 잔치 상도 푸짐하겠어.'),

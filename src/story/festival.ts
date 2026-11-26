@@ -65,7 +65,8 @@ export const RAIDER_ENTRY_MS = 4200;
 /** 잔치 자리: 모두 모닥불 쪽을 본다. 테온은 남문을 지킨다. */
 const SEATS: Record<Exclude<NamedNpcId, 'fern'>, Point> = {
   herman: P(1180, 1010),
-  rosetta: P(1340, 1060),
+  // 오른쪽 잔칫상과 광장 표지판을 피해 상 뒤쪽에 선다.
+  rosetta: P(1390, 1020),
   doran: P(1360, 1160),
   merina: P(1500, 1150),
   serena: P(900, 1170),
@@ -91,6 +92,7 @@ export function festivalNpcs(): NpcDef[] {
     const def: NpcDef = { ...n, ...seat, area: 'village', facing, wander: undefined };
     delete def.inside;
     delete def.talkOffset;
+    delete def.talkOffsetX;
     delete def.shop;
     return def;
   });
@@ -168,8 +170,8 @@ export const FESTIVAL: OpeningStep[] = [
     hero('삐뚤어진 게 더 높이 날아갈지도 모르지.'),
   ] },
   { type: 'emote', who: 'sia', text: '♪' },
-  { type: 'npc', id: 'sia', path: aroundFire(170, Math.PI * 0.75), speed: 1.6 },
-  { type: 'npc', id: 'linea', path: [P(1080, 1210), ...aroundFire(200, Math.PI * 0.8)], speed: 1.4 },
+  { type: 'npc', id: 'sia', path: aroundFire(135, Math.PI * 0.75), speed: 1.6 },
+  { type: 'npc', id: 'linea', path: [P(1080, 1210), ...aroundFire(155, Math.PI * 0.8)], speed: 1.45 },
   { type: 'wait', ms: 1600 },
   { type: 'face', id: 'serena', to: 'sia' },
   { type: 'say', lines: [
@@ -207,9 +209,9 @@ export const FESTIVAL: OpeningStep[] = [
     hero('도란 아저씨보다 먼저 떠 올게.'),
     line('teon', '테온', '하하, 그럼 서둘러야겠는데.'),
   ] },
-  // 하늘 등불
-  { type: 'npc', id: 'sia', path: [P(960, 1260)] },
-  { type: 'npc', id: 'linea', path: [P(1140, 1290)] },
+  // 하늘 등불 (모닥불 남쪽 바깥을 돌아 도착한 뒤 함께 띄운다)
+  { type: 'npc', id: 'sia', path: [P(1220, 1285), P(990, 1275)], speed: 1.5 },
+  { type: 'npc', id: 'linea', path: [P(1240, 1295), P(1130, 1295)], speed: 1.5, wait: true },
   { type: 'face', id: 'teon', to: P(1181, 1650) },
   { type: 'hero', path: [P(1100, 1250), P(1050, 1320)] },
   { type: 'face', id: 'sia' },
@@ -250,11 +252,12 @@ export const FESTIVAL: OpeningStep[] = [
   { type: 'say', lines: [
     line('herman', '헤르만', '북쪽 마을로! 내 집과 치유소 문을 열어 두겠네. 아이들과 노인부터!'),
     line('rosetta', '로제타', '여관은 입구랑 너무 가까워! 다들 북쪽 길로, 어서!'),
-    line('eila', '에일라', '다친 사람은 나한테! 걸을 수 있으면 치유소로 가요!'),
+    line('eila', '에일라', '다친 사람은 나한테! 걸을 수 있으면 치유소로 가!'),
   ] },
   { type: 'npc', id: 'herman', path: [P(1250, 960), P(1220, 760), P(1180, 620), P(1170, 430)], speed: 1.3 },
-  { type: 'npc', id: 'rosetta', path: [P(1340, 960), P(1230, 800), P(1200, 600), P(1190, 430)], speed: 1.5 },
-  { type: 'npc', id: 'merina', path: [P(1600, 1000), P(1380, 850), P(1230, 620), P(1210, 440)], speed: 1.5 },
+  // 표지판·오른쪽 잔칫상 바깥을 돌아 북쪽 길로 대피한다.
+  { type: 'npc', id: 'rosetta', path: [P(1380, 920), P(1280, 810), P(1200, 620), P(1190, 430)], speed: 1.5 },
+  { type: 'npc', id: 'merina', path: [P(1510, 1200), P(1635, 1185), P(1625, 990), P(1380, 850), P(1230, 620), P(1210, 440)], speed: 1.5 },
   { type: 'npc', id: 'vernel', path: [P(1420, 1250), P(1640, 1180), P(1620, 960), P(1300, 760), P(1220, 450)], speed: 1.5 },
   { type: 'npc', id: 'eila', path: [P(1450, 1250), P(1540, 1200)], speed: 1.2 },
   { type: 'npc', id: 'serena', path: [P(1000, 1260), P(1450, 1250), P(1500, 1110)], speed: 1.3 },
@@ -265,8 +268,9 @@ export const FESTIVAL: OpeningStep[] = [
     line('sia', '시아', '오빠도… 꼭 와야 해!'),
     line('sia', '시아', '내 등불은… 나중에 같이 띄우자.'),
   ] },
-  { type: 'npc', id: 'linea', path: [P(1060, 1150), P(1130, 980), P(1180, 760), P(1180, 560)], speed: 1.6 },
-  { type: 'npc', id: 'sia', path: [P(1030, 1170), P(1100, 990), P(1160, 760), P(1170, 560)], speed: 1.6 },
+  // 중앙 큰 나무 왼쪽으로 돌아 북쪽 길로 대피한다.
+  { type: 'npc', id: 'linea', path: [P(1075, 1150), P(1085, 970), P(1095, 810), P(1170, 650), P(1180, 540)], speed: 1.6 },
+  { type: 'npc', id: 'sia', path: [P(1055, 1170), P(1065, 980), P(1080, 815), P(1155, 650), P(1170, 540)], speed: 1.6 },
   { type: 'wait', ms: 1400 },
   // 검을 든다
   { type: 'npc', id: 'ruan', path: [P(1030, 1240)], speed: 1.3, wait: true },
@@ -275,7 +279,7 @@ export const FESTIVAL: OpeningStep[] = [
   { type: 'say', lines: [
     line('doran', '도란', '대장간은 그냥 둬! 나는 치유소 문을 지키지. 시온, 무리하지 마라!'),
   ] },
-  { type: 'npc', id: 'doran', path: [P(1250, 1000), P(1200, 700), P(1180, 440)], speed: 1.4 },
+  { type: 'npc', id: 'doran', path: [P(1290, 1120), P(1280, 920), P(1220, 720), P(1180, 440)], speed: 1.4 },
   { type: 'say', lines: [
     line('ruan', '루안', '시온, 검을 들어라. 수련한 대로만 하면 된다.'),
     hero('…네.'),

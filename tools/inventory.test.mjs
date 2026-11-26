@@ -98,3 +98,18 @@ test('상점마다 파는 물건이 다르다: 메리나는 일상 물건, 페�
   assert.equal(countOf(buy(rich, 'blue-dew', 2, 'fern'), 'blue-dew'), 2);
   assert.equal(buy(rich, 'blue-dew', 2, 'fern').gold, 440);
 });
+
+test('1장 서브 보상 아이템: 세레나의 도시락은 220 회복하며 기념품(조약돌·연구 메모)은 사용·판매할 수 없다', async () => {
+  const { canUse, itemEffectText } = await import('../src/items/inventory.ts');
+  let inv = addItem(addItem(addItem(emptyInventory(), 'serena-lunch', 1), 'sia-pebble', 1), 'vernel-memo', 1);
+  assert.equal(useItem(inv, 'serena-lunch', 10, 300).heal, 220);
+  assert.equal(bestHealItem(addItem(inv, 'potion', 1), 200), 'serena-lunch');
+  assert.equal(sell(inv, 'serena-lunch'), null, '세레나의 도시락은 팔 수 없다');
+  for (const id of ['sia-pebble', 'vernel-memo']) {
+    assert.equal(ITEMS[id].kind, 'keepsake');
+    assert.equal(canUse(id, { hp: 10, maxHp: 100, mp: 0, maxMp: 30, slowed: true }), false);
+    assert.equal(sell(inv, id), null, `${id} 기념품은 팔 수 없다`);
+    assert.match(itemEffectText(id), /기념품/);
+  }
+  assert.deepEqual(parseInventory(serializeInventory(inv)), inv);
+});

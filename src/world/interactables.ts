@@ -29,6 +29,8 @@ export interface Interactable {
   reach?: InteractableReach;
   /** 말풍선을 띄울 높이 (바닥에서 위로) */
   markerHeight: number;
+  /** 말풍선 가로 오프셋 (대화 지점과 실제 인물 위치가 다를 때 인물 머리 위에 맞춘다) */
+  markerOffsetX?: number;
   /** 말을 걸면 나오는 대사 */
   dialogue?: DialogueId;
   /** 건물 문: 누르면 이 맵(실내)의 이 자리로 들어간다. 대화 버튼 대신 "들어가기"가 뜬다. */

@@ -154,9 +154,9 @@ export function pickWanderTarget(
   return { x: home.x, y: home.y };
 }
 
-/** 맵 안을 자유롭게 돌아다니는지 (순찰 병사는 자기 자리 주변만, 장사하는 사람은 서 있다) */
+/** 맵 안을 자유롭게 돌아다니는지 (경비병·초소장 테온·치유소 에일라·장사하는 사람은 자기 자리 주변을 지킨다) */
 export function roamsFreely(def: NpcDef): boolean {
-  return def.wander !== undefined && !def.id.startsWith('guard-');
+  return def.wander !== undefined && !def.id.startsWith('guard-') && def.id !== 'teon' && def.id !== 'eila';
 }
 
 /**

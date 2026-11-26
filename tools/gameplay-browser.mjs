@@ -2020,7 +2020,7 @@ test('후속 메인: 전달·매듭·순찰·축제 선택·습격 전투·수�
     const searchMarker = s.storyMarkers.length;
     await restart('village-north');
     const searchRestored = s.interactables.some(p => p.id === 'story-home-search');
-    inspect('story-home-search'); await restart('in-clinic'); talk('eila');
+    inspect('story-home-search'); await restart('in-clinic'); talk('eila'); talk('linea');
     await restart('village-north'); talk('herman');
     await restart('village'); talk('vernel');
     // 도란의 검: 도란이 철검을 건넨다(가방에 들어온다).
@@ -2988,9 +2988,11 @@ test('여관의 로제타에게 쉬어 가거나 집 침대에서 쉬면 체력�
     for (let i = 0; i < 3; i++) g.step(t += 16, 16);
     const label = s.attackButton.text.text;
     s.openDialogue(bed);
-    return { label, saved: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
+    const asked = s.storyChoice.isOpen;
+    s.storyChoice.accept();
+    return { label, asked, saved: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
   })()`);
-  assert.deepEqual(home, { label: '쉬기', saved: 'home' });
+  assert.deepEqual(home, { label: '쉬기', asked: true, saved: 'home' });
 
   // 치유소 침대: 체력과 둔화를 회복하지만 다시 시작할 자리는 바꾸지 않는다.
   await load('in-clinic');
@@ -4127,7 +4129,7 @@ test('페른의 수레는 여행 물품만 팔고, 푸른 이슬은 마나를, �
   assert.equal(result.usedHerb, true);
   assert.equal(result.slowedAfter, false);
   assert.equal(result.unused, false, '느려지지 않았으면 해독 약초를 쓰지 않는다');
-  assert.deepEqual(result.tileIds, ['potion', 'lunch', 'travel-biscuit', 'blue-dew', 'antidote-herb']);
+  assert.deepEqual(result.tileIds, ['potion', 'lunch', 'travel-biscuit', 'blue-dew', 'antidote-herb', 'serena-lunch']);
   assert.equal(result.overlap, false);
   assert.equal(result.inside, true);
 });

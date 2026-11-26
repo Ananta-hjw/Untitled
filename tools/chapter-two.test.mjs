@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoSpots, shelterRestOpen, chapterTwoNpcs, chapterTwoStarted, fernCartVisible, fernMothHunt, fernShopOpen } from '../src/story/chapterTwo.ts';
+import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoSpots, eastPassBlockedDialogue, eastPassOpen, shelterRestOpen, chapterTwoNpcs, chapterTwoStarted, fernCartVisible, fernMothHunt, fernShopOpen } from '../src/story/chapterTwo.ts';
 import { QUESTS, continueMainQuest, parseQuests, recordEvent, serializeQuests, talkTo } from '../src/story/quests.ts';
 import { MAPS, findExit, walkable } from '../src/world/maps.ts';
 import { findInteractable } from '../src/world/interactables.ts';
 import { REST_POINTS } from '../src/story/restPoints.ts';
-import { chapterNpcs } from '../src/story/chapterOne.ts';
+import { chapterDialogue, chapterNpcs } from '../src/story/chapterOne.ts';
 import { guardsForMap } from '../src/world/guards.ts';
 import { insideObstacle } from '../src/world/obstacles.ts';
 
@@ -94,11 +94,28 @@ test('떠날 채비: 남문의 수레 뒤 이어지고, 루안에게 회전 베�
   assert.equal(state.farewell.status, 'done');
 });
 
-test('2장의 베르넬과 테온은 떠나는 시온에게 한마디씩 한다(그 전에는 1장 대사)', () => {
+test('1장 완료 전에는 동쪽 고갯길 통로가 막히고 시온이 자연스럽게 되돌아선다', () => {
+  assert.equal(eastPassOpen({}), false);
+  assert.equal(eastPassOpen({ 'village-raid': { status: 'done', count: 1 } }), false);
+  assert.equal(eastPassOpen(afterSword), true);
+  assert.equal(eastPassBlockedDialogue({})[0].portrait, 'hero-neutral');
+  assert.match(eastPassBlockedDialogue({})[0].text, /여기는 아니야/);
+  assert.match(eastPassBlockedDialogue({ 'festival-eve': { status: 'done', count: 1 } })[0].text, /마을로 돌아가야/);
+  assert.match(eastPassBlockedDialogue({ 'village-raid': { status: 'done', count: 1 } })[0].text, /대장간/);
+});
+
+test('2장의 베르넬과 테온은 남문의 수레 이후 떠나는 시온에게 한마디씩 한다(그 전에는 1장 회복 대사)', () => {
   assert.equal(chapterTwoDialogue('teon', {}), undefined);
-  assert.match(chapterTwoDialogue('teon', afterSword)[0].text, /여기 남을게/);
-  assert.match(chapterTwoDialogue('vernel', afterSword)[0].text, /유적 길/);
-  assert.equal(chapterTwoDialogue('doran', afterSword), undefined, '나머지는 1장 습격 뒤 대사를 그대로 쓴다');
+  // 도란의 검 직후(아직 페른을 만나기 전)에는 1장 회복 대사가 정상 출력된다.
+  assert.equal(chapterTwoDialogue('teon', afterSword), undefined);
+  assert.match(chapterDialogue('teon', afterSword)[0].text, /순찰도 다시 시작/);
+  const afterCart = { ...afterSword, 'fern-cart': { status: 'done', count: 1, step: 2 }, farewell: { status: 'active', count: 0, step: 0 } };
+  assert.match(chapterTwoDialogue('teon', afterCart)[0].text, /여기 남을게/);
+  assert.match(chapterTwoDialogue('vernel', afterCart)[0].text, /유적 길/);
+  assert.equal(chapterTwoDialogue('doran', afterCart), undefined, '나머지는 1장 습격 뒤 대사를 그대로 쓴다');
+  const afterFarewell = { ...afterCart, farewell: { status: 'done', count: 1, step: 4 } };
+  assert.match(chapterTwoDialogue('linea', afterFarewell)[0].text, /일지에 적어 둘게/);
+  assert.match(chapterTwoDialogue('herman', afterFarewell)[0].text, /몸 조심하게나/);
 });
 
 test('동쪽 고갯길: 떠날 채비 뒤 이어지고, 고갯길의 서리 딱정벌레 셋을 쫓은 뒤 쉼터의 도르를 만나면 끝난다', () => {

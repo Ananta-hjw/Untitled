@@ -59,7 +59,7 @@ const STAT_COLORS: Record<StatId, number> = {
 export function itemFallback(entry: Entry): IconFallback {
   if (entry.type === 'gear') return { glyph: GEAR[entry.id].name.slice(0, 2), color: 0x5a4a32 };
   const def = ITEMS[entry.id];
-  return { glyph: def.name.slice(0, 2), color: def.kind === 'consumable' ? 0x7a3b2a : 0x3a5a3a };
+  return { glyph: def.name.slice(0, 2), color: def.kind === 'consumable' ? 0x7a3b2a : def.kind === 'keepsake' ? 0x6b562e : 0x3a5a3a };
 }
 
 function statsText(stats: Partial<StatBlock>): string {
@@ -292,7 +292,7 @@ export class CharacterPanel {
     if (this.mode === 'smithy') {
       return this.shopTab === 'buy'
         ? gearEntries(gearForSale('doran'), (id) => gearCount(view.gear, id))
-        : gearEntries(GEAR_IDS.filter((id) => gearCount(view.gear, id) > 0), (id) => gearCount(view.gear, id));
+        : gearEntries(GEAR_IDS.filter((id) => gearCount(view.gear, id) > 0 && GEAR[id].sellPrice > 0), (id) => gearCount(view.gear, id));
     }
     if (this.tab === 'equip') {
       return gearEntries(GEAR_IDS.filter((id) => gearCount(view.gear, id) > 0 && fits(id, this.selectedSlot)), (id) => gearCount(view.gear, id));
@@ -495,7 +495,7 @@ export class CharacterPanel {
       if (this.mode === 'smithy') {
         const buying = this.shopTab === 'buy';
         const price = buying ? def.price ?? Infinity : def.sellPrice;
-        enabled = buying ? view.inventory.gold >= price : gearCount(view.gear, shown.id) > 0;
+        enabled = buying ? view.inventory.gold >= price : gearCount(view.gear, shown.id) > 0 && def.sellPrice > 0;
         label = `${buying ? '구매' : '판매'}  ${price} G`;
         lines.push(`보유 ${gearCount(view.gear, shown.id)}개`);
         if (buying && !enabled) lines.push('골드가 부족합니다.');

@@ -80,15 +80,35 @@ export function fernShopOpen(state: QuestState): boolean {
   return state['fern-cart']?.status === 'done';
 }
 
+/** 1장 완료 전(도란의 검 받기 전)에는 동쪽 개울가에서 동쪽 고갯길로 넘어가지 못한다. */
+export function eastPassOpen(state: QuestState): boolean {
+  return chapterTwoStarted(state);
+}
+
+/** 1장 완료 전 동쪽 고갯길 통로에 닿았을 때 시온이 자연스럽게 되돌아서는 대사. */
+export function eastPassBlockedDialogue(state: QuestState): DialogueLine[] {
+  const text = state['village-raid']?.status === 'done'
+    ? '아직 고개 너머로 떠날 준비가 안 됐어. 마을 사람들과 대장간에 먼저 들러 보자.'
+    : state['festival-eve']?.status === 'done'
+      ? '지금은 고개 너머로 갈 때가 아니야! 어서 마을로 돌아가야 해.'
+      : '여기는 아니야. 지금 고개 너머까지 갈 일은 없어. 마을로 돌아가자.';
+  return [{ speaker: '시온', portrait: 'hero-neutral', text }];
+}
+
 /**
- * 2장의 로웬에서 바뀌는 평소 대사. 퀘스트와 상관없이 말을 걸 때 나온다(1장 습격 뒤 대사보다 먼저).
- * 퀘스트 2 "떠날 채비"의 필수 인사(루안·세레나·리네아·에일라·헤르만)는 퀘스트 대사가 맡고, 여기는 덤으로 들르는 사람들이다.
+ * 2장 "떠날 채비" 이후 로웬에서 바뀌는 평소 대사. 퀘스트와 상관없이 말을 걸 때 나온다(1장 습격 뒤 대사보다 먼저).
+ * 페른에게 동쪽 소식을 듣기 전(남문의 수레 진행 중)에는 1장 회복 대사를 그대로 유지한다.
  */
 export function chapterTwoDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined {
-  if (!chapterTwoStarted(state)) return undefined;
+  if (state['fern-cart']?.status !== 'done') return undefined;
+  const departed = state.farewell?.status === 'done';
   const lines: Partial<Record<NpcId, DialogueLine[]>> = {
     vernel: [{ speaker: '베르넬', portrait: 'vernel', text: '유적 길을 다 치우려면 한참 걸려. 네가 돌아올 때쯤엔 들어갈 수 있게 해 둘게.' }],
     teon: [{ speaker: '테온', portrait: 'teon', text: '이번엔 여기 남을게. 남은 사람들은 내가 지킨다. …그러니까 너는 뒤돌아보지 말고 가.' }],
+    ...(departed ? {
+      linea: [{ speaker: '리네아', portrait: 'linea', text: '내 증상은 매일 일지에 적어 둘게. 시온, 무리하지 말고 꼭 돌아와.' }],
+      herman: [{ speaker: '헤르만', portrait: 'herman', text: '마을 걱정은 말게. 고개 너머에서도 부디 몸 조심하게나.' }],
+    } : {}),
   };
   return lines[npc];
 }

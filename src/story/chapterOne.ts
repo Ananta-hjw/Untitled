@@ -1,6 +1,6 @@
 import { mapLength, mapPoint } from '../world/mapScale.ts';
 import type { DialogueLine } from './dialogues.ts';
-import { currentObjective, questDef, type QuestId, type QuestState } from './quests.ts';
+import { currentObjective, isSubPaused, questDef, type QuestId, type QuestState } from './quests.ts';
 import { GUARDS, isGuardId } from '../world/guards.ts';
 import { NPCS, type Direction8, type DutyPoint, type NamedNpcId, type NpcDef, type NpcId } from '../world/npcs.ts';
 import { INTERIORS, interiorArtPoint, type InteriorId } from '../world/interiors.ts';
@@ -142,7 +142,7 @@ export const AFTERMATH_DUTIES: Partial<Record<NpcId, DutyPoint[]>> = {
   'guard-homes-east': duty('경계 중', [1900, 1160], [2300, 1100], [2250, 800], [1800, 800]),
   // 2장부터 남문 오른쪽 위에 페른의 수레가 서므로(story/chapterTwo.ts) 그 자리를 비켜 다닌다.
   teon: duty('남문 경계 중', [1340, 1450], [1050, 1420], [1300, 1300]),
-  vernel: duty('권속 흔적 조사 중', [1200, 1330], [1350, 1250], [1300, 1450])
+  vernel: duty('권속 흔적 조사 중', [1200, 1330], [1350, 1250], [1140, 1410])
     .map(p => ({ ...p, action: 'inspect', facing: 'down-left', durationMs: 8000 })),
   'guard-plaza-west': duty('목재 수리 중', [900, 1180], [1120, 1280])
     .map(p => ({ ...p, action: 'repair', facing: 'up-left', durationMs: 6000 })),
@@ -186,11 +186,21 @@ const SPOTS = {
   'moth-nest': { id: 'story-moth-nest', x: 1787.5, y: 1229.8, radius: 95, markerHeight: 55 },
   // 습격 중 마을 북쪽: 리네아의 집 옆 골목
   'north-alley': { id: 'story-north-alley', x: LINEA_YARD.x + mapLength(120), y: LINEA_YARD.y + mapLength(70), radius: 95, markerHeight: 55 },
+  // 1장 첫날 서브 퀘스트 채집·조사 지점
+  wildflower: { id: 'story-wildflower', x: 1120, y: 880, radius: 95, markerHeight: 55 },
+  'ancient-tablet': { id: 'story-ancient-tablet', x: 2640, y: 760, radius: 95, markerHeight: 55 },
+  'silver-herb-1': { id: 'story-silver-herb-1', x: 640, y: 1320, radius: 95, markerHeight: 55 },
+  'silver-herb-2': { id: 'story-silver-herb-2', x: 1580, y: 1720, radius: 95, markerHeight: 55 },
+  'silver-herb-3': { id: 'story-silver-herb-3', x: 2060, y: 1120, radius: 95, markerHeight: 55 },
+  'stream-pebble': { id: 'story-stream-pebble', ...mapPoint({ x: 960, y: 470 }), radius: 95, markerHeight: 55 },
+  'clear-water': { id: 'story-clear-water', ...mapPoint({ x: 1760, y: 470 }), radius: 95, markerHeight: 55 },
 } satisfies Record<string, Interactable>;
 
 export function chapterSpots(state: QuestState, map: MapId): Interactable[] {
   return Object.values(SPOTS).filter((spot: Interactable) => Object.entries(state).some(([id, p]) => {
-    const objective = currentObjective(questDef(id as Parameters<typeof questDef>[0]), p);
+    const def = questDef(id as QuestId);
+    if (isSubPaused(def, state)) return false;
+    const objective = currentObjective(def, p);
     return p.status === 'active' && objective.event === 'inspect' && objective.map === map && `story-${objective.spot}` === spot.id;
   }));
 }
@@ -210,6 +220,27 @@ export const INSPECTION_LINES: Record<string, DialogueLine[]> = {
     { speaker: '시온', portrait: 'hero-neutral', text: '시아야? …대답이 없어. 문은 열려 있는데 집은 비어 있어. 시아가 돌아온 흔적은 없어.' },
     { speaker: '시온', portrait: 'hero-neutral', text: '리네아라면 마지막으로 시아를 봤을 텐데… 에일라에게 가 보자.' },
   ],
+  'story-wildflower': [
+    { speaker: '시온', portrait: 'hero-neutral', text: '하늘색 꽃잎이 햇빛에 반짝이고 있어. 리네아가 좋아할 만한 걸로 한 다발 꺾어 가자.' },
+  ],
+  'story-ancient-tablet': [
+    { speaker: '시온', portrait: 'hero-neutral', text: '풀숲 사이에 반쯤 묻힌 낡은 석판 조각이야. 처음 보는 기하학적인 표식이 새겨져 있네… 베르넬에게 가져다주자.' },
+  ],
+  'story-silver-herb-1': [
+    { speaker: '시온', portrait: 'hero-neutral', text: '잎 끝이 은빛으로 빛나는 약초야. 뿌리가 다치지 않게 조심해서 캐자.' },
+  ],
+  'story-silver-herb-2': [
+    { speaker: '시온', portrait: 'hero-neutral', text: '여기에도 은빛 풀이 자라고 있어. 상쾌한 풀내음이 나네.' },
+  ],
+  'story-silver-herb-3': [
+    { speaker: '시온', portrait: 'hero-neutral', text: '이걸로 세 뿌리째야. 시들기 전에 치유소의 에일라 선생님께 갖다드리자.' },
+  ],
+  'story-stream-pebble': [
+    { speaker: '시온', portrait: 'hero-neutral', text: '맑은 물에 씻겨 동그랗고 윤이 나는 조약돌이야. 시아가 찾던 게 딱 이거겠네.' },
+  ],
+  'story-clear-water': [
+    { speaker: '시온', portrait: 'hero-neutral', text: '바닥 자갈이 훤히 비칠 만큼 맑은 개울물이야. 물통에 가득 담았으니 어머니께 갖다드리자.' },
+  ],
 };
 
 /**
@@ -221,6 +252,22 @@ export const DUSK_MOTH_POINTS: ReadonlyArray<readonly [number, number]> = [[1229
 
 export function isDusk(state: QuestState): boolean {
   return !!state['evening-patrol'] && chapterPhase(state) === 'day';
+}
+
+/** 해 질 무렵 남쪽 들판에 잿빛 나방이 남아 있는지 (쫓아내기 완료 뒤에는 사라진다). */
+export function hasDuskMoths(state: QuestState): boolean {
+  return isDusk(state) && state['moth-trail']?.status !== 'done';
+}
+
+/** 광장 표지판의 시기별 대사 (습격·수습 중에 첫날 축제 리본 감상이 나오지 않게 한다). */
+export function villageSignDialogue(state: QuestState): DialogueLine[] | undefined {
+  const phase = chapterPhase(state);
+  if (phase === 'day') return undefined;
+  const header: DialogueLine = { speaker: '표지판', text: '로웬 마을 광장\n북쪽: 집들 · 남쪽: 들판 · 서쪽: 숲길 · 동쪽: 개울가' };
+  const reaction = phase === 'raid'
+    ? '수확제 리본이 바람에 흩날리고 있어… 어서 마을을 지키자.'
+    : '수확제 리본이 아직 걸려 있네… 리네아와 시아가 무사히 돌아오면 좋겠어.';
+  return [header, { speaker: '시온', portrait: 'hero-neutral', text: reaction }];
 }
 
 export interface RaidSpawn {
@@ -285,12 +332,27 @@ export function raidSpawns(state: QuestState, map: MapId): RaidSpawn[] {
 }
 
 /**
- * 습격 전 첫날, 할 일을 끝낸 뒤의 평소 대사. 첫날 대사(dialogues.ts)가 이미 끝난 일을 다시 말하지 않게 한다.
+ * 습격 전 첫날, 진행 단계에 맞춰 바뀐 평소 대사. 이미 끝난 일이나 지난 시간대를 다시 말하지 않게 한다.
  */
 function dayDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined {
   const done = (id: QuestId) => state[id]?.status === 'done';
-  if (npc === 'ruan' && done('ruan-training')) return [{ speaker: '루안', portrait: 'ruan', text: '오늘은 충분하다. 저녁에 광장에서 보자.' }];
-  if (npc === 'linea' && done('ruan-training')) return [{ speaker: '리네아', portrait: 'linea', text: '수련은 끝났어? 장식은 거의 다 됐어. 이제 저녁만 기다리면 돼.' }];
+  if (npc === 'ruan') {
+    if (done('ruan-forest')) return [{ speaker: '루안', portrait: 'ruan', text: '오늘은 충분하다. 저녁에 광장에서 보자.' }];
+    if (done('ruan-training')) return [{ speaker: '루안', portrait: 'ruan', text: '아직 수련이 남았다. 서두르지 말고 차근차근 익혀라.' }];
+  }
+  if (npc === 'linea') {
+    if (done('sia-knot') || done('festival-supplies')) return [{ speaker: '리네아', portrait: 'linea', text: '등불 장식은 다 끝냈어! 이제 저녁만 기다리면 돼.' }];
+    if (done('ruan-training')) return [{ speaker: '리네아', portrait: 'linea', text: '수련 잘 되고 있어? 장식은 거의 다 됐어. 끝나고 이따 들러!' }];
+  }
+  if (npc === 'sia' && done('sia-knot')) {
+    return [{ speaker: '시아', portrait: 'sia', text: '창문 끈은 단단히 묶어 놨어! 이제 축제 때 같이 등불 띄우는 일만 남았네!' }];
+  }
+  if (npc === 'serena' && isDusk(state)) {
+    return [{ speaker: '세레나', portrait: 'serena', text: '벌써 해가 기울었구나. 곧 광장에서 잔치를 시작할 테니 서둘러 오렴.' }];
+  }
+  if (npc === 'doran' && isDusk(state)) {
+    return [{ speaker: '도란', portrait: 'doran', text: '해가 다 졌군. 오늘은 그만 쉬고 광장 잔치나 즐기자고!' }];
+  }
   if (npc === 'teon' && done('watch-report')) return [{ speaker: '테온', portrait: 'teon', text: '숲 얘기 고마워. 입구는 내가 더 단단히 지킬게.' }];
   return undefined;
 }
@@ -298,10 +360,19 @@ function dayDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined 
 export function chapterDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined {
   const phase = chapterPhase(state);
   if (phase === 'day') return dayDialogue(npc, state);
-  if (npc === 'serena' && phase === 'raid' && (state['village-raid']?.step ?? 0) >= 4) return [{
-    speaker: '세레나', portrait: 'serena', text: lineaRecovery(state)
-      ? '리네아는 내가 곁에서 볼게. 시온, 시아를 찾아 줘. 너도 무사히 돌아와야 한다.'
-      : '여긴 괜찮아. 다친 사람들이 쉴 수 있게 물과 수건을 챙기고 있어. 너도 조심하렴.',
+  const raidProgress = state['village-raid'];
+  const raidStep = raidProgress?.status === 'ready' ? 7 : (raidProgress?.step ?? 0);
+  if (npc === 'serena' && phase === 'raid' && raidStep >= 4) return [{
+    speaker: '세레나', portrait: 'serena', text: raidStep >= 6
+      ? '리네아는 내가 곁에서 볼게. 에일라에게 상태를 물어보고, 너도 조심하렴.'
+      : raidStep >= 5
+        ? '방금 사람들이 리네아를 업고 들어왔어. 시아는 안 보이던데… 북쪽 골목부터 살펴봐 주겠니?'
+        : '여긴 괜찮아. 다친 사람들이 쉴 수 있게 물과 수건을 챙기고 있어. 너도 조심하렴.',
+  }];
+  if (npc === 'eila' && phase === 'raid' && raidStep >= 5) return [{
+    speaker: '에일라', portrait: 'eila', text: raidStep >= 7
+      ? '리네아는 내가 곁에서 볼게. 루안도 크게 다쳤으니 광장에 먼저 가 보렴.'
+      : '방금 북쪽 골목에서 리네아를 업고 왔어. 큰 외상은 없는데 깨어나질 않아… 골목부터 살펴봐 주렴.',
   }];
   if (npc === 'linea' && !chapterCanTalk(npc, state)) return [{ speaker: '시온', portrait: 'hero-neutral', text: '리네아는 아직 의식을 되찾지 못했어. 숨은 고르게 쉬고 있어… 에일라에게 상태를 물어보자.' }];
   // 동료(entities/companion.ts)는 이 대사를 쓰지 않는다.
@@ -312,15 +383,18 @@ export function chapterDialogue(npc: NpcId, state: QuestState): DialogueLine[] |
     // 남문은 테온이 맡던 자리다. 잔치 날 밤 남문 병사들은 테온의 지휘 아래 있었고, 입구는 뚫렸다.
     const south = guard.gate === 'south';
     const text = phase === 'raid'
-      ? south ? '테온 대장님과 막고 있었는데… 놈들이 너무 많습니다! 마을 안쪽을 부탁드립니다!'
-        : '주민들이 대피할 길을 확보하고 있습니다. 위험하니 마물 가까이에서는 조심하세요!'
+      ? raidStep >= 5 ? '일단 큰 고비는 넘겼습니다. 다친 분들이 괜찮은지 살펴봐 주세요.'
+        : south ? '테온 대장님과 막고 있었는데… 놈들이 너무 많습니다! 마을 안쪽을 부탁드립니다!'
+          : '주민들이 대피할 길을 확보하고 있습니다. 위험하니 마물 가까이에서는 조심하세요!'
       : south ? '그날 밤 남문은 테온 대장님과 저희가 지켰습니다. …막아 내지 못했어요. 대장님은 혼자 다 짊어지려 하시고요.'
         : '다친 주민들을 살피고 경비를 다시 세우고 있습니다. 도움이 필요하면 말씀하세요.';
     return [{ speaker: guard.name, portrait: 'soldier', text }];
   }
   const texts: Partial<Record<NpcId, string>> = {
     ruan: '조금만 쉬면 괜찮아질 거다. 넌 네가 해야 할 일을 하렴. 다만 혼자 감당하려 들진 말고.',
-    linea: '시온… 시아는 찾았어? 그 아이, 혼자 있으면 안 되는데…',
+    linea: state['missing-sia']?.status === 'done'
+      ? '시온… 북쪽 골목에서 내가 끝까지 붙잡았어야 했는데… 시아는 꼭 무사할 거야.'
+      : '시온… 시아는 찾았어? 그 아이, 혼자 있으면 안 되는데…',
     serena: '나는 리네아 곁에 있을게. 시아를 찾아 줘. 너도 꼭 돌아와야 한다.',
     eila: '보통 상처가 아니야. 내가 곁에서 돌볼 테니, 넌 도울 방법을 찾아보렴.',
     teon: state['first-sword']?.status === 'done'
@@ -333,14 +407,14 @@ export function chapterDialogue(npc: NpcId, state: QuestState): DialogueLine[] |
     rosetta: '여관은 계속 열어 둘게. 다친 사람도, 집에 돌아가기 힘든 사람도 들어와 쉬면 돼.',
   };
   const raidTexts: Partial<Record<NpcId, string>> = {
-    ruan: '시온, 길을 막는 녀석들부터 저지하자. 사람들이 지나갈 길을 열어야 해!',
+    ruan: raidStep >= 5 ? '후우… 권속들은 물러난 모양이구나. 북쪽 골목과 치유소부터 살펴보고 오렴.' : '시온, 길을 막는 녀석들부터 저지하자. 사람들이 지나갈 길을 열어야 해!',
     serena: '다친 사람들은 북쪽 치유소로 보내고 있어. 시온, 너도 조심하렴.',
     eila: '움직일 수 있는 사람은 북쪽으로! 다친 사람은 여기서 내가 먼저 살펴볼게.',
-    teon: '입구에서 밀려들고 있어! 마을 안쪽으로 보내면 안 돼!',
+    teon: raidStep >= 2 ? '윽… 남문은 내가 버틸게. 안쪽 사람들을 부탁해!' : '입구에서 밀려들고 있어! 마을 안쪽으로 보내면 안 돼!',
     herman: '내 집과 치유소에 사람들을 들였네. 뒤처진 사람이 없는지 살펴 주게나.',
     merina: '가게에서 물약을 챙겨 왔어. 상처가 나면 바로 써. 필요한 건 여기 있어!',
-    doran: '치유소 문은 내가 지킨다. 너는 길을 막는 놈들을 부탁한다!',
-    vernel: '무슨 일이 벌어진 거지…? 아이들은 여기서 내가 보고 있겠네.',
+    doran: raidStep >= 5 ? '권속들은 물러난 모양이군. 치유소 안을 살펴봐라!' : '치유소 문은 내가 지킨다. 너는 길을 막는 놈들을 부탁한다!',
+    vernel: '무슨 일이 벌어진 거지…? 아이들은 여기서 내가 보고 있을게.',
     rosetta: '여관은 남쪽 입구와 너무 가까워서 다들 여기로 옮겼어. 담요는 넉넉해!',
   };
   const text = (phase === 'raid' ? raidTexts : texts)[npc];

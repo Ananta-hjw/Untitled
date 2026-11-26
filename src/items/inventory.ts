@@ -11,13 +11,14 @@
  * 이 파일은 Phaser를 쓰지 않아 tools/inventory.test.mjs가 직접 불러 검사한다.
  */
 
-export type ItemId = 'potion' | 'lunch' | 'slime-gel' | 'travel-biscuit' | 'blue-dew' | 'antidote-herb';
+export type ItemId = 'potion' | 'lunch' | 'slime-gel' | 'travel-biscuit' | 'blue-dew' | 'antidote-herb'
+  | 'serena-lunch' | 'sia-pebble' | 'vernel-memo';
 
 export interface ItemDef {
   id: ItemId;
   name: string;
   description: string;
-  kind: 'consumable' | 'material';
+  kind: 'consumable' | 'material' | 'keepsake';
   /** 쓰면 채우는 체력 */
   heal?: number;
   /** 쓰면 채우는 마나 */
@@ -26,7 +27,7 @@ export interface ItemDef {
   cures?: 'slow';
   /** 잡화점에서 살 때 값. 없으면 팔지 않는다 */
   price?: number;
-  /** 잡화점에 팔 때 받는 값 */
+  /** 잡화점에 팔 때 받는 값. 0이면 팔 수 없다 */
   sellPrice: number;
 }
 
@@ -37,6 +38,9 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   'travel-biscuit': { id: 'travel-biscuit', name: '여행용 건빵', description: '딱딱하지만 오래 가는 건빵. 체력을 30 채운다.', kind: 'consumable', heal: 30, price: 10, sellPrice: 4 },
   'blue-dew': { id: 'blue-dew', name: '푸른 이슬', description: '새벽 약초에서 받은 푸른 물. 마나를 40 채운다.', kind: 'consumable', mana: 40, price: 30, sellPrice: 12 },
   'antidote-herb': { id: 'antidote-herb', name: '해독 약초', description: '씹으면 몸이 가벼워진다. 잿빛 가루의 느려짐을 푼다.', kind: 'consumable', cures: 'slow', price: 15, sellPrice: 6 },
+  'serena-lunch': { id: 'serena-lunch', name: '세레나의 도시락', description: '세레나가 정성껏 싸 준 도시락. 체력을 220 채운다.', kind: 'consumable', heal: 220, sellPrice: 0 },
+  'sia-pebble': { id: 'sia-pebble', name: '시아의 조약돌', description: '시아가 개울가에서 오빠 몫으로 하나 더 주워 둔 매끈한 조약돌.', kind: 'keepsake', sellPrice: 0 },
+  'vernel-memo': { id: 'vernel-memo', name: '베르넬의 연구 메모', description: '들판 석판 조각에 새겨진 낯선 유적 표식을 베르넬이 옮겨 적은 쪽지.', kind: 'keepsake', sellPrice: 0 },
 };
 
 /** 상점 */
@@ -50,6 +54,7 @@ export const SHOP_STOCK: Record<ShopId, ItemId[]> = {
 /** 물품 창에 보여 줄 효과 한 줄 (예: "체력 50 회복") */
 export function itemEffectText(id: ItemId): string {
   const def = ITEMS[id];
+  if (def.kind === 'keepsake') return '소중한 기념품 · 팔 수 없다';
   if (def.kind !== 'consumable') return '재료 · 상점에 팔 수 있다';
   return [def.heal ? `체력 ${def.heal} 회복` : '', def.mana ? `마나 ${def.mana} 회복` : '', def.cures === 'slow' ? '느려짐 해소' : '']
     .filter(Boolean).join(' · ');
@@ -147,8 +152,9 @@ export function buy(inv: Inventory, id: ItemId, count = 1, shop?: ShopId): Inven
   return addItem({ ...inv, gold: inv.gold - cost }, id, count);
 }
 
-/** 판다. 모자라면 null */
+/** 판다. 모자라거나 팔 수 없는 물건(기념품 등)이면 null */
 export function sell(inv: Inventory, id: ItemId, count = 1): Inventory | null {
+  if (ITEMS[id].sellPrice <= 0 || ITEMS[id].kind === 'keepsake') return null;
   const removed = removeItem(inv, id, count);
   return removed ? addGold(removed, ITEMS[id].sellPrice * count) : null;
 }

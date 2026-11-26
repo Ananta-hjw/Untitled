@@ -24,7 +24,7 @@ export const SLOT_INFO: Record<SlotId, { name: string; kind: GearKind }> = {
 
 export type GearId =
   | 'wooden-sword' | 'short-sword' | 'long-sword' | 'iron-sword' | 'cloth-hood' | 'worn-tunic' | 'leather-armor'
-  | 'leather-gloves' | 'light-boots' | 'clover-charm' | 'blue-bead' | 'travel-cloak';
+  | 'leather-gloves' | 'light-boots' | 'clover-charm' | 'blue-bead' | 'wildflower-bracelet' | 'travel-cloak';
 
 export interface GearDef {
   id: GearId;
@@ -53,6 +53,8 @@ export const GEAR: Record<GearId, GearDef> = {
   'light-boots': { id: 'light-boots', name: '가벼운 장화', description: '발이 가벼워 몸을 빨리 뺄 수 있다.', kind: 'feet', stats: { dex: 3 }, price: 120, sellPrice: 45 },
   'clover-charm': { id: 'clover-charm', name: '네잎 부적', description: '행운을 부른다는 작은 부적.', kind: 'accessory', stats: { luk: 3 }, price: 150, sellPrice: 60 },
   'blue-bead': { id: 'blue-bead', name: '푸른 구슬 목걸이', description: '마음이 맑아지는 푸른 구슬.', kind: 'accessory', stats: { int: 3 }, price: 150, sellPrice: 60 },
+  // 1장 서브 퀘스트 "축제 장식용 들꽃" 보상: 리네아가 엮어 준 약속의 팔찌라 상점에 팔 수 없다.
+  'wildflower-bracelet': { id: 'wildflower-bracelet', name: '리네아의 들꽃 팔찌', description: '리네아가 하늘색 들꽃으로 엮어 준 팔찌. 손목에 차면 마음이 놓인다.', kind: 'accessory', stats: { vit: 2 }, sellPrice: 0 },
   // 페른의 수레에서 판다. 서브 퀘스트 "행상인의 짐"을 끝내면 수레에 들어온다(docs/story-chapter2.md).
   'travel-cloak': { id: 'travel-cloak', name: '여행자의 망토', description: '바람과 비를 막는 두꺼운 망토. 몸놀림을 해치지 않는다.', kind: 'body', stats: { def: 2, dex: 2 }, price: 220, sellPrice: 85, shop: 'fern' },
 };
@@ -139,9 +141,9 @@ export function buyGear(inv: Inventory, gear: Gear, id: GearId, shop: 'doran' | 
   return { inventory: { ...inv, gold: inv.gold - price }, gear: addBag(gear, id, 1) };
 }
 
-/** 가방의(끼지 않은) 장비를 판다. 없으면 null */
+/** 가방의(끼지 않은) 장비를 판다. 없거나 팔 수 없는 기념품 장비면 null */
 export function sellGear(inv: Inventory, gear: Gear, id: GearId): { inventory: Inventory; gear: Gear } | null {
-  if (gearCount(gear, id) <= 0) return null;
+  if (gearCount(gear, id) <= 0 || GEAR[id].sellPrice <= 0) return null;
   return {
     inventory: { ...inv, gold: Math.min(MAX_GOLD, inv.gold + GEAR[id].sellPrice) },
     gear: addBag(gear, id, -1),

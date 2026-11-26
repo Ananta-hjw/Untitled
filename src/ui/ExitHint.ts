@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH_UI } from '../config';
 import { actionIcon } from './actionIcons';
 import type { Interactable } from '../world/interactables';
-import { isMapId, MAPS, type GameMap, type Point } from '../world/maps';
+import { isMapId, MAPS, type GameMap, type MapExit, type Point } from '../world/maps';
 import { CARDINAL, exitDirection, exitPoint, nearbyExit } from '../world/mapNavigation';
 
 type BannerKind = 'passage' | 'enter' | 'exit';
@@ -161,13 +161,21 @@ export class ExitHint {
     this.last = '!';
   }
 
-  update(player: Point, hidden: boolean, blocked: boolean, door?: Interactable): void {
+  update(
+    player: Point,
+    hidden: boolean,
+    blocked: boolean | ((exit: MapExit) => string | boolean | undefined),
+    door?: Interactable,
+  ): void {
     const activeDoor = !hidden && door?.enter ? door : undefined;
     const exit = hidden || activeDoor ? undefined : nearbyExit(this.map, player);
+    const blockInfo = exit ? (typeof blocked === 'function' ? blocked(exit) : blocked) : false;
+    const isBlocked = !!blockInfo;
+    const blockMessage = typeof blockInfo === 'string' ? blockInfo : '습격을 막은 뒤 이동할 수 있습니다';
     const id = activeDoor
       ? `door:${activeDoor.id}:${this.width}`
       : exit
-        ? `exit:${exit.to}:${blocked}:${this.width}`
+        ? `exit:${exit.to}:${isBlocked ? blockMessage : ''}:${this.width}`
         : '';
     this.activeDoor = activeDoor;
     if (id === this.last) return;
@@ -222,10 +230,10 @@ export class ExitHint {
       const direction = CARDINAL[exitDirection(this.map, exitPoint(this.map, exit))];
       this.title.setColor(theme.titleColor).setText(`${direction.arrow} ${direction.name} · ${MAPS[exit.to].name}`);
       this.detail
-        .setColor(blocked ? '#f0b89c' : theme.detailColor)
-        .setText(blocked ? '습격을 막은 뒤 이동할 수 있습니다' : '길 끝으로 이동하면 지역이 바뀝니다');
+        .setColor(isBlocked ? '#f0b89c' : theme.detailColor)
+        .setText(isBlocked ? blockMessage : '길 끝으로 이동하면 지역이 바뀝니다');
       this.icon.setVisible(false);
-      this.glyph.setColor(blocked ? '#f0b89c' : theme.accentColor).setText(direction.arrow).setVisible(true);
+      this.glyph.setColor(isBlocked ? '#f0b89c' : theme.accentColor).setText(direction.arrow).setVisible(true);
       this.chevron.setVisible(false);
       this.hitArea.setVisible(false).disableInteractive();
 

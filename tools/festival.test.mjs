@@ -89,3 +89,29 @@ test('잔치 연출에서 시온이 걷는 길은 걸을 수 있고, 잔칫상·
     }
   }
 });
+
+test('수확제 컷신의 모든 이동 선분은 표지판·큰 나무·잔칫상·모닥불을 관통하지 않는다', () => {
+  const map = MAPS.village;
+  const pos = new Map([['hero', { ...FESTIVAL_HERO_START }]]);
+  for (const n of festivalNpcs()) pos.set(n.id, { x: n.x, y: n.y });
+  const inTable = (x, y) => FEAST_TABLES.some(t => Math.abs(x - t.x) < t.w / 2 - 12 && y <= t.y && y >= t.y - t.d);
+  const inFire = (x, y) => Math.hypot((x - BONFIRE.x) / 68, (y - BONFIRE.y) / 42) < 1;
+  for (const [idx, step] of FESTIVAL.entries()) {
+    if (step.type === 'placeHero') { pos.set('hero', { ...step.at }); continue; }
+    if (step.type === 'place') { pos.set(step.id, { ...step.at }); continue; }
+    if (step.type !== 'hero' && step.type !== 'npc') continue;
+    const who = step.type === 'hero' ? 'hero' : step.id;
+    let cur = pos.get(who);
+    for (const next of step.path) {
+      const n = Math.max(1, Math.ceil(Math.hypot(next.x - cur.x, next.y - cur.y) / 8));
+      for (let i = 1; i <= n; i++) {
+        const x = cur.x + (next.x - cur.x) * i / n, y = cur.y + (next.y - cur.y) * i / n;
+        assert.equal(walkable(map, x, y), true, `step ${idx} ${who} 장애물 충돌 (${Math.round(x)}, ${Math.round(y)})`);
+        assert.equal(inTable(x, y), false, `step ${idx} ${who} 잔칫상 관통 (${Math.round(x)}, ${Math.round(y)})`);
+        assert.equal(inFire(x, y), false, `step ${idx} ${who} 모닥불 관통 (${Math.round(x)}, ${Math.round(y)})`);
+      }
+      cur = next;
+    }
+    pos.set(who, cur);
+  }
+});

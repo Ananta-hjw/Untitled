@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
-import { MAPS, type GameMap, type Point } from '../world/maps';
+import { MAPS, type GameMap, type MapId, type Point } from '../world/maps';
 import { CARDINAL, exitDirection, exitPoint, type Cardinal } from '../world/mapNavigation';
 import { mapPreview, type MapPreview } from './mapPreview';
 
 const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 const DEPTH = DEPTH_UI + 50;
-interface Label { text: Phaser.GameObjects.Text; point: Point; direction?: Cardinal }
+interface Label { text: Phaser.GameObjects.Text; point: Point; direction?: Cardinal; target?: MapId }
 interface Dots { npcs: Point[]; enemies: Point[] }
 
 /** Actual current-map art, with current positions. Opening pauses gameplay; it never travels on click. */
@@ -27,7 +27,8 @@ export class WorldMap {
   private width = 0;
   private player: Point = { x: 0, y: 0 };
   private dots: Dots = { npcs: [], enemies: [] };
-  private blocked = false;
+  private blocked: boolean | ReadonlySet<MapId> = false;
+  private blockNote = '';
   private mapRect = { x: 0, y: 0, w: 0, h: 0 };
 
   constructor(private readonly scene: Phaser.Scene, private readonly map: GameMap, private readonly onClose: () => void) {
@@ -60,7 +61,7 @@ export class WorldMap {
     }
     for (const passage of passages) {
       const direction = CARDINAL[passage.direction];
-      this.labels.push({ point: passage.point, direction: passage.direction,
+      this.labels.push({ point: passage.point, direction: passage.direction, target: passage.target,
         text: this.text(`${direction.arrow} ${MAPS[passage.target].name}`, 17, '#ffe2a0')
           .setPadding(8, 5).setBackgroundColor('#17241d') });
     }
@@ -68,9 +69,9 @@ export class WorldMap {
   }
 
   get isOpen(): boolean { return this.open; }
-  show(player: Point, dots: Dots, blocked = false): void {
+  show(player: Point, dots: Dots, blocked: boolean | ReadonlySet<MapId> = false, blockNote = ''): void {
     this.player = { x: player.x, y: player.y };
-    this.dots = dots; this.blocked = blocked;
+    this.dots = dots; this.blocked = blocked; this.blockNote = blockNote;
     this.open = true; this.setVisible(true); this.draw();
   }
   close(): void {
@@ -113,8 +114,9 @@ export class WorldMap {
     for (const label of this.labels) {
       const p = this.project(label.point), t = label.text;
       if (!label.direction) { t.setPosition(p.x, p.y + 5); continue; }
-      dot(label.point, this.blocked ? 0x9c9b8a : 0xf3c568, 5);
-      t.setColor(this.blocked ? '#b6b4a6' : '#ffe2a0');
+      const locked = typeof this.blocked === 'boolean' ? this.blocked : !!label.target && this.blocked.has(label.target);
+      dot(label.point, locked ? 0x9c9b8a : 0xf3c568, 5);
+      t.setColor(locked ? '#b6b4a6' : '#ffe2a0');
       const dir = label.direction;
       t.setOrigin(dir === 'east' ? 1 : dir === 'west' ? 0 : .5, dir === 'north' ? 0 : dir === 'south' ? 1 : .5)
         .setPosition(p.x + (dir === 'east' ? -14 : dir === 'west' ? 14 : 0), p.y + (dir === 'north' ? 14 : dir === 'south' ? -14 : 0));
@@ -126,7 +128,10 @@ export class WorldMap {
     const p = this.project(this.player); this.here.setPosition(p.x, p.y);
     const positions = [-220, -80, 65, 210];
     this.legend.forEach((text, i) => text.setPosition(width / 2 + positions[i], 652).setOrigin(.5));
-    if (this.blocked) this.subtitle.setText('현재 지역 전체 · 습격 중에는 다른 지역으로 이동할 수 없습니다');
+    const hasBlocked = typeof this.blocked === 'boolean' ? this.blocked : this.blocked.size > 0;
+    this.subtitle.setText(hasBlocked
+      ? `현재 지역 전체 · ${this.blockNote || '습격 중에는 마을 밖 사냥터로 나갈 수 없습니다'}`
+      : '현재 지역 전체 · 파란 점이 내 위치입니다');
   }
 
   private setVisible(visible: boolean): void {

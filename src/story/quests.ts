@@ -17,6 +17,7 @@ import type { SkillId } from '../entities/skills.ts';
 
 export type QuestId = 'ruan-training' | 'ruan-dodge' | 'ruan-parry' | 'ruan-field' | 'eila-potion' | 'vernel-resonance'
   | 'ruan-forest' | 'doran-gel' | 'teon-lunch'
+  | 'linea-flowers' | 'sia-pebble' | 'vernel-tablet' | 'eila-herbs' | 'serena-water'
   | 'watch-report' | 'festival-supplies' | 'sia-knot' | 'harvest-help' | 'evening-patrol' | 'moth-trail'
   | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter' | 'first-sword'
   // 2장 (docs/story-chapter2.md, story/chapterTwo.ts)
@@ -35,7 +36,9 @@ export type QuestEvent =
   | { type: 'inspect'; spot: InspectSpot; map: MapId };
 
 /** 살펴보기 지점 (story/chapterOne.ts의 SPOTS) */
-export type InspectSpot = 'south-watch' | 'home-search' | 'moth-nest' | 'north-alley' | 'pass-summit' | 'ferry-forge' | 'reed-kite';
+export type InspectSpot =
+  | 'south-watch' | 'home-search' | 'moth-nest' | 'north-alley' | 'pass-summit' | 'ferry-forge' | 'reed-kite'
+  | 'wildflower' | 'stream-pebble' | 'ancient-tablet' | 'silver-herb-1' | 'silver-herb-2' | 'silver-herb-3' | 'clear-water';
 
 export interface QuestObjective {
   /** 추적 표시에 나오는 글 (예: "남쪽 들판의 슬라임") */
@@ -65,6 +68,8 @@ export interface QuestDef {
   requires?: QuestId;
   /** 메인 스토리 퀘스트인지 */
   main?: boolean;
+  /** 1장 첫날(수확제 시작 전)에만 받고 진행할 수 있는 일상 서브 의뢰인지 */
+  dayOnly?: boolean;
   objective: QuestObjective;
   /** 여러 목표를 차례로 수행한다. objective는 첫 목표와 같다. */
   steps?: QuestObjective[];
@@ -151,7 +156,7 @@ export const QUESTS: QuestDef[] = [
       ruan('다섯 마리를 잡고 돌아와. 덤벼들기 전에 몸을 움츠리면 피할 때다.'),
     ],
     reminder: [ruan('들판은 남쪽 입구 너머다. 다섯 마리, 잊지 마라.')],
-    done: [ruan('다치지 않고 돌아왔구나. 잘했다.')],
+    done: [ruan('제법 잘 싸우고 돌아왔구나. 잘했다.')],
   },
   {
     id: 'eila-potion', title: '약은 아끼지 말고', giver: 'ruan', main: true, requires: 'ruan-field', tutorial: true,
@@ -169,7 +174,7 @@ export const QUESTS: QuestDef[] = [
     offer: [ruan('그래도 들판을 돌고 왔으니 에일라에게 가서 상처를 보여라. 약 쓰는 법도 배워 두고. 치유소는 마을 북쪽이다.')],
     reminder: [ruan('치유소의 에일라에게 가 봐라. 마을 북쪽이다.')],
     remindersByNpc: { eila: [line('eila', '에일라', '물약 칸에 물약을 넣어 두고, 한 병 마셔 보렴.')] },
-    done: [line('eila', '에일라', '잘했어. 한 병 더 챙겨 줄게. 물약은 아끼다 쓰러지면 소용없단다.')],
+    done: [line('eila', '에일라', '잘했어. 두 병 더 챙겨 줄게. 물약은 아끼다 쓰러지면 소용없단다.')],
   },
   {
     id: 'vernel-resonance', title: '칼끝의 울림', giver: 'eila', main: true, requires: 'eila-potion', tutorial: true,
@@ -178,16 +183,16 @@ export const QUESTS: QuestDef[] = [
     steps: [
       { label: '광장의 베르넬에게 이야기 듣기', need: 1, event: 'talk', npc: 'vernel', lines: [
         line('vernel', '베르넬', '루안에게 들었어. 칼로 공격을 받아낼 때 칼끝이 울린다고.'),
-        line('vernel', '베르넬', '옛 기록에 그런 울림을 모아 몸에 두르는 검사들 얘기가 있어. 울림이 다섯 번 가득 차면, 잠깐 동안 더 세게 베고 덜 다친대.'),
+        line('vernel', '베르넬', '옛 기록에 그런 울림을 모아 몸에 두르는 검사들 얘기가 있어. 구슬 다섯 개가 가득 차면, 잠깐 동안 더 세게 베고 덜 다친대.'),
         hero('그게 정말 돼요?'),
-        line('vernel', '베르넬', '해 보면 알겠지. 마침 네 칼끝에 울림이 가득해 보이는데? 한번 끌어내 봐.'),
+        line('vernel', '베르넬', '해 보면 알겠지. 마침 네 칼끝에 울림이 가득해 보이는데? 한번 끌어내 보고 루안에게 들려줘.'),
       ] },
       { label: '공명 써 보기', need: 1, event: 'resonance' },
     ],
     rewardXp: 20,
     offer: [line('eila', '에일라', '그러고 보니 베르넬이 너를 찾더구나. 칼끝의 울림이 어쩌고 하던데. 광장에 있을 거야.')],
     reminder: [line('eila', '에일라', '베르넬은 광장에 있을 거야.')],
-    remindersByNpc: { vernel: [line('vernel', '베르넬', '울림을 끌어내 봐. 공명이라고 부르면 되겠군.')] },
+    remindersByNpc: { vernel: [line('vernel', '베르넬', '울림을 끌어내 봐. 써 보고 나면 루안에게도 들려줘.')] },
     done: [ruan('베르넬이 또 옛 기록 얘기를 했구나. …그래도 그 울림은 나도 안다. 함부로 믿지는 말고, 버릴 필요도 없다.')],
   },
   {
@@ -258,7 +263,7 @@ export const QUESTS: QuestDef[] = [
         line('herman', '헤르만', '내가 너만 할 때는 이 축제가 일 년 중 제일 기다려졌지. 오늘 밤은 모두 웃을 수 있으면 좋겠구먼.')] },
     ],
     rewardXp: 25, rewardGold: 40,
-    offer: [line('herman', '헤르만', '마침 잘 왔네. 일손이 필요하던 참이야.')],
+    offer: [hero('촌장님께 가서 도와드릴 일이 있는지 여쭤보자.')],
     reminder: [line('herman', '헤르만', '도란에게 걸쇠를, 메리나에게 초를 받아 오게.')],
     done: [line('herman', '헤르만', '그런데 테온이 입구 쪽이 어수선하다더군. 해 지기 전에 한 번만 살펴봐 주겠나? 그다음엔 여관의 로제타에게 가 보게. 잔치 상을 차리고 있을 걸세.')],
   },
@@ -268,7 +273,7 @@ export const QUESTS: QuestDef[] = [
     rewardXp: 20, rewardItems: [{ id: 'potion', count: 2 }],
     offer: [hero('남쪽 입구를 살펴보고 테온에게 알려 주자.')],
     reminder: [line('herman', '헤르만', '입구를 살핀 뒤 테온에게 알려 주게. 너무 늦진 말고.')],
-    remindersByNpc: { teon: [line('teon', '테온', '남쪽 입구에 모인 나방 봤어? 먼저 흔적을 살펴보고 와 줘. 여기서 기다릴게.')] },
+    remindersByNpc: { teon: [line('teon', '테온', '남쪽 입구 쪽이 좀 어수선해. 먼저 흔적을 살펴보고 와 줘. 여기서 기다릴게.')] },
     done: [hero('입구에 잿빛 나방이 모여 있었어. 이런 나방이 있었나?'), line('teon', '테온', '나도 처음 보네. 들판 쪽에서 계속 날아오는 것 같아.')],
   },
   {
@@ -308,7 +313,7 @@ export const QUESTS: QuestDef[] = [
       { label: '남쪽 입구에서 들어온 권속 저지하기', need: 6, event: 'kill', map: 'village', encounter: 'village-raid' },
       { label: '남쪽 입구의 테온 살피기', need: 1, event: 'talk', npc: 'teon', lines: [
         line('teon', '테온', '윽… 괜찮아, 긁힌 거야. 그보다 몇 놈이 여관 쪽 골목으로 빠졌어!'),
-        line('teon', '테온', '북쪽으로 피하던 사람들이 아직 그 골목에 남아 있어. 시온, 그쪽을 막아 줘!'),
+        line('teon', '테온', '대피하다 뒤처진 사람들이 아직 그 골목에 갇혀 있어. 시온, 그쪽을 막아 줘!'),
         hero('알았어. 테온은 여기서 버텨!')] },
       { label: '여관 앞 골목의 권속 저지하기', need: 3, event: 'kill', map: 'village', encounter: 'village-raid' },
       { label: '광장의 세레나 안전 확인하기', need: 1, event: 'talk', npc: 'serena', lines: [line('serena', '세레나', '나는 괜찮아. 다친 사람들은 북쪽 치유소로 보냈어. 시아는… 리네아와 북쪽 집 쪽으로 먼저 갔는데.'), hero('북쪽으로요? 제가 가 볼게요. 어머니도 남은 사람들과 북쪽으로 피하세요.')] },
@@ -320,29 +325,40 @@ export const QUESTS: QuestDef[] = [
     rewardXp: 50, rewardItems: [{ id: 'potion', count: 3 }],
     // 습격은 수확제 연출 끝에서 시작한다(연출의 대사가 이 퀘스트를 연다).
     offer: [],
-    reminder: [line('rosetta', '로제타', '길을 막는 권속부터 물리쳐 줘. 광장엔 아직 세레나와 에일라가 남아 있어!')],
+    reminder: [line('rosetta', '로제타', '여관은 입구와 가까워 다들 치유소로 옮겼어. 여긴 괜찮으니 밖을 부탁해!')],
     done: [ruan('더는 따라오지 않는구나… 사람들은 무사하니?'), hero('네. 하지만 시아가 안 보여요. 리네아도 다쳤고요.'), ruan('나는 조금 쉬어야겠다. 가족부터 찾아보렴. 혼자 너무 멀리 나가지는 말고.')],
   },
   {
     id: 'missing-sia', title: '돌아오지 않은 동생', giver: 'ruan', main: true, requires: 'village-raid',
-    turnIn: 'eila', completeOnTarget: true,
+    turnIn: 'linea', completeOnTarget: true,
     objective: { label: '치유소의 세레나에게 시아의 행방 묻기', need: 1, event: 'talk', npc: 'serena' },
     steps: [
       { label: '치유소의 세레나에게 시아의 행방 묻기', need: 1, event: 'talk', npc: 'serena', lines: [line('serena', '세레나', '아직 돌아오지 않았어. 집에도 없더구나. 혹시 모르니 너도 한 번 봐 주겠니?')] },
       { label: '마을 북쪽 시온의 집 앞에서 시아의 흔적 살펴보기', need: 1, event: 'inspect', spot: 'home-search', map: 'village-north' },
-      { label: '에일라에게 리네아의 상태 확인하기', need: 1, event: 'talk', npc: 'eila', lines: [line('eila', '에일라', '리네아가 눈은 떴지만, 몸속을 갉아먹는 기운이 남아 있어. 평범한 독도 아니고… 어떤 권능의 흔적 같구나. 상처를 치료해도 그 기운은 사라지지 않아.'), hero('그럼 고칠 방법을 찾아야겠네요. 시아도… 꼭 데려올 거예요.')] },
+      { label: '에일라에게 리네아의 상태 확인하기', need: 1, event: 'talk', npc: 'eila', lines: [
+        line('eila', '에일라', '리네아가 눈은 떴지만, 몸속을 갉아먹는 기운이 남아 있어. 평범한 독도 아니고… 어떤 권능의 흔적 같구나. 상처를 치료해도 그 기운은 사라지지 않아.'),
+        hero('그럼 고칠 방법을 찾아야겠네요. 시아도… 꼭 데려올 거예요.'),
+        line('eila', '에일라', '방금 깨어나서 아직 기운이 없지만, 널 찾더구나. 잠깐 이야기 나눠 보렴.'),
+      ] },
+      { label: '깨어난 리네아와 이야기 나누기', need: 1, event: 'talk', npc: 'linea', lines: [
+        line('linea', '리네아', '시온… 왔어?'),
+        hero('리네아, 괜찮아? 무리해서 말하지 않아도 돼.'),
+        line('linea', '리네아', '…기억이 끊겨. 북쪽 골목에서 권속이 몰려와서 시아를 감싸 안았는데, 갑자기 숨이 막히면서 쓰러졌어.'),
+        line('linea', '리네아', '눈을 떠 보니 치유소였고… 시아는 없었어. 내가 끝까지 지켰어야 했는데… 미안해, 시온.'),
+        hero('네 잘못이 아니야. 시아도… 네 몸에 남은 기운도, 내가 꼭 해결할게.'),
+      ] },
     ],
     rewardXp: 25,
     offer: [ruan('세레나와 이야기하고 집도 살펴봐라. 에일라가 리네아를 돌보고 있을 거다.')],
     reminder: [ruan('혼자 감당하려 하지 마. 마을 사람들에게 물어보렴.')],
-    done: [line('eila', '에일라', '헤르만 촌장님이 오래된 서신을 꺼내셨어. 이번 일과 관계가 있을지 모르겠다며 널 찾으시더구나.')],
+    done: [line('eila', '에일라', '…그나저나 시온. 헤르만 촌장님이 오래된 서신을 꺼내셨어. 이번 일과 관계가 있을지 모르겠다며 널 찾으시더구나.')],
   },
   {
     id: 'sealed-letter', title: '봉인된 서신', giver: 'eila', main: true, requires: 'missing-sia',
     turnIn: 'vernel', completeOnTarget: true,
     objective: { label: '헤르만에게 오래된 서신 확인하기', need: 1, event: 'talk', npc: 'herman' },
     steps: [
-      { label: '헤르만에게 오래된 서신 확인하기', need: 1, event: 'talk', npc: 'herman', lines: [line('herman', '헤르만', '우리 집안이 대대로 지켜 온 서신이다. 때가 오면 열라고 했지. 이제 열어야겠더구나.'), hero('뭐라고 쓰여 있나요?'), line('herman', '헤르만', '너무 오래된 글자라 읽을 수가 없구나. 베르넬에게 보여 주겠니?')] },
+      { label: '헤르만에게 오래된 서신 확인하기', need: 1, event: 'talk', npc: 'herman', lines: [line('herman', '헤르만', '우리 집안이 대대로 지켜 온 서신이다. 때가 오면 열라고 했지. 이제 열어야겠네.'), hero('뭐라고 쓰여 있나요?'), line('herman', '헤르만', '너무 오래된 글자라 읽을 수가 없구나. 베르넬에게 보여 주겠나?')] },
       { label: '베르넬에게 서신의 표식 보여 주기', need: 1, event: 'talk', npc: 'vernel', lines: [line('vernel', '베르넬', '글자 전체는 모르겠어. 하지만 이 표식은… 북쪽 유적에서 본 것과 같아.'), hero('그곳에 가면 실마리를 찾을 수 있을까요?')] },
     ],
     rewardXp: 25,
@@ -356,14 +372,14 @@ export const QUESTS: QuestDef[] = [
     turnIn: 'doran', completeOnTarget: true,
     objective: { label: '대장간의 도란 찾아가기', need: 1, event: 'talk', npc: 'doran' },
     rewardXp: 20, rewardGear: ['iron-sword'],
-    offer: [line('vernel', '베르넬', '대장간에 들러 보게. 도란은 말보다 망치가 먼저인 사람이니까.')],
-    reminder: [line('vernel', '베르넬', '도란이 대장간에서 기다리고 있을 걸세.')],
+    offer: [line('vernel', '베르넬', '대장간에 들러 봐. 도란은 말보다 망치가 먼저인 사람이니까.')],
+    reminder: [line('vernel', '베르넬', '도란이 대장간에서 기다리고 있을 거야.')],
     target: [
       line('doran', '도란', '왔냐. …앉아라, 아니 서 있어도 되고.'),
       line('doran', '도란', '앞으로도 그런 밤을 견디려면, 네 손에 맞는 검이 있어야지. 밤새 두들겼다. 받아라.'),
       hero('이걸… 저한테요?'),
-      line('doran', '도란', '에일라가 전해 달라더라. 리네아가 좀 안정돼서 이제 자기 집에서 쉬게 할 거래. 세레나랑 함께 옮긴다더군.'),
       line('doran', '도란', '언젠가 네 검 한 자루 두들겨 주겠다고 했잖냐. 생각보다 일찍 오긴 했다만.'),
+      line('doran', '도란', '아, 에일라가 전해 달라더라. 리네아가 좀 안정돼서 이제 자기 집에서 쉬게 할 거래. 세레나랑 함께 옮긴다더군.'),
       line('doran', '도란', '시아 데려와라. 리네아도 고칠 방법 찾고. 날이 무뎌지면 언제든 돌아와서 맡겨.'),
     ],
     done: [line('doran', '도란', '장비 창에서 무기 칸에 끼워라. 손에 익을 때까지 휘둘러 보고.')],
@@ -543,6 +559,91 @@ export const QUESTS: QuestDef[] = [
       line('teon', '테온', '아주머니가 네 몫도 싸 주셨네. 이건 너 가져.'),
     ],
   },
+  {
+    id: 'linea-flowers', title: '축제 장식용 들꽃', giver: 'linea', requires: 'ruan-training', dayOnly: true,
+    objective: { label: '남쪽 들판에서 하늘색 들꽃 따기', need: 1, event: 'inspect', spot: 'wildflower', map: 'south-field' },
+    rewardXp: 20, rewardGear: ['wildflower-bracelet'],
+    offer: [
+      line('linea', '리네아', '시온! 마침 잘 왔어. 축제 등불 옆에 꽂을 들꽃이 조금 모자라거든.'),
+      line('linea', '리네아', '남쪽 들판에 하늘색 들꽃이 피어 있을 거야. 한 다발만 따다 줄 수 있어?'),
+      hero('하늘색 들꽃? 알았어, 금방 다녀올게.'),
+    ],
+    reminder: [line('linea', '리네아', '남쪽 들판 서쪽 풀밭에 하늘색 꽃이 예쁘게 피어 있었어. 슬라임 조심하고!')],
+    done: [
+      line('linea', '리네아', '우와, 시들지도 않고 딱 예쁜 것만 골라 왔네! 고마워, 시온.'),
+      line('linea', '리네아', '자, 남는 줄기로 팔찌도 하나 엮었어. 축제 동안 손목에 차고 다녀!'),
+      hero('…고마워, 리네아. 소중히 찰게.'),
+    ],
+  },
+  {
+    id: 'sia-pebble', title: '리네아 언니 생일 선물', giver: 'sia', requires: 'ruan-training', dayOnly: true,
+    objective: { label: '동쪽 개울가에서 예쁜 조약돌 줍기', need: 1, event: 'inspect', spot: 'stream-pebble', map: 'east-stream' },
+    rewardXp: 20, rewardGold: 15, rewardItems: [{ id: 'sia-pebble', count: 1 }],
+    offer: [
+      line('sia', '시아', '오빠! 잠깐 이리 와 봐. 비밀인데, 곧 리네아 언니 생일이거든.'),
+      line('sia', '시아', '동쪽 개울가에 물결에 깎여서 반짝거리는 예쁜 돌이 있대. 근데 거긴 마물이 있어서 혼자 못 가겠어… 오빠가 하나만 주워 와 줘!'),
+      hero('비밀 선물이라니 알았어. 동쪽 개울가에서 제일 예쁜 걸로 찾아올게.'),
+    ],
+    reminder: [line('sia', '시아', '동쪽 개울가 물가 쪽에 반짝이는 돌이 있을 거야! 언니한테는 비밀이야!')],
+    done: [
+      line('sia', '시아', '와아, 진짜 매끈하고 예쁘다! 언니가 분명 좋아할 거야!'),
+      line('sia', '시아', '참, 이건 아까 내가 먼저 주워 둔 건데 오빠 몫으로 줄게. 비상금도 조금! 고마워, 오빠!'),
+      hero('비상금까지 주면 어떡해… 조약돌은 잘 간직할게, 시아.'),
+    ],
+  },
+  {
+    id: 'vernel-tablet', title: '이상한 돌조각', giver: 'vernel', requires: 'ruan-training', dayOnly: true,
+    objective: { label: '남쪽 들판에서 낡은 석판 조각 찾기', need: 1, event: 'inspect', spot: 'ancient-tablet', map: 'south-field' },
+    rewardXp: 25, rewardGold: 30, rewardItems: [{ id: 'vernel-memo', count: 1 }],
+    offer: [
+      line('vernel', '베르넬', '시온, 혹시 남쪽 들판에 나갈 일 있으면 바위 근처를 한 번만 살펴봐 줄래?'),
+      line('vernel', '베르넬', '며칠 전부터 들판 쪽에서 오래된 석판 조각이 나온다는 얘기가 들려서 말이야. 북쪽 유적과 관련이 있을지도 몰라.'),
+      hero('특이한 무늬가 있는 돌조각이요? 찾아볼게요.'),
+    ],
+    reminder: [line('vernel', '베르넬', '남쪽 들판 동쪽 바위 근처야. 평범한 돌이랑 다르게 희미한 선이 새겨져 있을 거야.')],
+    done: [
+      line('vernel', '베르넬', '이건… 틀림없어! 북쪽 유적 외벽에 새겨진 것과 같은 양식의 표식이야.'),
+      line('vernel', '베르넬', '수고비와 함께 표식을 옮겨 적은 연구 메모를 하나 줄게. 언젠가 이 무늬를 또 보게 되면 금방 알아볼 수 있을 거야.'),
+    ],
+  },
+  {
+    id: 'eila-herbs', title: '약초 채집', giver: 'eila', requires: 'ruan-training', dayOnly: true,
+    objective: { label: '남쪽 들판의 은빛 풀 채집 (1/3)', need: 1, event: 'inspect', spot: 'silver-herb-1', map: 'south-field' },
+    steps: [
+      { label: '남쪽 들판의 은빛 풀 채집 (1/3)', need: 1, event: 'inspect', spot: 'silver-herb-1', map: 'south-field' },
+      { label: '남쪽 들판의 은빛 풀 채집 (2/3)', need: 1, event: 'inspect', spot: 'silver-herb-2', map: 'south-field' },
+      { label: '남쪽 들판의 은빛 풀 채집 (3/3)', need: 1, event: 'inspect', spot: 'silver-herb-3', map: 'south-field' },
+    ],
+    rewardXp: 25, rewardItems: [{ id: 'potion', count: 5 }],
+    offer: [
+      line('eila', '에일라', '시온, 축제가 다가오니까 다치는 사람이 많아져서 약초가 금방 동이 나네.'),
+      line('eila', '에일라', '남쪽 들판에 잎 끝이 은빛으로 반짝이는 풀이 자랄 거야. 세 뿌리만 캐다 줄 수 있겠니?'),
+      hero('은빛 풀이요? 다녀올게요, 에일라 선생님.'),
+    ],
+    reminder: [line('eila', '에일라', '남쪽 들판 풀밭에 은빛 풀이 자랄 거야. 세 뿌리만 조심해서 캐 오렴.')],
+    done: [
+      line('eila', '에일라', '어머, 뿌리까지 상하지 않게 잘 캐 왔네. 이리 줘 보렴.'),
+      { speaker: '치유소', text: '약초를 건네받으며 시온의 손을 잡은 에일라가 잠깐 멈칫했다.' },
+      hero('…선생님? 어디 불편하세요?'),
+      line('eila', '에일라', '아니야, 네 손이 유난히 따뜻해서… 괜찮아. 고맙구나. 달여 둔 회복 물약 다섯 병 챙겨 가렴. 상처가 나면 아끼지 말고 바로 마셔야 한다?'),
+    ],
+  },
+  {
+    id: 'serena-water', title: '텃밭에 줄 물', giver: 'serena', requires: 'ruan-training', dayOnly: true,
+    objective: { label: '동쪽 개울가에서 맑은 물 길어 오기', need: 1, event: 'inspect', spot: 'clear-water', map: 'east-stream' },
+    rewardXp: 20, rewardItems: [{ id: 'serena-lunch', count: 1 }],
+    offer: [
+      line('serena', '세레나', '시온, 마침 잘 만났구나. 집 앞 텃밭 흙이 바짝 말랐는데 우물물이 조금 탁해서 말이야.'),
+      line('serena', '세레나', '동쪽 개울가에 가서 맑은 물 한 통만 길어다 줄 수 있겠니? 갔다 오면 엄마가 맛있는 도시락 싸 줄게.'),
+      hero('좋아요, 금방 길어 올게요!'),
+    ],
+    reminder: [line('serena', '세레나', '동쪽 개울가 물가에서 맑은 물 한 통만 길어 오렴. 미끄러지지 않게 조심하고.')],
+    done: [
+      line('serena', '세레나', '아이고, 시원하고 맑네! 고맙구나, 우리 아들.'),
+      line('serena', '세레나', '약속한 도시락이야. 수련하다 배고프거나 다치면 꼭 꺼내 먹으렴.'),
+      hero('잘 먹을게요, 어머니!'),
+    ],
+  },
 ];
 
 const BY_ID = new Map(QUESTS.map((q) => [q.id, q]));
@@ -578,8 +679,15 @@ export function currentObjective(def: QuestDef, progress?: QuestProgress): Quest
 
 export function reportTo(def: QuestDef): NpcId { return def.turnIn ?? def.giver; }
 
+/** 습격의 밤 동안에는 일상 서브 의뢰를 잠시 숨기고, 첫날 한정 의뢰(dayOnly)는 습격 이후에도 열지 않는다. */
+export function isSubPaused(def: QuestDef, state: QuestState): boolean {
+  if (def.main) return false;
+  if (state['festival-eve']?.status !== 'done') return false;
+  return !!def.dayOnly || state['village-raid']?.status !== 'done';
+}
+
 function canStart(def: QuestDef, state: QuestState): boolean {
-  return !state[def.id] && (!def.requires || state[def.requires]?.status === 'done');
+  return !isSubPaused(def, state) && !state[def.id] && (!def.requires || state[def.requires]?.status === 'done');
 }
 
 /** 완료한 메인 다음 의뢰를 자동 수락한다. 첫 수련은 루안에게 직접 받는다. */
@@ -590,15 +698,18 @@ export function continueMainQuest(state: QuestState): QuestState {
 }
 
 export function markerFor(npc: NpcId, state: QuestState): QuestMarker | undefined {
-  const ordered = [...QUESTS].sort((a, b) => Number(!!b.main) - Number(!!a.main));
-  const ready = ordered.find(q => reportTo(q) === npc && state[q.id]?.status === 'ready');
-  if (ready) return questMarker(ready, 'ready');
-  // 다음 메인 목적지를 서브 의뢰보다 먼저 안내한다.
-  const target = ordered.find(q => state[q.id]?.status === 'active' && currentObjective(q, state[q.id]).npc === npc);
-  if (target?.main) return 'target';
+  const ordered = QUESTS.filter(q => !isSubPaused(q, state)).sort((a, b) => Number(!!b.main) - Number(!!a.main));
+  const mainReady = ordered.find(q => q.main && reportTo(q) === npc && state[q.id]?.status === 'ready');
+  if (mainReady) return 'ready';
+  // 메인 진행 대상은 완료 대기 중인 서브 의뢰보다 먼저 안내한다.
+  const mainTarget = ordered.find(q => q.main && state[q.id]?.status === 'active' && currentObjective(q, state[q.id]).npc === npc);
+  if (mainTarget) return 'target';
+  const subReady = ordered.find(q => !q.main && reportTo(q) === npc && state[q.id]?.status === 'ready');
+  if (subReady) return 'sub-ready';
   const fresh = ordered.find(q => q.giver === npc && canStart(q, state));
   if (fresh) return questMarker(fresh, 'new');
-  if (target) return 'target';
+  const subTarget = ordered.find(q => !q.main && state[q.id]?.status === 'active' && currentObjective(q, state[q.id]).npc === npc);
+  if (subTarget) return 'target';
   if (ordered.some(q => (q.giver === npc || reportTo(q) === npc) && state[q.id]?.status === 'active')) return 'progress';
   return undefined;
 }
@@ -622,25 +733,30 @@ function finish(state: QuestState, def: QuestDef, lines: DialogueLine[]): TalkRe
   return { lines: [...lines, ...def.done, ...(next?.offer ?? [])], state: nextState, completed: def, next };
 }
 
-/** 완료 > 현재 메인 목표 > 서브 목표 > 새 의뢰 > 진행 안내 순서. */
+/** 메인 완료 > 메인 목표 > 서브 완료 > 서브 목표 > 새 의뢰 > 진행 안내 순서. */
 export function talkTo(npc: NpcId, state: QuestState): TalkResult | undefined {
-  const ordered = [...QUESTS].sort((a, b) => Number(!!b.main) - Number(!!a.main));
-  const ready = ordered.find(q => reportTo(q) === npc && state[q.id]?.status === 'ready');
-  if (ready) return finish(state, ready, []);
-  const target = ordered.find(q => state[q.id]?.status === 'active' && currentObjective(q, state[q.id]).event === 'talk' && currentObjective(q, state[q.id]).npc === npc);
-  if (target) {
-    const objective = currentObjective(target, state[target.id]);
-    const next = advance(state, target, 1);
-    const lines = objective.lines ?? target.target ?? [];
-    if (target.completeOnTarget && next[target.id]?.status === 'ready') return { ...finish(next, target, lines), stepDone: objective };
-    return { lines, state: next, progressed: target, stepDone: objective };
-  }
+  const ordered = QUESTS.filter(q => !isSubPaused(q, state)).sort((a, b) => Number(!!b.main) - Number(!!a.main));
+  const talkStep = (def: QuestDef): TalkResult => {
+    const objective = currentObjective(def, state[def.id]);
+    const next = advance(state, def, 1);
+    const lines = objective.lines ?? def.target ?? [];
+    if (def.completeOnTarget && next[def.id]?.status === 'ready') return { ...finish(next, def, lines), stepDone: objective };
+    return { lines, state: next, progressed: def, stepDone: objective };
+  };
+  const mainReady = ordered.find(q => q.main && reportTo(q) === npc && state[q.id]?.status === 'ready');
+  if (mainReady) return finish(state, mainReady, []);
+  const mainTarget = ordered.find(q => q.main && state[q.id]?.status === 'active' && currentObjective(q, state[q.id]).event === 'talk' && currentObjective(q, state[q.id]).npc === npc);
+  if (mainTarget) return talkStep(mainTarget);
+  const subReady = ordered.find(q => !q.main && reportTo(q) === npc && state[q.id]?.status === 'ready');
+  if (subReady) return finish(state, subReady, []);
+  const subTarget = ordered.find(q => !q.main && state[q.id]?.status === 'active' && currentObjective(q, state[q.id]).event === 'talk' && currentObjective(q, state[q.id]).npc === npc);
+  if (subTarget) return talkStep(subTarget);
   const offer = ordered.find(q => q.giver === npc && canStart(q, state));
   if (offer) return { lines: offer.offer, state: { ...state, [offer.id]: { status: 'active', count: 0 } }, accepted: offer };
   const active = ordered.find(q => (q.giver === npc || reportTo(q) === npc) && state[q.id]?.status === 'active');
   if (active) {
     const lines = active.remindersByNpc?.[npc] ?? (active.giver === npc ? active.reminder : undefined);
-    if (lines) return { lines, state };
+    if (lines?.length) return { lines, state };
   }
   return undefined;
 }
@@ -661,6 +777,7 @@ export function recordEvent(state: QuestState, event: QuestEvent): { state: Ques
   let next = state;
   const updates: QuestUpdate[] = [];
   for (const q of QUESTS) {
+    if (isSubPaused(q, state)) continue;
     const o = currentObjective(q, state[q.id]);
     if (state[q.id]?.status !== 'active' || o.event !== event.type || event.type === 'talk') continue;
     if ('map' in event && o.map && o.map !== event.map) continue;
@@ -673,7 +790,7 @@ export function recordEvent(state: QuestState, event: QuestEvent): { state: Ques
 }
 
 export function trackedQuests(state: QuestState): Array<{ quest: QuestDef; progress: QuestProgress }> {
-  return QUESTS.filter(q => state[q.id] && state[q.id]!.status !== 'done')
+  return QUESTS.filter(q => state[q.id] && state[q.id]!.status !== 'done' && !isSubPaused(q, state))
     .sort((a, b) => Number(!!b.main) - Number(!!a.main))
     .map(q => ({ quest: q, progress: state[q.id]! }));
 }
@@ -705,8 +822,12 @@ export function parseQuests(raw: string | null): QuestState {
     if (status !== 'active' && status !== 'ready' && status !== 'done') continue;
     if (!Number.isInteger(count) || count! < 0) continue;
     const clamped = Math.min(count!, objective.need);
-    // 목표 수를 바꿨을 때도 말이 되게 상태를 다시 맞춘다.
-    state[def.id] = { status: status === 'done' ? 'done' : clamped >= objective.need ? 'ready' : 'active', count: clamped, ...(step !== undefined ? { step } : {}) };
+    // 목표 수를 바꿨을 때도 말이 되게 상태를 다시 맞춘다(다단계 중간 완료는 다음 단계로 넘긴다).
+    if (status !== 'done' && clamped >= objective.need && def.steps && (step ?? 0) + 1 < def.steps.length) {
+      state[def.id] = { status: 'active', count: 0, step: (step ?? 0) + 1 };
+    } else {
+      state[def.id] = { status: status === 'done' ? 'done' : clamped >= objective.need ? 'ready' : 'active', count: clamped, ...(step !== undefined ? { step } : {}) };
+    }
   }
   return continueMainQuest(skipPassedTutorials(state));
 }

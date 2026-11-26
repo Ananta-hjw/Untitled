@@ -42,6 +42,7 @@ import { CombatAudio } from '../audio/combatAudio';
 import { ImpactEffects } from '../combat/ImpactEffects';
 import {
   DEPTH_LIGHTING,
+  DEPTH_UI,
   DODGE,
   JUST_DODGE,
   MIST_THREADS,
@@ -93,7 +94,7 @@ import { BUTTON_RADIUS, JOYSTICK_REST, SKILL_SLOT_COUNT, combatButtonLayout, joy
 import { SKILLS, SKILL_SAVE_KEY, learnSkill, parseSkills, serializeSkills, type SkillId, type SkillState } from '../entities/skills';
 import { OpeningDirector } from './OpeningDirector';
 import { OPENING, OPENING_HINT, OPENING_SAVE_KEY, OPENING_WALK_SCALE, shouldPlayOpening, type OpeningStep } from '../story/opening';
-import { FESTIVAL, FESTIVAL_RAIDERS, FESTIVAL_SAVE_KEY, FESTIVAL_WALK_SCALE, RAIDER_ENTRY_MS, festivalNpcs, shouldPlayFestival } from '../story/festival';
+import { BONFIRE, FESTIVAL, FESTIVAL_RAIDERS, FESTIVAL_SAVE_KEY, FESTIVAL_WALK_SCALE, RAIDER_ENTRY_MS, festivalNpcs, shouldPlayFestival } from '../story/festival';
 import { FestivalStage, preloadFestival } from './FestivalStage';
 import { DeathPanel } from '../ui/DeathPanel';
 import { deathReport, emptyDamageLog, recordDamage, type DamageLog } from '../combat/damageLog';
@@ -103,7 +104,7 @@ import { findInteractable, talkChoices, type Interactable } from '../world/inter
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
 import { chapterTwoPreviewNpcs, isCastPreviewGroup, previewCastNpcs, type CastPreviewGroup } from '../world/chapterTwoNpcs';
-import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, FERRY_PEOPLE, ferryInnRestOpen, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
+import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, eastPassBlockedDialogue, eastPassOpen, FERRY_PEOPLE, ferryInnRestOpen, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
 import fernCartDamagedUrl from '../assets/village/rowen/fern-cart-damaged.webp?url';
 import fernCartRepairedUrl from '../assets/village/rowen/fern-cart-repaired.webp?url';
 import { PerfOverlay } from '../ui/PerfOverlay';
@@ -111,7 +112,7 @@ import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
 import { StoryChoice } from '../ui/StoryChoice';
 import { CLINIC_BED_SPOT, HOME_BED_SPOT, REST_POINTS, herbBonus, REST_SAVE_KEY, canRest, parseRestPoint, serializeRestPoint, type RestPointId } from '../story/restPoints';
-import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, chapterCanTalk, lineaRecovery, isDusk, raidSpawns, raidSpawnsAnyStep, INSPECTION_LINES, type RaidSpawn } from '../story/chapterOne';
+import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, chapterCanTalk, hasDuskMoths, lineaRecovery, isDusk, raidSpawns, raidSpawnsAnyStep, villageSignDialogue, INSPECTION_LINES, type RaidSpawn } from '../story/chapterOne';
 import { BOSS, entersPhaseTwo } from '../combat/bossPattern';
 import { COMPANION, COMPANION_SAVE_KEY, canEngage, companionDamage, companionNpcDef, followPlan, followSpot, isCompanionId, parseCompanion, type CompanionId } from '../entities/companion';
 import { ARENA, bossLanding, chooseArena, entryPoint, insideArena, pushTowardArena, type Arena } from '../combat/bossArena';
@@ -142,6 +143,8 @@ import { ProgressEffects } from '../ui/ProgressEffects';
 
 /** 고개의 쉼터에서 하룻밤을 보낼 때 화면이 어두워지고 밝아지는 시간 (ms, 연출만) */
 const NIGHT_FADE_MS = 900;
+/** 일반 휴식(시온의 집·여관·쉼터)에서 화면이 스르르 어두워졌다 밝아지는 시간 (ms, 연출만) */
+const REST_FADE_MS = 520;
 /** 위쪽 3타 찌르기 빛줄기를 원근으로 짧게 그린 칼끝 너머 먼 곳까지 늘이는 배율 */
 const UP_THRUST_REACH = 1.9;
 
@@ -172,6 +175,8 @@ interface SceneData {
   mp?: number;
   /** 맵을 옮길 때 이어지는 공명 남은 시간(ms). 한 번 쓰고 지운다. */
   resonance?: number;
+  /** 도착 시 화면이 밝아지는 시간(ms). 생략하면 기본 이동 속도. */
+  fadeInMs?: number;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -196,6 +201,8 @@ export class GameScene extends Phaser.Scene {
   private boss?: Enemy;
   private bossWarningEnd?: number;
   private pendingBoss?: RaidSpawn[];
+  /** 보스전 패배 후 재진입 시 바로 결계에 가두지 않고 북쪽 길 전투 지점에 다가갔을 때 보스전을 연다. */
+  private bossAwaitingApproach = false;
   private bossRoarUntil = 0;
   /**
    * 보스전 결계(combat/bossArena.ts): 고리, 닫혔는지, 걷히는 시각, 원래 걸을 수 있는 영역, 물러난 병사들.
@@ -220,6 +227,8 @@ export class GameScene extends Phaser.Scene {
   /** 초반 전투 가이드(story/tutorial.ts): 안내 창과 이미 본 안내 */
   private guideCard?: GuideCard;
   private seenLessons = new Set<LessonId>();
+  private potionPracticePrepared = false;
+  private resonancePracticePrepared = false;
   private attackTrace?: { startedAt: number; stage: number; direction: { x: number; y: number }; previous: Blade; elapsed: number; hit: Set<Enemy>; effect?: AttackEffect; counter: boolean; coneShown?: boolean; counterCallout?: boolean };
   private nextAttackAt = 0;
   private attackBufferedUntil?: number;
@@ -320,6 +329,7 @@ export class GameScene extends Phaser.Scene {
   private characterButton?: ActionButton;
   private characterKeys: Phaser.Input.Keyboard.Key[] = [];
   private storage?: SaveStorage;
+  private arrivalFadeInMs?: number;
   private fromTitle = false;
   /** 새 게임 첫 시작에 보여 주는 오프닝 연출. 끝나면 undefined */
   private opening?: OpeningDirector;
@@ -430,9 +440,10 @@ export class GameScene extends Phaser.Scene {
   init(data: SceneData = {}): void {
     this.resetState();
     // 맵: 넘겨받은 값 → (개발 빌드) 주소의 ?map= → 지금 맵 순서로 정한다.
+    const explicitMap = data.map;
     const fromUrl = import.meta.env.DEV ? new URLSearchParams(location.search).get('map') : null;
     // 처음 화면에서 시작할 때는 마지막으로 쉰 곳(여관·시온의 집)에서 시작한다. 쉰 적이 없으면 시온의 집 앞.
-    const rested = data.fromTitle && !data.map ? this.loadRestPoint() : undefined;
+    const rested = data.fromTitle && !explicitMap ? this.loadRestPoint() : undefined;
     if (rested) { data.map = rested.map; data.at = { ...rested.at }; }
     if (isMapId(data.map)) this.mapId = data.map;
     else if (isMapId(fromUrl)) this.mapId = fromUrl;
@@ -451,6 +462,8 @@ export class GameScene extends Phaser.Scene {
     }
     if (data.stress !== undefined) this.stressCount = data.stress;
     this.arrival = data.at;
+    this.arrivalFadeInMs = data.fadeInMs;
+    data.fadeInMs = undefined;
     this.fromTitle = !!data.fromTitle;
     // 다음 재시작에 같은 data가 넘어와도 다시 페이드하지 않게 한 번만 쓴다.
     data.fromTitle = undefined;
@@ -496,6 +509,18 @@ export class GameScene extends Phaser.Scene {
     let festival: string | null = null;
     try { festival = this.storage?.getItem(FESTIVAL_SAVE_KEY) ?? null; } catch { festival = null; }
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('festival')) festival = 'pending';
+    // 축제 연출 대기 중(pending)에 앱을 재실행하면 마지막 휴식처 대신 바로 광장으로 진입해 수확제 연출을 이어 본다.
+    if (this.fromTitle && !explicitMap && !this.previewNpcGroup && festival === 'pending'
+      && shouldPlayFestival({ map: 'village', quests: this.quests, saved: festival })) {
+      this.mapId = 'village';
+      this.map = MAPS.village;
+      this.arrival = undefined;
+      this.playOpening = false;
+      if (!this.visited.has(regionOf('village'))) {
+        this.visited.add(regionOf('village'));
+        this.saveVisited();
+      }
+    }
     this.playFestival = !this.playOpening && shouldPlayFestival({ map: this.mapId, quests: this.quests, saved: festival });
   }
 
@@ -504,11 +529,14 @@ export class GameScene extends Phaser.Scene {
    * 습격 뒤 남은 나방 넷이 같은 자리에 있다(story/chapterTwo.ts).
    */
   private duskSpawns(): Array<{ key: 'ashen-moth'; x: number; y: number }> {
-    if (this.mapId !== 'south-field' || (!isDusk(this.quests) && !fernMothHunt(this.quests))) return [];
+    if (this.mapId !== 'south-field' || (!hasDuskMoths(this.quests) && !fernMothHunt(this.quests))) return [];
     return DUSK_MOTH_POINTS.map(([x, y]) => ({ key: 'ashen-moth', x, y }));
   }
 
   private resetState(): void {
+    this.bossAwaitingApproach = false;
+    this.potionPracticePrepared = false;
+    this.resonancePracticePrepared = false;
     this.slowedUntil = 0;
     this.mistWeaver = undefined;
     this.enemies = [];
@@ -698,9 +726,8 @@ export class GameScene extends Phaser.Scene {
     this.loadCompanion();
     this.loadSkills();
     this.spawnCompanion();
+    this.drawChapterShade(this.scale.gameSize.width);
     if (chapterPhase(this.quests) === 'raid') {
-      this.chapterShade = this.add.graphics().setScrollFactor(0).setDepth(DEPTH_LIGHTING);
-      this.drawChapterShade(this.scale.gameSize.width);
       this.player.invulnerableUntil = 1500;
     }
     this.doorVisuals = new DoorVisuals(this, this.map);
@@ -782,7 +809,7 @@ export class GameScene extends Phaser.Scene {
     this.setCameraBounds();
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, CAMERA_FOLLOW_OFFSET_Y);
     if (this.fromTitle) this.cameras.main.fadeIn(TITLE_FADE_MS, 0, 0, 0);
-    else if (this.arrival) this.cameras.main.fadeIn(TRAVEL_FADE_MS, 0, 0, 0);
+    else if (this.arrival) this.cameras.main.fadeIn(this.arrivalFadeInMs ?? TRAVEL_FADE_MS, 0, 0, 0);
     if (this.playOpening) this.startOpening();
     else if (this.playFestival) this.startFestival();
 
@@ -814,14 +841,14 @@ export class GameScene extends Phaser.Scene {
         || !!this.worldMap?.isOpen || !!this.itemPanel?.isOpen || !!this.characterPanel?.isOpen || !!this.storyChoice?.isOpen
         || !!this.quickSlotPanel?.isOpen || !!this.deathPanel?.isOpen || !!this.guideCard?.isOpen || !!this.opening;
       const activeDoor = exitHidden ? undefined : this.findDoorTarget();
-      this.exitHint?.update(this.player, exitHidden, chapterPhase(this.quests) === 'raid' && this.mapId === 'village', activeDoor);
+      this.exitHint?.update(this.player, exitHidden, (exit) => this.exitBlockReason(exit), activeDoor);
       this.doorVisuals?.updateFloor(this.now, activeDoor?.enter
         ? { x: activeDoor.x, y: activeDoor.y, leaving: !activeDoor.enter.to.startsWith('in-') }
         : undefined);
     }
     this.setQuickButtonsVisible(!this.traveling && !!this.player?.alive && !this.dialogue.isOpen && !this.pauseMenu.isOpen
       && !this.characterPanel?.isOpen && !this.itemPanel?.isOpen && !this.worldMap?.isOpen && !this.storyChoice?.isOpen && !this.quickSlotPanel?.isOpen
-      && !this.deathPanel?.isOpen);
+      && !this.deathPanel?.isOpen && !this.guideCard?.isOpen);
     this.updateGuideHighlight();
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
     // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
@@ -836,10 +863,11 @@ export class GameScene extends Phaser.Scene {
     for (const key of this.pauseKeys) {
       if (Phaser.Input.Keyboard.JustDown(key)) escape = true;
     }
-    // 오프닝 중 Esc는 건너뛰기다.
+    // 오프닝 중 Esc는 건너뛰기다. 축제 건너뛰기로 즉시 travel이 시작되면 그 프레임에 전투 UI를 다시 켜지 않는다.
     if (this.opening && escape) {
       this.opening.skip();
       escape = false;
+      if (this.traveling) return;
     }
     // 전투 가이드 창: 확인(Enter·Space·E·J·Esc)으로 닫는다. 그동안 게임은 멈춰 있다.
     if (this.guideCard?.isOpen) {
@@ -1091,7 +1119,11 @@ export class GameScene extends Phaser.Scene {
     for (const npc of this.npcs) if (!npc.def.id.startsWith('guard-')) npc.placeAt(npc.x, npc.y);
     this.startCutscene(FESTIVAL, FESTIVAL_WALK_SCALE, (skipped) => this.finishFestival(skipped), (name) => {
       if (name === 'raiders') this.spawnFestivalRaiders();
-      else this.festivalStage?.cue(name);
+      else if (name === 'ready') {
+        const raiderX = FESTIVAL_RAIDERS[0]?.path.at(-1)?.x ?? BONFIRE.x;
+        for (const id of ['ruan', 'teon']) this.npcs.find(n => n.def.id === id)?.setCutsceneReady(raiderX);
+        if (this.player.sprite instanceof HeroSprite) this.player.sprite.triggerGuardRecoil();
+      } else this.festivalStage?.cue(name);
     });
     this.festivalStage = new FestivalStage(this);
   }
@@ -1227,13 +1259,13 @@ export class GameScene extends Phaser.Scene {
       ...(this.mapId === 'in-clinic' ? [{ ...CLINIC_BED_SPOT }] : [])];
     for (const spot of this.map.interactables) {
       if (!spot.enter) continue;
-      // 문 위의 퀘스트 표시: 지금 그 건물 안에 있는 사람(이야기 진행에 따라 다르다, 예: 습격 뒤의 에일라)
+      // 문 위의 퀘스트 표시: 진행 중 실내 인원이 바뀌어도(예: 습격 step 5 치유소 에일라) refreshQuests에서 갱신한다.
       const to = spot.enter.to;
-      const inside = isMapId(to) ? chapterNpcs(MAPS[to].npcs, this.quests, to).map((n) => n.id) : [];
-      if (inside.length === 0) continue;
+      if (!isMapId(to) || !MAPS[to].interior) continue;
+      const inside = chapterNpcs(MAPS[to].npcs, this.quests, to).map((n) => n.id);
       const text = this.add.text(spot.x, spot.y - 150, '', {
         fontFamily: 'system-ui, sans-serif', fontSize: '40px', fontStyle: 'bold', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 7,
-      }).setOrigin(0.5, 1).setDepth(spot.y + 400).setResolution(2).setVisible(false);
+      }).setOrigin(0.5, 1).setDepth(DEPTH_LIGHTING + 2).setResolution(2).setVisible(false);
       this.doorMarkers.push({ spot, text, npcs: inside });
     }
 
@@ -1265,14 +1297,37 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- 맵 이동
 
+  /** 현재 이 출구로 넘어갈 수 없는 이유. 열려 있으면 undefined. */
+  private exitBlockReason(exit: MapExit): string | undefined {
+    // 습격 중 광장에서는 바깥 사냥터로 나가지 못한다. 마을 북쪽(집들)으로는 갈 수 있다.
+    if (chapterPhase(this.quests) === 'raid' && this.mapId === 'village' && exit.to !== 'village-north') {
+      return '습격을 막은 뒤 이동할 수 있습니다';
+    }
+    // 1장 완료(도란의 검) 전에는 동쪽 개울가에서 동쪽 고갯길로 넘어가지 못한다.
+    if (this.mapId === 'east-stream' && exit.to === 'east-pass' && !eastPassOpen(this.quests)) {
+      return '아직 고개 너머로 갈 때가 아닙니다';
+    }
+    return undefined;
+  }
+
   /** 발이 출구 영역에 들어가면 연결된 맵으로 옮겨 간다. 옮기기 시작했으면 true. */
   private checkExit(): boolean {
     const player = this.player;
     if (!player.alive) return false;
     const exit = findExit(this.map, player.x, player.y);
     if (!exit) return false;
-    // 습격 중 광장에서는 바깥 사냥터로 나가지 못한다. 마을 북쪽(집들)으로는 갈 수 있다.
-    if (chapterPhase(this.quests) === 'raid' && this.mapId === 'village' && exit.to !== 'village-north') return false;
+    if (this.mapId === 'east-stream' && exit.to === 'east-pass' && !eastPassOpen(this.quests)) {
+      // 경계선에서 한 걸음 안쪽으로 물린 뒤 시온의 자연스러운 독백으로 되돌려 보낸다.
+      player.placeAt(Math.min(player.x, exit.zone.left - 24), player.y);
+      player.setMotion(false, -1);
+      this.clearAttackInput();
+      this.joystick.vector.set(0, 0);
+      this.attackButton.setVisible(false);
+      this.hideTalkMarker();
+      this.dialogue.open(eastPassBlockedDialogue(this.quests), () => this.onResume());
+      return true;
+    }
+    if (this.exitBlockReason(exit)) return false;
     this.travel(exit);
     return true;
   }
@@ -1291,6 +1346,73 @@ export class GameScene extends Phaser.Scene {
     const camera = this.cameras.main;
     camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart(data));
     camera.fadeOut(TRAVEL_FADE_MS, 0, 0, 0);
+  }
+
+  /**
+   * 습격의 밤이 끝나고 다음 날 아침으로 넘어가는 전환:
+   * 완료 보상 팝업이 잠시 보인 뒤 화면이 스르르 어두워지고, "습격 다음 날 아침" 자막을 띄운 뒤 밝은 광장으로 이어진다.
+   */
+  private transitionToMorning(at: Point): void {
+    this.traveling = true;
+    this.clearAttackInput();
+    this.player.setMotion(false);
+    this.attackButton.setVisible(false);
+    this.hideTalkMarker();
+    const data: SceneData = {
+      map: 'village', at, hp: this.player.hp, herb: this.herb, mp: this.mp,
+      resonance: Math.max(0, this.resonanceUntil - this.now), fadeInMs: 700,
+    };
+    this.time.delayedCall(650, () => {
+      if (!this.scene.isActive()) return;
+      const w = this.scale.gameSize.width, h = VIEW_HEIGHT;
+      const veil = this.add.rectangle(0, 0, w, h, 0x05080f, 1).setOrigin(0).setScrollFactor(0).setDepth(DEPTH_UI + 90).setAlpha(0);
+      const title = this.add.text(w / 2, h * 0.44, '습격 다음 날 아침', {
+        fontFamily: 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+        fontSize: '42px', fontStyle: 'bold', color: '#f6e7c4', stroke: '#0c1218', strokeThickness: 5,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH_UI + 91).setAlpha(0).setResolution(2);
+      const sub = this.add.text(w / 2, h * 0.54, '로웬 마을 광장', {
+        fontFamily: 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+        fontSize: '23px', color: '#c8d6cc',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH_UI + 91).setAlpha(0).setResolution(2);
+      const hint = this.add.text(w / 2, h * 0.78, '계속하려면 화면을 누르거나 잠시 기다리세요', {
+        fontFamily: 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+        fontSize: '17px', color: '#8fa399',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH_UI + 91).setAlpha(0).setResolution(2);
+      let finishing = false;
+      let holdTimer: Phaser.Time.TimerEvent | undefined;
+      const cleanup = () => {
+        this.input.off('pointerdown', skip);
+        this.input.keyboard?.off('keydown-SPACE', skip);
+        this.input.keyboard?.off('keydown-ENTER', skip);
+        holdTimer?.remove(false);
+      };
+      const finish = () => {
+        if (finishing || !this.scene.isActive()) return;
+        finishing = true;
+        cleanup();
+        this.tweens.add({
+          targets: [title, sub, hint], alpha: 0, duration: 280, ease: 'Sine.In',
+          onComplete: () => { if (this.scene.isActive()) this.scene.restart(data); },
+        });
+      };
+      const skip = () => finish();
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+      this.tweens.add({
+        targets: veil, alpha: 1, duration: 650, ease: 'Sine.InOut',
+        onComplete: () => {
+          if (!this.scene.isActive()) return;
+          this.tweens.add({ targets: [title, sub], alpha: 1, duration: 380, ease: 'Sine.Out' });
+          this.tweens.add({ targets: hint, alpha: 0.85, delay: 450, duration: 320, ease: 'Sine.Out' });
+          this.time.delayedCall(380, () => {
+            if (finishing || !this.scene.isActive()) return;
+            this.input.once('pointerdown', skip);
+            this.input.keyboard?.once('keydown-SPACE', skip);
+            this.input.keyboard?.once('keydown-ENTER', skip);
+          });
+          holdTimer = this.time.delayedCall(2100, finish);
+        },
+      });
+    });
   }
 
   // ---------------------------------------------------------------- UI
@@ -1439,7 +1561,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawChapterShade(width: number): void {
-    this.chapterShade?.clear().fillStyle(0x122137, 0.42).fillRect(0, 0, width, VIEW_HEIGHT);
+    const raid = chapterPhase(this.quests) === 'raid';
+    const dusk = isDusk(this.quests) && !this.map.interior;
+    if (!raid && !dusk) {
+      this.chapterShade?.destroy();
+      this.chapterShade = undefined;
+      return;
+    }
+    this.chapterShade ??= this.add.graphics().setScrollFactor(0).setDepth(DEPTH_LIGHTING);
+    const g = this.chapterShade.clear();
+    if (raid) {
+      // 실내는 난로·등불이 켜져 있으므로 은은한 밤 분위기만 남기고, 야외는 깊은 밤 그늘을 덮는다.
+      g.fillStyle(this.map.interior ? 0x14182a : 0x122137, this.map.interior ? 0.09 : 0.42).fillRect(0, 0, width, VIEW_HEIGHT);
+      return;
+    }
+    // 해 질 무렵(순찰~축제 전야): 야외 전체에 따뜻한 황혼 노을 색조를 덮는다.
+    g.fillStyle(0xc95a22, 0.15).fillRect(0, 0, width, VIEW_HEIGHT);
+    g.fillStyle(0x522548, 0.11).fillRect(0, 0, width, VIEW_HEIGHT * 0.36);
   }
 
   // ---------------------------------------------------------------- 이동
@@ -2127,15 +2265,17 @@ export class GameScene extends Phaser.Scene {
     if (this.guideCard?.isOpen) { this.guideCard.close(); return; }
     if (this.quickSlotPanel?.isOpen) { this.quickSlotPanel.close(); return; }
     if (this.storyChoice?.isOpen) { this.storyChoice.cancel(); return; }
+    if (this.worldMap?.isOpen) { this.worldMap.close(); return; }
+    if (this.itemPanel?.isOpen) { this.itemPanel.close(); return; }
     if (this.characterPanel?.isOpen) { this.characterPanel.close(); return; }
     if (this.pauseMenu.isOpen) this.pauseMenu.back();
     else this.openPause();
   }
 
   private openPause(): void {
-    if (this.opening || this.deathPanel?.isOpen || this.guideCard?.isOpen) return;
+    if (!this.player?.alive || this.opening || this.deathPanel?.isOpen || this.guideCard?.isOpen) return;
     if (this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return;
-    if (!this.pauseMenu || this.pauseMenu.isOpen || this.characterPanel?.isOpen) return;
+    if (!this.pauseMenu || this.pauseMenu.isOpen || this.characterPanel?.isOpen || this.itemPanel?.isOpen || this.worldMap?.isOpen) return;
     this.pauseButton.setVisible(false);
     this.characterButton?.setVisible(false);
     this.setQuickButtonsVisible(false);
@@ -2181,9 +2321,10 @@ export class GameScene extends Phaser.Scene {
   private readonly ignoreCombatPress = (pointer: Phaser.Input.Pointer): boolean =>
     this.menuOpen() || (this.dialogueTap?.id === pointer.id && this.dialogueTap.downTime === pointer.downTime);
 
-  /** 싸우는 중에는 말을 걸 수 없다. 대화 중에는 게임이 멈추므로 공격받는 도중에 열리지 않게 한다. */
+  /** 싸우는 중에는 말을 걸 수 없다. 보스 등장 경고 중에도 건물·출구 이탈을 막는다. */
   private inCombat(): boolean {
-    return !!this.mistWeaver?.threads.active
+    return this.bossWarningEnd !== undefined
+      || !!this.mistWeaver?.threads.active
       || this.enemies.some((e) => e.state === 'chase' || e.state === 'windup' || e.state === 'recover' || e.state === 'roar' || e.state === 'retreat' || e.state === 'volley' || e.state === 'veil');
   }
 
@@ -2257,7 +2398,7 @@ export class GameScene extends Phaser.Scene {
     const action: ActionIcon = leaving ? 'exit' : enter ? 'enter' : target.id.startsWith('story-') || observingPatient ? 'inspect' : target.id.startsWith('rest-') ? 'rest' : target.id.startsWith('heal-') ? 'heal' : 'talk';
     this.setPrimaryAction(action, leaving ? '나가기' : enter ? '들어가기' : action === 'inspect' ? '살펴보기' : action === 'rest' ? '쉬기' : action === 'heal' ? '치료받기' : '대화');
     marker.setText(leaving ? '▼ 나가기' : enter ? `▲ ${enter.label}` : '···');
-    marker.setVisible(true).setPosition(target.x, target.y - target.markerHeight - 6 * Math.abs(Math.sin(time / 260)));
+    marker.setVisible(true).setPosition(target.x + (target.markerOffsetX ?? 0), target.y - target.markerHeight - 6 * Math.abs(Math.sin(time / 260)));
     this.doorVisuals?.updateBadge(marker, leaving ? 'exit' : enter ? 'enter' : 'talk');
 
     const pressed = this.attackButton.consumePress() || this.keyboardAttackPressed;
@@ -2297,14 +2438,25 @@ export class GameScene extends Phaser.Scene {
   private openDialogue(target: Interactable, confirmed = false): void {
     if (this.storyChoice?.isOpen) return;
     const festival = this.quests['festival-eve'];
-    if (!confirmed && target.id === 'npc-rosetta' && festival?.status === 'active') {
+    const pendingTeonLunch = target.id === 'npc-rosetta' && festival?.status === 'active' && this.quests['teon-lunch']?.status === 'active';
+    if (!confirmed && !pendingTeonLunch && target.id === 'npc-rosetta' && festival?.status === 'active') {
       this.clearAttackInput();
       this.storyChoice?.open(() => this.openDialogue(target, true));
       return;
     }
     if (target.id === HOME_BED_SPOT.id) {
       this.clearAttackInput();
-      this.rest('home');
+      if (!canRest(this.quests)) {
+        this.hud.showCallout('지금은 쉴 때가 아니야');
+        return;
+      }
+      this.storyChoice?.open(() => this.restWithFade('home'), {
+        title: '시온의 집에서 쉬어 가기',
+        text: '익숙한 내 침대에서 잠시 쉬어 갈까?',
+        summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  시온의 집`,
+        hint: '휴식은 무료이며 퀘스트 진행과 시간대는 바뀌지 않습니다.',
+        yes: '쉬어 가기', no: '돌아가기',
+      });
       return;
     }
     if (target.id === CLINIC_BED_SPOT.id) {
@@ -2313,6 +2465,10 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (target.id.startsWith('story-')) {
+      this.clearAttackInput();
+      this.player.setMotion(false);
+      this.attackButton.setVisible(false);
+      this.hideTalkMarker();
       this.dialogue.open(INSPECTION_LINES[target.id] ?? CHAPTER_TWO_INSPECTIONS[target.id] ?? [], () => {
         const spot = target.id.slice('story-'.length) as InspectSpot;
         this.questEvent({ type: 'inspect', spot, map: this.mapId });
@@ -2329,11 +2485,16 @@ export class GameScene extends Phaser.Scene {
     player.setMotion(false, target.x - player.x);
     this.attackButton.setVisible(false);
     this.hideTalkMarker();
-    // 마을 사람이면 퀘스트 대화를 먼저 본다. 퀘스트와 상관없으면 평소 대사.
+    // 마을 사람이면 퀘스트 대화를 먼저 본다. 단, 축제 전야 중 도시락 심부름이 남았으면 도시락부터 건넨다.
     const npc = target.id.startsWith('npc-') ? target.id.slice(4) as NpcId : undefined;
-    const quest = npc && chapterCanTalk(npc, this.quests) ? talkTo(npc, this.quests) : undefined;
+    let quest = npc && chapterCanTalk(npc, this.quests) ? talkTo(npc, this.quests) : undefined;
+    if (pendingTeonLunch) {
+      const sub = talkTo('rosetta', { 'teon-lunch': this.quests['teon-lunch'] });
+      if (sub) quest = { ...sub, state: { ...this.quests, 'teon-lunch': sub.state['teon-lunch'] } };
+    }
+    const signLines = target.id === 'village-sign' ? villageSignDialogue(this.quests) : undefined;
     const lines = quest?.lines.length ? quest.lines
-      : (npc && (chapterTwoDialogue(npc, this.quests) ?? chapterDialogue(npc, this.quests))) || (target.dialogue ? DIALOGUES[target.dialogue] : []);
+      : signLines ?? ((npc && (chapterTwoDialogue(npc, this.quests) ?? chapterDialogue(npc, this.quests))) || (target.dialogue ? DIALOGUES[target.dialogue] : []));
     this.dialogue.open(lines, () => {
       if (quest) {
         this.quests = quest.state;
@@ -2359,12 +2520,12 @@ export class GameScene extends Phaser.Scene {
       if (!quest && target.id === 'npc-merina') this.openItemPanel('shop');
       // 페른: "남문의 수레"를 끝낸 대화 뒤, 그리고 그 뒤의 평소 대화 뒤에 수레(상점)를 연다.
       if (target.id === 'npc-fern' && fernShopOpen(this.quests) && (!quest || quest.completed?.id === 'fern-cart')) this.openItemPanel('shop', 'fern');
-      // 도란과 대화가 끝나면 대장간(장비 구매·판매)을 연다. 퀘스트를 막 받거나 끝낸 대화 뒤에는 열지 않는다
-      // (진행 중인 퀘스트를 다시 일러 주는 대화 뒤에는 연다. 그러지 않으면 퀘스트 동안 장비를 못 산다).
-      if (!quest?.accepted && !quest?.completed && target.id === 'npc-doran') this.openCharacterPanel('items', true);
+      // 도란과 대장간에서 대화가 끝나면 장비 상점을 연다. 습격 중 야외나 퀘스트 수락·진행·완료 직후에는 열지 않는다.
+      if (this.mapId === 'in-smithy' && !quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-doran') this.openCharacterPanel('items', true);
       // 로제타와의 평소 대화가 끝나면 쉬어 갈지 묻는다 (습격의 밤에는 묻지 않는다).
-      // 치유소의 에일라와 평소 대화가 끝나면 치료해 줄지 묻는다.
-      if (!quest && target.id === 'npc-eila' && this.mapId === 'in-clinic') {
+      // 치유소 또는 리네아의 집에서 에일라와 대화가 끝나면(퀘스트 수락·진행·완료 직후 제외) 치료해 줄지 묻는다.
+      if (!quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-eila'
+        && (this.mapId === 'in-clinic' || this.mapId === 'in-linea')) {
         this.storyChoice?.open(() => this.healAtClinic(), {
           title: '에일라의 치료',
           text: '다친 데가 있으면 봐 줄게.',
@@ -2373,7 +2534,7 @@ export class GameScene extends Phaser.Scene {
         });
       }
       if (!quest && target.id === 'npc-dor' && shelterRestOpen(this.quests)) {
-        this.storyChoice?.open(() => this.rest('shelter'), {
+        this.storyChoice?.open(() => this.restWithFade('shelter'), {
           title: '고개 쉼터에서 쉬어 가기',
           text: '도르가 모닥불에 장작을 한 아름 더 얹는다.',
           summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  동쪽 고갯길 고개 쉼터`,
@@ -2383,7 +2544,7 @@ export class GameScene extends Phaser.Scene {
       }
       // 나루 여관 주인: 평소 대화나 퀘스트 안내(진행·완료가 아닌 대화) 뒤에 쉬어 갈지 묻는다.
       if (!quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-fog-innkeeper' && ferryInnRestOpen(this.quests)) {
-        this.storyChoice?.open(() => this.rest('ferry-inn'), {
+        this.storyChoice?.open(() => this.restWithFade('ferry-inn'), {
           title: '나루 여관에서 쉬어 가기',
           text: '여관 주인이 강 쪽 창을 닫고 방을 내준다.',
           summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  물안개 나루 여관`,
@@ -2392,7 +2553,7 @@ export class GameScene extends Phaser.Scene {
         });
       }
       if (!quest && target.id === 'npc-rosetta' && canRest(this.quests)) {
-        this.storyChoice?.open(() => this.rest('inn'), {
+        this.storyChoice?.open(() => this.restWithFade('inn'), {
           title: '여관에서 쉬어 가기',
           text: '로제타가 준비한 방에서 잠시 쉬어 가세요.',
           summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  로웬 마을 여관`,
@@ -2406,31 +2567,91 @@ export class GameScene extends Phaser.Scene {
       this.clearQuickItemInput();
       for (const key of this.dodgeKeys) Phaser.Input.Keyboard.JustDown(key);
       if (beforePhase !== chapterPhase(this.quests)) {
+        const nextPhase = chapterPhase(this.quests);
         // 잔치가 시작되면 광장에서 수확제 연출을 본다.
-        if (chapterPhase(this.quests) === 'raid') {
+        if (nextPhase === 'raid') {
           try { this.storage?.setItem(FESTIVAL_SAVE_KEY, 'pending'); } catch { /* 저장소가 막혀 있으면 연출 없이 습격으로 */ }
         }
         const at = mapPoint({ x: 1180, y: 1130 });
-        this.travel({ to: 'village', arrive: at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: at });
+        if (beforePhase === 'raid' && nextPhase === 'aftermath') {
+          this.transitionToMorning(at);
+        } else {
+          this.travel({ to: 'village', arrive: at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: at });
+        }
       }
     });
   }
 
   /**
-   * 그 자리에서 하룻밤을 보낸다: 화면이 어두워지는 동안 게임을 멈추고(traveling), 쉬고(rest), 다시 밝힌다.
+   * 그 자리에서 하룻밤을 보낸다: 화면이 어두워지는 동안 게임을 멈추고(traveling), 쉬고, 다시 밝힌 뒤 안내한다.
    * 화면 페이드는 보이는 연출뿐이라 카메라의 실시간 효과를 쓴다(게임 시계와 상관없다).
    */
   private spendNight(id: RestPointId): void {
     const camera = this.cameras.main;
     this.traveling = true;
     this.player.setMotion(false, 0);
+    this.attackButton.setVisible(false);
+    this.hideTalkMarker();
     camera.fadeOut(NIGHT_FADE_MS, 0, 0, 0);
     camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       if (!this.scene.isActive()) return;
-      this.rest(id, '고개의 쉼터에서 하룻밤을 보냈다 · 다음 날 아침');
+      this.applyRest(id);
+      this.drawHud();
       camera.fadeIn(NIGHT_FADE_MS, 0, 0, 0);
-      this.traveling = false;
+      camera.once(Phaser.Cameras.Scene2D.Events.FADE_IN_COMPLETE, () => {
+        if (!this.scene.isActive()) return;
+        this.traveling = false;
+        this.attackButton.setVisible(true);
+        this.hud.showCallout('고개의 쉼터에서 하룻밤을 보냈다 · 다음 날 아침');
+      });
     });
+  }
+
+  /**
+   * 일반 휴식 연출(집·여관·쉼터): 바로 알림을 띄우지 않고 화면이 스르르 어두워졌다가 다시 밝아진 뒤 안내한다.
+   * 회복과 시작 위치 저장은 확인 즉시 반영해, 페이드 도중 앱을 닫아도 저장이 유실되지 않는다.
+   */
+  private restWithFade(id: RestPointId, callout?: string): void {
+    if (this.traveling) return;
+    if (!canRest(this.quests)) {
+      this.hud.showCallout('지금은 쉴 때가 아니야');
+      return;
+    }
+    this.applyRest(id);
+    const camera = this.cameras.main;
+    this.traveling = true;
+    this.clearAttackInput();
+    this.player.setMotion(false, 0);
+    this.attackButton.setVisible(false);
+    this.hideTalkMarker();
+    camera.fadeOut(REST_FADE_MS, 0, 0, 0);
+    camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      if (!this.scene.isActive()) return;
+      this.drawHud();
+      this.time.delayedCall(180, () => {
+        if (!this.scene.isActive()) return;
+        camera.fadeIn(REST_FADE_MS, 0, 0, 0);
+        camera.once(Phaser.Cameras.Scene2D.Events.FADE_IN_COMPLETE, () => {
+          if (!this.scene.isActive()) return;
+          this.traveling = false;
+          this.attackButton.setVisible(true);
+          this.hud.showCallout(callout ?? `푹 쉬었다 · 다음에는 ${REST_POINTS[id].name}에서 시작한다`);
+        });
+      });
+    });
+  }
+
+  /** 체력·마나 회복과 다음 시작 자리 저장만 수행한다 (HUD 갱신·알림은 호출 측 타이밍에 맞춘다). */
+  private applyRest(id: RestPointId): void {
+    this.player.setMaxHp(this.player.maxHp, true);
+    this.internalDamage = 0;
+    this.internalHealCarry = 0;
+    this.mp = this.maxMp;
+    try {
+      this.storage?.setItem(REST_SAVE_KEY, serializeRestPoint(id));
+    } catch {
+      // 저장소를 쓸 수 없으면 쉬기만 한다.
+    }
   }
 
   /** 쉬기: 체력을 채우고 다음 시작 자리로 저장한다. */
@@ -2439,16 +2660,8 @@ export class GameScene extends Phaser.Scene {
       this.hud.showCallout('지금은 쉴 때가 아니야');
       return;
     }
-    this.player.setMaxHp(this.player.maxHp, true);
-    this.internalDamage = 0;
-    this.internalHealCarry = 0;
-    this.mp = this.maxMp;
+    this.applyRest(id);
     this.drawHud();
-    try {
-      this.storage?.setItem(REST_SAVE_KEY, serializeRestPoint(id));
-    } catch {
-      // 저장소를 쓸 수 없으면 쉬기만 한다.
-    }
     this.hud.showCallout(callout ?? `푹 쉬었다 · 다음에는 ${REST_POINTS[id].name}에서 시작한다`);
   }
 
@@ -2485,7 +2698,10 @@ export class GameScene extends Phaser.Scene {
     this.saveQuests();
     this.refreshQuests();
     const u = updates[0];
-    this.hud.showCallout(u.ready ? `${u.quest.title} 목표 달성!` : `${u.quest.title} ${u.count}/${u.need}`);
+    const p = this.quests[u.quest.id]!;
+    this.hud.showCallout(u.ready ? `${u.quest.title} 목표 달성!`
+      : u.count >= u.need ? `${u.quest.title}: ${currentObjective(u.quest, p).label}`
+        : `${u.quest.title} ${u.count}/${u.need}`);
   }
 
   /** 머리 위 표시와 퀘스트 목록을 지금 상태로 맞춘다. */
@@ -2498,12 +2714,24 @@ export class GameScene extends Phaser.Scene {
     if (this.playFestival) return;
     if ([...this.raidEnemies].some((e) => e.character.alive && e.state !== 'dead') || this.bossWarningEnd !== undefined) return;
     const spawns = raidSpawns(this.quests, this.mapId);
-    if (spawns.length === 0) return;
+    if (spawns.length === 0) {
+      this.bossAwaitingApproach = false;
+      return;
+    }
     // 보스는 "보스 등장" 경고를 띄운 뒤 나타난다(updateBoss).
     if (spawns.some((s) => s.boss)) {
+      if (!this.player?.alive) return;
+      const bossPoint = spawns.find((s) => s.boss)!;
+      // 패배·재접속 후 마을 북쪽에 다시 들어왔을 때는 바로 결계에 가두지 않고, 전투 길목에 다가가면 시작한다.
+      if (!announce && Math.hypot(this.player.x - bossPoint.x, this.player.y - bossPoint.y) > 460) {
+        this.bossAwaitingApproach = true;
+        this.hud?.setHint('리네아의 집 앞 북쪽 길에 강한 기운이 서려 있습니다 · 준비를 마치고 다가가세요');
+        return;
+      }
+      this.bossAwaitingApproach = false;
       this.pendingBoss = spawns;
       this.bossWarningEnd = this.now + BOSS.warningMs;
-      this.bossHud?.showWarning(MONSTERS[spawns.find((s) => s.boss)!.key].name, this.now);
+      this.bossHud?.showWarning(MONSTERS[bossPoint.key].name, this.now);
       // 결계는 다음 프레임(updateBoss)에 연다: 장면을 만드는 중이면 아직 병사와 HUD가 없다.
       this.arena = undefined;
       this.cameras.main.shake(BOSS.warningMs * 0.3, 0.003);
@@ -2519,14 +2747,27 @@ export class GameScene extends Phaser.Scene {
 
   private refreshQuests(): void {
     if (this.player) this.syncRaidEnemies();
+    this.drawChapterShade(this.scale.gameSize.width);
+    this.ensureTutorialPracticeState();
     this.interactables = this.interactables.filter(spot => !spot.id.startsWith('story-'));
     for (const marker of this.storyMarkers) marker.destroy();
     this.storyMarkers = [];
+    const subSpotIds = new Set(['story-wildflower', 'story-ancient-tablet', 'story-silver-herb-1', 'story-silver-herb-2', 'story-silver-herb-3', 'story-stream-pebble', 'story-clear-water']);
+    const spotLabels: Record<string, string> = {
+      'story-wildflower': '◆ 하늘색 들꽃',
+      'story-ancient-tablet': '◆ 석판 조각',
+      'story-silver-herb-1': '◆ 은빛 풀',
+      'story-silver-herb-2': '◆ 은빛 풀',
+      'story-silver-herb-3': '◆ 은빛 풀',
+      'story-stream-pebble': '◆ 반짝이는 조약돌',
+      'story-clear-water': '◆ 맑은 개울물',
+    };
     for (const spot of [...chapterSpots(this.quests, this.mapId), ...chapterTwoSpots(this.quests, this.mapId)]) {
       this.interactables.push(spot);
-      this.storyMarkers.push(this.add.text(spot.x, spot.y - spot.markerHeight, '◆ 살펴보기', {
-        fontFamily: 'system-ui, sans-serif', fontSize: '22px', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 5,
-      }).setOrigin(0.5, 1).setDepth(spot.y + 400).setResolution(2));
+      const isSub = subSpotIds.has(spot.id);
+      this.storyMarkers.push(this.add.text(spot.x, spot.y - spot.markerHeight, spotLabels[spot.id] ?? '◆ 살펴보기', {
+        fontFamily: 'system-ui, sans-serif', fontSize: '22px', color: isSub ? '#8cf29e' : '#ffd23f', stroke: '#1a1008', strokeThickness: 5,
+      }).setOrigin(0.5, 1).setDepth(DEPTH_LIGHTING + 2).setResolution(2));
     }
     for (const npc of this.npcs) {
       this.syncDefenderRecovery(npc);
@@ -2535,6 +2776,8 @@ export class GameScene extends Phaser.Scene {
       npc.setQuestMarker(this.playFestival || !chapterCanTalk(npc.def.id, this.quests) ? undefined : markerFor(npc.def.id, this.quests));
     }
     for (const door of this.doorMarkers) {
+      const to = door.spot.enter?.to;
+      if (to && isMapId(to)) door.npcs = chapterNpcs(MAPS[to].npcs, this.quests, to).map((n) => n.id);
       const markers = door.npcs.filter(id => chapterCanTalk(id, this.quests)).map((id) => markerFor(id, this.quests)).filter((m): m is QuestMarker => !!m);
       door.marker = MARKER_PRIORITY.find((m) => markers.includes(m));
       if (door.marker) door.text.setText(MARKER_STYLE[door.marker].text).setColor(MARKER_STYLE[door.marker].color);
@@ -2884,7 +3127,7 @@ export class GameScene extends Phaser.Scene {
 
   /** 전체 지도를 연다. 대화·메뉴·이동 중에는 열지 않는다. */
   private openWorldMap(): void {
-    if (this.opening) return;
+    if (!this.player?.alive || this.opening) return;
     if (!this.worldMap || this.quickSlotPanel?.isOpen || this.storyChoice?.isOpen || this.worldMap.isOpen || this.dialogue.isOpen || this.pauseMenu.isOpen || this.itemPanel?.isOpen || this.characterPanel?.isOpen || this.traveling) return;
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
@@ -2895,9 +3138,11 @@ export class GameScene extends Phaser.Scene {
     // 지도에는 퀘스트 표시(!/?)를 띄우지 않는다. 퀘스트는 머리 위·미니맵·추적창으로 안내한다.
     this.exitHint?.update(this.player, true, false);
     this.setQuickButtonsVisible(false);
-    this.worldMap.show(this.player, { npcs: this.npcs.map(n => ({ x: n.x, y: n.y })),
+    const blocked = new Set(this.map.exits.filter(e => !!this.exitBlockReason(e)).map(e => e.to));
+    const blockNote = this.mapId === 'east-stream' ? '동쪽 고갯길은 1장을 마친 뒤 열립니다' : '습격 중에는 마을 밖 사냥터로 나갈 수 없습니다';
+    this.worldMap.show(this.player, { npcs: this.npcs.filter(n => n.visible).map(n => ({ x: n.x, y: n.y })),
       enemies: this.enemies.filter(e => e.character.alive).map(e => ({ x: e.character.x, y: e.character.y })) },
-      chapterPhase(this.quests) === 'raid' && this.mapId === 'village');
+      blocked, blockNote);
   }
 
   private loadVisited(): Set<RegionId> {
@@ -3000,7 +3245,7 @@ export class GameScene extends Phaser.Scene {
 
   /** 캐릭터 창을 연다. smithy면 도란의 대장간(장비 구매·판매). 대화·메뉴·이동 중에는 열지 않는다. */
   private openCharacterPanel(tab: CharacterTab, smithy = false, fromPause = false): boolean {
-    if (this.opening) return false;
+    if (!this.player?.alive || this.opening) return false;
     if (!this.characterPanel || this.characterPanel.isOpen || this.traveling || this.pauseMenu.isOpen || this.dialogue.isOpen
       || this.itemPanel?.isOpen || this.worldMap?.isOpen || this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return false;
     this.returnToPause = fromPause;
@@ -3137,7 +3382,7 @@ export class GameScene extends Phaser.Scene {
       ? enemyHitReaches(hit, x, y) && (enemy.kind !== 'swamp-lurker' || this.walkArea.hasClearPath(hit.fromX, hit.fromY, x, y, 4))
       : strikeReaches(c.x, c.y, c.facing, x, y);
     if (!reaches(player.x, player.y)) {
-      const defender = [...this.npcs, ...this.companionFighters()].filter(npc => npc.canFight && reaches(npc.x, npc.y))
+      const defender = [...this.npcs.filter(npc => !this.awayNpcs.has(npc)), ...this.companionFighters()].filter(npc => npc.canFight && reaches(npc.x, npc.y))
         .sort((a, b) => Math.hypot(a.x-c.x, a.y-c.y)-Math.hypot(b.x-c.x, b.y-c.y))[0];
       if (defender) {
         const source = hit ? { x: defender.x-hit.dx, y: defender.y-hit.dy } : c;
@@ -3315,27 +3560,30 @@ export class GameScene extends Phaser.Scene {
   };
 
   /**
-   * 주인공이 피해를 받는다: 방어력(DEF)과 공명을 반영하고(최소 1), 받은 피해를 기록하고, 약초 기운을 지운다.
+   * 주인공이 피해를 받는다: 방어력(DEF)과 공명을 반영하고(최소 1), 받은 피해를 기록한다.
+   * dot(부식 웅덩이 틱 피해)은 약초 기운·차지 패링 유지·콤보를 끊지 않도록 완화한다.
    * source: 쓰러졌을 때의 창에 보일 이름
    */
-  private hurtPlayer(enemy: Enemy, damage: number, source: string): { taken: number; died: boolean } {
+  private hurtPlayer(enemy: Enemy, damage: number, source: string, dot = false): { taken: number; died: boolean } {
     const player = this.player;
-    // 막지 못하고 정통으로 맞으면 회복 가능했던 내상도 사라지고 연속 패링 체인·차지도 끊긴다.
-    this.internalDamage = 0;
-    this.internalHealCarry = 0;
-    this.parryChain = { count: 0, lastAt: -Infinity };
-    this.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
-    this.parryPendingWhiff = false;
-    this.chargeHoldStart = undefined;
-    this.chargeParryReady = false;
-    this.unboundUntil = 0;
-    this.counterTarget = undefined;
-    this.resetHitCombo();
+    if (!dot) {
+      // 막지 못하고 정통으로 맞으면 회복 가능했던 내상도 사라지고 연속 패링 체인·차지·콤보가 끊긴다.
+      this.internalDamage = 0;
+      this.internalHealCarry = 0;
+      this.parryChain = { count: 0, lastAt: -Infinity };
+      this.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
+      this.parryPendingWhiff = false;
+      this.chargeHoldStart = undefined;
+      this.chargeParryReady = false;
+      this.unboundUntil = 0;
+      this.counterTarget = undefined;
+      this.resetHitCombo();
+    }
     const taken = resonanceTaken(mitigate(Math.round(damage), this.derived), this.resonating, RESONANCE);
-    const died = player.hurt(taken, 0xff5a4a);
+    const died = player.hurt(taken, dot ? 0xb87ae6 : 0xff5a4a);
     this.damageLog = recordDamage(this.damageLog, { name: source, level: enemy.level }, taken);
-    if (this.herb) {
-      // 약초 기운은 처음 맞을 때 사라진다. 남은 체력이 기본 최대보다 많으면 기본 최대로 맞춘다.
+    if (!dot && this.herb) {
+      // 약초 기운은 직접 피격 시 사라진다(바닥 웅덩이 틱 피해에는 유지). 남은 체력이 기본 최대보다 많으면 기본 최대로 맞춘다.
       this.herb = 0;
       player.setMaxHp(this.stats.maxHp, false);
       if (!died) this.hud.showCallout('약초 기운이 사라졌다');
@@ -3367,7 +3615,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!hit || !player.alive || now < player.invulnerableUntil || this.dialogue.isOpen) return;
     const scale = veil ? BOSS.veil.damageScale : BOSS.pool.damageScale;
-    const { taken, died } = this.hurtPlayer(enemy, enemy.stats.damage * scale, `${enemy.stats.name}(${veil ? '부식의 장막' : '부식 웅덩이'})`);
+    const { taken, died } = this.hurtPlayer(enemy, enemy.stats.damage * scale, `${enemy.stats.name}(${veil ? '부식의 장막' : '부식 웅덩이'})`, !veil);
     this.showDamage(player.x, player.y - 190, taken, veil ? '#ff8a7a' : '#c9a3e6');
     if (veil) {
       player.invulnerableUntil = now + PLAYER.invulnerableMs;
@@ -3450,6 +3698,7 @@ export class GameScene extends Phaser.Scene {
       const died = c.hurt(shockDamage, 0xfff0a0);
       this.showDamage(c.x, c.y - 125, shockDamage, '#ffe878', 56);
       if (died) this.resolveEnemyHit(enemy, true, enemyPushX, enemyPushY, BLOCK.enemyKnockback * 1.5);
+      else if (entersPhaseTwo(enemy.phase, c.hp, c.maxHp)) this.startBossRoar(enemy);
     }
 
     this.focusCompanion(enemy);
@@ -3633,6 +3882,14 @@ export class GameScene extends Phaser.Scene {
   /** 보스: 경고가 끝나면 나타나게 하고, 체력 막대를 맞춘다. */
   private updateBoss(time: number, dt: number): void {
     this.drawArena(time);
+    if (this.bossAwaitingApproach && this.player.alive && this.bossWarningEnd === undefined && !this.boss) {
+      const bossPoint = raidSpawns(this.quests, this.mapId).find((s) => s.boss);
+      if (!bossPoint) this.bossAwaitingApproach = false;
+      else if (Math.hypot(this.player.x - bossPoint.x, this.player.y - bossPoint.y) <= 460) {
+        this.bossAwaitingApproach = false;
+        this.syncRaidEnemies(true);
+      }
+    }
     if (this.bossWarningEnd !== undefined) {
       this.bossHud?.updateWarning(time);
       if (!this.arena || this.arenaFadeAt !== undefined) this.openArena();
@@ -3677,6 +3934,12 @@ export class GameScene extends Phaser.Scene {
     this.player.knockback.set(0, 0);
     this.attackBufferedUntil = undefined;
     this.attackTrace = undefined;
+    this.attackLunge = undefined;
+    this.blocking = false;
+    this.parryUntil = 0;
+    this.chargeHoldStart = undefined;
+    this.chargeParryReady = false;
+    this.shield?.clear();
     const c = enemy.character;
     this.cameras.main.shake(BOSS.roarMs * 0.85, 0.011);
     this.impacts.screenFlash(0x8c1010, 0.22, 420);
@@ -3856,7 +4119,7 @@ export class GameScene extends Phaser.Scene {
     this.arenaFadeAt = undefined;
     this.arenaOpenedAt = this.now;
     this.arenaRing ??= this.add.graphics().setDepth(-40);
-    const away = this.npcs.filter((npc) => npc.isFighter);
+    const away = this.npcs.filter((npc) => npc.isFighter && npc.canFight);
     for (const npc of away) this.awayNpcs.add(npc);
     const spots = new Set(away.map((npc) => npc.spot));
     this.interactables = this.interactables.filter((spot) => !spots.has(spot));
@@ -3916,6 +4179,7 @@ export class GameScene extends Phaser.Scene {
     }
     g.clear();
     if (fade <= 0) {
+      for (const npc of this.npcs) if (!this.awayNpcs.has(npc) && npc.alpha < 1) npc.setAlpha(1);
       this.arena = undefined;
       return;
     }
@@ -3941,21 +4205,42 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * 물약·공명 연습 단계가 진행 중이라면, 안내를 이미 본 뒤 새로고침했더라도 연습 조건(체력·물약·공명 구슬)을 보장한다.
+   */
+  private ensureTutorialPracticeState(): void {
+    if (!this.player?.alive) return;
+    const lesson = activeLesson(this.quests);
+    if (!lesson) return;
+    if (lesson.id === 'potion' && !this.potionPracticePrepared) {
+      this.potionPracticePrepared = true;
+      if (countOf(this.inventory, 'potion') <= 0) {
+        this.inventory = addItem(this.inventory, 'potion', 1);
+        this.saveInventory();
+        this.refreshInventory();
+      }
+      if (this.player.hp >= this.player.maxHp) {
+        this.player.hp = Math.max(1, Math.round(this.player.maxHp * 0.7));
+        this.drawHud();
+      }
+    }
+    if (lesson.id === 'resonance' && !this.resonancePracticePrepared) {
+      this.resonancePracticePrepared = true;
+      this.setResonanceCharge(Math.max(this.resonanceCharge, maxCharge(RESONANCE)));
+    }
+  }
+
+  /**
    * 수련 연습이 막 시작됐고 아직 안내를 본 적이 없으면 시스템 안내 창을 띄운다(한 번만, 기기에 저장).
    * 물약 수련은 다친 상태에서 연습하도록 체력이 가득이면 조금 깎아 두고(에일라가 상처를 봐 주는 장면),
    * 공명 수련은 바로 써 볼 수 있게 구슬을 가득 채운다.
    */
   private showLessonIfNew(): boolean {
     if (!this.guideCard || this.opening || this.traveling || !this.player?.alive || this.menuOpen()) return false;
+    this.ensureTutorialPracticeState();
     const lesson = lessonToShow(this.quests, this.seenLessons);
     if (!lesson) return false;
     this.seenLessons.add(lesson.id);
     try { this.storage?.setItem(GUIDE_SAVE_KEY, serializeSeenLessons(this.seenLessons)); } catch { /* 저장소가 막히면 다음에 다시 본다 */ }
-    if (lesson.id === 'potion' && this.player.hp >= this.player.maxHp) {
-      this.player.hp = Math.max(1, Math.round(this.player.maxHp * 0.7));
-      this.drawHud();
-    }
-    if (lesson.id === 'resonance') this.setResonanceCharge(Math.max(this.resonanceCharge, maxCharge(RESONANCE)));
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
     this.guideCard.open(lesson, () => this.onResume());

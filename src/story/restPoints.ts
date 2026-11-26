@@ -45,11 +45,11 @@ export const HOME_BED_SPOT = { id: 'rest-home', ...interiorArtPoint(home, 1000, 
 const clinic = INTERIORS.find((i) => i.id === 'clinic')!;
 
 /**
- * 치유소 침대 옆의 "치료받기" 자리 (두 침대 오른쪽 사이, 원화 좌표).
+ * 치유소 아래쪽 빈 침대 옆의 "치료받기" 자리 (에일라·리네아 간호 동선과 겹치지 않게 아래쪽 침대 옆에 둔다).
  * 체력을 다 채우고 잿빛 나방의 둔화를 풀지만, 다시 시작할 자리는 저장하지 않는다(저장은 집과 여관).
  * 습격의 밤에도 치료는 받을 수 있다.
  */
-export const CLINIC_BED_SPOT = { id: 'heal-clinic', ...interiorArtPoint(clinic, 530, 545), radius: 110, markerHeight: 150 };
+export const CLINIC_BED_SPOT = { id: 'heal-clinic', ...interiorArtPoint(clinic, 515, 675), radius: 75, markerHeight: 150 };
 
 /**
  * 약초 기운: 치유소에서 치료받으면 최대 체력이 기본의 HERB_BONUS_RATIO만큼 오르고 그만큼 채워진다.

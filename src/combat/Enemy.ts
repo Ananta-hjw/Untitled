@@ -125,7 +125,10 @@ export class Enemy {
     const c = this.character;
     if (this.state === 'dead' || this.kind === 'mist-weaver') return;
     this.hazards?.update(time, dt, player, area, {
-      strike: (hit) => onStrike(this, hit) === true,
+      strike: (hit) => {
+        this.lastStrikeAt = time;
+        return onStrike(this, hit) === true;
+      },
       pool: () => onHazard?.(this, 'pool', true, 0, 0),
     });
     this.updateDecoy(time);
@@ -242,7 +245,8 @@ export class Enemy {
       }
 
       case 'veil': {
-        // 범위를 그리며 몸을 떨다가 터뜨린다. 그때 범위 안에 있으면 큰 피해.
+        // 범위를 그리며 몸을 떨다가 터뜨린다. 시전 중에는 자리를 고정해 바닥 범위와 판정이 어긋나지 않게 한다.
+        c.knockback.set(0, 0);
         c.setMotion(false, dx);
         const shake = Math.sin(time / 30) * 3;
         c.sprite.setPosition(shake, 0);
@@ -311,7 +315,7 @@ export class Enemy {
     if (this.state === 'dead' || this.state === 'roar' || this.state === 'retreat' || this.state === 'veil') {
       return { outcome: 'normalBreak', step: 1, total: 1 };
     }
-    this.comboParries += 1;
+    if (perfect) this.comboParries += 1;
     const step = this.comboParries;
     const total = Math.max(step, this.chainTotal);
     const outcome = bossParryOutcome(this.boss, this.chainLeft, step, perfect);
