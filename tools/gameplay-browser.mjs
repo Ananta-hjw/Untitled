@@ -321,11 +321,23 @@ test('쓰러진 뒤의 창과 적의 부활은 시각 효과의 완료와 무관
   await load();
   const result = await evaluate(`(() => {
     const s = window.__game.scene.getScene('game'), p = s.player, e = s.enemies[0];
+    p.sprite.setAttackFacing('up-left'); p.sprite.setGuarding(true);
     p.hurt(p.maxHp); s.onPlayerDeath(); const playerAt = s.playerRespawnAt;
+    const poses = new Set([p.sprite.image.frame.name]);
+    for (let t = 50; t <= 600; t += 50) {
+      p.sprite.advance(50); poses.add(p.sprite.image.frame.name);
+    }
+    const collapse = { poses: [...poses], left: p.sprite.image.scaleX < 0,
+      weaponVisible: p.sprite.weaponBack.visible || p.sprite.weaponFront.visible || p.sprite.supportHand.visible };
     const getDelta = s.tweens.getDelta; s.tweens.getDelta = () => 10000; s.tweens.update(); s.tweens.getDelta = getDelta;
     const cosmeticOnly = p.alive; s.updateRespawns(playerAt - 1); const before = p.alive;
     s.now = playerAt; s.updateRespawns(playerAt); const after = s.deathPanel.isOpen && !p.alive;
+    p.setMotion(false); p.sprite.advance(50);
+    const held = { frame: p.sprite.image.frame.name, alpha: p.sprite.alpha,
+      nameVisible: p.nameText.visible, levelVisible: p.levelText.visible };
     p.revive(1000, 650); e.character.revive(1110, 650); e.character.hp = 1;
+    const revived = { idle: !p.sprite.image.frame.name.startsWith('death-'),
+      nameVisible: p.nameText.visible, levelVisible: p.levelText.visible };
     s.enemies = [e]; s.now = 0; s.comboStage = 2; s.comboExpiresAt = 10000; s.startAttack(0, 1);
     for (let t = 50; t <= 250; t += 50) {
       p.sprite.advance(50); s.now = t; s.updateAttackLunge(t); s.updateAttackTrace(t);
@@ -333,8 +345,11 @@ test('쓰러진 뒤의 창과 적의 부활은 시각 효과의 완료와 무관
     const pending = s.enemyRespawns[0]; if (!pending) throw new Error('적 사망 후 부활 예약 누락');
     s.updateRespawns(pending.at - 1); const enemyBefore = e.character.alive;
     s.now = pending.at; s.updateRespawns(pending.at);
-    return { cosmeticOnly, before, after, enemyBefore, enemyAfter: e.character.alive, pending: s.enemyRespawns.length };
+    return { collapse, held, revived, cosmeticOnly, before, after, enemyBefore, enemyAfter: e.character.alive, pending: s.enemyRespawns.length };
   })()`);
+  assert.deepEqual(result.collapse, { poses: Array.from({ length: 6 }, (_, i) => 'death-' + i), left: true, weaponVisible: false });
+  assert.deepEqual(result.held, { frame: 'death-5', alpha: 1, nameVisible: false, levelVisible: false });
+  assert.deepEqual(result.revived, { idle: true, nameVisible: true, levelVisible: true });
   assert.equal(result.cosmeticOnly, false);
   assert.equal(result.before, false, '기한 전에는 창이 뜨지 않는다');
   assert.equal(result.after, true, '기한에 창이 뜨고, 시온은 확인을 누를 때까지 쓰러져 있다');
