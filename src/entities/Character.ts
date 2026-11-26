@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { HeroSprite } from './HeroSprite';
-import { MonsterSprite } from '../combat/MonsterSprite';
+import { FADE_FRAME_MS, MonsterSprite } from '../combat/MonsterSprite';
 import type { MonsterKind } from '../combat/monsterTypes';
 
 export interface CharacterOptions {
@@ -223,6 +223,14 @@ export class Character extends Phaser.GameObjects.Container {
       this.nameText?.setVisible(false);
       this.levelText?.setVisible(false);
       this.sprite.setAlpha(1).play(`${this.key}-death`);
+      return;
+    }
+    // 안개 환영은 몸이 흩어지는 그림(게임 시계)을 보여 주고, 거의 사라진 마지막 칸만 살짝 지운다.
+    if (this.sprite instanceof MonsterSprite && this.sprite.hasFade) {
+      this.sprite.playFade('dissipate');
+      const tail = this.levelTagText ? [this.shadow, this.levelTagText] : [this.shadow];
+      this.scene.tweens.add({ targets: tail, alpha: 0, duration: 300, ease: 'Quad.easeIn' });
+      this.scene.tweens.add({ targets: this.sprite, alpha: 0, delay: FADE_FRAME_MS.dissipate * 4, duration: 160 });
       return;
     }
     // 레벨 글씨도 몸과 함께 사라진다(예전에는 몸이 사라진 뒤에도 남아 있었다).

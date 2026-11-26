@@ -105,6 +105,8 @@ export class Enemy {
       labelOffset: this.kind ? this.stats.height + (this.kind === 'fog-crow' ? 36 : 8) : 96,
     });
     this.staggerMark = scene.add.graphics().setVisible(false);
+    // 안개 환영은 안개 한 줄기에서 몸이 생기며 나타난다.
+    if (this.character.sprite instanceof MonsterSprite) this.character.sprite.playFade('materialize');
     this.target.set(x, y);
     this.wanderSpeed = Phaser.Math.Between(50, 80);
     this.timer = Phaser.Math.Between(300, 1800);
@@ -123,6 +125,8 @@ export class Enemy {
     onGlint?: GlintHandler,
   ): void {
     const c = this.character;
+    // 쓰러진 안개 환영은 흩어지는 그림을 게임 시계로 마저 보여 준다.
+    if (this.state === 'dead' && c.sprite instanceof MonsterSprite && c.sprite.hasFade) c.sprite.advance(dt * 1000);
     if (this.state === 'dead' || this.kind === 'mist-weaver') return;
     this.hazards?.update(time, dt, player, area, {
       strike: (hit) => {
@@ -136,6 +140,8 @@ export class Enemy {
     this.updateParryStun(time);
     this.updateProjectile(time, dt, player, area, onStrike);
     if (c.sprite instanceof MonsterSprite) c.sprite.advance(dt * 1000);
+    // 안개 환영은 안개에서 몸이 다 생길 때까지 움직이지 않는다.
+    if (c.sprite instanceof MonsterSprite && c.sprite.materializing) return;
 
     const opponent = chaseTarget ?? player;
     const dx = opponent.x - c.x;
@@ -529,8 +535,12 @@ export class Enemy {
     this.clearProjectile();
     this.cancelStrike();
     this.character.revive(x, y);
-    this.character.setAlpha(0);
-    this.scene.tweens.add({ targets: this.character, alpha: 1, duration: 400 });
+    const sprite = this.character.sprite;
+    if (sprite instanceof MonsterSprite && sprite.hasFade) sprite.playFade('materialize');
+    else {
+      this.character.setAlpha(0);
+      this.scene.tweens.add({ targets: this.character, alpha: 1, duration: 400 });
+    }
     this.target.set(x, y);
     this.state = 'wander';
     this.timer = 0;

@@ -4496,6 +4496,33 @@ test('밤의 종소리: 여관에서 방을 얻으면 밤 연출 → 잠든 여�
   assert.deepEqual(result.morning, { people: ['finn', 'fog-innkeeper'], shade: false, rest: 'ferry-inn' });
 });
 
+test('안개 환영은 안개 줄기에서 몸이 생기며 나타나고(그동안 멈춰 있다), 쓰러지면 몸이 흩어지고, 다시 나타날 때도 몸이 생긴다', async () => {
+  await load('reed-swamp&monsters=mist-phantom&companion=none');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), e = s.enemies.find(e => e.kind === 'mist-phantom'), sp = e.character.sprite;
+    const tick = ms => e.update(s.now += ms, ms / 1000, s.player, s.walkArea, s.nav, () => {});
+    s.player.placeAt(e.character.x - 150, e.character.y);
+    sp.playFade('materialize');
+    const start = { x: e.character.x, y: e.character.y }, frames = [sp.image.frame.name];
+    for (let i = 0; i < 3; i++) { tick(130); frames.push(sp.image.frame.name); }
+    const still = e.character.x === start.x && e.character.y === start.y && sp.materializing;
+    tick(130);
+    const after = { frame: sp.image.frame.name, texture: sp.image.texture.key, materializing: sp.materializing };
+    e.character.hurt(99999); e.kill();
+    const dying = [sp.image.frame.name];
+    for (let i = 0; i < 3; i++) { tick(120); dying.push(sp.image.frame.name); }
+    e.respawn(start.x, start.y);
+    return { frames, still, after, dying, respawn: sp.image.frame.name, alpha: e.character.alpha };
+  })()`);
+  assert.deepEqual(result.frames, ['materialize-0', 'materialize-1', 'materialize-2', 'materialize-3']);
+  assert.equal(result.still, true);
+  assert.equal(result.after.materializing, false);
+  assert.match(result.after.texture, /^monster-mist-phantom-walk/);
+  assert.deepEqual(result.dying, ['dissipate-0', 'dissipate-1', 'dissipate-2', 'dissipate-3']);
+  assert.equal(result.respawn, 'materialize-0');
+  assert.equal(result.alpha, 1);
+});
+
 test('나루 여관 주인은 전용 SD·잠든 걸음·대화 초상화를 사용하고 대화하면 깨어난다', async () => {
   await load('east-stream&npcs=innkeeper&sleepwalk=1&companion=none');
   const result=await evaluate(`(() => {

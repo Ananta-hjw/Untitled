@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { FROST_SHELL, MONSTERS, monsterKind, type EnemyKey, type MonsterKind } from './monsterTypes';
 import { direction8, type Direction8 } from '../world/npcs';
+import phantomFadeUrl from '../assets/monsters/mist-phantom/fade.webp?url';
+import phantomFade from '../assets/monsters/mist-phantom/fade-frames.json';
 
 interface Frame {
   name: string; animation: string; direction: string; pose: number; sheet: string;
@@ -12,6 +14,13 @@ const URLS = import.meta.glob<string>('../assets/monsters/*/*.webp', { eager: tr
 const keyFor = (kind: MonsterKind, sheet: string) => `monster-${kind}-${sheet.replace('.png', '')}`;
 const frameData = (kind: MonsterKind): FrameData | undefined => DATA[`../assets/monsters/${kind}/animation_frames.json`];
 const idleKey = (kind: MonsterKind) => keyFor(kind, 'idle');
+/**
+ * 안개 환영의 등장(안개 한 줄기에서 몸이 생긴다)·쓰러짐(몸이 흩어져 사라진다) 4칸씩 (tools/build_mist_phantom_fade.py).
+ * 게임 시계로 칸을 넘긴다. FADE_FRAME_MS × 4가 한 동작의 길이다.
+ */
+const FADE_KEY = 'monster-mist-phantom-fade';
+export const FADE_FRAME_MS = { materialize: 130, dissipate: 120 };
+export type FadeMotion = keyof typeof FADE_FRAME_MS;
 // 입을 벌린 타격 프레임에서 잰 입 위치. 원본 시트 px, 프레임의 기준점 상대 좌표.
 const SWAMP_MOUTH: Record<Direction8, [number, number]> = {
   down: [13, -119], left: [-100, -97], right: [99, -97], up: [13, -223],
@@ -35,6 +44,7 @@ export function preloadMonsters(scene: Phaser.Scene, spawns: readonly { key: Ene
     if (kind === 'fog-crow' && !scene.textures.exists('monster-fog-afterimage')) {
       scene.load.image('monster-fog-afterimage', URLS['../assets/monsters/fog-crow/afterimage-512.webp']);
     }
+    if (kind === 'mist-phantom' && !scene.textures.exists(FADE_KEY)) scene.load.image(FADE_KEY, phantomFadeUrl);
     if (kind === 'waterdrop-mushroom' && !scene.textures.exists('monster-water-shot')) {
       scene.load.image('monster-water-shot', URLS['../assets/monsters/waterdrop-mushroom/projectile.webp']);
     }
@@ -55,6 +65,8 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   /** 서리 딱정벌레가 마지막으로 몸을 돌린 시각(이 스프라이트가 받은 게임 시간 누계) */
   private turnedAt = -Infinity;
   private clock = 0;
+  /** 등장·쓰러짐 동작 중이면 그 동작과 시작한 뒤 흐른 시간 */
+  private fade?: { motion: FadeMotion; elapsed: number };
 
   constructor(scene: Phaser.Scene, readonly kind: MonsterKind) {
     super(scene, 0, 0);
@@ -82,10 +94,30 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     if (kind === 'ashen-moth') this.image.setY(-28);
     if (kind === 'fog-crow') this.image.setY(-12);
     this.add(this.image);
+    if (kind === 'mist-phantom') {
+      const texture = scene.textures.get(FADE_KEY);
+      phantomFade.frames.forEach((name, i) => {
+        if (!texture.has(name)) texture.add(name, 0, i * phantomFade.cell, 0, phantomFade.cell, phantomFade.cell);
+      });
+    }
+    this.showFrame();
+  }
+
+  /** 등장·쓰러짐 그림이 있는 종류인지 (안개 환영) */
+  get hasFade(): boolean { return this.kind === 'mist-phantom' && this.scene.textures.exists(FADE_KEY); }
+  /** 등장 동작을 하는 중인지 (그동안 적은 움직이지 않는다) */
+  get materializing(): boolean { return this.fade?.motion === 'materialize'; }
+
+  /** 등장·쓰러짐 동작을 처음부터 보여 준다. 쓰러짐은 마지막 칸(거의 흩어진 안개)에서 멈춘다. */
+  playFade(motion: FadeMotion): void {
+    if (!this.hasFade) return;
+    this.fade = { motion, elapsed: 0 };
     this.showFrame();
   }
 
   play(key: string): this {
+    // 다시 살아나면(revive) 흩어진 그림을 지운다. 등장 동작은 끝까지 보여 준다.
+    if (this.fade?.motion === 'dissipate') this.fade = undefined;
     this.motion = key.endsWith('-walk') ? 'walk' : 'idle';
     this.elapsed = 0;
     this.attackPose = undefined;
@@ -128,7 +160,16 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   setTint(color: number): this { this.image.setTint(color); return this; }
   setTintMode(mode: Phaser.TintModes): this { this.image.setTintMode(mode); return this; }
   clearTint(): this { this.image.clearTint(); return this; }
-  advance(deltaMs: number): void { this.elapsed += deltaMs * this.anims.timeScale; this.clock += deltaMs; this.showFrame(); }
+  advance(deltaMs: number): void {
+    this.elapsed += deltaMs * this.anims.timeScale;
+    this.clock += deltaMs;
+    if (this.fade) {
+      this.fade.elapsed += deltaMs;
+      // 등장이 끝나면 평소 그림으로 돌아간다.
+      if (this.fade.motion === 'materialize' && this.fade.elapsed >= FADE_FRAME_MS.materialize * 4) this.fade = undefined;
+    }
+    this.showFrame();
+  }
   showAttack(elapsed: number, windup: number, strike: number, recovery: number): void {
     this.attackPose = elapsed < windup ? 1 : elapsed < windup + strike ? 2 : elapsed < windup + strike + recovery ? 3 : undefined;
     this.showFrame();
@@ -148,6 +189,7 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
 
   private showFrame(): void {
     if (!this.sheetData) return;
+    if (this.fade) { this.showFade(this.fade.motion, this.fade.elapsed); return; }
     const flight = this.kind === 'fog-crow';
     const cycle = this.sheetData.animations?.walk;
     const poses = flight ? (cycle?.poses ?? [0, 1, 2, 3]) : [1, 2, 3, 2];
@@ -160,6 +202,15 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     const source = this.sheetData.sheets[f.sheet];
     const sx = texture.getSourceImage().width / source.width, sy = texture.getSourceImage().height / source.height;
     this.image.setTexture(texture.key, f.name).setOrigin(f.originX, f.originY)
-      .setScale(this.scale0 * f.scale / sx, this.scale0 * f.scale / sy);
+      .setScale(this.scale0 * f.scale / sx, this.scale0 * f.scale / sy).setFlipX(false);
+  }
+
+  /** 온몸이 보이는 칸을 걷기 그림의 오른쪽 아래 정지 자세와 같은 높이로 그린다. 왼쪽을 보면 뒤집는다. */
+  private showFade(motion: FadeMotion, elapsed: number): void {
+    const index = Math.min(3, Math.floor(elapsed / FADE_FRAME_MS[motion]));
+    const idle = this.frames.get('walk-down-right-0')!;
+    const scale = this.scale0 * idle.h * idle.scale / phantomFade.bodyHeight;
+    this.image.setTexture(FADE_KEY, `${motion}-${index}`).setOrigin(phantomFade.originX, phantomFade.originY)
+      .setScale(scale).setFlipX(this.direction.endsWith('left'));
   }
 }

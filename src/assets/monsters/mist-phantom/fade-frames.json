@@ -1,0 +1,17 @@
+{
+  "cell": 192,
+  "frames": [
+    "materialize-0",
+    "materialize-1",
+    "materialize-2",
+    "materialize-3",
+    "dissipate-0",
+    "dissipate-1",
+    "dissipate-2",
+    "dissipate-3"
+  ],
+  "originX": 0.5,
+  "originY": 0.85677,
+  "bodyHeight": 130.5,
+  "facing": "down-right"
+}
