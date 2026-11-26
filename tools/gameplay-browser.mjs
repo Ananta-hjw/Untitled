@@ -125,7 +125,7 @@ test('2장 여섯 인물은 각자의 스프라이트와 대화 초상화를 쓰
   })()`);
   assert.deepEqual(result.map(n => n.id).sort(), ['dor', 'evan', 'finn', 'joan', 'marta', 'morgan']);
   for (const n of result) {
-    const directional = n.id === 'evan' || n.id === 'joan';
+    const directional = n.id !== 'dor';
     assert.equal(n.before, `npc-${n.id}-${directional ? 'cardinal' : 'idle'}`);
     assert.equal(n.after, directional ? `npc-${n.id}-diagonal` : n.before);
     assert.equal(n.portrait, `portrait-${n.id}`);

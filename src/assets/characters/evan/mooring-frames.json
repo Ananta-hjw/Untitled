@@ -1,0 +1,40 @@
+{
+  "frames": [
+    {
+      "name": "mooring-ready",
+      "x": 0,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955308
+    },
+    {
+      "name": "mooring-loosen",
+      "x": 512,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955308
+    },
+    {
+      "name": "mooring-release",
+      "x": 0,
+      "y": 384,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955308
+    },
+    {
+      "name": "mooring-gather",
+      "x": 512,
+      "y": 384,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.955308
+    }
+  ]
+}

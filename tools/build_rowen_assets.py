@@ -29,7 +29,7 @@ CELL_OVERRIDES = {'clinic': (700, 512, 1536, 1024)}
 
 # Buildings drawn alone on one image: name -> (file, width in the sheet)
 SINGLES = {'linea-house': ('linea-house.png', 420)}
-NPCS = ['ruan', 'serena', 'linea', 'sia', 'herman', 'eila', 'merina', 'doran', 'rosetta', 'vernel', 'teon', 'soldier', 'fern', 'evan', 'joan']
+NPCS = ['ruan', 'serena', 'linea', 'sia', 'herman', 'eila', 'merina', 'doran', 'rosetta', 'vernel', 'teon', 'soldier', 'fern', 'evan', 'joan', 'finn', 'morgan', 'marta']
 
 
 def bbox(image):
