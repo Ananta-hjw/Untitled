@@ -33,6 +33,9 @@ export const SUPPORTING_CAST: readonly NpcDef[] = [
   { id: 'toby', name: '토비', role: '마르타의 견습생', x: 0, y: 0, height: 128, dialogue: 'npc-toby' },
   { id: 'bell-ringer', name: '종을 울리던 사내', role: '모르간의 부하', x: 0, y: 0, height: 146, dialogue: 'npc-bell-ringer' },
   { id: 'bell-ringer-mother', name: '사내의 어머니', role: '약값 의뢰의 대상', x: 0, y: 0, height: 118, dialogue: 'npc-bell-ringer-mother' },
+  { id: 'mill-apprentice', name: '방앗간 젊은이', role: '방앗간 일꾼', x: 0, y: 0, height: 142, dialogue: 'npc-mill-apprentice' },
+  { id: 'fisher-daughter', name: '어부의 딸', role: '실종된 어부의 가족', x: 0, y: 0, height: 130, dialogue: 'npc-fisher-daughter' },
+  { id: 'herbalist-elder', name: '약초 가게 할머니', role: '나루의 약초 상인', x: 0, y: 0, height: 124, dialogue: 'npc-herbalist-elder' },
 ];
 
 /** Future-story appearances are available to the engine, without early story placement. */
