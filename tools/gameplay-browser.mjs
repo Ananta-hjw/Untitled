@@ -4443,8 +4443,8 @@ test('멈춘 나루: 나루 사람들이 제 그림으로 서고(여관 주인�
     return { people, innSpeaks: innLines.some(l => l.portrait === 'fog-innkeeper'),
       afterInn, restOffered, rest: localStorage.getItem('untitled-rpg.rest') };
   })()`);
-  assert.deepEqual(outside.map(p => p.id).sort(), ['evan', 'morgan']);
-  assert.deepEqual(result.people.map(p => p.id).sort(), ['finn', 'fog-innkeeper']);
+  assert.deepEqual(outside.map(p => p.id).sort(), ['evan', 'ferry-fisher', 'morgan']);
+  assert.deepEqual(result.people.map(p => p.id).sort(), ['finn', 'fog-innkeeper', 'innkeeper-wife']);
   for (const p of [...outside, ...result.people]) assert.notEqual(p.texture, '__MISSING', p.id);
   assert.equal(evanResult.evanMarker, 'target');
   assert.equal(evanResult.evanSpeaks, true); assert.equal(evanResult.step, 1);
@@ -4511,14 +4511,14 @@ test('밤의 종소리: 여관에서 방을 얻으면 밤 연출 → 잠든 여�
     localStorage.removeItem('untitled-rpg.quests');
     return { day, inn, chase, bank, river, hug, status, morning };
   })()`);
-  assert.deepEqual(result.day, { people: ['finn', 'fog-innkeeper'], marker: 'target', spot: true });
+  assert.deepEqual(result.day, { people: ['finn', 'fog-innkeeper', 'innkeeper-wife'], marker: 'target', spot: true });
   assert.deepEqual(result.inn, { opening: true, shade: true, stage: true, finn: 'watch-awake', step: 1, rest: null });
   assert.deepEqual(result.chase, { shade: true, phantoms: 3, sleeping: true, talkable: false, finn: 'warn-father', others: ['finn', 'fog-innkeeper'] });
   assert.deepEqual(result.bank, { step: 2, talkable: true, fog: 8 });
   assert.deepEqual(result.river, { opening: true, step: 3, stillAsleep: true });
   assert.deepEqual(result.hug, { people: ['finn'], frame: 'hug-father', marker: 'target' });
   assert.equal(result.status, 'done');
-  assert.deepEqual(result.morning, { people: ['finn', 'fog-innkeeper'], shade: false, rest: 'ferry-inn' });
+  assert.deepEqual(result.morning, { people: ['finn', 'fog-innkeeper', 'innkeeper-wife'], shade: false, rest: 'ferry-inn' });
 });
 
 test('안개 환영은 안개 줄기에서 몸이 생기며 나타나고(그동안 멈춰 있다), 쓰러지면 몸이 흩어지고, 다시 나타날 때도 몸이 생긴다', async () => {
@@ -4618,6 +4618,69 @@ test('마르타는 나루 대장간 안에 서 있고, 멈춘 나루를 끝낸 �
   assert.equal(result.title, '마르타의 대장간');
   assert.deepEqual(result.ids, ['bronze-helm', 'scale-armor', 'bronze-bracers', 'bronze-bell-earring']);
   assert.deepEqual(result.bought, { gold: 420, bag: 1 });
+});
+
+test('사라진 다섯·새는 지붕·엉킨 그물: 증인은 각자 집에서 증언하고, 늪의 갈대와 그물을 모으면 여관 지붕이 고쳐진다', { timeout: 120000 }, async () => {
+  await load('east-pass&companion=none');
+  await evaluate(`(async () => {
+    const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
+    for (const q of QUESTS.filter(q => q.main)) {
+      seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+      if (q.id === 'night-bell') break;
+    }
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+    localStorage.setItem('untitled-rpg.inventory', JSON.stringify({ version: 1, gold: 0, items: {} }));
+  })()`);
+  await load('in-ferry-inn&companion=none');
+  const result = await evaluate(`(async () => {
+    const g = window.__game;
+    let s = g.scene.getScene('game'), t = performance.now();
+    const restart = async map => {
+      s.scene.restart({ map }); g.step(t += 16, 16);
+      for (let i = 0; i < 300; i++) {
+        s = g.scene.getScene('game');
+        if (s.mapId === map && s.sys.isActive() && s.minimap && !s.traveling) return;
+        await new Promise(resolve => setTimeout(resolve, 10)); g.step(t += 16, 16);
+      }
+      throw Error('맵 재시작 시간 초과: ' + map);
+    };
+    const flush = () => { while (s.dialogue.isOpen) s.dialogue.advance(); if (s.storyChoice?.isOpen) s.storyChoice.cancel(); if (s.characterPanel?.isOpen) s.characterPanel.close(); };
+    const talk = id => { const n = s.npcs.find(n => n.def.id === id); if (!n) throw Error('NPC 없음: ' + id + ' @' + s.mapId); s.openDialogue(n.spot); const portrait = s.dialogue.portrait.texture.key; flush(); return portrait; };
+    const inspectAll = () => { for (const spot of s.interactables.filter(i => i.id.startsWith('story-'))) { s.openDialogue(spot); flush(); } };
+    // 사라진 다섯: 여관 주인 → 증인 셋(각자 집) → 에반 → 마르타
+    talk('fog-innkeeper');
+    // 서브 의뢰도 받는다: 핀의 어머니(여관)
+    talk('innkeeper-wife');
+    const portraits = [];
+    await restart('in-ferry-fisherman-house'); portraits.push(talk('fisher-daughter'));
+    await restart('in-ferry-herbalist-shop'); portraits.push(talk('herbalist-elder'));
+    await restart('in-ferry-watermill'); portraits.push(talk('mill-apprentice'));
+    await restart('ferry-village'); talk('evan'); talk('ferry-fisher');
+    const innBefore = s.children.getByName('village-prop-inn').texture.key;
+    await restart('in-ferry-marta-smithy'); talk('marta');
+    const missing = s.quests['missing-five'].status;
+    // 갈대밭 늪: 갈대 묶음과 그물을 차례로 (한 번에 하나씩 보인다)
+    await restart('reed-swamp');
+    const art = s.storyMarkers.filter(m => m.type === 'Image').map(m => m.texture.key).sort();
+    for (let i = 0; i < 3; i++) inspectAll();
+    const ready = [s.quests['leaky-roof'].step, s.quests['tangled-nets'].step];
+    await restart('in-ferry-inn'); talk('innkeeper-wife');
+    await restart('ferry-village'); talk('ferry-fisher');
+    const innAfter = s.children.getByName('village-prop-inn').texture.key;
+    const result = { portraits, missing, art, ready, roof: s.quests['leaky-roof'].status, nets: s.quests['tangled-nets'].status,
+      fish: s.inventory.items['dried-fish'] ?? 0, innBefore, innAfter };
+    localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.inventory');
+    return result;
+  })()`);
+  assert.deepEqual(result.portraits, ['portrait-fisher-daughter', 'portrait-herbalist-elder', 'portrait-mill-apprentice']);
+  assert.equal(result.missing, 'done');
+  assert.deepEqual(result.art, ['quest-net-1', 'quest-reed-bundle']);
+  assert.deepEqual(result.ready, [3, 3]);
+  assert.equal(result.roof, 'done');
+  assert.equal(result.nets, 'done');
+  assert.equal(result.fish, 3);
+  assert.equal(result.innBefore, 'ferry-inn');
+  assert.equal(result.innAfter, 'ferry-inn-repaired');
 });
 
 test('나루 여관 주인은 전용 SD·잠든 걸음·대화 초상화를 사용하고 대화하면 깨어난다', async () => {

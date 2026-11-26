@@ -23,7 +23,9 @@ export type QuestId = 'ruan-training' | 'ruan-dodge' | 'ruan-parry' | 'ruan-fiel
   // 2장 (docs/story-chapter2.md, story/chapterTwo.ts)
   | 'fern-cart' | 'farewell' | 'mountain-pass' | 'pass-shelter' | 'still-ferry' | 'night-bell'
   // 2장 서브 퀘스트 1~3 (docs/story-chapter2.md "서브 퀘스트 초안")
-  | 'linea-ink' | 'fern-cover' | 'dor-herbs';
+  | 'linea-ink' | 'fern-cover' | 'dor-herbs'
+  // 2장 메인 7, 서브 4·5
+  | 'missing-five' | 'leaky-roof' | 'tangled-nets';
 
 /** 게임에서 일어나서 퀘스트 목표를 채우는 일 */
 export type QuestEvent =
@@ -41,7 +43,8 @@ export type QuestEvent =
 export type InspectSpot =
   | 'south-watch' | 'home-search' | 'moth-nest' | 'north-alley' | 'pass-summit' | 'ferry-forge' | 'reed-kite'
   | 'wildflower' | 'stream-pebble' | 'ancient-tablet' | 'silver-herb-1' | 'silver-herb-2' | 'silver-herb-3' | 'clear-water'
-  | 'pass-herb-1' | 'pass-herb-2' | 'pass-herb-3' | 'pass-herb-4' | 'pass-herb-5';
+  | 'pass-herb-1' | 'pass-herb-2' | 'pass-herb-3' | 'pass-herb-4' | 'pass-herb-5'
+  | 'reed-bundle-1' | 'reed-bundle-2' | 'reed-bundle-3' | 'tangled-net-1' | 'tangled-net-2' | 'tangled-net-3';
 
 export interface QuestObjective {
   /** 추적 표시에 나오는 글 (예: "남쪽 들판의 슬라임") */
@@ -113,6 +116,11 @@ const dor = (text: string): DialogueLine => ({ speaker: '도르', portrait: 'dor
 const evan = (text: string): DialogueLine => ({ speaker: '에반', portrait: 'evan', text });
 const marta = (text: string): DialogueLine => ({ speaker: '마르타', portrait: 'marta', text });
 const finn = (text: string): DialogueLine => ({ speaker: '핀', portrait: 'finn', text });
+const daughter = (text: string): DialogueLine => ({ speaker: '어부의 딸', portrait: 'fisher-daughter', text });
+const herbalist = (text: string): DialogueLine => ({ speaker: '약초 가게 할머니', portrait: 'herbalist-elder', text });
+const miller = (text: string): DialogueLine => ({ speaker: '방앗간 젊은이', portrait: 'mill-apprentice', text });
+const innWife = (text: string): DialogueLine => ({ speaker: '핀의 어머니', portrait: 'innkeeper-wife', text });
+const fisher = (text: string): DialogueLine => ({ speaker: '나루 어부', portrait: 'ferry-fisher', text });
 const innkeeper = (text: string): DialogueLine => ({ speaker: '여관 주인', portrait: 'fog-innkeeper', text });
 
 export const QUESTS: QuestDef[] = [
@@ -561,6 +569,50 @@ export const QUESTS: QuestDef[] = [
       { speaker: HERO_NAME, portrait: 'hero-neutral', text: '(잠든 사람만 디딜 수 있는 길이 있다. 깨어 있는 사람에게는 그냥 물이다.)' },
     ],
   },
+  {
+    // 퀘스트 7 (docs/story-chapter2.md "사라진 다섯"): 사라진 사람들의 가족을 찾아가 모두 그리운 사람의 목소리를 들었다는 것을 안다.
+    id: 'missing-five', title: '사라진 다섯', giver: 'fog-innkeeper', main: true, requires: 'night-bell', turnIn: 'marta', completeOnTarget: true,
+    objective: { label: '여관 주인에게 어젯밤 이야기 듣기', need: 1, event: 'talk', npc: 'fog-innkeeper' },
+    steps: [
+      { label: '여관 주인에게 어젯밤 이야기 듣기', need: 1, event: 'talk', npc: 'fog-innkeeper', lines: [
+        innkeeper('밤새 고마웠네. …날이 밝으니 이제야 어제 들은 게 또렷해.'),
+        innkeeper('어머니 목소리가 꼭 어릴 적 저녁 먹으라고 부르던 그대로였어… 따라가야 할 것 같았지. 강이 마당처럼 보였어.'),
+        hero('사라진 사람들도 그런 목소리를 들었을까요?'),
+        innkeeper('글쎄… 가족들에게 물어보게. 어부네 딸, 약초 가게 할멈, 방앗간 젊은이, 마르타 할멈. 그리고 에반.')] },
+      { label: '어부의 집의 딸 찾아가기', need: 1, event: 'talk', npc: 'fisher-daughter', lines: [
+        daughter('…아빠 이야기 들으러 왔어요? 이거, 아빠 찌예요. 아빠가 늘 갖고 다니던 거.'),
+        daughter('그날 밤에 아빠가 강에서 잃은 형 이름을 불렀어. 형이 부른다고. 문을 열고 나갔어.'),
+        daughter('솜을 꼈는데도 들렸대. 아빠는 형 목소리를 잊은 적이 없으니까.')] },
+      { label: '약초 가게 할머니 찾아가기', need: 1, event: 'talk', npc: 'herbalist-elder', lines: [
+        herbalist('차 한 잔 들고 가게. 요즘은 손님이 와도 차 끓일 기운이 없어.'),
+        herbalist('영감이 먼저 간 딸아이를 찾는다고 문을 열었지. "아가, 거기 있니" 하면서.'),
+        herbalist('딸아이는 스무 해 전에 열병으로 갔다네. …그 목소리를 아직 기억하고 있었던 게야.')] },
+      { label: '방앗간 젊은이 찾아가기', need: 1, event: 'talk', npc: 'mill-apprentice', lines: [
+        miller('형이… 군대에서 돌아오지 못한 친구 이름을 불렀어요.'),
+        miller('같이 떠났는데 형만 돌아왔거든요. 그 뒤로 밤마다 잠을 못 잤어요. 그날 밤엔… 대답하듯 웃더라고요.'),
+        hero('웃었다고요?'),
+        miller('네. 오랜만에 보는 얼굴이었어요. 그래서 붙잡지 못했어요.')] },
+      { label: '사공 에반에게 조안 이야기 듣기', need: 1, event: 'talk', npc: 'evan', lines: [
+        evan('…그날 밤 나도 그 사람 목소리를 들었어. 조안이 제 엄마 목소리라고 했지.'),
+        evan('그런데 그 애가 대신 갔다. 내가 아니라.'),
+        evan('섬으로 세 번 저어 나갔어. 세 번 다 이 나루로 돌아오더군. 안개가 배를 돌려보내.'),
+        hero('모두 그리워하던 사람의 목소리를 들었어요. 저도… 시아 목소리를 들었고요.'),
+        evan('나도 들었는데… 왜 조안만 데려간 거지?'),
+        hero('…아직 모르겠어요. 하지만 그 목소리를 따라가면 안 돼요.')] },
+      { label: '마르타에게 사위 이야기 듣기', need: 1, event: 'talk', npc: 'marta', lines: [
+        marta('우리 집 사위가 갔어. 몇 해 전 잃은 아내, 내 딸 목소리를 들었다더구나.'),
+        hero('…저도 시아 목소리를 들었어요. 거기 있을 리가 없는데.')] },
+    ],
+    rewardXp: 100, rewardGold: 40,
+    offer: [hero('(날이 밝으면 여관 주인에게 어젯밤 들은 목소리 이야기를 더 들어 보자.)')],
+    reminder: [innkeeper('사라진 사람들 가족에게 가 보게. 어부네, 약초 가게, 방앗간, 마르타 할멈, 그리고 에반.')],
+    remindersByNpc: { marta: [marta('다른 집 이야기부터 들어 보거라. 나는 여기 있으마.')] },
+    done: [
+      marta('그건 그리운 사람의 목소리를 흉내 낼 뿐이야. 진짜가 아니란다.'),
+      marta('…그 목소리를 따라가지 마라. 네가 찾는 아이는 강 건너 안개 속에 있지 않아.'),
+      { speaker: HERO_NAME, portrait: 'hero-neutral', text: '(모두 그리운 사람의 목소리를 들었다. 그리고 그 목소리를 따라 걸어갔다.)' },
+    ],
+  },
   // ---------------------------------------------------------------- 2장 서브 퀘스트 1~3
   {
     // 1. 리네아의 첫 잉크: 떠날 채비에서 리네아를 만난 뒤. 일지를 쓸 잉크와 공책을 메리나에게 받아다 준다.
@@ -626,6 +678,49 @@ export const QUESTS: QuestDef[] = [
       dor('허, 잎을 상하지 않게 잘도 땄구먼. 산사람 다 됐어.'),
       dor('이건 자네 몫이야. 말린 약초를 채운 주머니지. 물약 마실 때 한 줌 섞으면 훨씬 잘 듣는다네.'),
     ],
+  },
+  {
+    // 서브 4. 새는 지붕: 멈춘 나루 뒤. 갈대밭 늪에서 지붕 이을 갈대 세 묶음을 모아 핀의 어머니에게 가져간다. 끝나면 여관 지붕이 고쳐진다.
+    id: 'leaky-roof', title: '새는 지붕', giver: 'innkeeper-wife', requires: 'still-ferry', completeOnTarget: true,
+    objective: { label: '갈대밭 늪의 갈대 묶음 줍기 (1/3)', need: 1, event: 'inspect', spot: 'reed-bundle-1', map: 'reed-swamp' },
+    steps: [
+      ...([1, 2, 3] as const).map(i => ({
+        label: `갈대밭 늪의 갈대 묶음 줍기 (${i}/3)`, need: 1, event: 'inspect' as const, spot: `reed-bundle-${i}`, map: 'reed-swamp' as const,
+      })),
+      { label: '핀의 어머니에게 갈대 가져다주기', need: 1, event: 'talk', npc: 'innkeeper-wife', lines: [
+        innWife('어머나, 이렇게나 많이! 잘 마른 것만 골라 왔네.'),
+        { speaker: '나루 여관', text: '여관 주인과 함께 지붕에 올라 새는 자리에 갈대를 촘촘히 얹었다. 처마 끝이 한결 단정해졌다.' },
+        innWife('이제 비가 와도 손님 방에 물받이를 안 놔도 되겠어요.')] },
+    ],
+    rewardXp: 40, rewardGold: 30, rewardItems: [{ id: 'lunch', count: 2 }],
+    offer: [
+      innWife('손님, 잠깐만요. 비만 오면 여관 지붕이 새요. 위층 방은 아예 못 쓰고 있어요.'),
+      innWife('갈대밭 늪에 누가 베어 묶어 둔 갈대가 있을 거예요. 세 묶음만 가져다주시면 남편이랑 지붕을 이을게요.'),
+      hero('갈대밭 늪이라면 길을 알아요. 다녀올게요.'),
+    ],
+    reminder: [innWife('갈대밭 늪이에요. 잘 마른 갈대 묶음 세 개. 마물 조심하시고요.')],
+    done: [innWife('고마워요. 도시락 두 개 싸 뒀어요. 핀이 손님 형 얘기를 얼마나 하는지 몰라요.')],
+  },
+  {
+    // 서브 5. 엉킨 그물: 멈춘 나루 뒤. 갈대밭 물가의 마물에 엉킨 그물 셋을 풀어 나루 어부에게 가져간다.
+    id: 'tangled-nets', title: '엉킨 그물', giver: 'ferry-fisher', requires: 'still-ferry', completeOnTarget: true,
+    objective: { label: '갈대밭 물가의 엉킨 그물 풀기 (1/3)', need: 1, event: 'inspect', spot: 'tangled-net-1', map: 'reed-swamp' },
+    steps: [
+      ...([1, 2, 3] as const).map(i => ({
+        label: `갈대밭 물가의 엉킨 그물 풀기 (${i}/3)`, need: 1, event: 'inspect' as const, spot: `tangled-net-${i}`, map: 'reed-swamp' as const,
+      })),
+      { label: '나루 어부에게 그물 돌려주기', need: 1, event: 'talk', npc: 'ferry-fisher', lines: [
+        fisher('오, 셋 다 건져 왔구먼! 찢어진 데도 별로 없어.'),
+        fisher('배를 못 띄우니 그물이라도 손봐 둬야지. 안개가 걷히면 제일 먼저 나갈 거야.')] },
+    ],
+    rewardXp: 45, rewardGold: 45, rewardItems: [{ id: 'dried-fish', count: 3 }],
+    offer: [
+      fisher('갈대밭 물가에 그물 세 개가 엉켰어. 마물이 어슬렁거려 손도 못 대고 있지.'),
+      fisher('자네 칼 좀 쓰는 것 같던데. 풀어서 가져다주면 섭섭지 않게 해 주지.'),
+      hero('그물 셋이요. 가져올게요.'),
+    ],
+    reminder: [fisher('갈대밭 늪 물가야. 물속에 숨어 있다가 튀어나오는 놈이 있으니 조심하게.')],
+    done: [fisher('말린 생선 좀 챙겨 가게. 짭짤해서 길에서 힘이 날 거야.')],
   },
   {
     id: 'doran-gel', title: '담금질 재료', giver: 'doran',

@@ -13,6 +13,23 @@ export function preloadFerryVillage(scene: Phaser.Scene): void {
   }
 }
 
+import innRepairedUrl from '../assets/maps/ferry-village/quest-art/leaking-roof/inn-repaired.webp?url';
+import reedBundleUrl from '../assets/maps/ferry-village/quest-art/leaking-roof/reed-bundle.webp?url';
+import net1Url from '../assets/maps/reed-swamp/quest-art/tangled-nets/net-1.webp?url';
+import net2Url from '../assets/maps/reed-swamp/quest-art/tangled-nets/net-2.webp?url';
+import net3Url from '../assets/maps/reed-swamp/quest-art/tangled-nets/net-3.webp?url';
+
+/** 서브 퀘스트 "새는 지붕"을 끝낸 뒤의 나루 여관 그림 (원래 여관 그림과 같은 크기) */
+export const FERRY_INN_REPAIRED = 'ferry-inn-repaired';
+
+/** 살펴보기 자리에 놓이는 퀘스트 소품 그림을 그 맵에서만 읽는다 (story/chapterTwo.ts STORY_SPOT_ART의 키). */
+export function preloadStorySpotArt(scene: Phaser.Scene, map: string): void {
+  const art: Array<[string, string]> = map === 'reed-swamp'
+    ? [['quest-reed-bundle', reedBundleUrl], ['quest-net-1', net1Url], ['quest-net-2', net2Url], ['quest-net-3', net3Url]]
+    : map === 'ferry-village' ? [[FERRY_INN_REPAIRED, innRepairedUrl]] : [];
+  for (const [key, url] of art) if (!scene.textures.exists(key)) scene.load.image(key, url);
+}
+
 const interiorUrls = import.meta.glob<string>('../assets/maps/ferry-village/interiors/props/*.webp', {
   eager: true, query: '?url', import: 'default',
 });

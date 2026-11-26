@@ -198,11 +198,11 @@ test('고개의 쉼터 뒤 "멈춘 나루": 에반 → 여관 → 마르타와 �
   let state = farewell.state;
   assert.deepEqual(state['still-ferry'], { status: 'active', count: 0 });
   // 나루 사람들은 나루에만, 퀘스트를 받은 뒤에만 있다
-  assert.deepEqual(chapterTwoNpcs(state, 'ferry-village').map(n => n.id), ['evan', 'morgan']);
+  assert.deepEqual(chapterTwoNpcs(state, 'ferry-village').map(n => n.id), ['evan', 'morgan', 'ferry-fisher']);
   // 마르타는 대장간 안에 있다
   assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-marta-smithy').map(n => n.id), ['marta']);
   // 여관 주인과 핀은 여관 안에 있다
-  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-inn').map(n => n.id), ['fog-innkeeper', 'finn']);
+  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-inn').map(n => n.id), ['fog-innkeeper', 'finn', 'innkeeper-wife']);
   assert.deepEqual(chapterTwoNpcs(before, 'ferry-village'), []);
   assert.deepEqual(chapterTwoNpcs(state, 'east-pass'), []);
 
@@ -237,7 +237,7 @@ test('고개의 쉼터 뒤 "멈춘 나루": 에반 → 여관 → 마르타와 �
 test('물안개 나루 사람들은 걸을 수 있는 곳에 따로 서고, 살펴보기·쉬는 자리·늪 출구는 닿을 수 있다', () => {
   const ferry = MAPS['ferry-village'];
   const state = { 'pass-shelter': { status: 'done', count: 1 }, 'still-ferry': { status: 'active', count: 0 } };
-  for (const map of ['ferry-village', 'in-ferry-inn', 'in-ferry-marta-smithy']) {
+  for (const map of ['ferry-village', 'in-ferry-inn', 'in-ferry-marta-smithy', 'in-ferry-fisherman-house', 'in-ferry-herbalist-shop', 'in-ferry-watermill']) {
     const people = chapterTwoNpcs(state, map);
     // 대화 자리(카운터 뒤 여관 주인은 카운터 앞)가 걸을 수 있는 곳이다
     const spot = n => ({ x: n.x, y: n.y + (n.talkOffset ?? 0) });
@@ -269,7 +269,7 @@ test('멈춘 나루 뒤 "밤의 종소리": 여관 주인에게 방 얻기(여�
   // 낮: 여관 주인과 핀은 여관 안, 쉬어 갈 수 있다
   assert.equal(ferryNight(state), false);
   assert.equal(ferryInnRestOpen(state), true);
-  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-inn').map(n => n.id), ['fog-innkeeper', 'finn']);
+  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-inn').map(n => n.id), ['fog-innkeeper', 'finn', 'innkeeper-wife']);
   const talk = npc => { const r = talkTo(npc, state); state = r.state; return r; };
 
   // 방을 얻으면 여관의 밤 연출을 본다
@@ -300,7 +300,7 @@ test('멈춘 나루 뒤 "밤의 종소리": 여관 주인에게 방 얻기(여�
   assert.equal(done.completed?.id, 'night-bell');
   assert.ok(done.lines.some(l => l.text.includes('어머니')));
   assert.equal(ferryNight(state), false);
-  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-inn').map(n => n.id), ['fog-innkeeper', 'finn']);
+  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-inn').map(n => n.id), ['fog-innkeeper', 'finn', 'innkeeper-wife']);
   assert.deepEqual(parseQuests(serializeQuests(state))['night-bell'], state['night-bell']);
 });
 
@@ -375,4 +375,67 @@ test('2장 서브 퀘스트 3 쉼터의 약초: 고개의 쉼터 뒤 도르에�
   const done = talkTo('dor', state);
   assert.equal(done.completed?.id, 'dor-herbs');
   assert.ok(done.completed.rewardItems.some(i => i.id === 'dor-herb-pouch'));
+});
+
+test('밤의 종소리 뒤 "사라진 다섯": 여관 주인 → 어부의 딸 → 약초 가게 할머니 → 방앗간 젊은이 → 에반 → 마르타 순서로 증언을 듣는다', () => {
+  const bellDone = Object.fromEntries(QUESTS.slice(0, QUESTS.findIndex(q => q.id === 'night-bell') + 1)
+    .filter(q => q.main).map(q => [q.id, { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) }]));
+  let state = continueMainQuest(bellDone);
+  assert.deepEqual(state['missing-five'], { status: 'active', count: 0 });
+  // 증인들은 각자 집 안에 있다
+  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-fisherman-house').map(n => n.id), ['fisher-daughter']);
+  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-herbalist-shop').map(n => n.id), ['herbalist-elder']);
+  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-watermill').map(n => n.id), ['mill-apprentice']);
+  const talk = npc => { const r = talkTo(npc, state); state = r.state; return r; };
+  // 차례가 아닌 사람에게 먼저 가도 앞서 나가지 않는다
+  assert.equal(talkTo('marta', state)?.state['missing-five']?.step ?? 0, 0);
+  const order = ['fog-innkeeper', 'fisher-daughter', 'herbalist-elder', 'mill-apprentice', 'evan'];
+  for (const [i, npc] of order.entries()) {
+    const r = talk(npc);
+    assert.equal(r.progressed?.id, 'missing-five', npc);
+    assert.equal(state['missing-five'].step, i + 1);
+    assert.ok(r.lines.some(l => l.portrait === npc), npc);
+  }
+  const done = talk('marta');
+  assert.equal(done.completed?.id, 'missing-five');
+  assert.ok(done.lines.some(l => l.text.includes('흉내')));
+  assert.equal(state['missing-five'].status, 'done');
+});
+
+test('2장 서브 퀘스트 4·5: 새는 지붕과 엉킨 그물은 갈대밭 늪에서 세 곳을 차례로 살피고 의뢰인에게 돌아가며, 자리는 걸을 수 있다', async () => {
+  const { REED_BUNDLES, TANGLED_NETS, STORY_SPOT_ART } = await import('../src/story/chapterTwo.ts');
+  const ferryDone = Object.fromEntries(QUESTS.slice(0, QUESTS.findIndex(q => q.id === 'still-ferry') + 1)
+    .filter(q => q.main).map(q => [q.id, { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) }]));
+  let state = continueMainQuest(ferryDone);
+  const swamp = MAPS['reed-swamp'];
+  const obstacles = [...(swamp.obstacles ?? []), ...propObstacles(swamp.props)];
+  for (const [giver, quest, prefix, points, reward] of [
+    ['innkeeper-wife', 'leaky-roof', 'reed-bundle', REED_BUNDLES, 'lunch'],
+    ['ferry-fisher', 'tangled-nets', 'tangled-net', TANGLED_NETS, 'dried-fish'],
+  ]) {
+    const offer = talkTo(giver, state);
+    assert.equal(offer.accepted?.id, quest);
+    state = offer.state;
+    for (let i = 1; i <= 3; i++) {
+      const spots = chapterTwoSpots(state, 'reed-swamp').map(s => s.id);
+      assert.ok(spots.includes(`story-${prefix}-${i}`), `${quest} ${i}: ${spots}`);
+      assert.ok(STORY_SPOT_ART[`story-${prefix}-${i}`], '소품 그림');
+      assert.ok(CHAPTER_TWO_INSPECTIONS[`story-${prefix}-${i}`]?.length);
+      state = recordEvent(state, { type: 'inspect', spot: `${prefix}-${i}`, map: 'reed-swamp' }).state;
+    }
+    for (const p of points) {
+      assert.equal(walkable(swamp, p.x, p.y), true, JSON.stringify(p));
+      assert.ok(!obstacles.some(o => insideObstacle(o, p.x, p.y)), JSON.stringify(p));
+      assert.equal(findExit(swamp, p.x, p.y), undefined);
+    }
+    const done = talkTo(giver, state);
+    assert.equal(done.completed?.id, quest);
+    assert.ok(done.completed.rewardItems.some(r => r.id === reward));
+    state = done.state;
+  }
+  // 늪의 살펴보기 자리끼리(핀의 연 포함) 겹치지 않는다
+  const all = [...REED_BUNDLES, ...TANGLED_NETS, { x: 1780, y: 1250 }];
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+    assert.ok(Math.hypot(all[i].x - all[j].x, all[i].y - all[j].y) > 220, `${JSON.stringify(all[i])} ${JSON.stringify(all[j])}`);
+  }
 });

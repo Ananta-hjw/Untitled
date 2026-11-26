@@ -1,6 +1,6 @@
 import { outdoorArtBounds } from '../world/maps';
 import { EastPassScenery } from '../world/eastPassArt';
-import { FerryScenery } from '../world/ferryVillageArt';
+import { FerryScenery, FERRY_INN_REPAIRED, preloadStorySpotArt } from '../world/ferryVillageArt';
 import { mapPoint } from '../world/mapScale';
 import { interiorArtRect } from '../world/interiors';
 import Phaser from 'phaser';
@@ -106,7 +106,7 @@ import { findInteractable, talkChoices, type Interactable } from '../world/inter
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
 import { chapterTwoPreviewNpcs, isCastPreviewGroup, previewCastNpcs, type CastPreviewGroup } from '../world/chapterTwoNpcs';
-import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, eastPassBlockedDialogue, eastPassOpen, FERRY_PEOPLE, FERRY_INN, FERRY_SMITHY, martaShopOpen, FERRY_INN_DOOR, FERRY_NIGHT_LEVEL, FERRY_RIVERBANK, FERRY_SLEEPWALK_PATH, ferryInnRestOpen, ferryNight, ferryNightSpawns, ferryNightStep, fernCartState, fernCartVisible, fernExtraStock, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
+import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, eastPassBlockedDialogue, eastPassOpen, FERRY_PEOPLE, FERRY_INN, FERRY_SMITHY, STORY_SPOT_ART, ferryInnRepaired, martaShopOpen, FERRY_INN_DOOR, FERRY_NIGHT_LEVEL, FERRY_RIVERBANK, FERRY_SLEEPWALK_PATH, ferryInnRestOpen, ferryNight, ferryNightSpawns, ferryNightStep, fernCartState, fernCartVisible, fernExtraStock, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
 import fernCartDamagedUrl from '../assets/village/rowen/fern-cart-damaged.webp?url';
 import fernCartRepairedUrl from '../assets/village/rowen/fern-cart-repaired.webp?url';
 import { PerfOverlay } from '../ui/PerfOverlay';
@@ -407,7 +407,8 @@ export class GameScene extends Phaser.Scene {
   private crowdFocus = new Set<Npc>();
   /** 마지막으로 대화를 넘긴 누름 (onDialoguePointer) */
   private dialogueTap?: { id: number; downTime: number };
-  private storyMarkers: Phaser.GameObjects.Text[] = [];
+  /** 살펴보기 자리의 표시와 소품 그림 (퀘스트가 바뀔 때마다 지우고 다시 그린다) */
+  private storyMarkers: Array<Phaser.GameObjects.Text | Phaser.GameObjects.Image> = [];
   private raidEnemies = new Set<Enemy>();
   /** 습격의 밤 그늘. Rectangle의 반투명 채우기는 Phaser 4에서 훨씬 옅게 그려져 Graphics로 그린다. */
   private chapterShade?: Phaser.GameObjects.Graphics;
@@ -699,6 +700,7 @@ export class GameScene extends Phaser.Scene {
     preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...ferryNightSpawns(this.quests, this.mapId), ...raidSpawnsAnyStep(this.quests, this.mapId), ...this.previewMonsters()]);
     preloadVillage(this, this.map);
     preloadNpcs(this, [...NPCS, FERN, ...this.map.npcs, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 }), ...(this.mapId === 'ferry-village' || this.mapId.startsWith('in-ferry-') ? FERRY_PEOPLE : [])]);
+    preloadStorySpotArt(this, this.mapId);
     if (fernCartVisible(this.quests, this.mapId)) {
       this.load.image('fern-cart-damaged', fernCartDamagedUrl);
       this.load.image('fern-cart-repaired', fernCartRepairedUrl);
@@ -2880,6 +2882,7 @@ export class GameScene extends Phaser.Scene {
     this.drawChapterShade(this.scale.gameSize.width);
     this.syncFerryNight();
     this.syncFernCart();
+    this.syncFerryInnRoof();
     this.ensureTutorialPracticeState();
     this.interactables = this.interactables.filter(spot => !spot.id.startsWith('story-'));
     for (const marker of this.storyMarkers) marker.destroy();
@@ -2896,6 +2899,12 @@ export class GameScene extends Phaser.Scene {
     };
     for (const spot of [...chapterSpots(this.quests, this.mapId), ...chapterTwoSpots(this.quests, this.mapId)]) {
       this.interactables.push(spot);
+      // 갈대 묶음·엉킨 그물처럼 그 자리에 놓인 물건 그림 (story/chapterTwo.ts STORY_SPOT_ART)
+      const art = STORY_SPOT_ART[spot.id];
+      if (art && this.textures.exists(art.key)) {
+        const image = this.add.image(spot.x, spot.y + 18, art.key).setOrigin(0.5, 1).setDepth(spot.y + 18);
+        this.storyMarkers.push(image.setScale(art.width / image.width));
+      }
       const isSub = subSpotIds.has(spot.id);
       this.storyMarkers.push(this.add.text(spot.x, spot.y - spot.markerHeight, spotLabels[spot.id] ?? '◆ 살펴보기', {
         fontFamily: 'system-ui, sans-serif', fontSize: '22px', color: isSub ? '#8cf29e' : '#ffd23f', stroke: '#1a1008', strokeThickness: 5,
@@ -2909,7 +2918,8 @@ export class GameScene extends Phaser.Scene {
     }
     for (const door of this.doorMarkers) {
       const to = door.spot.enter?.to;
-      if (to && isMapId(to)) door.npcs = chapterNpcs(MAPS[to].npcs, this.quests, to).map((n) => n.id);
+      // 나루 실내(원화 실내)의 사람은 2장 배치에서 온다
+      if (to && isMapId(to)) door.npcs = (MAPS[to].interior ? chapterNpcs(MAPS[to].npcs, this.quests, to) : chapterTwoNpcs(this.quests, to)).map((n) => n.id);
       const markers = door.npcs.filter(id => chapterCanTalk(id, this.quests)).map((id) => markerFor(id, this.quests)).filter((m): m is QuestMarker => !!m);
       door.marker = MARKER_PRIORITY.find((m) => markers.includes(m));
       if (door.marker) door.text.setText(MARKER_STYLE[door.marker].text).setColor(MARKER_STYLE[door.marker].color);
@@ -4112,6 +4122,16 @@ export class GameScene extends Phaser.Scene {
       image.setScale(FERN_CART.width / image.width);
     }
     this.walkArea.obstacles.push({ ...FERN_CART_FOOTPRINT });
+  }
+
+  /** 서브 퀘스트 "새는 지붕"을 끝내면 나루 여관을 지붕을 고친 그림으로 바꾼다(그림 크기가 같다). */
+  private syncFerryInnRoof(): void {
+    if (this.mapId !== 'ferry-village' || !ferryInnRepaired(this.quests) || !this.textures.exists(FERRY_INN_REPAIRED)) return;
+    const image = this.children.getByName('village-prop-inn') as Phaser.GameObjects.Image | null;
+    if (!image || image.texture.key === FERRY_INN_REPAIRED) return;
+    const width = image.displayWidth;
+    image.setTexture(FERRY_INN_REPAIRED).setScale(1);
+    image.setScale(width / image.width);
   }
 
   /** "행상인의 짐"으로 덮개를 갈면 그 자리에서 고친 수레 그림으로 바꾼다. */

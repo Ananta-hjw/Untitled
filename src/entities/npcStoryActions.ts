@@ -24,6 +24,10 @@ import finnNightUrl from '../assets/characters/finn/night-watch.webp?url';
 import finnNightData from '../assets/characters/finn/night-watch-frames.json';
 import innRiverUrl from '../assets/characters/fog-innkeeper/river-wake.webp?url';
 import innRiverData from '../assets/characters/fog-innkeeper/river-wake-frames.json';
+import fisherDaughterUrl from '../assets/characters/fisher-daughter/testimony.webp?url';
+import fisherDaughterData from '../assets/characters/fisher-daughter/testimony-frames.json';
+import herbalistUrl from '../assets/characters/herbalist-elder/tend-patient.webp?url';
+import herbalistData from '../assets/characters/herbalist-elder/tend-patient-frames.json';
 
 export interface StoryFrame { name: string; x: number; y: number; w: number; h: number; originX: number; originY: number }
 export interface StoryAction {
@@ -80,6 +84,14 @@ const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
   }]))),
   'fog-innkeeper': Object.fromEntries(innRiverData.frames.map(frame => [frame.name, {
     key: 'npc-fog-innkeeper-river-wake', url: innRiverUrl, frames: [frame], fps: 0, bodyHeight: 329, onTalk: 'keep' as const,
+  }])),
+  // 퀘스트 7 "사라진 다섯"의 증인: 어부의 딸(아버지의 찌를 쥐고 이야기한다), 약초 가게 할머니(찻잔을 준비한다).
+  // 몸 높이는 서 있는 자세의 발바닥~머리끝 픽셀(350)이다.
+  'fisher-daughter': Object.fromEntries(fisherDaughterData.frames.map(frame => [frame.name, {
+    key: 'npc-fisher-daughter-testimony', url: fisherDaughterUrl, frames: [frame], fps: 0, bodyHeight: 350, onTalk: 'keep' as const,
+  }])),
+  'herbalist-elder': Object.fromEntries(herbalistData.frames.map(frame => [frame.name, {
+    key: 'npc-herbalist-elder-tend', url: herbalistUrl, frames: [frame], fps: 0, bodyHeight: 350, onTalk: 'keep' as const,
   }])),
   'bell-ringer': {
     ring: { key: 'npc-bell-ringer-ring', url: ringUrl, frames: ringData.frames, fps: ringData.fps, bodyHeight: 296, onTalk: 'stop' },

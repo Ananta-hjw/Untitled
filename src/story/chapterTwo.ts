@@ -43,6 +43,8 @@ export const FERN: NpcDef = {
 export const FERRY_OUTSIDE_PEOPLE: NpcDef[] = [
   { id: 'evan', name: '에반', role: '나루의 사공', x: 3060, y: 2480, height: 148, dialogue: 'npc-evan', facing: 'right' },
   { id: 'morgan', name: '모르간', role: '나루의 후원자', x: 1720, y: 1660, height: 150, dialogue: 'npc-morgan', facing: 'right' },
+  // 서브 퀘스트 "엉킨 그물"의 의뢰인: 어부의 집 앞 그물 건조대 곁 강가
+  { id: 'ferry-fisher', name: '나루 어부', role: '나루의 어부', x: 2300, y: 2440, height: 146, dialogue: 'npc-ferry-fisher', facing: 'down-right' },
 ];
 
 /**
@@ -53,6 +55,8 @@ export const FERRY_OUTSIDE_PEOPLE: NpcDef[] = [
 export const FERRY_INN_PEOPLE: NpcDef[] = [
   { id: 'fog-innkeeper', name: '여관 주인', role: '핀의 아버지', x: 300, y: 470, height: 148, dialogue: 'npc-fog-innkeeper', facing: 'down', talkOffset: 110 },
   { id: 'finn', name: '핀', role: '여관의 소년', x: 1200, y: 610, height: 116, dialogue: 'npc-finn', facing: 'down-left' },
+  // 핀의 어머니(서브 퀘스트 "새는 지붕"): 안쪽 벽 아래, 비 새는 자리를 올려다본다
+  { id: 'innkeeper-wife', name: '핀의 어머니', role: '나루 여관 안주인', x: 760, y: 440, height: 138, dialogue: 'npc-innkeeper-wife', facing: 'down' },
 ];
 
 /** 마르타의 대장간(in-ferry-marta-smithy) 안: 마르타는 모루 오른쪽에 서서 손님을 맞는다. 화덕은 왼쪽 안쪽이다. */
@@ -61,7 +65,24 @@ export const FERRY_SMITHY_PEOPLE: NpcDef[] = [
   { id: 'marta', name: '마르타', role: '대장장이', x: 720, y: 600, height: 138, dialogue: 'npc-marta', facing: 'left' },
 ];
 
-export const FERRY_PEOPLE: NpcDef[] = [...FERRY_OUTSIDE_PEOPLE, ...FERRY_INN_PEOPLE, ...FERRY_SMITHY_PEOPLE];
+/**
+ * 퀘스트 7 "사라진 다섯"의 증인들 (실내 원화 좌표): 어부의 딸은 어부의 집 깔개 앞에서 아버지의 찌를 쥐고,
+ * 약초 가게 할머니는 카운터 뒤에서 찻잔을 준비하며(카운터 앞에서 말을 받는다), 방앗간 젊은이는 작업대 앞에 서 있다.
+ */
+export const FERRY_HOUSE_PEOPLE: Partial<Record<MapId, NpcDef[]>> = {
+  'in-ferry-fisherman-house': [
+    { id: 'fisher-daughter', name: '어부의 딸', role: '실종된 어부의 가족', x: 700, y: 620, height: 130, dialogue: 'npc-fisher-daughter', facing: 'down', storyAction: 'hold-float' },
+  ],
+  'in-ferry-herbalist-shop': [
+    { id: 'herbalist-elder', name: '약초 가게 할머니', role: '나루의 약초 상인', x: 420, y: 495, height: 124, dialogue: 'npc-herbalist-elder', facing: 'down', talkOffset: 105, storyAction: 'prepare-cup' },
+  ],
+  'in-ferry-watermill': [
+    { id: 'mill-apprentice', name: '방앗간 젊은이', role: '방앗간 일꾼', x: 850, y: 640, height: 142, dialogue: 'npc-mill-apprentice', facing: 'right' },
+  ],
+};
+
+export const FERRY_PEOPLE: NpcDef[] = [...FERRY_OUTSIDE_PEOPLE, ...FERRY_INN_PEOPLE, ...FERRY_SMITHY_PEOPLE,
+  ...Object.values(FERRY_HOUSE_PEOPLE).flat() as NpcDef[]];
 export const FERRY_INN: MapId = 'in-ferry-inn';
 
 /** 마르타의 대장간(장비 상점)이 열렸는지: 퀘스트 5 "멈춘 나루"에서 마르타를 도운 뒤 */
@@ -123,6 +144,8 @@ export function chapterTwoNpcs(state: QuestState, map: MapId): NpcDef[] {
   if (map === 'ferry-village') return FERRY_OUTSIDE_PEOPLE.map(n => ({ ...n }));
   if (map === FERRY_INN) return FERRY_INN_PEOPLE.map(n => ({ ...n }));
   if (map === FERRY_SMITHY) return FERRY_SMITHY_PEOPLE.map(n => ({ ...n }));
+  const house = FERRY_HOUSE_PEOPLE[map];
+  if (house) return house.map(n => ({ ...n }));
   return [];
 }
 
@@ -130,6 +153,11 @@ export function chapterTwoNpcs(state: QuestState, map: MapId): NpcDef[] {
 export function ferryNightSpawns(state: QuestState, map: MapId): Array<{ key: 'mist-phantom'; x: number; y: number }> {
   if (map !== 'ferry-village' || ferryNightStep(state) !== 1) return [];
   return FERRY_NIGHT_PHANTOMS.map(p => ({ key: 'mist-phantom', ...p }));
+}
+
+/** 서브 퀘스트 "새는 지붕"으로 여관 지붕을 고쳤는지 (나루 여관 그림을 고친 그림으로 바꾼다) */
+export function ferryInnRepaired(state: QuestState): boolean {
+  return state['leaky-roof']?.status === 'done';
 }
 
 /** 나루 여관에서 쉬어 갈 수 있는지: 나루에 온 뒤 여관 주인에게 말하면 묻는다 (종소리의 밤은 빼고) */
@@ -207,6 +235,20 @@ export function fernMothHunt(state: QuestState): boolean {
   return currentObjective(questDef('fern-cart'), progress).monster === 'ashen-moth';
 }
 
+/** 갈대밭 늪의 갈대 묶음 셋 (서브 퀘스트 "새는 지붕", 줍는 차례대로) */
+export const REED_BUNDLES = [{ x: 560, y: 620 }, { x: 1150, y: 1240 }, { x: 1900, y: 640 }];
+/** 갈대밭 늪 물가의 엉킨 그물 셋 (서브 퀘스트 "엉킨 그물", 푸는 차례대로) */
+export const TANGLED_NETS = [{ x: 1000, y: 760 }, { x: 1480, y: 980 }, { x: 1620, y: 560 }];
+
+/**
+ * 살펴보기 자리에 함께 그리는 소품 그림 (보일 때만). 텍스처 키, 원본 파일, 화면 너비.
+ * 갈대 묶음은 src/assets/maps/ferry-village/quest-art/leaking-roof/, 그물은 reed-swamp/quest-art/tangled-nets/.
+ */
+export const STORY_SPOT_ART: Record<string, { key: string; width: number }> = {
+  ...Object.fromEntries(REED_BUNDLES.map((_, i) => [`story-reed-bundle-${i + 1}`, { key: 'quest-reed-bundle', width: 200 }])),
+  ...Object.fromEntries(TANGLED_NETS.map((_, i) => [`story-tangled-net-${i + 1}`, { key: `quest-net-${i + 1}`, width: 190 }])),
+};
+
 /** 고갯길 약초 다섯 포기 (서브 퀘스트 "쉼터의 약초", 캐는 차례대로) */
 export const PASS_HERBS = [{ x: 700, y: 1100 }, { x: 1500, y: 2750 }, { x: 2300, y: 1250 }, { x: 3300, y: 2700 }, { x: 4180, y: 1380 }];
 
@@ -221,6 +263,15 @@ const STORY_SPOTS: ReadonlyArray<{ quest: QuestId; map: MapId; spot: InspectSpot
   // 대장간 안 왼쪽 안쪽의 화덕과 풀무 앞 (실내 원화 좌표)
   { quest: 'still-ferry', map: 'in-ferry-marta-smithy', spot: 'ferry-forge', at: { id: 'story-ferry-forge', x: 340, y: 590, radius: 110, markerHeight: 150 } },
   { quest: 'still-ferry', map: 'reed-swamp', spot: 'reed-kite', at: { id: 'story-reed-kite', x: 1780, y: 1250, radius: 110, markerHeight: 90 } },
+  // 서브 퀘스트 "새는 지붕": 갈대밭 늪의 묶어 둔 갈대 세 묶음, "엉킨 그물": 물가 마물 곁에 엉킨 그물 셋
+  ...REED_BUNDLES.map((p, i) => ({
+    quest: 'leaky-roof' as const, map: 'reed-swamp' as const, spot: `reed-bundle-${i + 1}` as InspectSpot,
+    at: { id: `story-reed-bundle-${i + 1}`, ...p, radius: 100, markerHeight: 70 },
+  })),
+  ...TANGLED_NETS.map((p, i) => ({
+    quest: 'tangled-nets' as const, map: 'reed-swamp' as const, spot: `tangled-net-${i + 1}` as InspectSpot,
+    at: { id: `story-tangled-net-${i + 1}`, ...p, radius: 110, markerHeight: 90 },
+  })),
   // 서브 퀘스트 "쉼터의 약초": 고갯길의 바위 그늘·절벽 밑 다섯 곳. 지금 캘 차례인 한 포기만 보인다.
   ...PASS_HERBS.map((p, i) => ({
     quest: 'dor-herbs' as const, map: 'east-pass' as const, spot: `pass-herb-${i + 1}` as InspectSpot,
@@ -243,7 +294,20 @@ const HERB_LINES = [
   '고개 동쪽 끝 바위 아래, 마지막 한 포기. 이제 쉼터로 돌아가자.',
 ];
 
+const REED_LINES = [
+  '누군가 베어 묶어 둔 갈대 한 묶음. 잘 말라 가볍다. 어깨에 둘러멨다.',
+  '물가 언덕에 갈대 묶음이 기대어 있다. 진흙을 털어 내고 챙겼다.',
+  '늪 동쪽 덤불 곁의 마지막 한 묶음. 이만하면 지붕 한쪽은 덮겠다.',
+];
+const NET_LINES = [
+  '갈대 뿌리에 그물이 칭칭 감겨 있다. 찢기지 않게 매듭을 하나씩 풀어 걷었다.',
+  '그물 코마다 진흙과 물풀이 엉겨 있다. 마물이 물고 늘어진 자국도 있다. 천천히 풀어 냈다.',
+  '마지막 그물은 부표까지 엉켜 있었다. 부표째 풀어 말아 들었다.',
+];
+
 export const CHAPTER_TWO_INSPECTIONS: Record<string, DialogueLine[]> = {
+  ...Object.fromEntries(REED_LINES.map((text, i) => [`story-reed-bundle-${i + 1}`, [{ speaker: '갈대밭 늪', text }]])),
+  ...Object.fromEntries(NET_LINES.map((text, i) => [`story-tangled-net-${i + 1}`, [{ speaker: '갈대밭 물가', text }]])),
   ...Object.fromEntries(HERB_LINES.map((text, i) => [`story-pass-herb-${i + 1}`, [{ speaker: '고갯길 약초', text }]])),
   'story-pass-summit': [
     { speaker: '고개 꼭대기', text: '아침 해가 고개 너머에서 떠올랐다. 그 아래로 넓은 강이 굽이쳐 흐른다.' },
