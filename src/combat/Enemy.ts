@@ -359,7 +359,7 @@ export class Enemy {
     return { outcome, step, total };
   }
 
-  /** 차지 패링(무량반격) 파훼: 부식의 장막이나 보스 연타까지 모두 끊고 초대형 경직에 빠뜨린다. */
+  /** 차지 패링 파훼: 부식의 장막이나 보스 연타까지 모두 끊고 초대형 경직에 빠뜨린다. */
   onUnboundParried(time: number, durationMs: number, dirX: number, dirY: number, push: number): void {
     if (this.state === 'dead' || this.state === 'roar' || this.state === 'retreat') return;
     const c = this.character;

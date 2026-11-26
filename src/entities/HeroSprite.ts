@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { HERO_BLADE_WIDTH_SCALE } from '../config';
-import { guardMotion } from './guardMotion';
+import { attackBodyMotion } from './attackBodyMotion';
+import { guardMotion, type GuardMode } from './guardMotion';
 import type { Blade } from '../combat/blade';
 import data from '../assets/hero/academy/frames.json';
 import deathData from '../assets/hero/academy/death/frames.json';
@@ -146,9 +147,11 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   private moving = false;
   private frame!: SpriteFrame;
   private guarding = false;
+  private guardMode: GuardMode = 'guard';
   private guardTime = 0;
   private guardRecoilAt = -Infinity;
   private attackWeaponBehind = false;
+  private weaponAlpha = 1;
 
   constructor(scene: Phaser.Scene) {
     super(scene, 0, 0);
@@ -192,6 +195,8 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     this.applyFrame();
   }
 
+  get equippedWeapon(): WeaponId | null { return this.weapon; }
+
   get lookDirection(): Facing { return this.facing; }
 
   get isGuarding(): boolean { return this.guarding; }
@@ -206,8 +211,19 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     if (this.animation === 'death' || this.guarding === active) return;
     this.guarding = active;
     this.guardTime = 0;
-    if (!active) this.guardRecoilAt = -Infinity;
+    if (!active) {
+      this.guardRecoilAt = -Infinity;
+      this.guardMode = 'guard';
+    }
     this.applyFrame();
+  }
+
+  /** 일반 막기·차지 패링 충전·차지 패링 방출 상태를 반영한다. */
+  setGuardMode(mode: GuardMode): void {
+    if (this.guardMode === mode) return;
+    this.guardMode = mode;
+    if (mode === 'charging') this.guardTime = 0;
+    if (this.guarding) this.applyFrame();
   }
 
   /** 패링·막기로 충격을 받아낸 순간 검과 상체에 짧은 반동을 준다. */
@@ -237,7 +253,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   setTintMode(mode: Phaser.TintModes): this { for (const part of this.parts) part.setTintMode(mode); return this; }
   clearTint(): this { for (const part of this.parts) part.clearTint(); return this; }
   private get supportHandInFront(): boolean {
-    return this.guarding && (this.facing === 'up-left' || this.facing === 'up-right');
+    return false;
   }
   private get parts(): Phaser.GameObjects.Image[] {
     if (!this.guarding && this.frame?.gripCover) return [this.image, this.weaponBack, this.supportHand, this.weaponFront];
@@ -283,7 +299,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
       const copy = reuse ? ghost.getAt(i) as Phaser.GameObjects.Image : this.scene.add.image(0, 0, part.texture.key, part.frame.name);
       copy.setTexture(part.texture.key, part.frame.name).setPosition(part.x, part.y)
         .setOrigin(part.originX, part.originY).setScale(part.scaleX, part.scaleY)
-        .setRotation(part.rotation).setTint(tint).setVisible(part.visible);
+        .setRotation(part.rotation).setAlpha(part.alpha).setTint(tint).setVisible(part.visible);
       if (!reuse) ghost.add(copy);
     });
     return ghost;
@@ -316,10 +332,30 @@ export class HeroSprite extends Phaser.GameObjects.Container {
       : attacking ? this.attackFacing.includes('left')
         : (this.animation === 'dodge' || this.animation === 'death') && this.facing.includes('left');
     this.frame = frame;
-    const guardRecoil = this.guardRecoilAt >= 0 ? this.guardTime - this.guardRecoilAt : undefined;
-    this.setRotation(this.guarding ? guardMotion(this.guardTime, this.facing, guardRecoil).bodyAngle : 0);
+    let bodyAngle = 0, scaleX = 1, scaleY = 1, offsetY = 0;
+    if (this.guarding) {
+      const guardRecoil = this.guardRecoilAt >= 0 ? this.guardTime - this.guardRecoilAt : undefined;
+      const gm = guardMotion(this.guardTime, this.facing, guardRecoil, this.guardMode);
+      bodyAngle = gm.bodyAngle;
+      scaleX = gm.scaleX;
+      scaleY = gm.scaleY;
+      offsetY = gm.offsetY;
+      this.weaponAlpha = 1;
+    } else if (attacking) {
+      const stage = Number(this.animation.at(-1)) - 1;
+      const am = attackBodyMotion(stage, this.time, this.attackFacing);
+      bodyAngle = am.bodyAngle;
+      scaleX = am.scaleX;
+      scaleY = am.scaleY;
+      offsetY = am.offsetY;
+      this.weaponAlpha = am.weaponAlpha;
+    } else {
+      this.weaponAlpha = 1;
+    }
+    this.setRotation(bodyAngle);
     this.image.setTexture(frame.texture, frame.name).setOrigin(frame.originX, frame.originY)
-      .setScale(frame.scale * (mirrored ? -1 : 1), frame.scale);
+      .setPosition(0, offsetY)
+      .setScale(frame.scale * (mirrored ? -1 : 1) * scaleX, frame.scale * scaleY);
     this.applyWeapon();
   }
 
@@ -332,18 +368,18 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     this.attackWeaponBehind = attacking && this.attackFacing === 'up';
     for (const part of this.parts) this.bringToTop(part);
     this.supportHand.setVisible(false);
-    this.weaponFront.setVisible(!!this.weapon);
+    this.weaponFront.setVisible(!!this.weapon).setAlpha(this.weaponAlpha);
     const pose = weaponPose(this.frame);
     const f = this.frame;
     const persp = !this.guarding && (f.weaponPerspective === 'down' || f.weaponPerspective === 'up') ? f.weaponPerspective : undefined;
-    this.weaponBack.setVisible(!!this.weapon && !pose.sheathed);
+    this.weaponBack.setVisible(!!this.weapon && !pose.sheathed).setAlpha(this.weaponAlpha);
     if (!this.weapon) return;
     const lengthScale = weaponLengthScale(this.weapon);
     let { base, tip } = pose.blade;
     if (this.guarding && f.grip) {
       // A small settling motion keeps the blade and hilt rigid around the actual fist.
       const guardRecoil = this.guardRecoilAt >= 0 ? this.guardTime - this.guardRecoilAt : undefined;
-      const angle = guardMotion(this.guardTime, this.facing, guardRecoil).swordAngle;
+      const angle = guardMotion(this.guardTime, this.facing, guardRecoil, this.guardMode).swordAngle;
       const grip = f.grip;
       const rotate = (p: { x: number; y: number }) => ({
         x: grip.x + (p.x - grip.x) * Math.cos(angle) - (p.y - grip.y) * Math.sin(angle),
@@ -351,10 +387,14 @@ export class HeroSprite extends Phaser.GameObjects.Container {
       });
       base = rotate(base); tip = rotate(tip);
     }
-    const x = (base.x - f.originX * f.w) * this.image.scaleX;
-    const y = (base.y - f.originY * f.h) * this.image.scaleY;
-    const dx = (tip.x - base.x) * this.image.scaleX;
-    const dy = (tip.y - base.y) * this.image.scaleY;
+    // 몸통 탄성(Squash & Stretch) 중에도 칼날 자체는 휘거나 늘어나지 않도록 주먹(grip)만 몸통에 밀착하고 칼은 고정 스케일로 유지한다.
+    const uniformX = f.scale * (this.image.scaleX < 0 ? -1 : 1);
+    const uniformY = f.scale;
+    const grip = f.grip ?? base;
+    const x = (grip.x - f.originX * f.w) * this.image.scaleX + (base.x - grip.x) * uniformX;
+    const y = this.image.y + (grip.y - f.originY * f.h) * this.image.scaleY + (base.y - grip.y) * uniformY;
+    const dx = (tip.x - base.x) * uniformX;
+    const dy = (tip.y - base.y) * uniformY;
     if (persp) {
       const name = `${this.weapon}-${persp}`;
       const meta = perspectiveAtlas.frames.find(entry => entry.name === name)!;
@@ -394,7 +434,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   private showHandCover(f: SpriteFrame, cover: CoverFrame): void {
     this.supportHand.setTexture(f.texture, cover.name).setOrigin(0, 0)
       .setScale(this.image.scaleX, this.image.scaleY)
-      .setPosition((cover.x - f.originX * f.w) * this.image.scaleX, (cover.y - f.originY * f.h) * this.image.scaleY)
+      .setPosition((cover.x - f.originX * f.w) * this.image.scaleX, this.image.y + (cover.y - f.originY * f.h) * this.image.scaleY)
       .setVisible(true);
   }
 }

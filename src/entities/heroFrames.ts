@@ -10,96 +10,72 @@ const WALK_CYCLE = [1, 2, 3, 2];
 const DIRECTIONS: Facing[] = ['down', 'left', 'right', 'up'];
 const DIAGONALS: Facing[] = ['down-left', 'down-right', 'up-left', 'up-right'];
 const COMPASS: Facing[] = ['right', 'down-right', 'down', 'down-left', 'left', 'up-left', 'up', 'up-right'];
-export const ACTION_DURATION = { attack1: 420 + PLAYER.combo[0].followPauseMs, attack2: 320 + PLAYER.combo[1].followPauseMs, attack3: 400 + PLAYER.combo[2].followPauseMs, dodge: 300, death: 600 };
+export const ACTION_DURATION = { attack1: 350 + PLAYER.combo[0].followPauseMs, attack2: 300 + PLAYER.combo[1].followPauseMs, attack3: 380 + PLAYER.combo[2].followPauseMs, dodge: 300, death: 600 };
 const DEATH_POSE_STARTS = [0, 80, 170, 270, 390, 520];
 
+/**
+ * 공격·막기 캐릭터 포즈는 고퀄리티 4방향(상·하·좌·우)으로 통일한다(A안).
+ * 대각선 공격/막기 입력은 좌/우(side) 고해상도 포즈를 쓰고, 전진 방향·타격 판정·검기는 8방향 그대로 유지한다.
+ */
+export function cardinalPoseFacing(facing: Facing): 'right' | 'left' | 'down' | 'up' {
+  if (facing === 'down') return 'down';
+  if (facing === 'up') return 'up';
+  return facing.includes('left') ? 'left' : 'right';
+}
+
 export function guardFrame(facing: Facing): string {
-  if (facing === 'down') return 'guard-front';
-  if (facing === 'up') return 'guard-back';
-  if (facing === 'up-left' || facing === 'up-right') return 'guard-up-back';
-  return `guard-${facing.startsWith('up') ? 'up' : facing.startsWith('down') ? 'down' : 'side'}`;
+  const dir = cardinalPoseFacing(facing);
+  if (dir === 'down') return 'guard-front';
+  if (dir === 'up') return 'guard-back';
+  return 'guard-side';
 }
 // Put the drawn striking pose inside each configured damage window.
-// 준비 자세(0번)는 짧게 두어 누르자마자 칼을 드는 것이 보이게 하고, 그만큼 들어 올린 자세(1번)를 길게 보여 준다.
-// 2타(올려 베기)는 낮은 자세에서 올라가는 궤적으로 맞히므로, 타격 그림이 명중 구간이 열리는 순간(hitDelayMs)에 바뀐다.
-// 그래야 맞는 순간 화면에 낮은 준비 자세가 아니라 올려 베는 그림이 보인다.
 const POSE_STARTS = {
-  attack1: [0, 45, 200, 290],
-  attack2: [0, 40, 105, 200],
-  attack3: [0, 50, 168, 300],
+  attack1: [0, 35, 140, 225],
+  attack2: [0, 30, 106, 190],
+  attack3: [0, 45, 168, 258],
   dodge: [0, 60, 130, 240],
-};
-/** 신규 4포즈(예비→스윙/당김→타격/찌르기→잔심) 시트용 전환 시각(ms). */
-const PROTO_POSE_STARTS = {
-  attack1: [0, 145, 205, 305],
-  attack2: [0, 68, 105, 205],
-  attack3: [0, 50, 168, 300],
 };
 
 /**
- * 옆(좌우)과 정면(아래)의 1·2·3타는 6자세 원화를 쓴다(attack-six/). 각 공격의 타격 자세(3번)가 명중 구간
- * (hitDelayMs ~ +hitWindowMs)을 덮는다.
- * - 1타 내려 베기: 준비→예비→최대 들어 올림(길게, 힘을 모음)→타격→마무리→복귀
- * - 2타 올려 베기: 시작(1타의 끝)→낮게 뒤로 당김→휘두르기 시작→타격→마무리(위로)→자세 정리(3타의 시작)
- *   가장 빠른 공격이라 예비 동작을 짧게 둔다.
- * - 3타 찌르기: 시작(2타의 끝)→당김→깊이 웅크림→찌르기→유지(마무리 멈춤 동안)→복귀(1타의 시작)
+ * 4방향(옆·정면·뒷면) 1·2·3타 6자세 원화 + 나인솔즈·세키로 스타일 비선형 완급 타이밍:
+ * - 예비(1→2)는 힘을 모으는 리듬을 살리고,
+ * - 스윙 진입→타격(2→3)은 38~44ms 만에 홱 넘어가 칼날 스미어와 함께 날카롭게 꽂히며,
+ * - 타격 후 잔심(4)은 followPause로 딱 멈춰 실루엣을 각인시킨다.
  */
 const SIDE_SIX = {
-  attack1: { frame: 'attack-side6', starts: [0, 40, 110, 200, 280, 350] },
-  attack2: { frame: 'attack2-side6', starts: [0, 25, 65, 105, 170, 250] },
-  attack3: { frame: 'attack3-side6', starts: [0, 40, 100, 170, 245, 330] },
+  attack1: { frame: 'attack-side6', starts: [0, 24, 96, 140, 212, 290] },
+  attack2: { frame: 'attack2-side6', starts: [0, 20, 68, 106, 176, 250] },
+  attack3: { frame: 'attack3-side6', starts: [0, 32, 92, 168, 252, 336] },
 } as const;
 
-/** 정면 6자세: 같은 공격 구성이라 자세 시각도 옆모습과 같다. */
+/** 정면 6자세: 같은 완급 타이밍을 공유한다. */
 const FRONT_SIX = {
   attack1: { frame: 'attack-front6', starts: SIDE_SIX.attack1.starts },
   attack2: { frame: 'attack2-front6', starts: SIDE_SIX.attack2.starts },
   attack3: { frame: 'attack3-front6', starts: SIDE_SIX.attack3.starts },
 } as const;
 
-/** 위쪽(뒷모습) 6자세: 같은 공격 구성이라 자세 시각도 옆모습과 같다. */
+/** 위쪽(뒷모습) 6자세: 같은 완급 타이밍을 공유한다. */
 const BACK_SIX = {
   attack1: { frame: 'attack-back6', starts: SIDE_SIX.attack1.starts },
   attack2: { frame: 'attack2-back6', starts: SIDE_SIX.attack2.starts },
   attack3: { frame: 'attack3-back6', starts: SIDE_SIX.attack3.starts },
 } as const;
 
-/**
- * 앞대각선(아래 왼쪽·오른쪽) 6자세. 1타는 첫 타격 뒤 칼이 더 가파르게 내려오므로 명중 구간 안에 마무리 자세도 넣는다.
- * 2·3타는 옆모습과 같은 자세 시각이다.
- */
-const DOWN_DIAG_SIX = {
-  attack1: { frame: 'attack-down-diag6', starts: [0, 40, 110, 200, 250, 350] },
-  attack2: { frame: 'attack2-down-diag6', starts: SIDE_SIX.attack2.starts },
-  attack3: { frame: 'attack3-down-diag6', starts: SIDE_SIX.attack3.starts },
-} as const;
-
-/** 위대각선(위 왼쪽·오른쪽, 뒷모습 3/4) 6자세: 같은 공격 구성이라 자세 시각도 옆모습과 같다. */
-const UP_DIAG_SIX = {
-  attack1: { frame: 'attack-up-diag6', starts: SIDE_SIX.attack1.starts },
-  attack2: { frame: 'attack2-up-diag6', starts: SIDE_SIX.attack2.starts },
-  attack3: { frame: 'attack3-up-diag6', starts: SIDE_SIX.attack3.starts },
-} as const;
-
 function sixPoseAttack(action: HeroAction, facing: Facing) {
   if (action === 'idle' || action === 'walk' || action === 'dodge' || action === 'death') return undefined;
-  if (facing === 'right' || facing === 'left') return SIDE_SIX[action];
-  if (facing === 'up') return BACK_SIX[action];
-  if (facing === 'down-right' || facing === 'down-left') return DOWN_DIAG_SIX[action];
-  if (facing === 'up-right' || facing === 'up-left') return UP_DIAG_SIX[action];
-  return facing === 'down' ? FRONT_SIX[action] : undefined;
-}
-
-function usesFrontPoses(facing: Facing): boolean {
-  return facing === 'down' || facing === 'down-right' || facing === 'down-left';
+  const dir = cardinalPoseFacing(facing);
+  if (dir === 'up') return BACK_SIX[action];
+  if (dir === 'down') return FRONT_SIX[action];
+  return SIDE_SIX[action];
 }
 
 /** 콤보 단계(0~2)와 방향에 맞는 타격 자세가 나타나는 시각(ms). */
 export function strikePoseStart(stage: number, facing: Facing = 'right'): number {
   const six = sixPoseAttack(`attack${stage + 1}` as HeroAction, facing);
   if (six) return six.starts[3];
-  const starts = usesFrontPoses(facing) ? PROTO_POSE_STARTS : POSE_STARTS;
-  return starts[`attack${stage + 1}` as 'attack1' | 'attack2' | 'attack3'][2];
+  return POSE_STARTS[`attack${stage + 1}` as 'attack1' | 'attack2' | 'attack3'][2];
 }
 
 /** Phaser world Y grows downward; only actual displacement changes walking direction. */
@@ -171,19 +147,11 @@ export function heroFrame(action: HeroAction, facing: Facing, elapsedMs: number)
     while (pose < six.starts.length - 1 && time + 1e-6 >= six.starts[pose + 1]) pose++;
     return `${six.frame}-${pose}`;
   }
-  const useProto = action !== 'dodge' && usesFrontPoses(facing);
-  const starts = useProto
-    ? PROTO_POSE_STARTS[action as 'attack1' | 'attack2' | 'attack3']
-    : POSE_STARTS[action];
+  const starts = POSE_STARTS[action];
   let column = 0;
   // Accumulated 30/60fps deltas can be a fraction below the scene clock at a pose boundary.
   while (column < 3 && time + 1e-6 >= starts[column + 1]) column++;
   const row = action === 'dodge' ? 3 : Number(action.at(-1)) - 1;
   if (action === 'dodge' && (facing === 'up' || facing === 'down')) return `dodge-${facing}-${column}`;
-  if (action !== 'dodge') {
-    if (facing === 'down') return `attack-front-${row * 4 + column}`;
-    if (facing === 'up') return `attack-back-${row * 4 + column}`;
-    if (facing.startsWith('up')) return `attack-up-${row * 4 + column}`;
-  }
   return `combat-${row * 4 + column}`;
 }

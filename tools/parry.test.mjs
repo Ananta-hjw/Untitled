@@ -138,7 +138,7 @@ test('보스 연속 패링: 남은 연타가 있으면 이어지고, 마지막 �
   assert.equal(bossParryOutcome(true, 0, 1, true), 'normalBreak');
 });
 
-test('차지 패링(무량반격): 길게 눌러 충전하고 떼는 창에서 최고 등급 히트스톱·줌·공명 보상을 준다', () => {
+test('차지 패링: 길게 눌러 충전하고 떼는 창에서 최고 등급 히트스톱·줌·공명 보상을 준다', () => {
   assert.equal(chargeParryProgress(0), 0);
   assert.equal(isChargeParryReady(BLOCK.chargeHoldMs - 1), false);
   assert.equal(chargeParryProgress(BLOCK.chargeHoldMs), 1);
@@ -146,7 +146,7 @@ test('차지 패링(무량반격): 길게 눌러 충전하고 떼는 창에서 �
   assert.equal(isUnboundActive(1000, 1000 + BLOCK.unboundWindowMs), true);
   assert.equal(isUnboundActive(1000 + BLOCK.unboundWindowMs, 1000 + BLOCK.unboundWindowMs), false);
 
-  // 히트스톱·흔들림·줌·경직 위계: 불완전 막기 < 정밀 패링 < 연속 파훼 < 무량반격
+  // 히트스톱·흔들림·줌·경직 위계: 불완전 막기 < 정밀 패링 < 연속 파훼 < 차지 패링
   assert.ok(hitStopMs('imperfectGuard') < hitStopMs('parry'));
   assert.ok(hitStopMs('parry') < hitStopMs('chainBreak'));
   assert.ok(hitStopMs('chainBreak') < hitStopMs('unbound'));
@@ -156,11 +156,11 @@ test('차지 패링(무량반격): 길게 눌러 충전하고 떼는 창에서 �
   assert.ok(BLOCK.zoomPeak < BLOCK.zoomChainBreakPeak && BLOCK.zoomChainBreakPeak < BLOCK.zoomUnboundPeak);
   assert.ok(BOSS.unboundStunMs > BOSS.parryChainStunMs);
 
-  // 무량반격 슬로우아웃은 정밀 패링보다 더 깊고 길다.
+  // 차지 패링 슬로우아웃은 정밀 패링보다 더 깊고 길다.
   assert.equal(gameTimeScale(0, 0, BLOCK.unboundSlowOutMs, BLOCK.unboundSlowOutScale, BLOCK.unboundSlowOutMs), BLOCK.unboundSlowOutScale);
   assert.ok(BLOCK.unboundSlowOutScale < BLOCK.slowOutScale);
 
-  // 무량반격 공명 보상(구슬 1칸 = 3조각)과 최대치 상한 확인
+  // 차지 패링 공명 보상(구슬 1칸 = 3조각)과 최대치 상한 확인
   assert.equal(addResonanceParts(0, BLOCK.unboundResonanceParts, maxCharge(RESONANCE)), 3);
   assert.equal(addResonanceParts(14, BLOCK.unboundResonanceParts, maxCharge(RESONANCE)), maxCharge(RESONANCE));
 });
