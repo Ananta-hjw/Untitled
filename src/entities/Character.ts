@@ -53,6 +53,7 @@ export class Character extends Phaser.GameObjects.Container {
   /** 몬스터 머리 위 'Lv. N'. 죽으면 몸과 함께 사라진다. */
   private readonly levelTagText?: Phaser.GameObjects.Text;
   private readonly hpBarY: number;
+  private readonly nameText?: Phaser.GameObjects.Text;
   private levelText?: Phaser.GameObjects.Text;
   private moving = false;
   private attacking = false;
@@ -91,7 +92,7 @@ export class Character extends Phaser.GameObjects.Container {
     this.hpBarY = top;
 
     if (options.name) {
-      const label = scene.add
+      this.nameText = scene.add
         .text(0, top - 20, options.name, {
           fontFamily: 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
           fontSize: '20px',
@@ -102,7 +103,7 @@ export class Character extends Phaser.GameObjects.Container {
         })
         .setOrigin(0.5, 1)
         .setResolution(2);
-      this.add(label);
+      this.add(this.nameText);
 
       if (options.level !== undefined) {
         this.levelText = scene.add
@@ -160,6 +161,7 @@ export class Character extends Phaser.GameObjects.Container {
 
   /** 이동 여부와 바라보는 방향을 알려주면 애니메이션을 맞춰 준다. 공격 중에는 공격 동작이 우선한다. */
   setMotion(moving: boolean, directionX = 0, animSpeed = 1): void {
+    if (!this.alive && this.sprite instanceof HeroSprite) return;
     if (this.attacking) {
       this.moving = moving;
       return;
@@ -216,6 +218,13 @@ export class Character extends Phaser.GameObjects.Container {
     this.attacking = false;
     this.knockback.set(0, 0);
     this.hpBar?.setVisible(false);
+    if (this.sprite instanceof HeroSprite) {
+      this.moving = false;
+      this.nameText?.setVisible(false);
+      this.levelText?.setVisible(false);
+      this.sprite.setAlpha(1).play(`${this.key}-death`);
+      return;
+    }
     // 레벨 글씨도 몸과 함께 사라진다(예전에는 몸이 사라진 뒤에도 남아 있었다).
     this.scene.tweens.add({
       targets: this.levelTagText ? [this.sprite, this.shadow, this.levelTagText] : [this.sprite, this.shadow],
@@ -235,6 +244,8 @@ export class Character extends Phaser.GameObjects.Container {
   revive(x: number, y: number): void {
     this.scene.tweens.killTweensOf(this.levelTagText ? [this.sprite, this.shadow, this.levelTagText] : [this.sprite, this.shadow]);
     this.levelTagText?.setAlpha(1);
+    this.nameText?.setVisible(true);
+    this.levelText?.setVisible(true);
     this.alive = true;
     this.hp = this.maxHp;
     this.attacking = false;

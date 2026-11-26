@@ -3,6 +3,8 @@ import { HERO_BLADE_WIDTH_SCALE } from '../config';
 import { guardMotion } from './guardMotion';
 import type { Blade } from '../combat/blade';
 import data from '../assets/hero/academy/frames.json';
+import deathData from '../assets/hero/academy/death/frames.json';
+import deathSheet from '../assets/hero/academy/death/collapse.webp?url';
 import guardData from '../assets/hero/academy/guard/frames.json';
 import guardSheet from '../assets/hero/academy/guard/bodies.webp?url';
 import dodgeData from '../assets/hero/academy/dodge/frames.json';
@@ -73,6 +75,7 @@ interface SpriteFrame {
 }
 const FRAMES = new Map<string, SpriteFrame>([
   ...data.frames,
+  ...deathData.frames,
   ...guardData.frames,
   ...dodgeData.frames,
   ...attackFrontData.frames,
@@ -96,6 +99,7 @@ const FRAMES = new Map<string, SpriteFrame>([
 ].map((f) => [f.name, f]));
 
 export function preloadHeroSprite(scene: Phaser.Scene): void {
+  if (!scene.textures.exists('hero-academy-death')) scene.load.image('hero-academy-death', deathSheet);
   if (!scene.textures.exists('hero-academy-dodge-cardinal')) scene.load.image('hero-academy-dodge-cardinal', dodgeSheet);
   if (!scene.textures.exists('hero-academy-attack-side6')) scene.load.image('hero-academy-attack-side6', attackSideSheet);
   if (!scene.textures.exists('hero-academy-attack2-side6')) scene.load.image('hero-academy-attack2-side6', attack2SideSheet);
@@ -170,8 +174,8 @@ export class HeroSprite extends Phaser.GameObjects.Container {
 
   play(key: string): this {
     const name = key.slice(key.lastIndexOf('-') + 1) as HeroAction;
-    if (!['idle', 'walk', 'attack1', 'attack2', 'attack3', 'dodge'].includes(name)) return this;
-    if (name.startsWith('attack') || name === 'dodge') this.guarding = false;
+    if (!['idle', 'walk', 'attack1', 'attack2', 'attack3', 'dodge', 'death'].includes(name)) return this;
+    if (name.startsWith('attack') || name === 'dodge' || name === 'death') this.guarding = false;
     this.animation = name;
     this.time = 0;
     this.finished = false;
@@ -199,7 +203,7 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   }
 
   setGuarding(active: boolean): void {
-    if (this.guarding === active) return;
+    if (this.animation === 'death' || this.guarding === active) return;
     this.guarding = active;
     this.guardTime = 0;
     if (!active) this.guardRecoilAt = -Infinity;
@@ -291,13 +295,14 @@ export class HeroSprite extends Phaser.GameObjects.Container {
    */
   advance(delta: number): void {
     if (!this.active) return;
+    if (this.animation === 'death' && this.finished) return;
     const loop = this.animation === 'idle' || this.animation === 'walk';
     if (this.guarding) this.guardTime += Math.max(0, Math.min(delta, 50));
     this.time += Math.max(0, Math.min(delta, 50)) * (loop ? this.anims.timeScale : 1);
     let complete = false;
     if (!loop && this.time + 1e-6 >= ACTION_DURATION[this.animation as keyof typeof ACTION_DURATION] && !this.finished) {
       this.finished = true;
-      complete = this.animation !== 'dodge';
+      complete = this.animation !== 'dodge' && this.animation !== 'death';
     }
     this.applyFrame();
     if (complete) this.emit(Phaser.Animations.Events.ANIMATION_COMPLETE);
@@ -308,7 +313,8 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     const frame = FRAMES.get(this.guarding ? guardFrame(this.facing)
       : heroFrame(this.animation, attacking ? this.attackFacing : this.facing, this.time))!;
     const mirrored = this.guarding ? this.facing.includes('left')
-      : attacking ? this.attackFacing.includes('left') : this.animation === 'dodge' && this.facing.includes('left');
+      : attacking ? this.attackFacing.includes('left')
+        : (this.animation === 'dodge' || this.animation === 'death') && this.facing.includes('left');
     this.frame = frame;
     const guardRecoil = this.guardRecoilAt >= 0 ? this.guardTime - this.guardRecoilAt : undefined;
     this.setRotation(this.guarding ? guardMotion(this.guardTime, this.facing, guardRecoil).bodyAngle : 0);
@@ -318,6 +324,10 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   }
 
   private applyWeapon(): void {
+    if (this.animation === 'death') {
+      for (const layer of [this.weaponBack, this.weaponFront, this.supportHand]) layer.setVisible(false);
+      return;
+    }
     const attacking = this.animation.startsWith('attack') && !this.guarding;
     this.attackWeaponBehind = attacking && this.attackFacing === 'up';
     for (const part of this.parts) this.bringToTop(part);

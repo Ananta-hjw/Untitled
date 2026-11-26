@@ -3,14 +3,15 @@ import { attackPoseTime } from './attackTiming.ts';
 
 export type Facing = 'down' | 'left' | 'right' | 'up' | 'down-left' | 'down-right' | 'up-left' | 'up-right';
 export type AttackFacing = Facing;
-export type HeroAction = 'idle' | 'walk' | 'attack1' | 'attack2' | 'attack3' | 'dodge';
+export type HeroAction = 'idle' | 'walk' | 'attack1' | 'attack2' | 'attack3' | 'dodge' | 'death';
 
 export const WALK_FPS = 8;
 const WALK_CYCLE = [1, 2, 3, 2];
 const DIRECTIONS: Facing[] = ['down', 'left', 'right', 'up'];
 const DIAGONALS: Facing[] = ['down-left', 'down-right', 'up-left', 'up-right'];
 const COMPASS: Facing[] = ['right', 'down-right', 'down', 'down-left', 'left', 'up-left', 'up', 'up-right'];
-export const ACTION_DURATION = { attack1: 420 + PLAYER.combo[0].followPauseMs, attack2: 320 + PLAYER.combo[1].followPauseMs, attack3: 400 + PLAYER.combo[2].followPauseMs, dodge: 300 };
+export const ACTION_DURATION = { attack1: 420 + PLAYER.combo[0].followPauseMs, attack2: 320 + PLAYER.combo[1].followPauseMs, attack3: 400 + PLAYER.combo[2].followPauseMs, dodge: 300, death: 600 };
+const DEATH_POSE_STARTS = [0, 80, 170, 270, 390, 520];
 
 export function guardFrame(facing: Facing): string {
   if (facing === 'down') return 'guard-front';
@@ -81,7 +82,7 @@ const UP_DIAG_SIX = {
 } as const;
 
 function sixPoseAttack(action: HeroAction, facing: Facing) {
-  if (action === 'idle' || action === 'walk' || action === 'dodge') return undefined;
+  if (action === 'idle' || action === 'walk' || action === 'dodge' || action === 'death') return undefined;
   if (facing === 'right' || facing === 'left') return SIDE_SIX[action];
   if (facing === 'up') return BACK_SIX[action];
   if (facing === 'down-right' || facing === 'down-left') return DOWN_DIAG_SIX[action];
@@ -153,6 +154,11 @@ export function insideAttackLane(dx: number, dy: number, direction: { x: number;
 
 export function heroFrame(action: HeroAction, facing: Facing, elapsedMs: number): string {
   const elapsed = Math.max(0, elapsedMs);
+  if (action === 'death') {
+    let pose = 0;
+    while (pose < DEATH_POSE_STARTS.length - 1 && elapsed + 1e-6 >= DEATH_POSE_STARTS[pose + 1]) pose++;
+    return `death-${pose}`;
+  }
   const time = action.startsWith('attack') ? attackPoseTime(Number(action.at(-1)) - 1, elapsed) : elapsed;
   if (action === 'idle' || action === 'walk') {
     const column = action === 'walk' ? WALK_CYCLE[Math.floor(time * WALK_FPS / 1000) % 4] : 0;

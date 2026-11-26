@@ -1,0 +1,76 @@
+{
+  "frames": [
+    {
+      "name": "death-0",
+      "texture": "hero-academy-death",
+      "x": 2,
+      "y": 2,
+      "w": 190,
+      "h": 311,
+      "originX": 0.555556,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "death-1",
+      "texture": "hero-academy-death",
+      "x": 342,
+      "y": 2,
+      "w": 210,
+      "h": 293,
+      "originX": 0.543933,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "death-2",
+      "texture": "hero-academy-death",
+      "x": 682,
+      "y": 2,
+      "w": 207,
+      "h": 268,
+      "originX": 0.540426,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "death-3",
+      "texture": "hero-academy-death",
+      "x": 2,
+      "y": 322,
+      "w": 263,
+      "h": 220,
+      "originX": 0.454849,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "death-4",
+      "texture": "hero-academy-death",
+      "x": 342,
+      "y": 322,
+      "w": 291,
+      "h": 196,
+      "originX": 0.507553,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    },
+    {
+      "name": "death-5",
+      "texture": "hero-academy-death",
+      "x": 682,
+      "y": 322,
+      "w": 304,
+      "h": 180,
+      "originX": 0.492754,
+      "originY": 1,
+      "scale": 1,
+      "blade": null
+    }
+  ]
+}
