@@ -4359,7 +4359,7 @@ test('물안개 나루는 바닥을 1:1로 표시하고 고갯길에서 왕복�
   await reached('east-pass');
 });
 
-test('멈춘 나루: 나루 사람들이 제 그림으로 서고, 에반에게 말을 걸면 다음 단계로, 여관 주인에게는 쉬어 갈 수 있다', async () => {
+test('멈춘 나루: 나루 사람들이 제 그림으로 서고(여관 주인과 핀은 여관 안), 에반에게 말을 걸면 다음 단계로, 여관 주인에게는 쉬어 갈 수 있다', async () => {
   await load('east-pass&companion=none');
   await evaluate(`(async () => {
     const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
@@ -4372,6 +4372,17 @@ test('멈춘 나루: 나루 사람들이 제 그림으로 서고, 에반에게 �
     localStorage.removeItem('untitled-rpg.rest');
   })()`);
   await load('ferry-village&companion=none');
+  const outside = await evaluate(`window.__game.scene.getScene('game').npcs.map(n => ({ id: n.def.id, texture: n.figure.texture.key }))`);
+  const evanResult = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    const n = s.npcs.find(n => n.def.id === 'evan'), evanMarker = n.questMarker;
+    s.player.placeAt(n.spot.x, n.spot.y + 10); s.attackButton.pressed = true; s.updateInteraction(s.now);
+    const lines = [...s.dialogue.lines];
+    while (s.dialogue.isOpen) s.dialogue.advance();
+    return { evanMarker, evanSpeaks: lines.some(l => l.portrait === 'evan'), step: s.quests['still-ferry'].step, fog: s.children.list.filter(o => o.name === 'ferry-river-fog').length };
+  })()`);
+  // 여관 주인과 핀은 여관 안에 있다
+  await load('in-ferry-inn&companion=none');
   const result = await evaluate(`(() => {
     const s = window.__game.scene.getScene('game');
     const people = s.npcs.map(n => ({ id: n.def.id, texture: n.figure.texture.key }));
@@ -4383,26 +4394,91 @@ test('멈춘 나루: 나루 사람들이 제 그림으로 서고, 에반에게 �
       while (s.dialogue.isOpen) s.dialogue.advance();
       return lines;
     };
-    const evanMarker = s.npcs.find(n => n.def.id === 'evan').questMarker;
-    const evanLines = talk('evan');
-    const step = s.quests['still-ferry'].step;
     const innLines = talk('fog-innkeeper');
     const afterInn = s.quests['still-ferry'].step;
     // 진행이 아닌 안내 대화 뒤에는 쉬어 갈지 묻는다
     talk('fog-innkeeper');
     const restOffered = s.storyChoice.isOpen;
     if (restOffered) s.storyChoice.accept();
-    return { people, evanMarker, evanSpeaks: evanLines.some(l => l.portrait === 'evan'), step, innSpeaks: innLines.some(l => l.portrait === 'fog-innkeeper'),
-      afterInn, restOffered, rest: localStorage.getItem('untitled-rpg.rest'), fog: s.children.list.filter(o => o.name === 'ferry-river-fog').length };
+    return { people, innSpeaks: innLines.some(l => l.portrait === 'fog-innkeeper'),
+      afterInn, restOffered, rest: localStorage.getItem('untitled-rpg.rest') };
   })()`);
-  assert.deepEqual(result.people.map(p => p.id).sort(), ['evan', 'finn', 'fog-innkeeper', 'marta', 'morgan']);
-  for (const p of result.people) assert.notEqual(p.texture, '__MISSING', p.id);
-  assert.equal(result.evanMarker, 'target');
-  assert.equal(result.evanSpeaks, true); assert.equal(result.step, 1);
+  assert.deepEqual(outside.map(p => p.id).sort(), ['evan', 'marta', 'morgan']);
+  assert.deepEqual(result.people.map(p => p.id).sort(), ['finn', 'fog-innkeeper']);
+  for (const p of [...outside, ...result.people]) assert.notEqual(p.texture, '__MISSING', p.id);
+  assert.equal(evanResult.evanMarker, 'target');
+  assert.equal(evanResult.evanSpeaks, true); assert.equal(evanResult.step, 1);
   assert.equal(result.innSpeaks, true); assert.equal(result.afterInn, 2);
   assert.equal(result.restOffered, true);
   assert.equal(JSON.parse(result.rest).point, 'ferry-inn');
-  assert.ok(result.fog >= 10, '강 위 안개');
+  assert.ok(evanResult.fog >= 10, '강 위 안개');
+});
+
+test('밤의 종소리: 여관에서 방을 얻으면 밤 연출 → 잠든 여관 주인과 안개 환영 → 물가에서 깨우기 → 핀을 달래면 여관에서 아침', { timeout: 120000 }, async () => {
+  await load('east-pass&companion=none');
+  await evaluate(`(async () => {
+    const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
+    for (const q of QUESTS.filter(q => q.main)) {
+      seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+      if (q.id === 'still-ferry') break;
+    }
+    seed['night-bell'] = { status: 'active', count: 0 };
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+    localStorage.removeItem('untitled-rpg.rest');
+  })()`);
+  await load('in-ferry-inn&companion=none');
+  const result = await evaluate(`(async () => {
+    const g = window.__game;
+    let s = g.scene.getScene('game'), t = performance.now();
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); s = g.scene.getScene('game'); };
+    const ready = async map => {
+      for (let i = 0; i < 400; i++) {
+        step();
+        if (s.mapId === map && s.sys.isActive() && s.minimap && !s.traveling && !s.opening) return;
+        await new Promise(resolve => setTimeout(resolve, 8));
+      }
+      throw Error('준비 시간 초과: ' + map);
+    };
+    const flush = () => { while (s.dialogue.isOpen) s.dialogue.advance(); };
+    const npc = id => s.npcs.find(n => n.def.id === id);
+    const day = { people: s.npcs.map(n => n.def.id).sort(), marker: npc('fog-innkeeper').questMarker,
+      spot: s.walkArea.contains(npc('fog-innkeeper').spot.x, npc('fog-innkeeper').spot.y) };
+    s.openDialogue(npc('fog-innkeeper').spot); flush();
+    for (let i = 0; i < 200 && !s.opening; i++) { step(); await new Promise(r => setTimeout(r, 4)); }
+    const inn = { opening: !!s.opening, shade: !!s.chapterShade, stage: !!s.nightBellStage, finn: npc('finn').figure.frame.name,
+      step: s.quests['night-bell'].step, rest: localStorage.getItem('untitled-rpg.rest') };
+    s.opening.skip(); await ready('ferry-village');
+    const sleeper = npc('fog-innkeeper');
+    const chase = { shade: !!s.chapterShade, phantoms: s.enemies.filter(e => e.kind === 'mist-phantom').length,
+      sleeping: sleeper.sleepwalking, talkable: s.interactables.includes(sleeper.spot), finn: npc('finn').figure.frame.name,
+      others: s.npcs.map(n => n.def.id).sort() };
+    for (const e of s.enemies) e.character.setVisible(false);
+    s.enemies = [];
+    for (let i = 0; i < 3; i++) s.questEvent({ type: 'kill', map: 'ferry-village', monster: 'mist-phantom' });
+    const bank = { step: s.quests['night-bell'].step, talkable: s.interactables.includes(sleeper.spot),
+      fog: s.children.list.filter(o => o.name === 'night-fog-path').length };
+    s.player.placeAt(sleeper.spot.x - 60, sleeper.spot.y + 20);
+    s.openDialogue(sleeper.spot);
+    const stillAsleep = sleeper.sleepwalking;
+    flush(); step();
+    const river = { opening: !!s.opening, step: s.quests['night-bell'].step, stillAsleep };
+    s.opening.skip(); await ready('ferry-village');
+    const hug = { people: s.npcs.map(n => n.def.id), frame: npc('finn').figure.frame.name, marker: npc('finn').questMarker };
+    s.openDialogue(npc('finn').spot); flush();
+    const status = s.quests['night-bell'].status;
+    await ready('in-ferry-inn');
+    const morning = { people: s.npcs.map(n => n.def.id).sort(), shade: !!s.chapterShade, rest: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
+    localStorage.removeItem('untitled-rpg.quests');
+    return { day, inn, chase, bank, river, hug, status, morning };
+  })()`);
+  assert.deepEqual(result.day, { people: ['finn', 'fog-innkeeper'], marker: 'target', spot: true });
+  assert.deepEqual(result.inn, { opening: true, shade: true, stage: true, finn: 'watch-awake', step: 1, rest: null });
+  assert.deepEqual(result.chase, { shade: true, phantoms: 3, sleeping: true, talkable: false, finn: 'warn-father', others: ['finn', 'fog-innkeeper'] });
+  assert.deepEqual(result.bank, { step: 2, talkable: true, fog: 8 });
+  assert.deepEqual(result.river, { opening: true, step: 3, stillAsleep: true });
+  assert.deepEqual(result.hug, { people: ['finn'], frame: 'hug-father', marker: 'target' });
+  assert.equal(result.status, 'done');
+  assert.deepEqual(result.morning, { people: ['finn', 'fog-innkeeper'], shade: false, rest: 'ferry-inn' });
 });
 
 test('나루 여관 주인은 전용 SD·잠든 걸음·대화 초상화를 사용하고 대화하면 깨어난다', async () => {

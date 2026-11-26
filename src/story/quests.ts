@@ -21,7 +21,7 @@ export type QuestId = 'ruan-training' | 'ruan-dodge' | 'ruan-parry' | 'ruan-fiel
   | 'watch-report' | 'festival-supplies' | 'sia-knot' | 'harvest-help' | 'evening-patrol' | 'moth-trail'
   | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter' | 'first-sword'
   // 2장 (docs/story-chapter2.md, story/chapterTwo.ts)
-  | 'fern-cart' | 'farewell' | 'mountain-pass' | 'pass-shelter' | 'still-ferry';
+  | 'fern-cart' | 'farewell' | 'mountain-pass' | 'pass-shelter' | 'still-ferry' | 'night-bell';
 
 /** 게임에서 일어나서 퀘스트 목표를 채우는 일 */
 export type QuestEvent =
@@ -57,6 +57,8 @@ export interface QuestObjective {
   rewardSkill?: SkillId;
   /** 이 단계를 마친 대화 뒤 그 자리에서 하룻밤을 보낸다 (고개의 쉼터: 화면이 어두워졌다 밝아지고, 고개 쉼터가 다시 시작할 자리가 된다) */
   night?: boolean;
+  /** 이 단계를 마친 대화 뒤에 그 자리에서 보는 연출 (퀘스트 6: 여관의 밤, 물가에서 깨어남) */
+  cutscene?: 'night-bell' | 'river-wake';
 }
 
 export interface QuestDef {
@@ -504,7 +506,7 @@ export const QUESTS: QuestDef[] = [
         hero('벽에 걸린 그림, 커다란 종이던데요.'),
         marta('…우리 집안이 예전에 종을 부었지.'),
         marta('옛날 얘기다. 불 봐 줘서 고맙구나. 쇠 다루는 손이 제법이야.')] },
-      { label: '여관 앞의 핀 만나기', need: 1, event: 'talk', npc: 'finn', lines: [
+      { label: '여관의 핀 만나기', need: 1, event: 'talk', npc: 'finn', lines: [
         finn('형이 아빠가 말한 그 손님이지? 내 연 좀 찾아 줘! 바람에 날아가서 갈대밭 늪에 걸렸어.'),
         finn('나 혼자는 못 가. 갈대 사이에 뭔가 숨어 있다가 덤벼. 물도 막 쏘고.'),
         hero('늪은 어느 쪽이야?'),
@@ -527,6 +529,34 @@ export const QUESTS: QuestDef[] = [
       finn: [finn('연은 갈대밭 늪에 걸렸어. 마을 남서쪽 길로 내려가!')],
     },
     done: [finn('이 연, 조안 누나가 만들어 준 거야. …누나도 곧 돌아올 거야. 그치?')],
+  },
+  {
+    // 퀘스트 6 (docs/story-chapter2.md "밤의 종소리"): 여관에서 밤을 보내다 종소리를 직접 겪는다. 잠든 여관 주인을 물가에서 깨운다.
+    id: 'night-bell', title: '밤의 종소리', giver: 'fog-innkeeper', main: true, requires: 'still-ferry', turnIn: 'finn', completeOnTarget: true,
+    objective: { label: '여관 주인에게 방 얻기', need: 1, event: 'talk', npc: 'fog-innkeeper' },
+    steps: [
+      { label: '여관 주인에게 방 얻기', need: 1, event: 'talk', npc: 'fog-innkeeper', cutscene: 'night-bell', lines: [
+        hero('오늘 밤 묵어 갈게요. 핀이 밤엔 절대 밖에 나가지 말라던데요.'),
+        innkeeper('그 녀석이 또 겁을 줬구먼. …허나 틀린 말은 아니야. 자, 솜이네. 귀를 단단히 막고 자게.'),
+        innkeeper('창은 내가 닫아 두지. 강 쪽에서 무슨 소리가 들려도 내다보지 말고.'),
+        { speaker: '나루 여관', text: '여관 주인이 창을 하나씩 닫는다. 강에서 밀려온 안개가 창틈에 하얗게 서려 있다.' }] },
+      { label: '여관 주인을 가로막는 안개 환영 물리치기', need: 3, event: 'kill', map: 'ferry-village', monster: 'mist-phantom' },
+      { label: '물가의 여관 주인 깨우기', need: 1, event: 'talk', npc: 'fog-innkeeper', cutscene: 'river-wake', lines: [
+        { speaker: '물가', text: '강 위의 안개가 여관 주인의 발 앞으로 낮게 깔려, 물 위로 하얀 길을 내고 있다.' },
+        { speaker: '물가', text: '여관 주인이 한 발을 들어 안개 위에 올린다. …빠지지 않는다.' },
+        hero('아저씨! 일어나세요! 거기는 강이에요!')] },
+      { label: '아버지를 끌어안은 핀 달래기', need: 1, event: 'talk', npc: 'finn', lines: [
+        finn('밤새 안 잤는데… 문 여는 소리를 못 들었어. 형이 없었으면 아빠는…'),
+        hero('아저씨는 괜찮아. 네가 깨워 줘서 나도 따라올 수 있었어.'),
+        finn('…형. 내가 아는 거, 전부 말해 줄게. 조안 누나 일도.')] },
+    ],
+    rewardXp: 90, rewardGold: 30, rewardItems: [{ id: 'potion', count: 2 }],
+    offer: [hero('(핀 말대로 오늘 밤은 여관에서 묵자. 여관 주인에게 방을 부탁해야지.)')],
+    reminder: [innkeeper('방은 언제든 내주지. 밤이 오기 전에 들어오게.')],
+    done: [
+      innkeeper('…어머니가 강 건너 안개 속에서 부르셨어. 십 년 전에 돌아가셨는데.'),
+      { speaker: HERO_NAME, portrait: 'hero-neutral', text: '(잠든 사람만 디딜 수 있는 길이 있다. 깨어 있는 사람에게는 그냥 물이다.)' },
+    ],
   },
   {
     id: 'doran-gel', title: '담금질 재료', giver: 'doran',

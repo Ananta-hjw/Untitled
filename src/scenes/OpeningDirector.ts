@@ -1,9 +1,8 @@
 import Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 import type { DialogueLine } from '../story/dialogues';
-import type { CutsceneTarget, OpeningStep, Point } from '../story/opening';
+import type { CutsceneNpcId, CutsceneTarget, OpeningStep, Point } from '../story/opening';
 import type { Npc } from '../entities/Npc';
-import type { NamedNpcId } from '../world/npcs';
 
 /** 오프닝을 보여 주는 장면이 감독에게 빌려주는 것들 */
 export interface OpeningHost {
@@ -13,7 +12,7 @@ export interface OpeningHost {
   setHeroInput(x: number, y: number): void;
   /** 시온을 그 자리로 옮긴다(막혀서 못 가는 경우). */
   placeHero(x: number, y: number): void;
-  npc(id: NamedNpcId): Npc | undefined;
+  npc(id: CutsceneNpcId): Npc | undefined;
   say(lines: DialogueLine[], done: () => void): void;
   closeDialogue(): void;
   finish(skipped: boolean): void;
@@ -58,7 +57,7 @@ export class OpeningDirector {
   /** 마지막으로 받은 게임 시각 (대화가 닫힐 때 다음 단계를 이 시각에 시작한다) */
   private clock = 0;
   private cameraFrom = { x: 0, y: 0 };
-  private emotes: Array<{ text: Phaser.GameObjects.Text; who: NamedNpcId | 'hero'; until: number }> = [];
+  private emotes: Array<{ text: Phaser.GameObjects.Text; who: CutsceneNpcId | 'hero'; until: number }> = [];
 
   constructor(host: OpeningHost, steps: OpeningStep[]) {
     this.host = host;
@@ -261,7 +260,7 @@ export class OpeningDirector {
   }
 
   /** 머리 위 높이(발에서) */
-  private headOf(who: NamedNpcId | 'hero'): Point | undefined {
+  private headOf(who: CutsceneNpcId | 'hero'): Point | undefined {
     if (who === 'hero') {
       const hero = this.host.hero();
       return { x: hero.x, y: hero.y - 200 };
@@ -270,7 +269,7 @@ export class OpeningDirector {
     return npc ? { x: npc.x, y: npc.y - npc.def.height - 34 } : undefined;
   }
 
-  private showEmote(who: NamedNpcId | 'hero', text: string, now: number): void {
+  private showEmote(who: CutsceneNpcId | 'hero', text: string, now: number): void {
     const head = this.headOf(who);
     if (!head) return;
     const label = this.host.scene.add.text(head.x, head.y, text, {

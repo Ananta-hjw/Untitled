@@ -20,6 +20,10 @@ import joanCocoonUrl from '../assets/characters/joan/cocoon-awaken.webp?url';
 import joanCocoonData from '../assets/characters/joan/cocoon-awaken-frames.json';
 import doranHammerUrl from '../assets/characters/doran/hammer.webp?url';
 import doranHammerData from '../assets/characters/doran/hammer-frames.json';
+import finnNightUrl from '../assets/characters/finn/night-watch.webp?url';
+import finnNightData from '../assets/characters/finn/night-watch-frames.json';
+import innRiverUrl from '../assets/characters/fog-innkeeper/river-wake.webp?url';
+import innRiverData from '../assets/characters/fog-innkeeper/river-wake-frames.json';
 
 export interface StoryFrame { name: string; x: number; y: number; w: number; h: number; originX: number; originY: number }
 export interface StoryAction {
@@ -66,6 +70,16 @@ const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
   linea: Object.fromEntries(lineaRecoveryData.frames.map(frame => [frame.name, {
     key: 'npc-linea-recovery', url: lineaRecoveryUrl, frames: [frame], fps: 0,
     bodyHeight: frame.name === 'journal' ? 480 : 370, onTalk: 'keep' as const,
+  }])),
+  // 퀘스트 6 "밤의 종소리": 핀의 밤샘(솜 끼고 깨어 있기 → 시온 깨우기 → 아버지가 간 쪽 가리키기 → 아버지 끌어안기),
+  // 물가에서 깨어나는 여관 주인(깨어남 → 발이 물에 빠짐 → 뒤로 물러섬 → 정신 차림). 한 자세씩 쓴다.
+  // 몸 높이는 서 있는 자세(핀 warn-father, 여관 주인 river-awake)의 발바닥~머리끝 픽셀이다.
+  // `-left`는 좌우를 뒤집은 그림이다(여관 안에서 왼쪽 아래 문으로 나가는 아버지를 가리킬 때).
+  finn: Object.fromEntries(finnNightData.frames.flatMap(frame => [false, true].map(flipX => [`${frame.name}${flipX ? '-left' : ''}`, {
+    key: 'npc-finn-night-watch', url: finnNightUrl, frames: [frame], fps: 0, bodyHeight: 346, onTalk: 'keep' as const, flipX,
+  }]))),
+  'fog-innkeeper': Object.fromEntries(innRiverData.frames.map(frame => [frame.name, {
+    key: 'npc-fog-innkeeper-river-wake', url: innRiverUrl, frames: [frame], fps: 0, bodyHeight: 329, onTalk: 'keep' as const,
   }])),
   'bell-ringer': {
     ring: { key: 'npc-bell-ringer-ring', url: ringUrl, frames: ringData.frames, fps: ringData.fps, bodyHeight: 296, onTalk: 'stop' },

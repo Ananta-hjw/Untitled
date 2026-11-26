@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { FERRY_FOG_PATH, FERRY_INN_DOOR, FERRY_NIGHT_PHANTOMS, FERRY_RIVERBANK, FERRY_SLEEPWALK_PATH, ferryInnRestOpen, ferryNight, ferryNightSpawns, ferryNightStep } from '../src/story/chapterTwo.ts';
 import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoSpots, eastPassBlockedDialogue, eastPassOpen, shelterRestOpen, chapterTwoNpcs, chapterTwoStarted, fernCartVisible, fernMothHunt, fernShopOpen } from '../src/story/chapterTwo.ts';
 import { QUESTS, continueMainQuest, parseQuests, recordEvent, serializeQuests, talkTo } from '../src/story/quests.ts';
 import { MAPS, findExit, walkable } from '../src/world/maps.ts';
 import { findInteractable } from '../src/world/interactables.ts';
-import { REST_POINTS } from '../src/story/restPoints.ts';
+import { REST_POINTS, canRest } from '../src/story/restPoints.ts';
 import { chapterDialogue, chapterNpcs } from '../src/story/chapterOne.ts';
 import { guardsForMap } from '../src/world/guards.ts';
 import { insideObstacle } from '../src/world/obstacles.ts';
+import { propObstacles } from '../src/world/villageLayout.ts';
 
 // 1장의 메인 퀘스트를 모두 끝낸 저장
 const chapterOneDone = Object.fromEntries(QUESTS.slice(0, QUESTS.findIndex(q => q.id === 'first-sword') + 1)
@@ -196,7 +198,9 @@ test('고개의 쉼터 뒤 "멈춘 나루": 에반 → 여관 → 마르타와 �
   let state = farewell.state;
   assert.deepEqual(state['still-ferry'], { status: 'active', count: 0 });
   // 나루 사람들은 나루에만, 퀘스트를 받은 뒤에만 있다
-  assert.deepEqual(chapterTwoNpcs(state, 'ferry-village').map(n => n.id), ['evan', 'marta', 'fog-innkeeper', 'finn', 'morgan']);
+  assert.deepEqual(chapterTwoNpcs(state, 'ferry-village').map(n => n.id), ['evan', 'marta', 'morgan']);
+  // 여관 주인과 핀은 여관 안에 있다
+  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-inn').map(n => n.id), ['fog-innkeeper', 'finn']);
   assert.deepEqual(chapterTwoNpcs(before, 'ferry-village'), []);
   assert.deepEqual(chapterTwoNpcs(state, 'east-pass'), []);
 
@@ -223,6 +227,7 @@ test('고개의 쉼터 뒤 "멈춘 나루": 에반 → 여관 → 마르타와 �
   assert.ok(CHAPTER_TWO_INSPECTIONS['story-reed-kite'].some(l => l.text.includes('놋쇠 종')));
   const done = talk('finn');
   assert.equal(done.completed?.id, 'still-ferry');
+  assert.equal(done.next?.id, 'night-bell');
   assert.equal(state['still-ferry'].status, 'done');
   assert.deepEqual(serializeQuests(state) && parseQuests(serializeQuests(state))['still-ferry'], state['still-ferry']);
 });
@@ -230,11 +235,15 @@ test('고개의 쉼터 뒤 "멈춘 나루": 에반 → 여관 → 마르타와 �
 test('물안개 나루 사람들은 걸을 수 있는 곳에 따로 서고, 살펴보기·쉬는 자리·늪 출구는 닿을 수 있다', () => {
   const ferry = MAPS['ferry-village'];
   const state = { 'pass-shelter': { status: 'done', count: 1 }, 'still-ferry': { status: 'active', count: 0 } };
-  const people = chapterTwoNpcs(state, 'ferry-village');
-  for (const n of people) assert.equal(walkable(ferry, n.x, n.y), true, n.id);
-  for (let i = 0; i < people.length; i++) for (let j = i + 1; j < people.length; j++) {
-    const a = people[i], b = people[j];
-    assert.ok(Math.hypot(a.x - b.x, a.y - b.y) > 220, `${a.id}·${b.id}: 대화 자리가 겹치지 않는다`);
+  for (const map of ['ferry-village', 'in-ferry-inn']) {
+    const people = chapterTwoNpcs(state, map);
+    // 대화 자리(카운터 뒤 여관 주인은 카운터 앞)가 걸을 수 있는 곳이다
+    const spot = n => ({ x: n.x, y: n.y + (n.talkOffset ?? 0) });
+    for (const n of people) assert.equal(walkable(MAPS[map], spot(n).x, spot(n).y), true, n.id);
+    for (let i = 0; i < people.length; i++) for (let j = i + 1; j < people.length; j++) {
+      const a = spot(people[i]), b = spot(people[j]);
+      assert.ok(Math.hypot(a.x - b.x, a.y - b.y) > 220, `${people[i].id}·${people[j].id}: 대화 자리가 겹치지 않는다`);
+    }
   }
   for (const [map, spot] of [['ferry-village', 'story-ferry-forge'], ['reed-swamp', 'story-reed-kite']]) {
     const s = { 'story-ferry-forge': { x: 1420, y: 1430 }, 'story-reed-kite': { x: 1780, y: 1250 } }[spot];
@@ -242,9 +251,71 @@ test('물안개 나루 사람들은 걸을 수 있는 곳에 따로 서고, 살�
     assert.equal(findExit(MAPS[map], s.x, s.y), undefined, spot);
   }
   const inn = REST_POINTS['ferry-inn'];
-  assert.equal(walkable(ferry, inn.at.x, inn.at.y), true);
+  assert.equal(inn.map, 'in-ferry-inn');
+  assert.equal(walkable(MAPS[inn.map], inn.at.x, inn.at.y), true);
   // 갈대밭 늪은 나루 남서쪽 길에서 오가고, 동쪽 고갯길에는 늪 출구가 없다
   assert.ok(ferry.exits.some(e => e.to === 'reed-swamp'));
   assert.ok(MAPS['reed-swamp'].exits.every(e => e.to === 'ferry-village'));
   assert.ok(MAPS['east-pass'].exits.every(e => e.to !== 'reed-swamp'));
+});
+
+test('멈춘 나루 뒤 "밤의 종소리": 여관 주인에게 방 얻기(여관의 밤) → 안개 환영 셋 → 물가에서 깨우기 → 핀 달래기', () => {
+  const ferryDone = Object.fromEntries(QUESTS.slice(0, QUESTS.findIndex(q => q.id === 'still-ferry') + 1)
+    .filter(q => q.main).map(q => [q.id, { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) }]));
+  let state = continueMainQuest(ferryDone);
+  assert.deepEqual(state['night-bell'], { status: 'active', count: 0 });
+  // 낮: 여관 주인과 핀은 여관 안, 쉬어 갈 수 있다
+  assert.equal(ferryNight(state), false);
+  assert.equal(ferryInnRestOpen(state), true);
+  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-inn').map(n => n.id), ['fog-innkeeper', 'finn']);
+  const talk = npc => { const r = talkTo(npc, state); state = r.state; return r; };
+
+  // 방을 얻으면 여관의 밤 연출을 본다
+  assert.equal(talk('fog-innkeeper').stepDone?.cutscene, 'night-bell');
+  assert.equal(ferryNightStep(state), 1);
+  assert.equal(canRest(state), false);
+  assert.equal(ferryInnRestOpen(state), false);
+  // 밤: 여관은 비고, 잠든 여관 주인은 여관 문 앞, 핀은 문 앞에서 아버지를 가리킨다. 다른 나루 사람들은 자고 있다
+  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-inn'), []);
+  const night = chapterTwoNpcs(state, 'ferry-village');
+  assert.deepEqual(night.map(n => n.id), ['fog-innkeeper', 'finn']);
+  assert.deepEqual({ x: night[0].x, y: night[0].y }, FERRY_INN_DOOR);
+  assert.equal(night[1].storyAction, 'warn-father');
+  assert.equal(ferryNightSpawns(state, 'ferry-village').length, 3);
+  assert.deepEqual(ferryNightSpawns(state, 'reed-swamp'), []);
+  for (let i = 0; i < 3; i++) state = recordEvent(state, { type: 'kill', map: 'ferry-village', monster: 'mist-phantom' }).state;
+  assert.equal(ferryNightStep(state), 2);
+  assert.deepEqual(ferryNightSpawns(state, 'ferry-village'), []);
+  const bank = chapterTwoNpcs(state, 'ferry-village').find(n => n.id === 'fog-innkeeper');
+  assert.deepEqual({ x: bank.x, y: bank.y }, FERRY_RIVERBANK);
+  // 물가에서 깨우면 깨어나는 연출, 핀이 아버지를 끌어안는다(한 그림)
+  assert.equal(talk('fog-innkeeper').stepDone?.cutscene, 'river-wake');
+  assert.equal(ferryNightStep(state), 3);
+  const hug = chapterTwoNpcs(state, 'ferry-village');
+  assert.deepEqual(hug.map(n => n.id), ['finn']);
+  assert.equal(hug[0].storyAction, 'hug-father');
+  const done = talk('finn');
+  assert.equal(done.completed?.id, 'night-bell');
+  assert.ok(done.lines.some(l => l.text.includes('어머니')));
+  assert.equal(ferryNight(state), false);
+  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-inn').map(n => n.id), ['fog-innkeeper', 'finn']);
+  assert.deepEqual(parseQuests(serializeQuests(state))['night-bell'], state['night-bell']);
+});
+
+test('종소리의 밤: 잠든 걸음 길·물가·안개 환영 자리는 걸을 수 있고, 길은 벽과 소품을 지나지 않는다', () => {
+  const ferry = MAPS['ferry-village'];
+  const obstacles = [...ferry.obstacles, ...propObstacles(ferry.props)];
+  const clear = (x, y) => walkable(ferry, x, y) && !obstacles.some(o => insideObstacle(o, x, y)) && !findExit(ferry, x, y);
+  const path = [FERRY_INN_DOOR, ...FERRY_SLEEPWALK_PATH];
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i];
+    for (let t = 0; t <= 1; t += 0.02) {
+      const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+      assert.ok(clear(x, y), `잠든 걸음 ${i}: (${Math.round(x)}, ${Math.round(y)})`);
+    }
+  }
+  for (const p of FERRY_NIGHT_PHANTOMS) assert.ok(clear(p.x, p.y), JSON.stringify(p));
+  // 핀이 서는 자리와 안개 길: 핀은 문 앞 걸을 수 있는 곳, 안개 길은 강둑 끝에서 물(걸을 수 없는 곳) 위로 뻗는다
+  assert.ok(clear(FERRY_INN_DOOR.x - 150, FERRY_INN_DOOR.y + 20));
+  assert.equal(walkable(ferry, FERRY_FOG_PATH.x + FERRY_FOG_PATH.length * 0.5, FERRY_FOG_PATH.y), false);
 });

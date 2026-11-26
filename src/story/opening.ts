@@ -1,6 +1,6 @@
 import { mapLength, mapPoint } from '../world/mapScale.ts';
 import { HERO_NAME, type DialogueLine } from './dialogues.ts';
-import type { NamedNpcId } from '../world/npcs.ts';
+import type { ChapterTwoNpcId, NamedNpcId } from '../world/npcs.ts';
 import { LINEA_YARD, PLAYER_SPAWN } from '../world/villageLayout.ts';
 import type { QuestState } from './quests.ts';
 
@@ -15,8 +15,11 @@ import type { QuestState } from './quests.ts';
 
 export interface Point { x: number; y: number }
 
+/** 연출에 나오는 사람: 로웬 마을 사람과 2장 인물(나루의 핀·여관 주인 등) */
+export type CutsceneNpcId = NamedNpcId | ChapterTwoNpcId;
+
 /** 연출에서 바라보거나 다가갈 대상: 마을 사람, 시온, 또는 맵의 한 지점 */
-export type CutsceneTarget = NamedNpcId | 'hero' | Point;
+export type CutsceneTarget = CutsceneNpcId | 'hero' | Point;
 
 /**
  * 연출 대본의 한 단계. 오프닝과 1장 수확제 연출(story/festival.ts)이 함께 쓴다.
@@ -33,21 +36,21 @@ export type OpeningStep =
   /** 시온을 그 자리로 옮겨 세운다(화면이 가려져 있을 때). */
   | { type: 'placeHero'; at: Point }
   /** 마을 사람을 그 자리로 옮겨 세운다(화면 밖에서 미리 자리 잡기). */
-  | { type: 'place'; id: NamedNpcId; at: Point }
+  | { type: 'place'; id: CutsceneNpcId; at: Point }
   /** 마을 사람이 경로를 따라 걷는다(speed: 평소 걷는 빠르기에 대한 배율, 뛰기는 1.6 정도). wait이면 도착할 때까지 기다린다. */
-  | { type: 'npc'; id: NamedNpcId; path: Point[]; wait?: boolean; speed?: number }
+  | { type: 'npc'; id: CutsceneNpcId; path: Point[]; wait?: boolean; speed?: number }
   /** 마을 사람이 대상(없으면 시온) 쪽을 본다. */
-  | { type: 'face'; id: NamedNpcId; to?: CutsceneTarget }
+  | { type: 'face'; id: CutsceneNpcId; to?: CutsceneTarget }
   /** 카메라가 ms 동안 그 지점(또는 시온)으로 옮겨 간다. 시온으로 돌아오면 다시 시온을 따라간다. */
   | { type: 'camera'; to: Point | 'hero'; ms: number }
   /** 머리 위에 잠깐 떠오르는 짧은 표시(♪, !, … 등). 기다리지 않는다. */
-  | { type: 'emote'; who: NamedNpcId | 'hero'; text: string }
+  | { type: 'emote'; who: CutsceneNpcId | 'hero'; text: string }
   /** 장면이 맡는 효과 신호(예: 등불 띄우기, 경보). 기다리지 않는다. */
   | { type: 'cue'; cue: string }
   | { type: 'say'; lines: DialogueLine[] };
 
 const hero = (text: string): DialogueLine => ({ speaker: HERO_NAME, portrait: 'hero-neutral', text });
-const line = (id: NamedNpcId, speaker: string, text: string): DialogueLine => ({ speaker, portrait: id, text });
+const line = (id: CutsceneNpcId, speaker: string, text: string): DialogueLine => ({ speaker, portrait: id, text });
 
 /** 시온이 연출 동안 걷는 빠르기 (평소 이동 속도에 대한 비율). 천천히 둘러보듯 걷는다. */
 export const OPENING_WALK_SCALE = 0.5;

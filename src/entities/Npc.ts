@@ -279,11 +279,11 @@ export class Npc extends Phaser.GameObjects.Container {
   private get labelHeight(): number { return this.storyAction?.labelOffset ?? this.def.labelOffset ?? this.def.height; }
 
   /** Story-ready sleepwalking along a collision-checked path; no wall or water bypass. */
-  startSleepwalk(path: { x: number; y: number }[]): void {
+  startSleepwalk(path: { x: number; y: number }[], speed = 0.45): void {
     if (this.skin !== 'fog-innkeeper') return;
     this.sleeping = true;
     this.sleepElapsed = 0;
-    this.walkTo(path, 0.45);
+    this.walkTo(path, speed);
     this.showFrame(0);
   }
 

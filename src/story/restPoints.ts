@@ -1,5 +1,6 @@
 import type { MapId } from '../world/maps.ts';
 import { INTERIORS, interiorArtPoint, interiorShop } from '../world/interiors.ts';
+import { ferryNight } from './chapterTwo.ts';
 import { chapterPhase } from './chapterOne.ts';
 import { PASS_FIRE } from '../world/eastPass.ts';
 import type { QuestState } from './quests.ts';
@@ -36,7 +37,7 @@ export const REST_POINTS: Record<RestPointId, RestPoint> = {
   // 2장: 동쪽 고갯길의 돌 쉼터, 도르의 모닥불 앞 (퀘스트 "고개의 쉼터" 뒤로 도르에게 말해 쉬어 간다)
   shelter: { id: 'shelter', name: '고개 쉼터', map: 'east-pass', at: { x: PASS_FIRE.x - 70, y: PASS_FIRE.y + 80 } },
   // 2장: 물안개 나루 여관 앞, 여관 주인 곁 (퀘스트 "멈춘 나루"를 받은 뒤 여관 주인에게 말해 쉬어 간다). 건물 실내는 아직 없다.
-  'ferry-inn': { id: 'ferry-inn', name: '물안개 나루 여관', map: 'ferry-village', at: { x: 2170, y: 1400 } },
+  'ferry-inn': { id: 'ferry-inn', name: '물안개 나루 여관', map: 'in-ferry-inn', at: { x: 860, y: 700 } },
 };
 
 /** 시온의 집 침대 앞의 "쉬기" 자리 */
@@ -63,9 +64,9 @@ export function herbBonus(baseMaxHp: number): number {
   return Math.max(1, Math.round(baseMaxHp * HERB_BONUS_RATIO));
 }
 
-/** 지금 쉴 수 있는지. 습격의 밤에는 쉴 수 없다. */
+/** 지금 쉴 수 있는지. 습격의 밤과 나루의 종소리가 울린 밤(퀘스트 6)에는 쉴 수 없다. */
 export function canRest(state: QuestState): boolean {
-  return chapterPhase(state) !== 'raid';
+  return chapterPhase(state) !== 'raid' && !ferryNight(state);
 }
 
 export const REST_SAVE_KEY = 'untitled-rpg.rest';

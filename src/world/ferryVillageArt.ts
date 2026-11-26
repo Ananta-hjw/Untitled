@@ -32,7 +32,18 @@ export function preloadFerryInterior(scene: Phaser.Scene, props: readonly Villag
 /** 강 위 안개 한 덩이: 강의 가로 범위(x) 안에서 천천히 오르내리며 흘러간다. */
 interface FogPuff { image: Phaser.GameObjects.Image; x: number; y: number; drift: number; phase: number; alpha: number }
 
-const FOG_TEXTURE = 'ferry-river-fog';
+export const FOG_TEXTURE = 'ferry-river-fog';
+
+/** 부드러운 안개 덩이 텍스처(가운데가 짙고 가장자리로 사라지는 원)를 한 번 만든다. */
+export function ensureFogTexture(scene: Phaser.Scene): void {
+  if (scene.textures.exists(FOG_TEXTURE)) return;
+  const size = 256, texture = scene.textures.createCanvas(FOG_TEXTURE, size, size)!, ctx = texture.context;
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  for (const [stop, alpha] of [[0, 1], [0.35, 0.7], [0.7, 0.22], [1, 0]]) gradient.addColorStop(stop, `rgba(235, 242, 245, ${alpha})`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  texture.refresh();
+}
 /** 강물이 시작되는 x (걸을 수 있는 강둑의 동쪽 끝 너머) */
 const RIVER_LEFT = 3150;
 const RIVER_RIGHT = 4800;
@@ -47,14 +58,7 @@ export class FerryScenery {
   private readonly puffs: FogPuff[] = [];
 
   constructor(scene: Phaser.Scene) {
-    if (!scene.textures.exists(FOG_TEXTURE)) {
-      const size = 256, texture = scene.textures.createCanvas(FOG_TEXTURE, size, size)!, ctx = texture.context;
-      const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-      for (const [stop, alpha] of [[0, 1], [0.35, 0.7], [0.7, 0.22], [1, 0]]) gradient.addColorStop(stop, `rgba(235, 242, 245, ${alpha})`);
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, size, size);
-      texture.refresh();
-    }
+    ensureFogTexture(scene);
     // 강을 따라 위에서 아래로 줄지어 둔다. 크기·짙기·흐름을 조금씩 다르게.
     for (let i = 0; i < 14; i++) {
       // 강둑 가까이(잔교·배가 보이는 곳)에 더 많이 걸리게, 강 서쪽 2/3 안에 둔다.

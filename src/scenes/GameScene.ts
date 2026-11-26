@@ -96,6 +96,8 @@ import { OpeningDirector } from './OpeningDirector';
 import { OPENING, OPENING_HINT, OPENING_SAVE_KEY, OPENING_WALK_SCALE, shouldPlayOpening, type OpeningStep } from '../story/opening';
 import { BONFIRE, FESTIVAL, FESTIVAL_RAIDERS, FESTIVAL_SAVE_KEY, FESTIVAL_WALK_SCALE, RAIDER_ENTRY_MS, festivalNpcs, shouldPlayFestival } from '../story/festival';
 import { FestivalStage, preloadFestival } from './FestivalStage';
+import { NightBellStage } from './NightBellStage';
+import { INN_NIGHT, INN_SLEEPWALK_SPEED, NIGHT_BELL_INN, NIGHT_BELL_MORNING, NIGHT_BELL_WALK_SCALE, RIVER_WAKE_STEPS } from '../story/nightBell';
 import { DeathPanel } from '../ui/DeathPanel';
 import { deathReport, emptyDamageLog, recordDamage, type DamageLog } from '../combat/damageLog';
 import { justDodgeWindowMs, loadSettings, saveSettings, sizeScale, type Settings } from '../ui/settingsData';
@@ -104,7 +106,7 @@ import { findInteractable, talkChoices, type Interactable } from '../world/inter
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
 import { chapterTwoPreviewNpcs, isCastPreviewGroup, previewCastNpcs, type CastPreviewGroup } from '../world/chapterTwoNpcs';
-import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, eastPassBlockedDialogue, eastPassOpen, FERRY_PEOPLE, ferryInnRestOpen, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
+import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, eastPassBlockedDialogue, eastPassOpen, FERRY_PEOPLE, FERRY_INN, FERRY_INN_DOOR, FERRY_NIGHT_LEVEL, FERRY_RIVERBANK, FERRY_SLEEPWALK_PATH, ferryInnRestOpen, ferryNight, ferryNightSpawns, ferryNightStep, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
 import fernCartDamagedUrl from '../assets/village/rowen/fern-cart-damaged.webp?url';
 import fernCartRepairedUrl from '../assets/village/rowen/fern-cart-repaired.webp?url';
 import { PerfOverlay } from '../ui/PerfOverlay';
@@ -345,6 +347,8 @@ export class GameScene extends Phaser.Scene {
   private passScenery?: EastPassScenery;
   private ferryScenery?: FerryScenery;
   private festivalStage?: FestivalStage;
+  /** 퀘스트 6 "밤의 종소리"의 종소리·안개 길 */
+  private nightBellStage?: NightBellStage;
   /** 축제 연출 끝에 남문으로 걸어 들어오는 권속 (싸우지 않는 그림뿐. 연출이 끝나면 광장을 다시 열어 진짜 무리가 나온다) */
   private festivalRaiders: Array<{ enemy: Enemy; path: readonly Point[]; startedAt: number }> = [];
   /** 잿빛 나방의 가루에 닿아 느려진 상태가 끝나는 게임 시각 */
@@ -665,6 +669,7 @@ export class GameScene extends Phaser.Scene {
     this.playFestival = false;
     this.cutsceneWalkScale = OPENING_WALK_SCALE;
     this.festivalStage = undefined;
+    this.nightBellStage = undefined;
     this.passScenery = undefined;
     this.ferryScenery = undefined;
     this.festivalRaiders = [];
@@ -691,9 +696,9 @@ export class GameScene extends Phaser.Scene {
     if (this.playFestival) preloadFestival(this);
     preloadIcons(this);
     // 습격 중에는 이 맵에 나올 모든 무리의 그림을 미리 읽는다(대화 뒤 다음 무리가 바로 나타난다).
-    preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...raidSpawnsAnyStep(this.quests, this.mapId), ...this.previewMonsters()]);
+    preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...ferryNightSpawns(this.quests, this.mapId), ...raidSpawnsAnyStep(this.quests, this.mapId), ...this.previewMonsters()]);
     preloadVillage(this, this.map);
-    preloadNpcs(this, [...NPCS, FERN, ...this.map.npcs, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 }), ...(this.mapId === 'ferry-village' ? FERRY_PEOPLE : [])]);
+    preloadNpcs(this, [...NPCS, FERN, ...this.map.npcs, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 }), ...(this.mapId === 'ferry-village' || this.mapId === FERRY_INN ? FERRY_PEOPLE : [])]);
     if (fernCartVisible(this.quests, this.mapId)) {
       this.load.image('fern-cart-damaged', fernCartDamagedUrl);
       this.load.image('fern-cart-repaired', fernCartRepairedUrl);
@@ -707,6 +712,8 @@ export class GameScene extends Phaser.Scene {
     this.walkArea = buildMap(this, this.map);
     if (this.mapId === 'east-pass') this.passScenery = new EastPassScenery(this);
     if (this.mapId === 'ferry-village') this.ferryScenery = new FerryScenery(this);
+    // 종소리의 밤, 여관 주인이 물가에 닿은 뒤에는 강 위에 안개 길이 깔려 있다.
+    if (this.mapId === 'ferry-village' && ferryNightStep(this.quests) === 2) this.nightBellStage = new NightBellStage(this, { fogPath: true });
     this.placeFernCart();
     const bounds = this.walkArea.bounds;
     this.nav = new NavGrid(bounds.left, bounds.top, bounds.right, bounds.bottom, NAV_CELL,
@@ -984,6 +991,7 @@ export class GameScene extends Phaser.Scene {
     this.effects.update(time);
     this.opening?.update(time);
     this.festivalStage?.update(time);
+    this.nightBellStage?.update(time);
     this.passScenery?.update(time, this.player);
     this.ferryScenery?.update(time);
     this.updateFestivalRaiders(time);
@@ -1092,6 +1100,8 @@ export class GameScene extends Phaser.Scene {
     this.clearAttackInput();
     this.joystick.vector.set(0, 0);
     this.cutsceneWalkScale = walkScale;
+    // 연출 동안에는 머리 위 퀘스트 표시를 숨긴다(끝나면 refreshQuests가 되살린다).
+    for (const npc of this.npcs) npc.setQuestMarker(undefined);
     // 화면에 고정된 UI(체력 막대·버튼·미니맵 등)를 잠시 숨긴다. 대화창은 열릴 때 스스로 나타난다.
     this.openingHidden = this.children.list.filter((o): o is Phaser.GameObjects.GameObject & { setVisible(v: boolean): unknown; visible: boolean; scrollFactorX: number } =>
       o !== this.chapterShade && 'scrollFactorX' in o && (o as { scrollFactorX: number }).scrollFactorX === 0 && 'visible' in o && (o as { visible: boolean }).visible);
@@ -1126,6 +1136,93 @@ export class GameScene extends Phaser.Scene {
       } else this.festivalStage?.cue(name);
     });
     this.festivalStage = new FestivalStage(this);
+  }
+
+  // ---------------------------------------------------------------- 2장 퀘스트 6 "밤의 종소리"
+
+  private npcById(id: string): Npc | undefined { return this.npcs.find(npc => npc.def.id === id); }
+
+  /** 방을 얻으면 화면이 어두워졌다가 여관의 밤 연출이 시작된다(story/nightBell.ts). 끝나면 나루(밤)의 여관 문 앞으로 나간다. */
+  private startNightBell(): void {
+    const camera = this.cameras.main;
+    this.traveling = true;
+    this.player.setMotion(false, 0);
+    this.attackButton.setVisible(false);
+    this.hideTalkMarker();
+    camera.fadeOut(700, 0, 0, 0);
+    camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      if (!this.scene.isActive()) return;
+      this.traveling = false;
+      this.drawChapterShade(this.scale.gameSize.width);
+      const finn = () => this.npcById('finn'), innkeeper = () => this.npcById('fog-innkeeper');
+      this.startCutscene(NIGHT_BELL_INN, NIGHT_BELL_WALK_SCALE, () => this.finishNightBell(), (name) => {
+        if (name === 'finn-watch') finn()?.setStoryAction('watch-awake');
+        else if (name === 'finn-up') finn()?.setStoryAction();
+        else if (name === 'finn-wake') finn()?.setStoryAction('wake-sion');
+        else if (name === 'finn-warn') finn()?.setStoryAction('warn-father-left');
+        else if (name === 'bell') this.nightBellStage?.bell();
+        else if (name === 'sleepwalk') innkeeper()?.startSleepwalk([...INN_NIGHT.sleepwalk], INN_SLEEPWALK_SPEED);
+        else if (name === 'innkeeper-out') innkeeper()?.setVisible(false);
+      });
+      // 연출이 화면 고정 UI를 숨긴 뒤에 만들어야 종소리의 흐려짐이 함께 숨지 않는다.
+      this.nightBellStage = new NightBellStage(this);
+      this.nightBellStage.layout(this.scale.gameSize.width);
+      camera.fadeIn(700, 0, 0, 0);
+    });
+  }
+
+  private finishNightBell(): void {
+    this.opening = undefined;
+    this.openingInput.set(0, 0);
+    this.clearAttackInput();
+    // 여관 문 앞(바깥)으로 나간다. 잠든 여관 주인은 문 앞에서 물가로 걷기 시작한다.
+    const at = { x: FERRY_INN_DOOR.x - 90, y: FERRY_INN_DOOR.y + 60 };
+    this.travel({ to: 'ferry-village', arrive: at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: at });
+  }
+
+  /**
+   * 안개 환영 셋을 물리치면(단계 1 → 2) 맵을 다시 열지 않아도 물가에 안개 길이 깔리고, 잠든 여관 주인에게 말을 걸 수 있다.
+   * 여관 주인은 하던 대로 물가까지 걸어간다.
+   */
+  private syncFerryNight(): void {
+    if (this.mapId !== 'ferry-village' || ferryNightStep(this.quests) !== 2 || !this.player) return;
+    if (!this.nightBellStage) {
+      this.nightBellStage = new NightBellStage(this, { fogPath: true });
+      this.nightBellStage.layout(this.scale.gameSize.width);
+    }
+    const sleeper = this.npcById('fog-innkeeper');
+    if (sleeper && !this.interactables.includes(sleeper.spot)) this.interactables.push(sleeper.spot);
+  }
+
+  /** 물가에서 여관 주인을 깨우면: 안개 길이 물로 풀리고, 핀이 달려와 아버지를 끌어안는다. */
+  private startRiverWake(): void {
+    const finn = () => this.npcById('finn'), innkeeper = () => this.npcById('fog-innkeeper');
+    this.nightBellStage ??= new NightBellStage(this, { fogPath: true });
+    // 아직 물가로 걸어가던 중에 깨웠어도 장면은 강둑 끝에서 시작한다.
+    const sleeper = innkeeper();
+    if (sleeper && Math.hypot(sleeper.x - FERRY_RIVERBANK.x, sleeper.y - FERRY_RIVERBANK.y) > 4) sleeper.placeAt(FERRY_RIVERBANK.x, FERRY_RIVERBANK.y);
+    this.startCutscene(RIVER_WAKE_STEPS, NIGHT_BELL_WALK_SCALE, () => {
+      this.opening = undefined;
+      this.openingInput.set(0, 0);
+      this.clearAttackInput();
+      // 그 자리에서 다시 연다: 핀이 물가에서 아버지를 끌어안고 있다(한 그림).
+      const at = { x: this.player.x, y: this.player.y };
+      this.travel({ to: 'ferry-village', arrive: at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: at });
+    }, (name) => {
+      const inn = innkeeper();
+      if (name === 'fog-dissolve') {
+        this.nightBellStage?.dissolve();
+        inn?.wake();
+        inn?.setStoryAction('river-slip');
+      } else if (name === 'inn-step-back') inn?.setStoryAction('river-step-back');
+      else if (name === 'inn-steady') inn?.setStoryAction('river-steady');
+      else if (name === 'finn-run') finn()?.setStoryAction();
+      else if (name === 'hug') {
+        inn?.setVisible(false);
+        finn()?.placeAt(FERRY_RIVERBANK.x, FERRY_RIVERBANK.y);
+        finn()?.setStoryAction('hug-father');
+      }
+    });
   }
 
   /** 연출 속 권속: 남문 밖에서 걸어 들어와 선다. 싸우지 않는다(장면의 적 목록에 넣지 않는다). */
@@ -1213,6 +1310,7 @@ export class GameScene extends Phaser.Scene {
     // 사냥터 몬스터는 그 맵의 권장 레벨 범위를 차례로 받는다. 해 질 무렵의 나방은 따로 정한 레벨.
     this.map.enemies.forEach((spawn, i) => this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, spawnLevel(this.mapId, i))));
     for (const spawn of this.duskSpawns()) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, DUSK_MOTH_LEVEL));
+    for (const spawn of ferryNightSpawns(this.quests, this.mapId)) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, FERRY_NIGHT_LEVEL));
     for (const spawn of this.previewMonsters()) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, 9));
     this.syncRaidEnemies(false);
     // 축제 연출 동안에는 마을 사람 모두가 광장의 잔치 자리에 있다.
@@ -1237,6 +1335,11 @@ export class GameScene extends Phaser.Scene {
       this.npcs.push(evan);
       this.mistWeaver = { caster: weaver, evan, threads: new MistThreads(this, weaverSprite, this.now), aimAtEvan: false };
     }
+    // 종소리의 밤: 잠든 여관 주인이 여관 문 앞에서 물가로 걸어가고(1), 물가에 닿으면 그 자리에서 잠든 채 서 있다(2).
+    const nightStep = this.mapId === 'ferry-village' ? ferryNightStep(this.quests) : undefined;
+    const sleeper = this.npcs.find(npc => npc.def.id === 'fog-innkeeper');
+    if (sleeper && nightStep === 1) sleeper.startSleepwalk(FERRY_SLEEPWALK_PATH);
+    if (sleeper && nightStep === 2) sleeper.startSleepwalk([FERRY_RIVERBANK]);
     if (this.previewNpcGroup === 'innkeeper' && new URLSearchParams(location.search).get('sleepwalk') === '1') {
       const innkeeper = this.npcs[0];
       innkeeper.startSleepwalk([{ x: innkeeper.x + 260, y: innkeeper.y + 65 }]);
@@ -1252,7 +1355,9 @@ export class GameScene extends Phaser.Scene {
     if (action === 'joan-cocoon' || action === 'joan-awaken') {
       this.npcs.find(npc => npc.def.id === 'joan')?.setStoryAction(action === 'joan-cocoon' ? 'cocoon' : 'awaken');
     }
-    this.interactables = [...this.map.interactables, ...this.npcs.map((npc) => npc.spot),
+    this.interactables = [...this.map.interactables,
+      // 안개 환영을 물리치기 전에는 잠든 여관 주인에게 말을 걸 수 없다(깨우는 것은 물가에서).
+      ...this.npcs.filter(npc => !(nightStep === 1 && npc.def.id === 'fog-innkeeper')).map((npc) => npc.spot),
       // 시온의 집 침대 앞: 쉬기 (저장)
       ...(this.mapId === 'in-home' ? [{ ...HOME_BED_SPOT }] : []),
       // 치유소 침대 옆: 치료받기 (저장하지 않음)
@@ -1261,8 +1366,9 @@ export class GameScene extends Phaser.Scene {
       if (!spot.enter) continue;
       // 문 위의 퀘스트 표시: 진행 중 실내 인원이 바뀌어도(예: 습격 step 5 치유소 에일라) refreshQuests에서 갱신한다.
       const to = spot.enter.to;
-      if (!isMapId(to) || !MAPS[to].interior) continue;
-      const inside = chapterNpcs(MAPS[to].npcs, this.quests, to).map((n) => n.id);
+      if (!isMapId(to) || !(MAPS[to].interior || MAPS[to].indoorThreshold)) continue;
+      const inside = MAPS[to].interior ? chapterNpcs(MAPS[to].npcs, this.quests, to).map((n) => n.id)
+        : chapterTwoNpcs(this.quests, to).map((n) => n.id);
       const text = this.add.text(spot.x, spot.y - 150, '', {
         fontFamily: 'system-ui, sans-serif', fontSize: '40px', fontStyle: 'bold', color: '#ffd23f', stroke: '#1a1008', strokeThickness: 7,
       }).setOrigin(0.5, 1).setDepth(DEPTH_LIGHTING + 2).setResolution(2).setVisible(false);
@@ -1352,25 +1458,25 @@ export class GameScene extends Phaser.Scene {
    * 습격의 밤이 끝나고 다음 날 아침으로 넘어가는 전환:
    * 완료 보상 팝업이 잠시 보인 뒤 화면이 스르르 어두워지고, "습격 다음 날 아침" 자막을 띄운 뒤 밝은 광장으로 이어진다.
    */
-  private transitionToMorning(at: Point): void {
+  private transitionToMorning(at: Point, map: MapId = 'village', text = { title: '습격 다음 날 아침', sub: '로웬 마을 광장' }): void {
     this.traveling = true;
     this.clearAttackInput();
     this.player.setMotion(false);
     this.attackButton.setVisible(false);
     this.hideTalkMarker();
     const data: SceneData = {
-      map: 'village', at, hp: this.player.hp, herb: this.herb, mp: this.mp,
+      map, at, hp: this.player.hp, herb: this.herb, mp: this.mp,
       resonance: Math.max(0, this.resonanceUntil - this.now), fadeInMs: 700,
     };
     this.time.delayedCall(650, () => {
       if (!this.scene.isActive()) return;
       const w = this.scale.gameSize.width, h = VIEW_HEIGHT;
       const veil = this.add.rectangle(0, 0, w, h, 0x05080f, 1).setOrigin(0).setScrollFactor(0).setDepth(DEPTH_UI + 90).setAlpha(0);
-      const title = this.add.text(w / 2, h * 0.44, '습격 다음 날 아침', {
+      const title = this.add.text(w / 2, h * 0.44, text.title, {
         fontFamily: 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
         fontSize: '42px', fontStyle: 'bold', color: '#f6e7c4', stroke: '#0c1218', strokeThickness: 5,
       }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH_UI + 91).setAlpha(0).setResolution(2);
-      const sub = this.add.text(w / 2, h * 0.54, '로웬 마을 광장', {
+      const sub = this.add.text(w / 2, h * 0.54, text.sub, {
         fontFamily: 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
         fontSize: '23px', color: '#c8d6cc',
       }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH_UI + 91).setAlpha(0).setResolution(2);
@@ -1557,12 +1663,21 @@ export class GameScene extends Phaser.Scene {
     this.guideCard?.layout(width);
     this.drawChapterShade(width);
     this.festivalStage?.layout(width);
+    this.nightBellStage?.layout(width);
     this.pauseMenu.layout(width);
   }
 
   private drawChapterShade(width: number): void {
     const raid = chapterPhase(this.quests) === 'raid';
     const dusk = isDusk(this.quests) && !this.map.interior;
+    // 종소리의 밤(퀘스트 6): 나루와 여관 안이 어둡다.
+    const ferryDark = ferryNight(this.quests) && (this.mapId === 'ferry-village' || this.mapId === FERRY_INN);
+    if (ferryDark) {
+      this.chapterShade ??= this.add.graphics().setScrollFactor(0).setDepth(DEPTH_LIGHTING);
+      const indoor = this.mapId === FERRY_INN;
+      this.chapterShade.clear().fillStyle(indoor ? 0x101830 : 0x0e1a30, indoor ? 0.34 : 0.5).fillRect(0, 0, width, VIEW_HEIGHT);
+      return;
+    }
     if (!raid && !dusk) {
       this.chapterShade?.destroy();
       this.chapterShade = undefined;
@@ -2479,7 +2594,9 @@ export class GameScene extends Phaser.Scene {
     const beforePhase = chapterPhase(this.quests);
     const player = this.player;
     // 말을 건 사람만 걷던 것을 멈추고 이쪽을 본다.
-    this.npcs.find(npc => npc.spot === target)?.talkedTo(this.now, player);
+    // 종소리의 밤 물가의 여관 주인은 대화 뒤 연출(story/nightBell.ts)이 깨운다. 대사 동안에는 잠든 채 안개 위에 발을 올리고 있다.
+    const talked = this.npcs.find(npc => npc.spot === target);
+    if (!(talked?.sleepwalking && ferryNightStep(this.quests) === 2)) talked?.talkedTo(this.now, player);
     this.hud.dismissHint();
     this.clearAttackInput();
     player.setMotion(false, target.x - player.x);
@@ -2505,11 +2622,19 @@ export class GameScene extends Phaser.Scene {
       if (quest?.stepDone?.rewardSkill) this.learnSkill(quest.stepDone.rewardSkill);
       // 그 자리에서 하룻밤을 보내는 단계(고개의 쉼터): 화면이 어두워졌다 밝아지며 쉰다.
       if (quest?.stepDone?.night) this.spendNight('shelter');
+      // 퀘스트 6: 방을 얻으면 여관의 밤, 물가에서 깨우면 깨어나는 연출
+      if (quest?.stepDone?.cutscene === 'night-bell') this.startNightBell();
+      if (quest?.stepDone?.cutscene === 'river-wake') this.startRiverWake();
       if (quest?.completed) {
         this.hud.showCallout(`퀘스트 완료: ${quest.completed.title}${quest.next ? ` → ${quest.next.title}` : ''}`);
         this.gainXp(quest.completed.rewardXp, player.x, player.y - 185);
         this.giveRewards(quest.completed.rewardGold ?? 0, quest.completed.rewardItems ?? [], quest.completed.rewardGear ?? []);
         if (quest.completed.rewardSkill) this.learnSkill(quest.completed.rewardSkill);
+        // 종소리의 밤이 끝나면 여관에서 아침을 맞는다.
+        if (quest.completed.id === 'night-bell') {
+          this.applyRest('ferry-inn');
+          this.transitionToMorning(REST_POINTS['ferry-inn'].at, FERRY_INN, NIGHT_BELL_MORNING);
+        }
       } else if (quest?.accepted) {
         this.hud.showCallout(`새 퀘스트: ${quest.accepted.title}`);
       } else if (quest?.progressed) {
@@ -2748,6 +2873,7 @@ export class GameScene extends Phaser.Scene {
   private refreshQuests(): void {
     if (this.player) this.syncRaidEnemies();
     this.drawChapterShade(this.scale.gameSize.width);
+    this.syncFerryNight();
     this.ensureTutorialPracticeState();
     this.interactables = this.interactables.filter(spot => !spot.id.startsWith('story-'));
     for (const marker of this.storyMarkers) marker.destroy();
@@ -2773,7 +2899,7 @@ export class GameScene extends Phaser.Scene {
       this.syncDefenderRecovery(npc);
       const recovery = npc.def.id === 'linea' ? lineaRecovery(this.quests) : undefined;
       if (recovery && npc.currentStoryAction !== recovery) npc.setStoryAction(recovery);
-      npc.setQuestMarker(this.playFestival || !chapterCanTalk(npc.def.id, this.quests) ? undefined : markerFor(npc.def.id, this.quests));
+      npc.setQuestMarker(this.playFestival || this.opening || !chapterCanTalk(npc.def.id, this.quests) ? undefined : markerFor(npc.def.id, this.quests));
     }
     for (const door of this.doorMarkers) {
       const to = door.spot.enter?.to;

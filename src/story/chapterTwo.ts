@@ -35,34 +35,94 @@ export const FERN: NpcDef = {
 };
 
 /**
- * 물안개 나루의 사람들 (퀘스트 5 "멈춘 나루"부터). 걷기 그림이 없는 사람도 있어 모두 제자리에 서서 말을 건다.
- * 에반은 아래 잔교 곁 강가 바위에서 강만 보고, 마르타는 대장간 앞, 여관 주인과 아들 핀은 여관 앞,
- * 모르간은 우물가에서 쌀과 등불을 나눠 준다. 서로의 대화 자리는 대화가 닿는 거리(110px)의 두 배보다 멀리 둔다.
+ * 물안개 나루의 사람들 (퀘스트 5 "멈춘 나루"부터). 바깥 사람들은 제자리에 서서 말을 건다.
+ * 에반은 아래 잔교 곁 강가 바위에서 강만 보고, 마르타는 대장간 앞, 모르간은 우물가에서 쌀과 등불을 나눠 준다.
+ * 서로의 대화 자리는 대화가 닿는 거리(110px)의 두 배보다 멀리 둔다.
  */
-export const FERRY_PEOPLE: NpcDef[] = [
+export const FERRY_OUTSIDE_PEOPLE: NpcDef[] = [
   { id: 'evan', name: '에반', role: '나루의 사공', x: 3060, y: 2480, height: 148, dialogue: 'npc-evan', facing: 'right' },
   { id: 'marta', name: '마르타', role: '대장장이', x: 1170, y: 1470, height: 138, dialogue: 'npc-marta', facing: 'down' },
-  { id: 'fog-innkeeper', name: '여관 주인', role: '핀의 아버지', x: 2050, y: 1310, height: 148, dialogue: 'npc-fog-innkeeper', facing: 'down' },
-  { id: 'finn', name: '핀', role: '여관의 소년', x: 2330, y: 1350, height: 116, dialogue: 'npc-finn', facing: 'down-left' },
   { id: 'morgan', name: '모르간', role: '나루의 후원자', x: 1720, y: 1660, height: 150, dialogue: 'npc-morgan', facing: 'right' },
 ];
+
+/**
+ * 나루 여관(in-ferry-inn, 실내 원화의 픽셀 좌표) 안의 여관 주인과 아들 핀.
+ * 여관 주인은 술병 선반과 카운터 사이에 서서 카운터 앞에서 말을 받고(카운터가 다리를 가린다),
+ * 핀은 오른쪽 난로 곁 탁자 옆에 서 있다.
+ */
+export const FERRY_INN_PEOPLE: NpcDef[] = [
+  { id: 'fog-innkeeper', name: '여관 주인', role: '핀의 아버지', x: 300, y: 470, height: 148, dialogue: 'npc-fog-innkeeper', facing: 'down', talkOffset: 110 },
+  { id: 'finn', name: '핀', role: '여관의 소년', x: 1200, y: 610, height: 116, dialogue: 'npc-finn', facing: 'down-left' },
+];
+
+export const FERRY_PEOPLE: NpcDef[] = [...FERRY_OUTSIDE_PEOPLE, ...FERRY_INN_PEOPLE];
+export const FERRY_INN: MapId = 'in-ferry-inn';
 
 /** 나루에 도착할 때가 됐는지: 퀘스트 5 "멈춘 나루"를 받았다(고개의 쉼터를 끝냈다) */
 export function ferryOpen(state: QuestState): boolean {
   return !!state['still-ferry'];
 }
 
-/** 2장에 더하는 사람들: 로웬 광장의 페른, 물안개 나루 사람들 */
+/**
+ * 퀘스트 6 "밤의 종소리"의 밤 (여관에서 잠든 뒤부터 핀을 달랠 때까지). 단계 번호를 돌려준다.
+ *  1: 잠든 여관 주인이 강으로 걸어가고, 시온이 길을 막는 안개 환영과 싸운다
+ *  2: 여관 주인이 물가에서 안개 길에 발을 올리려 한다 (말을 걸어 깨운다)
+ *  3: 깨어난 아버지를 핀이 끌어안고 운다 (핀을 달랜다)
+ */
+export function ferryNightStep(state: QuestState): number | undefined {
+  const progress = state['night-bell'];
+  if (progress?.status !== 'active' || !progress.step) return undefined;
+  return progress.step;
+}
+
+export function ferryNight(state: QuestState): boolean {
+  return ferryNightStep(state) !== undefined;
+}
+
+/** 여관 문 앞(바깥): 여관 주인이 잠든 채 나서는 자리, 핀이 아버지를 부르며 서 있는 자리 */
+export const FERRY_INN_DOOR = { x: 2160, y: 1372 };
+/**
+ * 물가: 방앗간 아래, 아래 잔교 바로 위의 풀밭 강둑 끝. 여관 주인이 멈춰 서고, 그 앞 강 위로 안개가 길처럼 깔린다.
+ * 방앗간 그림의 아래 끝(1870)보다 앞이라 지붕에 가려지지 않는다. 잠든 걸음은 벽을 넘지 않으므로 방앗간 서쪽으로 돌아간다.
+ */
+export const FERRY_RIVERBANK = { x: 3040, y: 1985 };
+export const FERRY_SLEEPWALK_PATH = [{ x: 2420, y: 1500 }, { x: 2600, y: 1930 }, FERRY_RIVERBANK];
+/** 안개 길: 강둑 끝에서 동쪽 강 위로 뻗는다 (그림 효과, 발 디딜 곳이 아니다) */
+export const FERRY_FOG_PATH = { x: FERRY_RIVERBANK.x + 70, y: FERRY_RIVERBANK.y - 8, length: 560 };
+/** 길을 막는 안개 환영 셋 (퀘스트 6) */
+export const FERRY_NIGHT_PHANTOMS = [{ x: 2470, y: 1690 }, { x: 2700, y: 1960 }, { x: 2880, y: 2000 }];
+export const FERRY_NIGHT_LEVEL = 11;
+
+/** 2장에 더하는 사람들: 로웬 광장의 페른, 물안개 나루 사람들 (밤에는 여관 주인과 핀만 밖에 있다) */
 export function chapterTwoNpcs(state: QuestState, map: MapId): NpcDef[] {
   if (!chapterTwoStarted(state)) return [];
   if (map === 'village') return [{ ...FERN }];
-  if (map === 'ferry-village' && ferryOpen(state)) return FERRY_PEOPLE.map(n => ({ ...n }));
+  if (!ferryOpen(state)) return [];
+  const night = ferryNightStep(state);
+  if (night !== undefined) {
+    if (map !== 'ferry-village') return [];
+    const [innkeeper, finn] = FERRY_INN_PEOPLE;
+    // 핀은 여관 문 앞에서 아버지를 부르다가, 아버지가 깨어나면 물가로 달려와 끌어안는다(그림에 아버지도 함께 있다).
+    if (night === 3) return [{ ...finn, ...FERRY_RIVERBANK, facing: 'down', storyAction: 'hug-father', role: '여관의 소년' }];
+    return [
+      { ...innkeeper, ...(night === 1 ? FERRY_INN_DOOR : FERRY_RIVERBANK), facing: 'right', talkOffset: 0 },
+      { ...finn, x: FERRY_INN_DOOR.x - 150, y: FERRY_INN_DOOR.y + 20, facing: 'right', storyAction: 'warn-father' },
+    ];
+  }
+  if (map === 'ferry-village') return FERRY_OUTSIDE_PEOPLE.map(n => ({ ...n }));
+  if (map === FERRY_INN) return FERRY_INN_PEOPLE.map(n => ({ ...n }));
   return [];
 }
 
-/** 나루 여관에서 쉬어 갈 수 있는지: 나루에 온 뒤 여관 주인에게 말하면 묻는다 */
+/** 퀘스트 6의 밤에 나루에 나오는 안개 환영 (여관 주인을 쫓는 동안만) */
+export function ferryNightSpawns(state: QuestState, map: MapId): Array<{ key: 'mist-phantom'; x: number; y: number }> {
+  if (map !== 'ferry-village' || ferryNightStep(state) !== 1) return [];
+  return FERRY_NIGHT_PHANTOMS.map(p => ({ key: 'mist-phantom', ...p }));
+}
+
+/** 나루 여관에서 쉬어 갈 수 있는지: 나루에 온 뒤 여관 주인에게 말하면 묻는다 (종소리의 밤은 빼고) */
 export function ferryInnRestOpen(state: QuestState): boolean {
-  return ferryOpen(state);
+  return ferryOpen(state) && !ferryNight(state);
 }
 
 /** 수레가 광장에 있는지 */
@@ -101,6 +161,16 @@ export function eastPassBlockedDialogue(state: QuestState): DialogueLine[] {
  */
 export function chapterTwoDialogue(npc: NpcId, state: QuestState): DialogueLine[] | undefined {
   if (state['fern-cart']?.status !== 'done') return undefined;
+  // 종소리의 밤: 여관 문 앞의 핀은 아버지를 따라가 달라고 한다.
+  const night = ferryNightStep(state);
+  if (npc === 'finn' && (night === 1 || night === 2)) {
+    return [{ speaker: '핀', portrait: 'finn', text: night === 1
+      ? '형, 아빠를 따라가 줘! 안개 속에 뭔가 있어. 나는… 다리가 안 움직여.'
+      : '아빠가 물가에 서 있어! 형, 빨리 깨워 줘!' }];
+  }
+  if (npc === 'finn' && state['still-ferry']?.status === 'done' && state['night-bell']?.status === 'active' && !night) {
+    return [{ speaker: '핀', portrait: 'finn', text: '형, 아빠한테 방 달라고 해. 그리고 귀 꼭 막아.' }];
+  }
   const departed = state.farewell?.status === 'done';
   const lines: Partial<Record<NpcId, DialogueLine[]>> = {
     vernel: [{ speaker: '베르넬', portrait: 'vernel', text: '유적 길을 다 치우려면 한참 걸려. 네가 돌아올 때쯤엔 들어갈 수 있게 해 둘게.' }],
