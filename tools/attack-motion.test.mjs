@@ -14,6 +14,7 @@ const perspData = JSON.parse(readFileSync(new URL('../src/assets/hero/weapons/pe
 const backSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-back_frames.json`, import.meta.url))).frames;
 const frontSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-front_frames.json`, import.meta.url))).frames;
 const downDiagSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-down-diag_frames.json`, import.meta.url))).frames;
+const upDiagSix = (stage) => JSON.parse(readFileSync(new URL(`../src/assets/hero/academy/attack-six/attack${stage}-up-diag_frames.json`, import.meta.url))).frames;
 
 test('공격은 8방향 모두 그대로 유지하고 정면·앞대각선은 신규 시트를 선택한다', () => {
   for (const facing of EIGHT_DIRS) {
@@ -31,6 +32,9 @@ test('공격은 8방향 모두 그대로 유지하고 정면·앞대각선은 �
     const diagonalFrame = `attack${stage ? stage + 1 : ''}-down-diag6-3`;
     assert.equal(heroFrame(`attack${stage + 1}`, 'down-right', t), diagonalFrame);
     assert.equal(heroFrame(`attack${stage + 1}`, 'down-left', t), diagonalFrame);
+    const upDiagonalFrame = `attack${stage ? stage + 1 : ''}-up-diag6-3`;
+    assert.equal(heroFrame(`attack${stage + 1}`, 'up-right', t), upDiagonalFrame);
+    assert.equal(heroFrame(`attack${stage + 1}`, 'up-left', t), upDiagonalFrame);
   }
 });
 
@@ -167,6 +171,39 @@ test('앞대각선 1·2·3타는 여섯 자세의 검 방향과 길이를 유지
         assert.equal(heroFrame(`attack${stage + 1}`, facing, at[i]), frame.name);
       }
     }
+  }
+});
+
+test('위대각선 1·2·3타는 여섯 자세의 검 방향과 길이를 유지한다', () => {
+  // 칸마다 칼끝이 향하는 화면 시계 방향과, 그 자세가 보이는 시각(타격 뒤 멈춤만큼 늦어진 마지막 자세 포함)
+  const poses = [
+    { hours: [1.5, 12, 7.5, 1.75, 3.5, 4], at: [0, 40, 110, 200, 280, 440] },
+    { hours: [4, 7.5, 5, 2, 12.5, 2.5], at: [0, 25, 65, 105, 170, 340] },
+    { hours: [2.5, 1.5, 1.5, 1.5, 1.5, 1.5], at: [0, 40, 100, 170, 245, 450] },
+  ];
+  for (const [stage, { hours, at }] of poses.entries()) {
+    const frames = upDiagSix(stage + 1);
+    assert.equal(frames.length, hours.length);
+    for (const [i, frame] of frames.entries()) {
+      const { base, tip } = frame.blade;
+      const dx = tip.x - base.x, dy = tip.y - base.y;
+      assert.ok(Math.abs(Math.hypot(dx, dy) - 135 * 304 / 310) < 0.02, frame.name);
+      const direction = (hours[i] - 3) * Math.PI / 6;
+      assert.ok((dx * Math.cos(direction) + dy * Math.sin(direction)) / Math.hypot(dx, dy) >= Math.cos(Math.PI / 12), frame.name);
+      assert.ok(frame.gripCover, `${frame.name} 주먹이 손잡이를 가린다`);
+      for (const facing of ['up-right', 'up-left']) {
+        assert.equal(heroFrame(`attack${stage + 1}`, facing, at[i]), frame.name);
+      }
+    }
+  }
+});
+
+test('위대각선 콤보는 앞 공격의 끝과 다음 공격의 시작이 같은 검 위치를 쓴다', () => {
+  const relative = (frame) => [frame.blade.base, frame.blade.tip]
+    .flatMap(p => [Math.round(p.x - frame.originX * frame.w), Math.round(p.y - frame.originY * frame.h)]);
+  for (const [from, to] of [[1, 2], [2, 3], [3, 1]]) {
+    const end = upDiagSix(from).at(-1), start = upDiagSix(to)[0];
+    relative(end).forEach((v, i) => assert.ok(Math.abs(v - relative(start)[i]) <= 3, `${from}타 끝 → ${to}타 시작 ${i}: ${v} vs ${relative(start)[i]}`));
   }
 });
 

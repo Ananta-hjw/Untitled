@@ -73,11 +73,19 @@ const DOWN_DIAG_SIX = {
   attack3: { frame: 'attack3-down-diag6', starts: SIDE_SIX.attack3.starts },
 } as const;
 
+/** 위대각선(위 왼쪽·오른쪽, 뒷모습 3/4) 6자세: 같은 공격 구성이라 자세 시각도 옆모습과 같다. */
+const UP_DIAG_SIX = {
+  attack1: { frame: 'attack-up-diag6', starts: SIDE_SIX.attack1.starts },
+  attack2: { frame: 'attack2-up-diag6', starts: SIDE_SIX.attack2.starts },
+  attack3: { frame: 'attack3-up-diag6', starts: SIDE_SIX.attack3.starts },
+} as const;
+
 function sixPoseAttack(action: HeroAction, facing: Facing) {
   if (action === 'idle' || action === 'walk' || action === 'dodge') return undefined;
   if (facing === 'right' || facing === 'left') return SIDE_SIX[action];
   if (facing === 'up') return BACK_SIX[action];
   if (facing === 'down-right' || facing === 'down-left') return DOWN_DIAG_SIX[action];
+  if (facing === 'up-right' || facing === 'up-left') return UP_DIAG_SIX[action];
   return facing === 'down' ? FRONT_SIX[action] : undefined;
 }
 

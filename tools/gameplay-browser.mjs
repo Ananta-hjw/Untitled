@@ -765,22 +765,20 @@ test('8방향의 모든 콤보는 20·30·60·120fps에서 가까운 앞쪽만 �
   assert.equal(result.length, 192);
   for (const run of result) {
     assert.deepEqual(run.hits, [1, 0, 0, 0], JSON.stringify(run));
-    const downDiag = run.facing === 'down-right' || run.facing === 'down-left';
-    const downDiagSix = downDiag;
+    const downDiagSix = run.facing === 'down-right' || run.facing === 'down-left';
+    const upDiagSix = run.facing === 'up-right' || run.facing === 'up-left';
     const sideSix = run.facing === 'right' || run.facing === 'left';
     const frontSix = run.facing === 'down';
     const backSix = run.facing === 'up';
-    const six = sideSix || frontSix || backSix || downDiagSix;
-    const texture = six
-      ? `hero-academy-attack${run.stage ? run.stage + 1 : ''}-${sideSix ? 'side' : frontSix ? 'front' : backSix ? 'back' : 'down-diag'}6`
-      : downDiag ? 'hero-academy-attack-corrections' : 'hero-academy-attack-up';
-    assert.equal(run.texture, texture);
+    // 8방향 모두 6자세 원화를 쓴다
+    const view = sideSix ? 'side' : frontSix ? 'front' : backSix ? 'back' : downDiagSix ? 'down-diag' : 'up-diag';
+    assert.equal(run.texture, `hero-academy-attack${run.stage ? run.stage + 1 : ''}-${view}6`);
     assert.ok(run.fx, JSON.stringify(run));
-    assert.equal(Number(run.fx.frame.slice(run.fx.frame.lastIndexOf('-') + 1)) % (six ? 6 : 4), six ? 3 : 2, '검기는 타격 자세부터 나온다: ' + JSON.stringify(run));
+    assert.equal(Number(run.fx.frame.slice(run.fx.frame.lastIndexOf('-') + 1)), 3, '검기는 타격 자세부터 나온다: ' + JSON.stringify(run));
     assert.ok(run.samples >= 2, JSON.stringify(run));
     assert.ok(run.maxTrailError < 1e-6, JSON.stringify(run));
     if (run.stage !== 2) assert.ok(run.longestPath > run.fx.pathSize, '베기 궤적이 점차 드러난다: ' + JSON.stringify(run));
-    if ((sideSix || frontSix || downDiagSix) && run.fps >= 30) assert.equal(run.followThrough, true, '마무리 자세까지 검기를 갱신한다: ' + JSON.stringify(run));
+    if ((sideSix || frontSix || downDiagSix || upDiagSix) && run.fps >= 30) assert.equal(run.followThrough, true, '마무리 자세까지 검기를 갱신한다: ' + JSON.stringify(run));
     if (sideSix && run.stage < 2) {
       assert.ok(run.maxFinishTurn < Math.PI / 4, '좌우 베기 검기의 접합부가 꺾이지 않는다: ' + JSON.stringify(run));
       assert.ok(run.maxFinishGap < 1e-6, '올려 베기 검기가 사라질 때 칼끝에서 떨어지지 않는다: ' + JSON.stringify(run));
@@ -894,7 +892,7 @@ test('마지막 대각선과 자동 조준을 사용하고 공격 도중 반대 
     s.startAttack(2000, 0, 0);
     return { before, after, aimed: hero.image.texture.key, direction: s.attackTrace.direction };
   })()`);
-  assert.ok(result.before.frame.startsWith('attack-up-'));
+  assert.ok(result.before.frame.startsWith('attack-up-diag6-'));
   assert.ok(result.before.scale < 0);
   assert.deepEqual(result.after, result.before);
   assert.equal(result.aimed, 'hero-academy-attack-down-diag6');

@@ -37,6 +37,12 @@ import attack2DownDiagSixData from '../assets/hero/academy/attack-six/attack2-do
 import attack2DownDiagSixSheet from '../assets/hero/academy/attack-six/attack2-down-diag.webp?url';
 import attack3DownDiagSixData from '../assets/hero/academy/attack-six/attack3-down-diag_frames.json';
 import attack3DownDiagSixSheet from '../assets/hero/academy/attack-six/attack3-down-diag.webp?url';
+import attack1UpDiagSixData from '../assets/hero/academy/attack-six/attack1-up-diag_frames.json';
+import attack1UpDiagSixSheet from '../assets/hero/academy/attack-six/attack1-up-diag.webp?url';
+import attack2UpDiagSixData from '../assets/hero/academy/attack-six/attack2-up-diag_frames.json';
+import attack2UpDiagSixSheet from '../assets/hero/academy/attack-six/attack2-up-diag.webp?url';
+import attack3UpDiagSixData from '../assets/hero/academy/attack-six/attack3-up-diag_frames.json';
+import attack3UpDiagSixSheet from '../assets/hero/academy/attack-six/attack3-up-diag.webp?url';
 import { isAttackFollowPause } from './attackTiming';
 import walkSheet from '../assets/hero/academy/unarmed/player_walk.webp?url';
 import combatSheet from '../assets/hero/academy/unarmed/player_combat.webp?url';
@@ -84,6 +90,9 @@ const FRAMES = new Map<string, SpriteFrame>([
   ...attack1DownDiagSixData.frames,
   ...attack2DownDiagSixData.frames,
   ...attack3DownDiagSixData.frames,
+  ...attack1UpDiagSixData.frames,
+  ...attack2UpDiagSixData.frames,
+  ...attack3UpDiagSixData.frames,
 ].map((f) => [f.name, f]));
 
 export function preloadHeroSprite(scene: Phaser.Scene): void {
@@ -100,6 +109,9 @@ export function preloadHeroSprite(scene: Phaser.Scene): void {
   if (!scene.textures.exists('hero-academy-attack-down-diag6')) scene.load.image('hero-academy-attack-down-diag6', attack1DownDiagSixSheet);
   if (!scene.textures.exists('hero-academy-attack2-down-diag6')) scene.load.image('hero-academy-attack2-down-diag6', attack2DownDiagSixSheet);
   if (!scene.textures.exists('hero-academy-attack3-down-diag6')) scene.load.image('hero-academy-attack3-down-diag6', attack3DownDiagSixSheet);
+  if (!scene.textures.exists('hero-academy-attack-up-diag6')) scene.load.image('hero-academy-attack-up-diag6', attack1UpDiagSixSheet);
+  if (!scene.textures.exists('hero-academy-attack2-up-diag6')) scene.load.image('hero-academy-attack2-up-diag6', attack2UpDiagSixSheet);
+  if (!scene.textures.exists('hero-academy-attack3-up-diag6')) scene.load.image('hero-academy-attack3-up-diag6', attack3UpDiagSixSheet);
   if (!scene.textures.exists('hero-academy-attack-corrections')) scene.load.image('hero-academy-attack-corrections', attackCorrectionsSheet);
   if (!scene.textures.exists('hero-weapons')) scene.load.image('hero-weapons', weaponSheet);
   if (!scene.textures.exists('hero-weapons-perspective')) scene.load.image('hero-weapons-perspective', perspectiveSheet);
