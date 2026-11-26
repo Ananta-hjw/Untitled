@@ -1,0 +1,40 @@
+{
+  "frames": [
+    {
+      "name": "burrow-ready",
+      "x": 0,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.828125
+    },
+    {
+      "name": "burrow-sink",
+      "x": 512,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.828125
+    },
+    {
+      "name": "burrow-submerge",
+      "x": 1024,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.828125
+    },
+    {
+      "name": "burrow-hidden",
+      "x": 1536,
+      "y": 0,
+      "w": 512,
+      "h": 384,
+      "originX": 0.5,
+      "originY": 0.828125
+    }
+  ]
+}
