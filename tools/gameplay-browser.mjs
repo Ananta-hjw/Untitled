@@ -2299,9 +2299,11 @@ test('일시정지에서 정보와 가방을 터치로 열고, 다음 가방 페
     const s = window.__game.scene.getScene('game'), panel = s.characterPanel;
     // 둘째 쪽에는 첫 쪽에 다 못 넣은 나머지(아이템·장비 전체 - 한 쪽 칸 수)가 나온다
     const total = Object.keys(s.inventory.items).length + Object.keys(s.character.gear.bag).length;
-    return { page: panel.pageLabel.text, entries: panel.cells.filter(c => c.shown).length, rest: total - panel.cells.length, frozen: s.now === ${before} };
+    const per = panel.cells.length;
+    return { page: panel.pageLabel.text, entries: panel.cells.filter(c => c.shown).length, rest: Math.min(per, total - per),
+      pages: Math.ceil(total / per), frozen: s.now === ${before} };
   })()`);
-  assert.equal(page.page, '2 / 2');
+  assert.equal(page.page, `2 / ${page.pages}`);
   assert.equal(page.frozen, true);
   assert.ok(page.entries > 0 && page.entries === page.rest, JSON.stringify(page));
   await tap('characterPanel.cellNames[0]');
