@@ -21,7 +21,9 @@ export type QuestId = 'ruan-training' | 'ruan-dodge' | 'ruan-parry' | 'ruan-fiel
   | 'watch-report' | 'festival-supplies' | 'sia-knot' | 'harvest-help' | 'evening-patrol' | 'moth-trail'
   | 'festival-eve' | 'village-raid' | 'missing-sia' | 'sealed-letter' | 'first-sword'
   // 2장 (docs/story-chapter2.md, story/chapterTwo.ts)
-  | 'fern-cart' | 'farewell' | 'mountain-pass' | 'pass-shelter' | 'still-ferry' | 'night-bell';
+  | 'fern-cart' | 'farewell' | 'mountain-pass' | 'pass-shelter' | 'still-ferry' | 'night-bell'
+  // 2장 서브 퀘스트 1~3 (docs/story-chapter2.md "서브 퀘스트 초안")
+  | 'linea-ink' | 'fern-cover' | 'dor-herbs';
 
 /** 게임에서 일어나서 퀘스트 목표를 채우는 일 */
 export type QuestEvent =
@@ -38,7 +40,8 @@ export type QuestEvent =
 /** 살펴보기 지점 (story/chapterOne.ts의 SPOTS) */
 export type InspectSpot =
   | 'south-watch' | 'home-search' | 'moth-nest' | 'north-alley' | 'pass-summit' | 'ferry-forge' | 'reed-kite'
-  | 'wildflower' | 'stream-pebble' | 'ancient-tablet' | 'silver-herb-1' | 'silver-herb-2' | 'silver-herb-3' | 'clear-water';
+  | 'wildflower' | 'stream-pebble' | 'ancient-tablet' | 'silver-herb-1' | 'silver-herb-2' | 'silver-herb-3' | 'clear-water'
+  | 'pass-herb-1' | 'pass-herb-2' | 'pass-herb-3' | 'pass-herb-4' | 'pass-herb-5';
 
 export interface QuestObjective {
   /** 추적 표시에 나오는 글 (예: "남쪽 들판의 슬라임") */
@@ -501,7 +504,7 @@ export const QUESTS: QuestDef[] = [
       { label: '대장간의 마르타 돕기', need: 1, event: 'talk', npc: 'marta', lines: [
         marta('여관에서 보냈느냐? 마침 잘 왔다. 이 늙은 팔로는 풀무를 오래 못 밟아.'),
         marta('화덕 옆 풀무를 좀 밟아 다오. 불이 죽지 않을 만큼만.')] },
-      { label: '대장간 화덕의 풀무 밟기', need: 1, event: 'inspect', map: 'ferry-village', spot: 'ferry-forge' },
+      { label: '대장간 화덕의 풀무 밟기', need: 1, event: 'inspect', map: 'in-ferry-marta-smithy', spot: 'ferry-forge' },
       { label: '마르타에게 벽의 종 그림 묻기', need: 1, event: 'talk', npc: 'marta', lines: [
         hero('벽에 걸린 그림, 커다란 종이던데요.'),
         marta('…우리 집안이 예전에 종을 부었지.'),
@@ -525,7 +528,7 @@ export const QUESTS: QuestDef[] = [
     reminder: [evan('…배는 안 띄운다고 했다. 여관에나 가 봐.')],
     remindersByNpc: {
       'fog-innkeeper': [innkeeper('마르타 할멈과 우리 핀 녀석 일 좀 봐 주게. 밤이 오기 전에.')],
-      marta: [marta('풀무는 화덕 오른쪽이다. 불이 죽지 않게만 밟아 다오.')],
+      marta: [marta('풀무는 저 안쪽 화덕 옆이다. 불이 죽지 않게만 밟아 다오.')],
       finn: [finn('연은 갈대밭 늪에 걸렸어. 마을 남서쪽 길로 내려가!')],
     },
     done: [finn('이 연, 조안 누나가 만들어 준 거야. …누나도 곧 돌아올 거야. 그치?')],
@@ -556,6 +559,72 @@ export const QUESTS: QuestDef[] = [
     done: [
       innkeeper('…어머니가 강 건너 안개 속에서 부르셨어. 십 년 전에 돌아가셨는데.'),
       { speaker: HERO_NAME, portrait: 'hero-neutral', text: '(잠든 사람만 디딜 수 있는 길이 있다. 깨어 있는 사람에게는 그냥 물이다.)' },
+    ],
+  },
+  // ---------------------------------------------------------------- 2장 서브 퀘스트 1~3
+  {
+    // 1. 리네아의 첫 잉크: 떠날 채비에서 리네아를 만난 뒤. 일지를 쓸 잉크와 공책을 메리나에게 받아다 준다.
+    id: 'linea-ink', title: '리네아의 첫 잉크', giver: 'linea', requires: 'fern-cart', completeOnTarget: true,
+    objective: { label: '잡화점의 메리나에게 잉크와 공책 받기', need: 1, event: 'talk', npc: 'merina' },
+    steps: [
+      { label: '잡화점의 메리나에게 잉크와 공책 받기', need: 1, event: 'talk', npc: 'merina', lines: [
+        hero('메리나 아주머니, 리네아가 일지를 쓸 잉크와 공책을 부탁했어요.'),
+        line('merina', '메리나', '리네아가? 몸도 성치 않은데 기특하기도 하지. 제일 좋은 걸로 줄게.'),
+        line('merina', '메리나', '값은 됐어. 다 나으면 가게에 얼굴이나 비추라고 전해 줘.')] },
+      { label: '리네아에게 잉크와 공책 건네기', need: 1, event: 'talk', npc: 'linea', lines: [
+        line('linea', '리네아', '와, 새 공책이다. 잉크 냄새도 좋다.'),
+        line('linea', '리네아', '아픈 동안 매일 어떤지 적어 둘게. 에일라 선생님이 그러면 낫는 걸 빨리 알 수 있대.'),
+        line('linea', '리네아', '…그리고 이건 시온 거. 공책 뒤에서 몇 장 떼었어. 가는 곳마다 한 장씩 편지 써 줘.'),
+        hero('편지라니. …알았어. 꼭 쓸게.')] },
+    ],
+    rewardXp: 30, rewardGold: 20, rewardItems: [{ id: 'linea-letter-paper', count: 1 }],
+    offer: [
+      line('linea', '리네아', '시온, 부탁 하나만 해도 돼? 누워만 있으니까 하루가 어떻게 가는지 모르겠어.'),
+      line('linea', '리네아', '일지를 써 보려고. 메리나 아주머니 가게에서 잉크랑 공책 좀 받아다 줄래?'),
+      hero('그 정도야 금방이지. 다녀올게.'),
+    ],
+    reminder: [line('linea', '리네아', '메리나 아주머니 잡화점이야. 잉크는 너무 진하지 않은 걸로!')],
+    done: [line('linea', '리네아', '첫 장에는 오늘 날씨부터 적을래. …맑음, 시온이 잉크를 사 옴.')],
+  },
+  {
+    // 2. 행상인의 짐: 남문의 수레 뒤. 나방에 삭은 수레 덮개를 갈 천을 메리나에게 받아 온다. 끝나면 수레가 고쳐지고 물건이 하나 는다.
+    id: 'fern-cover', title: '행상인의 짐', giver: 'fern', requires: 'fern-cart', completeOnTarget: true,
+    objective: { label: '잡화점의 메리나에게 수레 덮개 천 받기', need: 1, event: 'talk', npc: 'merina' },
+    steps: [
+      { label: '잡화점의 메리나에게 수레 덮개 천 받기', need: 1, event: 'talk', npc: 'merina', lines: [
+        hero('페른 아저씨가 수레 덮개를 갈 천을 찾는데요. 값은 미리 받아 왔어요.'),
+        line('merina', '메리나', '수레 덮개라… 비 안 새는 기름 먹인 천이 한 필 있지. 무거우니 조심해서 들고 가.')] },
+      { label: '페른에게 덮개 천 가져다주기', need: 1, event: 'talk', npc: 'fern', lines: [
+        fern('오, 기름 먹인 천이로군! 이거면 비가 와도 끄떡없겠어.'),
+        { speaker: '남문 안쪽', text: '페른과 함께 삭은 덮개를 걷어 내고 새 천을 팽팽하게 씌웠다. 수레가 몰라보게 말끔해졌다.' },
+        fern('짐이 다 젖을까 봐 남쪽 장터에서 떼어 온 무화과를 못 풀고 있었거든. 이제 진열해야지.')] },
+    ],
+    rewardXp: 35, rewardGold: 25,
+    offer: [
+      fern('나방 놈들이 덮개를 다 갉아 놨어. 이대로 비라도 오면 물건이 다 젖는다니까.'),
+      fern('마을 잡화점에 튼튼한 천이 있을까? 값은 내가 줄 테니 한 필만 받아다 주겠나?'),
+      hero('메리나 아주머니 가게에 가 볼게요.'),
+    ],
+    reminder: [fern('잡화점 메리나 씨에게 기름 먹인 천을 물어보게. 비 안 새는 걸로.')],
+    done: [fern('고맙네! 덕분에 장사를 제대로 하겠어. 말린 무화과도 팔기 시작했으니 길 떠나기 전에 챙겨 가게.')],
+  },
+  {
+    // 3. 쉼터의 약초: 고개의 쉼터 뒤. 고갯길 곳곳의 약초 다섯 포기를 캐 온다. 도르의 약초 주머니는 회복 물약을 조금 더 세게 만든다.
+    id: 'dor-herbs', title: '쉼터의 약초', giver: 'dor', requires: 'pass-shelter',
+    objective: { label: '고갯길의 약초 캐기 (1/5)', need: 1, event: 'inspect', spot: 'pass-herb-1', map: 'east-pass' },
+    steps: ([1, 2, 3, 4, 5] as const).map(i => ({
+      label: `고갯길의 약초 캐기 (${i}/5)`, need: 1, event: 'inspect' as const, spot: `pass-herb-${i}`, map: 'east-pass' as const,
+    })),
+    rewardXp: 40, rewardItems: [{ id: 'potion', count: 3 }, { id: 'dor-herb-pouch', count: 1 }],
+    offer: [
+      dor('쉼터에 약초가 다 떨어졌어. 이 늙은 다리로는 고개 구석구석까지 못 다녀.'),
+      dor('바위 그늘마다 잎이 톱니 같은 약초가 숨어 있지. 다섯 포기만 캐다 주겠나? 뿌리째 말고, 윗잎만.'),
+      hero('윗잎만요. 알겠어요.'),
+    ],
+    reminder: [dor('바위 그늘, 절벽 밑을 보게. 잎이 톱니 같은 게 그거야. 다섯 포기.')],
+    done: [
+      dor('허, 잎을 상하지 않게 잘도 땄구먼. 산사람 다 됐어.'),
+      dor('이건 자네 몫이야. 말린 약초를 채운 주머니지. 물약 마실 때 한 줌 섞으면 훨씬 잘 듣는다네.'),
     ],
   },
   {

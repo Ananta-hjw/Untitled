@@ -198,7 +198,9 @@ test('고개의 쉼터 뒤 "멈춘 나루": 에반 → 여관 → 마르타와 �
   let state = farewell.state;
   assert.deepEqual(state['still-ferry'], { status: 'active', count: 0 });
   // 나루 사람들은 나루에만, 퀘스트를 받은 뒤에만 있다
-  assert.deepEqual(chapterTwoNpcs(state, 'ferry-village').map(n => n.id), ['evan', 'marta', 'morgan']);
+  assert.deepEqual(chapterTwoNpcs(state, 'ferry-village').map(n => n.id), ['evan', 'morgan']);
+  // 마르타는 대장간 안에 있다
+  assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-marta-smithy').map(n => n.id), ['marta']);
   // 여관 주인과 핀은 여관 안에 있다
   assert.deepEqual(chapterTwoNpcs(state, 'in-ferry-inn').map(n => n.id), ['fog-innkeeper', 'finn']);
   assert.deepEqual(chapterTwoNpcs(before, 'ferry-village'), []);
@@ -216,7 +218,7 @@ test('고개의 쉼터 뒤 "멈춘 나루": 에반 → 여관 → 마르타와 �
   talk('fog-innkeeper');
   talk('marta');
   assert.deepEqual(chapterTwoSpots(state, 'reed-swamp'), []);
-  inspect('ferry-forge', 'ferry-village');
+  inspect('ferry-forge', 'in-ferry-marta-smithy');
   assert.ok(CHAPTER_TWO_INSPECTIONS['story-ferry-forge'].some(l => l.text.includes('종')));
   talk('marta');
   talk('finn');
@@ -235,7 +237,7 @@ test('고개의 쉼터 뒤 "멈춘 나루": 에반 → 여관 → 마르타와 �
 test('물안개 나루 사람들은 걸을 수 있는 곳에 따로 서고, 살펴보기·쉬는 자리·늪 출구는 닿을 수 있다', () => {
   const ferry = MAPS['ferry-village'];
   const state = { 'pass-shelter': { status: 'done', count: 1 }, 'still-ferry': { status: 'active', count: 0 } };
-  for (const map of ['ferry-village', 'in-ferry-inn']) {
+  for (const map of ['ferry-village', 'in-ferry-inn', 'in-ferry-marta-smithy']) {
     const people = chapterTwoNpcs(state, map);
     // 대화 자리(카운터 뒤 여관 주인은 카운터 앞)가 걸을 수 있는 곳이다
     const spot = n => ({ x: n.x, y: n.y + (n.talkOffset ?? 0) });
@@ -245,8 +247,8 @@ test('물안개 나루 사람들은 걸을 수 있는 곳에 따로 서고, 살�
       assert.ok(Math.hypot(a.x - b.x, a.y - b.y) > 220, `${people[i].id}·${people[j].id}: 대화 자리가 겹치지 않는다`);
     }
   }
-  for (const [map, spot] of [['ferry-village', 'story-ferry-forge'], ['reed-swamp', 'story-reed-kite']]) {
-    const s = { 'story-ferry-forge': { x: 1420, y: 1430 }, 'story-reed-kite': { x: 1780, y: 1250 } }[spot];
+  for (const [map, spot] of [['in-ferry-marta-smithy', 'story-ferry-forge'], ['reed-swamp', 'story-reed-kite']]) {
+    const s = { 'story-ferry-forge': { x: 340, y: 590 }, 'story-reed-kite': { x: 1780, y: 1250 } }[spot];
     assert.equal(walkable(MAPS[map], s.x, s.y), true, spot);
     assert.equal(findExit(MAPS[map], s.x, s.y), undefined, spot);
   }
@@ -318,4 +320,59 @@ test('종소리의 밤: 잠든 걸음 길·물가·안개 환영 자리는 걸�
   // 핀이 서는 자리와 안개 길: 핀은 문 앞 걸을 수 있는 곳, 안개 길은 강둑 끝에서 물(걸을 수 없는 곳) 위로 뻗는다
   assert.ok(clear(FERRY_INN_DOOR.x - 150, FERRY_INN_DOOR.y + 20));
   assert.equal(walkable(ferry, FERRY_FOG_PATH.x + FERRY_FOG_PATH.length * 0.5, FERRY_FOG_PATH.y), false);
+});
+
+test('2장 서브 퀘스트 1·2: 리네아의 첫 잉크와 행상인의 짐은 메리나를 거쳐 끝나고, 수레가 고쳐지며 페른이 말린 무화과를 판다', async () => {
+  const { fernCartState, fernExtraStock } = await import('../src/story/chapterTwo.ts');
+  const { markerFor } = await import('../src/story/quests.ts');
+  // 남문의 수레를 끝내고 떠날 채비가 시작된 저장
+  let state = talkTo('fern', { ...afterSword, 'fern-cart': { status: 'ready', count: 4, step: 2 } }).state;
+  state = { ...state, 'fern-cart': { status: 'done', count: 1, step: 2 } };
+  assert.equal(fernCartState(state), 'damaged');
+  assert.deepEqual(fernExtraStock(state), []);
+  // 페른과 리네아가 초록 느낌표로 새 의뢰를 준다
+  assert.equal(markerFor('fern', state), 'sub-new');
+  const talk = npc => { const r = talkTo(npc, state); state = r.state; return r; };
+  assert.equal(talk('fern').accepted?.id, 'fern-cover');
+  // 떠날 채비의 리네아 차례에는 메인 대화가 먼저다
+  state = { ...state, farewell: { status: 'active', count: 0, step: 2 } };
+  assert.equal(talk('linea').progressed?.id, 'farewell');
+  assert.equal(talk('linea').accepted?.id, 'linea-ink');
+  // 메리나에게 두 번 말을 걸어 잉크와 천을 받는다
+  const first = talk('merina'), second = talk('merina');
+  assert.deepEqual([first.progressed?.id, second.progressed?.id].sort(), ['fern-cover', 'linea-ink']);
+  const ink = talk('linea');
+  assert.equal(ink.completed?.id, 'linea-ink');
+  assert.ok(ink.completed.rewardItems.some(i => i.id === 'linea-letter-paper'));
+  const cover = talk('fern');
+  assert.equal(cover.completed?.id, 'fern-cover');
+  assert.equal(fernCartState(state), 'repaired');
+  assert.deepEqual(fernExtraStock(state), ['dried-fig']);
+});
+
+test('2장 서브 퀘스트 3 쉼터의 약초: 고개의 쉼터 뒤 도르에게 받고, 고갯길 약초 다섯 포기를 차례로 캐서 도르에게 가져간다', async () => {
+  const { PASS_HERBS } = await import('../src/story/chapterTwo.ts');
+  const shelterDone = Object.fromEntries(QUESTS.slice(0, QUESTS.findIndex(q => q.id === 'pass-shelter') + 1)
+    .filter(q => q.main).map(q => [q.id, { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) }]));
+  let state = continueMainQuest(shelterDone);
+  const accepted = talkTo('dor', state);
+  assert.equal(accepted.accepted?.id, 'dor-herbs');
+  state = accepted.state;
+  const pass = MAPS['east-pass'];
+  const obstacles = [...pass.obstacles, ...propObstacles(pass.props)];
+  for (let i = 1; i <= 5; i++) {
+    // 지금 캘 한 포기만 보인다
+    assert.deepEqual(chapterTwoSpots(state, 'east-pass').map(s => s.id), [`story-pass-herb-${i}`]);
+    assert.ok(CHAPTER_TWO_INSPECTIONS[`story-pass-herb-${i}`]?.length);
+    state = recordEvent(state, { type: 'inspect', spot: `pass-herb-${i}`, map: 'east-pass' }).state;
+  }
+  for (const p of PASS_HERBS) {
+    assert.equal(walkable(pass, p.x, p.y), true, JSON.stringify(p));
+    assert.ok(!obstacles.some(o => insideObstacle(o, p.x, p.y)), JSON.stringify(p));
+    assert.equal(findExit(pass, p.x, p.y), undefined);
+  }
+  assert.equal(state['dor-herbs'].status, 'ready');
+  const done = talkTo('dor', state);
+  assert.equal(done.completed?.id, 'dor-herbs');
+  assert.ok(done.completed.rewardItems.some(i => i.id === 'dor-herb-pouch'));
 });

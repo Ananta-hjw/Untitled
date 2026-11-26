@@ -5,6 +5,7 @@ import type { DialogueLine } from './dialogues.ts';
 import type { Obstacle } from '../world/obstacles.ts';
 import { currentObjective, questDef, type InspectSpot, type QuestId, type QuestState } from './quests.ts';
 import type { Interactable } from '../world/interactables.ts';
+import type { ItemId } from '../items/inventory.ts';
 
 /**
  * 2장 "물안개 나루의 종소리"의 로웬 쪽 진행 (docs/story-chapter2.md).
@@ -41,7 +42,6 @@ export const FERN: NpcDef = {
  */
 export const FERRY_OUTSIDE_PEOPLE: NpcDef[] = [
   { id: 'evan', name: '에반', role: '나루의 사공', x: 3060, y: 2480, height: 148, dialogue: 'npc-evan', facing: 'right' },
-  { id: 'marta', name: '마르타', role: '대장장이', x: 1170, y: 1470, height: 138, dialogue: 'npc-marta', facing: 'down' },
   { id: 'morgan', name: '모르간', role: '나루의 후원자', x: 1720, y: 1660, height: 150, dialogue: 'npc-morgan', facing: 'right' },
 ];
 
@@ -55,8 +55,19 @@ export const FERRY_INN_PEOPLE: NpcDef[] = [
   { id: 'finn', name: '핀', role: '여관의 소년', x: 1200, y: 610, height: 116, dialogue: 'npc-finn', facing: 'down-left' },
 ];
 
-export const FERRY_PEOPLE: NpcDef[] = [...FERRY_OUTSIDE_PEOPLE, ...FERRY_INN_PEOPLE];
+/** 마르타의 대장간(in-ferry-marta-smithy) 안: 마르타는 모루 오른쪽에 서서 손님을 맞는다. 화덕은 왼쪽 안쪽이다. */
+export const FERRY_SMITHY: MapId = 'in-ferry-marta-smithy';
+export const FERRY_SMITHY_PEOPLE: NpcDef[] = [
+  { id: 'marta', name: '마르타', role: '대장장이', x: 720, y: 600, height: 138, dialogue: 'npc-marta', facing: 'left' },
+];
+
+export const FERRY_PEOPLE: NpcDef[] = [...FERRY_OUTSIDE_PEOPLE, ...FERRY_INN_PEOPLE, ...FERRY_SMITHY_PEOPLE];
 export const FERRY_INN: MapId = 'in-ferry-inn';
+
+/** 마르타의 대장간(장비 상점)이 열렸는지: 퀘스트 5 "멈춘 나루"에서 마르타를 도운 뒤 */
+export function martaShopOpen(state: QuestState): boolean {
+  return state['still-ferry']?.status === 'done';
+}
 
 /** 나루에 도착할 때가 됐는지: 퀘스트 5 "멈춘 나루"를 받았다(고개의 쉼터를 끝냈다) */
 export function ferryOpen(state: QuestState): boolean {
@@ -111,6 +122,7 @@ export function chapterTwoNpcs(state: QuestState, map: MapId): NpcDef[] {
   }
   if (map === 'ferry-village') return FERRY_OUTSIDE_PEOPLE.map(n => ({ ...n }));
   if (map === FERRY_INN) return FERRY_INN_PEOPLE.map(n => ({ ...n }));
+  if (map === FERRY_SMITHY) return FERRY_SMITHY_PEOPLE.map(n => ({ ...n }));
   return [];
 }
 
@@ -130,9 +142,14 @@ export function fernCartVisible(state: QuestState, map: MapId): boolean {
   return chapterTwoStarted(state) && map === 'village';
 }
 
-/** 수레 그림 상태 (덮개 수리 서브 퀘스트가 생기기 전까지는 늘 삭은 덮개) */
-export function fernCartState(_state: QuestState): 'damaged' | 'repaired' {
-  return 'damaged';
+/** 수레 그림 상태: 서브 퀘스트 "행상인의 짐"으로 덮개를 갈면 고친 수레 */
+export function fernCartState(state: QuestState): 'damaged' | 'repaired' {
+  return state['fern-cover']?.status === 'done' ? 'repaired' : 'damaged';
+}
+
+/** 이야기로 늘어난 페른의 물건: "행상인의 짐" 뒤 말린 무화과 */
+export function fernExtraStock(state: QuestState): ItemId[] {
+  return state['fern-cover']?.status === 'done' ? ['dried-fig'] : [];
 }
 
 /** 페른의 수레(상점)가 열렸는지: 퀘스트 1 "남문의 수레"를 끝냈다 */
@@ -190,16 +207,25 @@ export function fernMothHunt(state: QuestState): boolean {
   return currentObjective(questDef('fern-cart'), progress).monster === 'ashen-moth';
 }
 
+/** 고갯길 약초 다섯 포기 (서브 퀘스트 "쉼터의 약초", 캐는 차례대로) */
+export const PASS_HERBS = [{ x: 700, y: 1100 }, { x: 1500, y: 2750 }, { x: 2300, y: 1250 }, { x: 3300, y: 2700 }, { x: 4180, y: 1380 }];
+
 /**
  * 2장의 살펴보기 자리. 그 퀘스트의 그 단계일 때만 그 맵에 나타난다.
  *  - 고개 꼭대기(퀘스트 4): 고갯길이 동쪽 절벽 모서리 아래로 사라지는 곳
- *  - 대장간 화덕(퀘스트 5): 마르타의 대장간 오른쪽, 지붕 아래 화덕과 풀무 앞
+ *  - 대장간 화덕(퀘스트 5): 마르타의 대장간 안, 왼쪽 안쪽의 화덕과 풀무 앞
  *  - 핀의 연(퀘스트 5): 갈대밭 늪 동쪽 끝 덤불 곁 진흙
  */
 const STORY_SPOTS: ReadonlyArray<{ quest: QuestId; map: MapId; spot: InspectSpot; at: Interactable }> = [
   { quest: 'pass-shelter', map: 'east-pass', spot: 'pass-summit', at: { id: 'story-pass-summit', x: 4560, y: 990, radius: 110, markerHeight: 55 } },
-  { quest: 'still-ferry', map: 'ferry-village', spot: 'ferry-forge', at: { id: 'story-ferry-forge', x: 1420, y: 1430, radius: 110, markerHeight: 150 } },
+  // 대장간 안 왼쪽 안쪽의 화덕과 풀무 앞 (실내 원화 좌표)
+  { quest: 'still-ferry', map: 'in-ferry-marta-smithy', spot: 'ferry-forge', at: { id: 'story-ferry-forge', x: 340, y: 590, radius: 110, markerHeight: 150 } },
   { quest: 'still-ferry', map: 'reed-swamp', spot: 'reed-kite', at: { id: 'story-reed-kite', x: 1780, y: 1250, radius: 110, markerHeight: 90 } },
+  // 서브 퀘스트 "쉼터의 약초": 고갯길의 바위 그늘·절벽 밑 다섯 곳. 지금 캘 차례인 한 포기만 보인다.
+  ...PASS_HERBS.map((p, i) => ({
+    quest: 'dor-herbs' as const, map: 'east-pass' as const, spot: `pass-herb-${i + 1}` as InspectSpot,
+    at: { id: `story-pass-herb-${i + 1}`, ...p, radius: 100, markerHeight: 55 },
+  })),
 ];
 
 export function chapterTwoSpots(state: QuestState, map: MapId): Interactable[] {
@@ -209,7 +235,16 @@ export function chapterTwoSpots(state: QuestState, map: MapId): Interactable[] {
   }).map(s => s.at);
 }
 
+const HERB_LINES = [
+  '바위 그늘에 잎이 톱니 같은 풀이 숨어 있다. 윗잎만 조심스레 땄다.',
+  '절벽 밑 물기 젖은 흙에 약초가 두 포기 붙어 자란다. 한 포기만 남기고 땄다.',
+  '마른 덤불 사이로 톱니 잎이 고개를 내밀었다. 서리를 맞아 향이 짙다.',
+  '바위틈에서 약초를 땄다. 손끝에 쌉싸름한 냄새가 오래 남는다.',
+  '고개 동쪽 끝 바위 아래, 마지막 한 포기. 이제 쉼터로 돌아가자.',
+];
+
 export const CHAPTER_TWO_INSPECTIONS: Record<string, DialogueLine[]> = {
+  ...Object.fromEntries(HERB_LINES.map((text, i) => [`story-pass-herb-${i + 1}`, [{ speaker: '고갯길 약초', text }]])),
   'story-pass-summit': [
     { speaker: '고개 꼭대기', text: '아침 해가 고개 너머에서 떠올랐다. 그 아래로 넓은 강이 굽이쳐 흐른다.' },
     { speaker: '시온', portrait: 'hero-neutral', text: '저 아래 지붕들… 저게 물안개 나루구나. 그런데 해가 떴는데도 강 위에 안개가 걸려 있어.' },

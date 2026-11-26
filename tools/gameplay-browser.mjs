@@ -2296,9 +2296,13 @@ test('일시정지에서 정보와 가방을 터치로 열고, 다음 가방 페
   await tap('characterPanel.next');
   const page = await evaluate(`(() => {
     const s = window.__game.scene.getScene('game'), panel = s.characterPanel;
-    return { page: panel.pageLabel.text, entries: panel.cells.filter(c => c.shown).length, frozen: s.now === ${before} };
+    // 둘째 쪽에는 첫 쪽에 다 못 넣은 나머지(아이템·장비 전체 - 한 쪽 칸 수)가 나온다
+    const total = Object.keys(s.inventory.items).length + Object.keys(s.character.gear.bag).length;
+    return { page: panel.pageLabel.text, entries: panel.cells.filter(c => c.shown).length, rest: total - panel.cells.length, frozen: s.now === ${before} };
   })()`);
-  assert.deepEqual(page, { page: '2 / 2', entries: 3, frozen: true });
+  assert.equal(page.page, '2 / 2');
+  assert.equal(page.frozen, true);
+  assert.ok(page.entries > 0 && page.entries === page.rest, JSON.stringify(page));
   await tap('characterPanel.cellNames[0]');
   assert.ok(await evaluate(`window.__game.scene.getScene('game').characterPanel.selectedEntry`));
   await evaluate(`window.__game.scene.getScene('game').onBackButton()`);
@@ -3529,7 +3533,8 @@ test('무기 교체·해제는 별도 레이어와 칼집 손잡이·잔상·저
     const ghost=h.spawnGhost(s.player.x,s.player.y,0,0x9fc4ff,.3),copies=ghost.list.map(o=>o.texture.key+':'+o.frame.name);
     h.setWeapon(undefined);const empty=!h.weaponFront.visible&&!h.weaponBack.visible&&Math.hypot(h.getBlade().tip.x-h.getBlade().base.x,h.getBlade().tip.y-h.getBlade().base.y)===0;
     h.spawnGhost(s.player.x,s.player.y,0,0x9fc4ff,.3,ghost);
-    const emptyGhost=!ghost.getAt(0).visible&&!ghost.getAt(3).visible;ghost.destroy();
+    // 무기를 뺀 잔상: 무기 그림 조각은 모두 숨는다(손잡이를 덮는 주먹 그림이 있는 자세는 조각 순서가 달라 순서로 찾지 않는다).
+    const weaponCopies=ghost.list.filter(o=>o.texture.key.startsWith('hero-weapons'));const emptyGhost=weaponCopies.length===2&&weaponCopies.every(o=>!o.visible);ghost.destroy();
     s.scene.restart();g.step(performance.now(),16);g.step(performance.now()+16,16);
     const restored=s.player.sprite.weapon==='iron-sword';
     s.openCharacterPanel('equip');s.characterPanel.selectSlot('weapon');s.characterPanel.primary();s.characterPanel.close();
@@ -3538,7 +3543,8 @@ test('무기 교체·해제는 별도 레이어와 칼집 손잡이·잔상·저
   })()`);
   for(const key of ['equipped','empty','emptyGhost','restored','unequipped'])assert.equal(result[key],true,key);
   assert.ok(result.maxError<.001,JSON.stringify(result));
-  assert.equal(result.copies[0],'hero-weapons:iron-sword-grip');assert.equal(result.copies[3],'hero-weapons:iron-sword-blade');
+  // 잔상은 무기의 손잡이와 칼날 조각을 함께 복사한다(조각 순서는 자세마다 다르다).
+  assert.ok(result.copies.includes('hero-weapons:iron-sword-grip')&&result.copies.includes('hero-weapons:iron-sword-blade'),JSON.stringify(result.copies));
 });
 
 test('네 검은 정면 찌르기와 좌우·앞대각선 공격에서 주먹에 맞는 손잡이를 표시한다', async () => {
@@ -4141,7 +4147,7 @@ test('페른의 수레는 여행 물품만 팔고, 푸른 이슬은 마나를, �
   assert.equal(result.usedHerb, true);
   assert.equal(result.slowedAfter, false);
   assert.equal(result.unused, false, '느려지지 않았으면 해독 약초를 쓰지 않는다');
-  assert.deepEqual(result.tileIds, ['potion', 'lunch', 'travel-biscuit', 'blue-dew', 'antidote-herb', 'serena-lunch']);
+  assert.deepEqual(result.tileIds, ['potion', 'lunch', 'travel-biscuit', 'blue-dew', 'antidote-herb', 'serena-lunch', 'dried-fig']);
   assert.equal(result.overlap, false);
   assert.equal(result.inside, true);
 });
@@ -4184,11 +4190,19 @@ test('2장 남문의 수레: 광장에 페른과 삭은 수레가 서고, 들판
     await restart('village');
     const fern2 = s.npcs.find(n => n.def.id === 'fern');
     s.openDialogue(fern2.spot); flush();
+    // 페른의 수레는 여행 물품과 여행 장비 가운데 고른다
+    const goods = () => { if (s.storyChoice.isOpen) s.storyChoice.choose(0); };
+    goods();
     const shop = { open: s.itemPanel.isOpen, title: s.itemPanel.title.text };
     s.itemPanel.close();
     const done = s.quests['fern-cart']?.status, herbs = s.inventory.items['antidote-herb'] ?? 0;
+    // 남문의 수레 뒤 첫 대화는 서브 퀘스트 "행상인의 짐" 제안, 그다음 평소 대화 뒤에 수레가 열린다
     s.openDialogue(fern2.spot); flush();
-    const again = s.itemPanel.isOpen; s.itemPanel.close();
+    const cover = s.quests['fern-cover']?.status;
+    if (s.storyChoice.isOpen) s.storyChoice.cancel();
+    if (s.itemPanel.isOpen) s.itemPanel.close();
+    s.openDialogue(fern2.spot); flush(); goods();
+    const again = cover === 'active' && s.itemPanel.isOpen; s.itemPanel.close();
     localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.inventory');
     return { hint, hasFern: !!fern, fernName: fern?.def.name, cart: !!cart, blocked, quest, firstSpeaker, afterTalk, moths: moths.length, afterHunt, shop, done, herbs, again };
   })()`);
@@ -4325,6 +4339,16 @@ test('안개 까마귀는 고갯길에서 무리로 날고 덮치며, 피격 잔
 });
 
 test('동쪽 고갯길은 개울가에서 왕복하며 큰 카메라·지도·개별 소품·쉼터 가림·불을 연결한다', async () => {
+  // 1장을 끝내기 전(도란의 검 전)에는 개울가에서 고갯길로 넘어가지 못한다. 1장을 끝낸 저장으로 시작한다.
+  await load('east-stream&companion=none');
+  await evaluate(`(async () => {
+    const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
+    for (const q of QUESTS.filter(q => q.main)) {
+      seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+      if (q.id === 'first-sword') break;
+    }
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+  })()`);
   await load('east-stream&companion=none');
   await evaluate(`(() => {const s=window.__game.scene.getScene('game');s.player.placeAt(3280,1400);window.__passTime=performance.now();})()`);
   await until(()=>evaluate(`(() => {const g=window.__game;g.step(window.__passTime+=16,16);const s=g.scene.getScene('game');return s.mapId==='east-pass'&&s.sys.isActive()&&!!s.passScenery&&s.minimap&&!s.traveling;})()`));
@@ -4345,6 +4369,7 @@ test('동쪽 고갯길은 개울가에서 왕복하며 큰 카메라·지도·�
   await evaluate(`window.__game.scene.getScene('game').player.placeAt(120,2150)`);
   await until(()=>evaluate(`(() => {const g=window.__game;g.step(window.__passTime+=16,16);const s=g.scene.getScene('game');return s.mapId==='east-stream'&&s.sys.isActive()&&!s.passScenery&&s.minimap&&!s.traveling;})()`));
   assert.equal(await evaluate(`window.__game.scene.getScene('game').walkArea.contains(3040,1420)`),true);
+  await evaluate(`localStorage.removeItem('untitled-rpg.quests')`);
 });
 
 test('물안개 나루는 바닥을 1:1로 표시하고 고갯길에서 왕복하며 두 선착장만 강 위로 걸을 수 있다', async () => {
@@ -4418,7 +4443,7 @@ test('멈춘 나루: 나루 사람들이 제 그림으로 서고(여관 주인�
     return { people, innSpeaks: innLines.some(l => l.portrait === 'fog-innkeeper'),
       afterInn, restOffered, rest: localStorage.getItem('untitled-rpg.rest') };
   })()`);
-  assert.deepEqual(outside.map(p => p.id).sort(), ['evan', 'marta', 'morgan']);
+  assert.deepEqual(outside.map(p => p.id).sort(), ['evan', 'morgan']);
   assert.deepEqual(result.people.map(p => p.id).sort(), ['finn', 'fog-innkeeper']);
   for (const p of [...outside, ...result.people]) assert.notEqual(p.texture, '__MISSING', p.id);
   assert.equal(evanResult.evanMarker, 'target');
@@ -4523,6 +4548,78 @@ test('안개 환영은 안개 줄기에서 몸이 생기며 나타나고(그동�
   assert.equal(result.alpha, 1);
 });
 
+test('행상인의 짐: 메리나의 천을 페른에게 가져가면 그 자리에서 수레가 고쳐지고 페른의 수레에 말린 무화과가 생긴다', async () => {
+  await load('south-field&companion=none');
+  await evaluate(`(async () => {
+    const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
+    for (const q of QUESTS.filter(q => q.main)) {
+      seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+      if (q.id === 'fern-cart') break;
+    }
+    seed['fern-cover'] = { status: 'active', count: 0, step: 1 };
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+    localStorage.setItem('untitled-rpg.inventory', JSON.stringify({ version: 1, gold: 200, items: {} }));
+  })()`);
+  await load('village&companion=none');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), fern = s.npcs.find(n => n.def.id === 'fern');
+    const cart = () => s.children.getByName('fern-cart').texture.key;
+    const before = cart(), marker = fern.questMarker;
+    s.openDialogue(fern.spot); while (s.dialogue.isOpen) s.dialogue.advance();
+    const after = cart(), status = s.quests['fern-cover'].status;
+    // 끝낸 대화 뒤 바로 수레가 열린다: 물품과 장비 가운데 고른다
+    const choice = s.storyChoice.isOpen;
+    s.storyChoice.choose(1);
+    const gearShop = { open: s.characterPanel.isOpen, title: s.characterPanel.title.text,
+      boots: s.characterPanel.collectEntries(s.characterView()).some(e => e.id === 'heron-feather-boots') };
+    s.characterPanel.close();
+    s.openItemPanel('shop', 'fern');
+    const names = s.itemPanel.rows.filter(r => r.name.visible).map(r => r.name.text);
+    // 한 쪽에 세 줄: 다음 쪽까지 본다
+    s.itemPanel.nextButton.emit('pointerup');
+    names.push(...s.itemPanel.rows.filter(r => r.name.visible).map(r => r.name.text));
+    s.itemPanel.close();
+    localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.inventory');
+    return { before, marker, after, status, choice, gearShop, fig: names.some(n => n.includes('말린 무화과')) };
+  })()`);
+  assert.deepEqual(result, { before: 'fern-cart-damaged', marker: 'target', after: 'fern-cart-repaired', status: 'done', choice: true,
+    gearShop: { open: true, title: '페른의 수레 · 여행 장비', boots: true }, fig: true });
+});
+
+test('마르타는 나루 대장간 안에 서 있고, 멈춘 나루를 끝낸 뒤 대화하면 청동 장비를 판다', async () => {
+  await load('east-pass&companion=none');
+  await evaluate(`(async () => {
+    const { QUESTS } = await import('/src/story/quests.ts'); const seed = {};
+    for (const q of QUESTS.filter(q => q.main)) {
+      seed[q.id] = { status: 'done', count: (q.steps?.at(-1) ?? q.objective).need, ...(q.steps ? { step: q.steps.length - 1 } : {}) };
+      if (q.id === 'still-ferry') break;
+    }
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: seed }));
+    localStorage.setItem('untitled-rpg.inventory', JSON.stringify({ version: 1, gold: 1000, items: {} }));
+  })()`);
+  await load('in-ferry-marta-smithy&companion=none');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), marta = s.npcs.find(n => n.def.id === 'marta');
+    const placed = { people: s.npcs.map(n => n.def.id), texture: marta.figure.texture.key, spot: s.walkArea.contains(marta.spot.x, marta.spot.y) };
+    s.player.placeAt(marta.spot.x - 60, marta.spot.y + 20);
+    s.openDialogue(marta.spot); while (s.dialogue.isOpen) s.dialogue.advance();
+    const panel = s.characterPanel, open = panel.isOpen, title = panel.title.text;
+    const ids = panel.collectEntries(s.characterView()).map(e => e.id);
+    s.tradeGear('scale-armor', 'buy');
+    const bought = { gold: s.inventory.gold, bag: s.character.gear.bag['scale-armor'] };
+    panel.close();
+    localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.inventory');
+    return { placed, open, title, ids, bought };
+  })()`);
+  assert.deepEqual(result.placed.people, ['marta']);
+  assert.notEqual(result.placed.texture, '__MISSING');
+  assert.equal(result.placed.spot, true);
+  assert.equal(result.open, true);
+  assert.equal(result.title, '마르타의 대장간');
+  assert.deepEqual(result.ids, ['bronze-helm', 'scale-armor', 'bronze-bracers', 'bronze-bell-earring']);
+  assert.deepEqual(result.bought, { gold: 420, bag: 1 });
+});
+
 test('나루 여관 주인은 전용 SD·잠든 걸음·대화 초상화를 사용하고 대화하면 깨어난다', async () => {
   await load('east-stream&npcs=innkeeper&sleepwalk=1&companion=none');
   const result=await evaluate(`(() => {
@@ -4605,8 +4702,11 @@ test('2장 고개의 쉼터: 까마귀 넷 뒤 도르와 하룻밤을 보내 쉼
     const step = s.quests['pass-shelter'].step;
     s.openDialogue(dor.spot); while (s.dialogue.isOpen) s.dialogue.advance();
     const done = s.quests['pass-shelter'].status;
+    // 끝낸 뒤 첫 대화는 서브 퀘스트 "쉼터의 약초" 제안, 그다음 평소 대화 뒤에 쉬어 갈지 묻는다
     s.openDialogue(dor.spot); while (s.dialogue.isOpen) s.dialogue.advance();
-    const offer = s.storyChoice?.isOpen;
+    const herbs = s.quests['dor-herbs']?.status;
+    s.openDialogue(dor.spot); while (s.dialogue.isOpen) s.dialogue.advance();
+    const offer = herbs === 'active' && s.storyChoice?.isOpen;
     s.storyChoice?.close?.();
     localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.rest');
     return { tracker, before, sleeping, rest, healed, summit: !!summit, step, done, offer };

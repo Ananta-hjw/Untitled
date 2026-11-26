@@ -113,3 +113,18 @@ test('1장 서브 보상 아이템: 세레나의 도시락은 220 회복하며 �
   }
   assert.deepEqual(parseInventory(serializeInventory(inv)), inv);
 });
+
+test('도르의 약초 주머니가 가방에 있으면 회복 물약이 더 채우고, 페른은 이야기로 늘어난 물건만 더 판다', async () => {
+  const { HERB_POUCH_BONUS, ITEMS, buy, shopStock, useConsumable, itemEffectText, sell } = await import('../src/items/inventory.ts');
+  const status = { hp: 10, maxHp: 500, mp: 0, maxMp: 0, slowed: false };
+  const plain = useConsumable({ gold: 0, items: { potion: 1 } }, 'potion', status);
+  const pouch = useConsumable({ gold: 0, items: { potion: 1, 'dor-herb-pouch': 1 } }, 'potion', status);
+  assert.equal(pouch.heal - plain.heal, HERB_POUCH_BONUS);
+  assert.equal(pouch.inventory.items['dor-herb-pouch'], 1);
+  assert.match(itemEffectText('dor-herb-pouch'), /회복 물약/);
+  assert.equal(sell({ gold: 0, items: { 'dor-herb-pouch': 1 } }, 'dor-herb-pouch'), null);
+  assert.equal(buy({ gold: 100, items: {} }, 'dried-fig', 1, 'fern'), null);
+  assert.deepEqual(shopStock('fern', ['dried-fig']).at(-1), 'dried-fig');
+  assert.equal(buy({ gold: 100, items: {} }, 'dried-fig', 1, 'fern', ['dried-fig'])?.items['dried-fig'], 1);
+  assert.ok(ITEMS['dried-fig'].heal > ITEMS.potion.heal);
+});

@@ -65,7 +65,7 @@ import { addMana, inSpinRadius, regenMana } from '../combat/mana';
 import { DUSK_MOTH_LEVEL, levelHint, spawnLevel, xpForKill } from '../combat/monsterLevel';
 import { allocate, deriveStats, mitigate, pointsLeft, totalStats, type DerivedStats, type StatId } from '../entities/attributes';
 import { CHARACTER_SAVE_KEY, newCharacter, parseCharacter, serializeCharacter, type CharacterData } from '../entities/characterData';
-import { GEAR, SLOT_INFO, addGear, buyGear, equip, gearBonus, sellGear, unequip, type GearId } from '../items/equipment';
+import { GEAR, SLOT_INFO, addGear, buyGear, equip, gearBonus, sellGear, unequip, type GearId, type GearShopId } from '../items/equipment';
 import { CharacterPanel, type CharacterTab, type CharacterView } from '../ui/CharacterPanel';
 import { preloadIcons } from '../ui/icons';
 import { dodgeDistanceRatio, lungeProgress, locomotionRate } from '../entities/movement';
@@ -106,7 +106,7 @@ import { findInteractable, talkChoices, type Interactable } from '../world/inter
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
 import { chapterTwoPreviewNpcs, isCastPreviewGroup, previewCastNpcs, type CastPreviewGroup } from '../world/chapterTwoNpcs';
-import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, eastPassBlockedDialogue, eastPassOpen, FERRY_PEOPLE, FERRY_INN, FERRY_INN_DOOR, FERRY_NIGHT_LEVEL, FERRY_RIVERBANK, FERRY_SLEEPWALK_PATH, ferryInnRestOpen, ferryNight, ferryNightSpawns, ferryNightStep, fernCartState, fernCartVisible, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
+import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, eastPassBlockedDialogue, eastPassOpen, FERRY_PEOPLE, FERRY_INN, FERRY_SMITHY, martaShopOpen, FERRY_INN_DOOR, FERRY_NIGHT_LEVEL, FERRY_RIVERBANK, FERRY_SLEEPWALK_PATH, ferryInnRestOpen, ferryNight, ferryNightSpawns, ferryNightStep, fernCartState, fernCartVisible, fernExtraStock, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
 import fernCartDamagedUrl from '../assets/village/rowen/fern-cart-damaged.webp?url';
 import fernCartRepairedUrl from '../assets/village/rowen/fern-cart-repaired.webp?url';
 import { PerfOverlay } from '../ui/PerfOverlay';
@@ -698,7 +698,7 @@ export class GameScene extends Phaser.Scene {
     // 습격 중에는 이 맵에 나올 모든 무리의 그림을 미리 읽는다(대화 뒤 다음 무리가 바로 나타난다).
     preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...ferryNightSpawns(this.quests, this.mapId), ...raidSpawnsAnyStep(this.quests, this.mapId), ...this.previewMonsters()]);
     preloadVillage(this, this.map);
-    preloadNpcs(this, [...NPCS, FERN, ...this.map.npcs, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 }), ...(this.mapId === 'ferry-village' || this.mapId === FERRY_INN ? FERRY_PEOPLE : [])]);
+    preloadNpcs(this, [...NPCS, FERN, ...this.map.npcs, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 }), ...(this.mapId === 'ferry-village' || this.mapId.startsWith('in-ferry-') ? FERRY_PEOPLE : [])]);
     if (fernCartVisible(this.quests, this.mapId)) {
       this.load.image('fern-cart-damaged', fernCartDamagedUrl);
       this.load.image('fern-cart-repaired', fernCartRepairedUrl);
@@ -2644,7 +2644,12 @@ export class GameScene extends Phaser.Scene {
       // 메리나와의 평소 대화가 끝나면 잡화점을 연다.
       if (!quest && target.id === 'npc-merina') this.openItemPanel('shop');
       // 페른: "남문의 수레"를 끝낸 대화 뒤, 그리고 그 뒤의 평소 대화 뒤에 수레(상점)를 연다.
-      if (target.id === 'npc-fern' && fernShopOpen(this.quests) && (!quest || quest.completed?.id === 'fern-cart')) this.openItemPanel('shop', 'fern');
+      // 진행 안내(서브 퀘스트를 받은 뒤의 재촉 대사)는 평소 대화처럼 본다. "행상인의 짐"을 끝낸 뒤에도 바로 연다(말린 무화과).
+      const plainTalk = !quest?.accepted && !quest?.completed && !quest?.progressed;
+      if (target.id === 'npc-fern' && fernShopOpen(this.quests)
+        && (plainTalk || quest?.completed?.id === 'fern-cart' || quest?.completed?.id === 'fern-cover')) this.openFernShop();
+      // 마르타: "멈춘 나루"를 끝낸 뒤 대장간 안에서 평소 대화가 끝나면 청동 장비를 판다.
+      if (plainTalk && target.id === 'npc-marta' && this.mapId === FERRY_SMITHY && martaShopOpen(this.quests)) this.openCharacterPanel('items', true, false, 'marta');
       // 도란과 대장간에서 대화가 끝나면 장비 상점을 연다. 습격 중 야외나 퀘스트 수락·진행·완료 직후에는 열지 않는다.
       if (this.mapId === 'in-smithy' && !quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-doran') this.openCharacterPanel('items', true);
       // 로제타와의 평소 대화가 끝나면 쉬어 갈지 묻는다 (습격의 밤에는 묻지 않는다).
@@ -2658,7 +2663,7 @@ export class GameScene extends Phaser.Scene {
           yes: '치료받기', no: '괜찮아요',
         });
       }
-      if (!quest && target.id === 'npc-dor' && shelterRestOpen(this.quests)) {
+      if (plainTalk && target.id === 'npc-dor' && shelterRestOpen(this.quests)) {
         this.storyChoice?.open(() => this.restWithFade('shelter'), {
           title: '고개 쉼터에서 쉬어 가기',
           text: '도르가 모닥불에 장작을 한 아름 더 얹는다.',
@@ -2874,6 +2879,7 @@ export class GameScene extends Phaser.Scene {
     if (this.player) this.syncRaidEnemies();
     this.drawChapterShade(this.scale.gameSize.width);
     this.syncFerryNight();
+    this.syncFernCart();
     this.ensureTutorialPracticeState();
     this.interactables = this.interactables.filter(spot => !spot.id.startsWith('story-'));
     for (const marker of this.storyMarkers) marker.destroy();
@@ -3337,7 +3343,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private tradeGear(id: GearId, type: 'buy' | 'sell'): void {
-    const result = type === 'buy' ? buyGear(this.inventory, this.character.gear, id) : sellGear(this.inventory, this.character.gear, id);
+    const result = type === 'buy' ? buyGear(this.inventory, this.character.gear, id, this.characterPanel?.shop ?? 'doran') : sellGear(this.inventory, this.character.gear, id);
     if (!result) {
       this.characterPanel?.setStatus('거래할 수 없어요. 골드와 보유 수량을 확인해 주세요.', true);
       return;
@@ -3370,7 +3376,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 캐릭터 창을 연다. smithy면 도란의 대장간(장비 구매·판매). 대화·메뉴·이동 중에는 열지 않는다. */
-  private openCharacterPanel(tab: CharacterTab, smithy = false, fromPause = false): boolean {
+  private openCharacterPanel(tab: CharacterTab, smithy = false, fromPause = false, shop: GearShopId = 'doran'): boolean {
     if (!this.player?.alive || this.opening) return false;
     if (!this.characterPanel || this.characterPanel.isOpen || this.traveling || this.pauseMenu.isOpen || this.dialogue.isOpen
       || this.itemPanel?.isOpen || this.worldMap?.isOpen || this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return false;
@@ -3382,7 +3388,7 @@ export class GameScene extends Phaser.Scene {
     this.pauseButton.setVisible(false);
     this.characterButton?.setVisible(false);
     this.setQuickButtonsVisible(false);
-    if (smithy) this.characterPanel.showSmithy(this.characterView());
+    if (smithy) this.characterPanel.showSmithy(this.characterView(), shop);
     else this.characterPanel.show(tab, this.characterView(), fromPause);
     return true;
   }
@@ -3413,8 +3419,19 @@ export class GameScene extends Phaser.Scene {
     this.hideTalkMarker();
     this.pauseButton.setVisible(false);
     this.characterButton?.setVisible(false);
-    this.itemPanel?.show(mode, this.inventory, shop);
+    this.itemPanel?.show(mode, this.inventory, shop, this.shopExtra());
   }
+
+  /** 페른의 수레: 여행 물품(아이템 창)과 여행 장비(장비 상점 창) 가운데 고른다. */
+  private openFernShop(): void {
+    this.storyChoice?.pick([
+      { label: '여행 물품', onPick: () => this.openItemPanel('shop', 'fern') },
+      { label: '여행 장비', onPick: () => { this.openCharacterPanel('items', true, false, 'fern'); } },
+    ], '페른의 수레', '무엇을 볼까요?');
+  }
+
+  /** 이야기로 늘어난 상점 물건 (행상인의 짐 뒤 페른의 말린 무화과) */
+  private shopExtra(): ItemId[] { return this.shopId === 'fern' ? fernExtraStock(this.quests) : []; }
 
   private onItemAction(action: PanelAction): void {
     let next: Inventory | null = null;
@@ -3442,7 +3459,7 @@ export class GameScene extends Phaser.Scene {
       }
       return;
     }
-    if (action.type === 'buy') next = buy(this.inventory, action.id, 1, this.shopId);
+    if (action.type === 'buy') next = buy(this.inventory, action.id, 1, this.shopId, this.shopExtra());
     if (action.type === 'sell') next = sell(this.inventory, action.id);
     if (!next) {
       this.itemPanel?.setStatus('거래할 수 없어요. 골드와 보유 수량을 확인해 주세요.', true);
@@ -4091,10 +4108,19 @@ export class GameScene extends Phaser.Scene {
     if (!fernCartVisible(this.quests, this.mapId)) return;
     const key = `fern-cart-${fernCartState(this.quests)}`;
     if (this.textures.exists(key)) {
-      const image = this.add.image(FERN_CART.x, FERN_CART.y, key).setOrigin(0.5, 1).setDepth(FERN_CART.y);
+      const image = this.add.image(FERN_CART.x, FERN_CART.y, key).setOrigin(0.5, 1).setDepth(FERN_CART.y).setName('fern-cart');
       image.setScale(FERN_CART.width / image.width);
     }
     this.walkArea.obstacles.push({ ...FERN_CART_FOOTPRINT });
+  }
+
+  /** "행상인의 짐"으로 덮개를 갈면 그 자리에서 고친 수레 그림으로 바꾼다. */
+  private syncFernCart(): void {
+    const image = this.children.getByName('fern-cart') as Phaser.GameObjects.Image | null;
+    const key = `fern-cart-${fernCartState(this.quests)}`;
+    if (!image || image.texture.key === key || !this.textures.exists(key)) return;
+    image.setTexture(key).setScale(1);
+    image.setScale(FERN_CART.width / image.width);
   }
 
   // ---------------------------------------------------------------- 기술

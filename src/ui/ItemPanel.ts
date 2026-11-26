@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { itemIcon } from './itemIcons';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
-import { ITEMS, ITEM_IDS, MAX_STACK, MAX_GOLD, SHOP_STOCK, countOf, itemEffectText, type Inventory, type ItemId, type ShopId } from '../items/inventory';
+import { ITEMS, ITEM_IDS, MAX_STACK, MAX_GOLD, shopStock, countOf, itemEffectText, type Inventory, type ItemId, type ShopId } from '../items/inventory';
 
 /** 한 쪽에 보여 주는 줄 수. 물건이 더 많으면 ◀ ▶로 넘긴다. */
 const ROWS_PER_PAGE = 3;
@@ -36,6 +36,8 @@ export class ItemPanel {
   private readonly nextButton: Phaser.GameObjects.Text;
   private readonly rows: ItemRow[] = [];
   private shop: ShopId = 'merina';
+  /** 이야기로 늘어난 물건 (행상인의 짐 뒤 페른의 말린 무화과) */
+  private extra: readonly ItemId[] = [];
   private page = 0;
   private pages = 1;
   private open = false;
@@ -77,9 +79,10 @@ export class ItemPanel {
   get isOpen(): boolean { return this.open; }
 
   /** 가방 또는 상점을 연다. 상점마다 파는 물건이 다르다(SHOP_STOCK). */
-  show(mode: 'bag' | 'shop', inventory: Inventory, shop: ShopId = 'merina'): void {
+  show(mode: 'bag' | 'shop', inventory: Inventory, shop: ShopId = 'merina', extra: readonly ItemId[] = []): void {
     this.mode = mode;
     this.shop = shop;
+    this.extra = extra;
     this.tab = 'buy';
     this.page = 0;
     this.open = true;
@@ -118,7 +121,7 @@ export class ItemPanel {
     if (!this.open) return;
     this.inventory = inventory;
     const all = this.mode === 'shop' && this.tab === 'buy'
-      ? SHOP_STOCK[this.shop]
+      ? shopStock(this.shop, this.extra)
       : ITEM_IDS.filter(id => countOf(inventory, id) > 0 && (this.mode !== 'shop' || (ITEMS[id].sellPrice > 0 && ITEMS[id].kind !== 'keepsake')));
     this.pages = Math.max(1, Math.ceil(all.length / ROWS_PER_PAGE));
     this.page = Math.min(this.page, this.pages - 1);

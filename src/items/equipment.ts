@@ -24,7 +24,12 @@ export const SLOT_INFO: Record<SlotId, { name: string; kind: GearKind }> = {
 
 export type GearId =
   | 'wooden-sword' | 'short-sword' | 'long-sword' | 'iron-sword' | 'cloth-hood' | 'worn-tunic' | 'leather-armor'
-  | 'leather-gloves' | 'light-boots' | 'clover-charm' | 'blue-bead' | 'wildflower-bracelet' | 'travel-cloak';
+  | 'leather-gloves' | 'light-boots' | 'clover-charm' | 'blue-bead' | 'wildflower-bracelet' | 'travel-cloak'
+  // 2장: 나루 마르타의 대장간(청동), 페른의 수레(여행 장비)
+  | 'bronze-helm' | 'scale-armor' | 'bronze-bracers' | 'bronze-bell-earring' | 'heron-feather-boots' | 'reed-knot-bracelet';
+
+/** 장비를 파는 곳: 로웬 도란의 대장간, 페른의 수레, 물안개 나루 마르타의 대장간 */
+export type GearShopId = 'doran' | 'fern' | 'marta';
 
 export interface GearDef {
   id: GearId;
@@ -35,7 +40,7 @@ export interface GearDef {
   /** 살 때 값. 없으면 팔지 않는다 */
   price?: number;
   /** 파는 곳. 없으면 도란의 대장간 */
-  shop?: 'doran' | 'fern';
+  shop?: GearShopId;
   sellPrice: number;
 }
 
@@ -57,6 +62,15 @@ export const GEAR: Record<GearId, GearDef> = {
   'wildflower-bracelet': { id: 'wildflower-bracelet', name: '리네아의 들꽃 팔찌', description: '리네아가 하늘색 들꽃으로 엮어 준 팔찌. 손목에 차면 마음이 놓인다.', kind: 'accessory', stats: { vit: 2 }, sellPrice: 0 },
   // 페른의 수레에서 판다. 서브 퀘스트 "행상인의 짐"을 끝내면 수레에 들어온다(docs/story-chapter2.md).
   'travel-cloak': { id: 'travel-cloak', name: '여행자의 망토', description: '바람과 비를 막는 두꺼운 망토. 몸놀림을 해치지 않는다.', kind: 'body', stats: { def: 2, dex: 2 }, price: 220, sellPrice: 85, shop: 'fern' },
+  // 2장 장비: 같은 칸의 1장 장비보다 능력치 합이 2~5 높고 값은 두 배쯤이다(tools/equipment.test.mjs가 확인).
+  // 물안개 나루 마르타의 대장간: 종을 부었던 집안의 청동 장비
+  'bronze-helm': { id: 'bronze-helm', name: '청동 투구', description: '마르타가 종 거푸집 남은 청동으로 두드린 투구. 둔탁한 소리를 막아 준다.', kind: 'head', stats: { def: 3, vit: 3 }, price: 270, sellPrice: 105, shop: 'marta' },
+  'scale-armor': { id: 'scale-armor', name: '비늘 덧댄 갑옷', description: '강가 도마뱀 비늘을 청동 못으로 덧댄 갑옷. 무겁지만 단단하다.', kind: 'body', stats: { def: 6, vit: 4 }, price: 580, sellPrice: 225, shop: 'marta' },
+  'bronze-bracers': { id: 'bronze-bracers', name: '청동 손목 장갑', description: '손목에 청동 띠를 두른 장갑. 칼을 휘두를 때 손목이 흔들리지 않는다.', kind: 'hands', stats: { str: 3, def: 2 }, price: 260, sellPrice: 100, shop: 'marta' },
+  'bronze-bell-earring': { id: 'bronze-bell-earring', name: '청동 방울 귀걸이', description: '울리지 않게 속을 막은 작은 청동 방울. 머리가 맑아진다.', kind: 'accessory', stats: { int: 4, luk: 2 }, price: 300, sellPrice: 115, shop: 'marta' },
+  // 페른의 수레: 길 떠나는 사람의 장비
+  'heron-feather-boots': { id: 'heron-feather-boots', name: '물새 깃 장화', description: '물새 깃을 덧댄 가벼운 장화. 젖은 강둑에서도 미끄러지지 않는다.', kind: 'feet', stats: { dex: 5, def: 2 }, price: 320, sellPrice: 125, shop: 'fern' },
+  'reed-knot-bracelet': { id: 'reed-knot-bracelet', name: '갈대 매듭 팔찌', description: '물가 사람들이 무사히 돌아오라고 엮는 갈대 매듭 팔찌.', kind: 'accessory', stats: { vit: 3, dex: 3 }, price: 300, sellPrice: 115, shop: 'fern' },
 };
 export const GEAR_IDS = Object.keys(GEAR) as GearId[];
 export const MAX_GEAR_STACK = 9;
@@ -130,12 +144,12 @@ export function addGear(gear: Gear, id: GearId, count = 1): Gear {
 }
 
 /** 이 상점이 파는 장비 (도란의 대장간이 기본) */
-export function gearForSale(shop: 'doran' | 'fern' = 'doran'): GearId[] {
+export function gearForSale(shop: GearShopId = 'doran'): GearId[] {
   return (Object.keys(GEAR) as GearId[]).filter((id) => GEAR[id].price !== undefined && (GEAR[id].shop ?? 'doran') === shop);
 }
 
 /** 산다. 골드가 모자라거나 팔지 않거나(그 상점에 없거나) 가득하면 null */
-export function buyGear(inv: Inventory, gear: Gear, id: GearId, shop: 'doran' | 'fern' = 'doran'): { inventory: Inventory; gear: Gear } | null {
+export function buyGear(inv: Inventory, gear: Gear, id: GearId, shop: GearShopId = 'doran'): { inventory: Inventory; gear: Gear } | null {
   const price = GEAR[id].price;
   if (price === undefined || (GEAR[id].shop ?? 'doran') !== shop || inv.gold < price || gearCount(gear, id) >= MAX_GEAR_STACK) return null;
   return { inventory: { ...inv, gold: inv.gold - price }, gear: addBag(gear, id, 1) };

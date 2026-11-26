@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
 import { STAT_IDS, STAT_INFO, statGain, type DerivedStats, type StatBlock, type StatId } from '../entities/attributes';
 import {
-  GEAR, GEAR_IDS, SLOT_IDS, SLOT_INFO, fits, gearCount, gearForSale, type Gear, type GearId, type SlotId,
+  GEAR, GEAR_IDS, SLOT_IDS, SLOT_INFO, fits, gearCount, gearForSale, type Gear, type GearId, type GearShopId, type SlotId,
 } from '../items/equipment';
 import { ITEMS, ITEM_IDS, canUse, countOf, itemEffectText, type Inventory, type ItemId } from '../items/inventory';
 import { IconView, type IconFallback } from './icons';
@@ -66,6 +66,9 @@ function statsText(stats: Partial<StatBlock>): string {
   return (Object.entries(stats) as [StatId, number][]).map(([id, v]) => `${STAT_INFO[id].short} +${v}`).join('  ');
 }
 
+/** 장비 상점 창의 제목 */
+const GEAR_SHOP_TITLE: Record<GearShopId, string> = { doran: '도란의 대장간', fern: '페른의 수레 · 여행 장비', marta: '마르타의 대장간' };
+
 export class CharacterPanel {
   private readonly scene: Phaser.Scene;
   private readonly actions: CharacterActions;
@@ -99,6 +102,8 @@ export class CharacterPanel {
 
   private open = false;
   private mode: 'character' | 'smithy' = 'character';
+  /** 장비 상점 모드에서 지금 연 상점 (도란·페른·마르타) */
+  private gearShop: GearShopId = 'doran';
   private tab: CharacterTab = 'status';
   private shopTab: ShopTab = 'buy';
   private view?: CharacterView;
@@ -188,9 +193,13 @@ export class CharacterPanel {
     this.openWith(view);
   }
 
-  /** 도란의 대장간: 장비를 사고판다. */
-  showSmithy(view: CharacterView): void {
+  /** 지금 연 장비 상점 */
+  get shop(): GearShopId { return this.gearShop; }
+
+  /** 장비 상점(도란의 대장간·페른의 수레·마르타의 대장간): 장비를 사고판다. */
+  showSmithy(view: CharacterView, shop: GearShopId = 'doran'): void {
     this.mode = 'smithy';
+    this.gearShop = shop;
     this.closeButton.setText('닫기');
     this.shopTab = 'buy';
     this.openWith(view);
@@ -291,7 +300,7 @@ export class CharacterPanel {
       ids.map((id): Entry => ({ type: 'gear', id, count: counts(id) }));
     if (this.mode === 'smithy') {
       return this.shopTab === 'buy'
-        ? gearEntries(gearForSale('doran'), (id) => gearCount(view.gear, id))
+        ? gearEntries(gearForSale(this.gearShop), (id) => gearCount(view.gear, id))
         : gearEntries(GEAR_IDS.filter((id) => gearCount(view.gear, id) > 0 && GEAR[id].sellPrice > 0), (id) => gearCount(view.gear, id));
     }
     if (this.tab === 'equip') {
@@ -340,7 +349,7 @@ export class CharacterPanel {
     drawMenuFrame(g, left, top, panelWidth, height);
     g.lineStyle(1, 0x534537).lineBetween(x, top + 75, right, top + 75);
     this.title.setPosition(x, top + 40).setText(this.mode === 'smithy'
-      ? '도란의 대장간' : `${view.name}  ·  Lv. ${view.level}`).setVisible(true);
+      ? GEAR_SHOP_TITLE[this.gearShop] : `${view.name}  ·  Lv. ${view.level}`).setVisible(true);
     this.gold.setText(`${view.inventory.gold.toLocaleString()} G`).setPosition(right - 112, top + 40).setVisible(true);
     placeMenuButton(g, this.closeButton, right - 44, top + 40, 88, 46);
     this.status.setPosition(x, top + 621).setWordWrapWidth(right - x)

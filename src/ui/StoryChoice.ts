@@ -67,14 +67,14 @@ export class StoryChoice {
    * 여러 사람이 한자리에 모여 있을 때 대화할 사람을 고른다(가까운 순서, 최대 4명).
    * Enter는 첫 번째(가장 가까운) 사람, 취소·Esc·뒤로 가기는 닫기.
    */
-  pick(options: readonly ChoiceOption[], title = '누구와 이야기할까요?'): void {
+  pick(options: readonly ChoiceOption[], title = '누구와 이야기할까요?', hint = '가까이 있는 사람이 여럿이에요. 이야기할 사람을 고르세요.'): void {
     this.picks = options.slice(0, MAX_OPTIONS);
     if (this.picks.length === 0) return;
     this.callback = this.picks[0].onPick;
     this.hasSummary = false;
     this.title.setText(title);
     this.text.setText('');
-    this.hint.setText('가까이 있는 사람이 여럿이에요. 이야기할 사람을 고르세요.');
+    this.hint.setText(hint);
     this.no.setText('취소');
     for (const object of this.objects()) object.setVisible(true);
     this.summary.setVisible(false);

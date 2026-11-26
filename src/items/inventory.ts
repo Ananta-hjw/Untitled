@@ -12,7 +12,9 @@
  */
 
 export type ItemId = 'potion' | 'lunch' | 'slime-gel' | 'travel-biscuit' | 'blue-dew' | 'antidote-herb'
-  | 'serena-lunch' | 'sia-pebble' | 'vernel-memo';
+  | 'serena-lunch' | 'sia-pebble' | 'vernel-memo'
+  // 2장 서브 퀘스트: 페른이 새로 파는 말린 무화과, 리네아의 편지지, 도르의 약초 주머니
+  | 'dried-fig' | 'linea-letter-paper' | 'dor-herb-pouch';
 
 export interface ItemDef {
   id: ItemId;
@@ -25,11 +27,16 @@ export interface ItemDef {
   mana?: number;
   /** 쓰면 푸는 상태 (slow: 잿빛 나방·부식 웅덩이의 느려짐) */
   cures?: 'slow';
+  /** 물품 창의 효과 줄을 대신하는 설명 (기념품의 숨은 효과 등) */
+  note?: string;
   /** 잡화점에서 살 때 값. 없으면 팔지 않는다 */
   price?: number;
   /** 잡화점에 팔 때 받는 값. 0이면 팔 수 없다 */
   sellPrice: number;
 }
+
+/** 도르의 약초 주머니가 가방에 있으면 회복 물약이 더 채우는 체력 */
+export const HERB_POUCH_BONUS = 10;
 
 export const ITEMS: Record<ItemId, ItemDef> = {
   potion: { id: 'potion', name: '회복 물약', description: '체력을 50 채운다.', kind: 'consumable', heal: 50, price: 20, sellPrice: 8 },
@@ -41,7 +48,16 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   'serena-lunch': { id: 'serena-lunch', name: '세레나의 도시락', description: '세레나가 정성껏 싸 준 도시락. 체력을 220 채운다.', kind: 'consumable', heal: 220, sellPrice: 0 },
   'sia-pebble': { id: 'sia-pebble', name: '시아의 조약돌', description: '시아가 개울가에서 오빠 몫으로 하나 더 주워 둔 매끈한 조약돌.', kind: 'keepsake', sellPrice: 0 },
   'vernel-memo': { id: 'vernel-memo', name: '베르넬의 연구 메모', description: '들판 석판 조각에 새겨진 낯선 유적 표식을 베르넬이 옮겨 적은 쪽지.', kind: 'keepsake', sellPrice: 0 },
+  'dried-fig': { id: 'dried-fig', name: '말린 무화과', description: '페른이 남쪽 장터에서 떼어 온 달콤한 무화과. 체력을 90 채운다.', kind: 'consumable', heal: 90, price: 35, sellPrice: 14 },
+  'linea-letter-paper': { id: 'linea-letter-paper', name: '리네아의 편지지', description: '리네아가 새 공책에서 떼어 준 편지지. "가는 곳마다 한 장씩 써 보내."', kind: 'keepsake', sellPrice: 0 },
+  'dor-herb-pouch': { id: 'dor-herb-pouch', name: '도르의 약초 주머니', description: '도르가 말린 약초를 채워 준 작은 주머니. 회복 물약에 약초를 한 줌 섞어 마신다.', kind: 'keepsake', sellPrice: 0,
+    note: `가방에 있으면 회복 물약이 체력을 ${HERB_POUCH_BONUS} 더 채운다 · 팔 수 없다` },
 };
+
+/** 이 아이템을 쓸 때 더 채우는 체력 (도르의 약초 주머니 + 회복 물약) */
+export function healBonus(inv: Inventory, id: ItemId): number {
+  return id === 'potion' && countOf(inv, 'dor-herb-pouch') > 0 ? HERB_POUCH_BONUS : 0;
+}
 
 /** 상점 */
 export type ShopId = 'merina' | 'fern';
@@ -51,9 +67,15 @@ export const SHOP_STOCK: Record<ShopId, ItemId[]> = {
   fern: ['potion', 'travel-biscuit', 'blue-dew', 'antidote-herb'],
 };
 
+/** 상점이 지금 파는 물건: 기본 물건과 이야기로 늘어난 물건(예: 행상인의 짐 뒤 페른의 말린 무화과) */
+export function shopStock(shop: ShopId, extra: readonly ItemId[] = []): ItemId[] {
+  return [...SHOP_STOCK[shop], ...extra.filter(id => !SHOP_STOCK[shop].includes(id))];
+}
+
 /** 물품 창에 보여 줄 효과 한 줄 (예: "체력 50 회복") */
 export function itemEffectText(id: ItemId): string {
   const def = ITEMS[id];
+  if (def.note) return def.note;
   if (def.kind === 'keepsake') return '소중한 기념품 · 팔 수 없다';
   if (def.kind !== 'consumable') return '재료 · 상점에 팔 수 있다';
   return [def.heal ? `체력 ${def.heal} 회복` : '', def.mana ? `마나 ${def.mana} 회복` : '', def.cures === 'slow' ? '느려짐 해소' : '']
@@ -122,7 +144,7 @@ export function useConsumable(inv: Inventory, id: ItemId, status: UseStatus): Us
   const def = ITEMS[id];
   return {
     inventory,
-    heal: def.heal ? Math.max(0, Math.min(def.heal, status.maxHp - status.hp)) : 0,
+    heal: def.heal ? Math.max(0, Math.min(def.heal + healBonus(inv, id), status.maxHp - status.hp)) : 0,
     mana: def.mana ? Math.max(0, Math.min(def.mana, status.maxMp - status.mp)) : 0,
     cured: def.cures === 'slow' && status.slowed,
   };
@@ -143,9 +165,9 @@ export function bestHealItem(inv: Inventory, missing: number): ItemId | undefine
 }
 
 /** 산다. 골드가 모자라거나 팔지 않는 물건(그 상점에 없는 물건)이거나 가방이 가득하면 null. */
-export function buy(inv: Inventory, id: ItemId, count = 1, shop?: ShopId): Inventory | null {
+export function buy(inv: Inventory, id: ItemId, count = 1, shop?: ShopId, extra: readonly ItemId[] = []): Inventory | null {
   const price = ITEMS[id].price;
-  if (price === undefined || count < 1 || (shop && !SHOP_STOCK[shop].includes(id))) return null;
+  if (price === undefined || count < 1 || (shop && !shopStock(shop, extra).includes(id))) return null;
   if (countOf(inv, id) + count > MAX_STACK) return null;
   const cost = price * count;
   if (inv.gold < cost) return null;

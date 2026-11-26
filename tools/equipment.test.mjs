@@ -79,7 +79,7 @@ test('무기 칸에 낄 수 있는 모든 검은 주인공 그림의 무기 모�
 test('여행자의 망토는 페른이 팔고 도란의 대장간에는 없다', async () => {
   const { GEAR, gearForSale, buyGear } = await import('../src/items/equipment.ts');
   const { emptyInventory, addGold } = await import('../src/items/inventory.ts');
-  assert.deepEqual(gearForSale('fern'), ['travel-cloak']);
+  assert.deepEqual(gearForSale('fern'), ['travel-cloak', 'heron-feather-boots', 'reed-knot-bracelet']);
   assert.ok(!gearForSale('doran').includes('travel-cloak'));
   assert.ok(gearForSale('doran').includes('short-sword'));
   assert.deepEqual(GEAR['travel-cloak'].stats, { def: 2, dex: 2 });
@@ -99,4 +99,28 @@ test('리네아의 들꽃 팔찌는 장신구 칸에 끼워 VIT +2를 얻고 상
   const worn = equip(bag, 'wildflower-bracelet');
   assert.equal(worn.equipped.accessory1, 'wildflower-bracelet');
   assert.equal(gearBonus(worn).vit, 2);
+});
+
+test('2장 장비: 마르타의 대장간은 청동 장비, 페른은 여행 장비를 팔고, 같은 칸의 1장 장비보다 능력치가 높고 값도 비싸다', async () => {
+  const { GEAR, gearForSale, buyGear } = await import('../src/items/equipment.ts');
+  const { emptyInventory, addGold } = await import('../src/items/inventory.ts');
+  assert.deepEqual(gearForSale('marta'), ['bronze-helm', 'scale-armor', 'bronze-bracers', 'bronze-bell-earring']);
+  const sum = id => Object.values(GEAR[id].stats).reduce((a, b) => a + b, 0);
+  const chapterOne = Object.values(GEAR).filter(g => g.price !== undefined && g.kind !== 'weapon' && g.shop !== 'marta'
+    && !['heron-feather-boots', 'reed-knot-bracelet'].includes(g.id));
+  for (const id of [...gearForSale('marta'), 'heron-feather-boots', 'reed-knot-bracelet']) {
+    const g = GEAR[id];
+    assert.notEqual(g.kind, 'weapon');
+    const best = chapterOne.filter(o => o.kind === g.kind);
+    assert.ok(best.length, id);
+    for (const o of best) {
+      assert.ok(sum(id) >= sum(o.id) + 2, `${id} > ${o.id}`);
+      assert.ok(g.price > o.price, `${id} 값`);
+    }
+    assert.ok(g.sellPrice < g.price);
+  }
+  const rich = addGold(emptyInventory(), 2000), gear = { equipped: {}, bag: {} };
+  assert.equal(buyGear(rich, gear, 'scale-armor'), null, '도란의 대장간에는 없다');
+  assert.equal(buyGear(rich, gear, 'scale-armor', 'fern'), null);
+  assert.equal(buyGear(rich, gear, 'scale-armor', 'marta').gear.bag['scale-armor'], 1);
 });
