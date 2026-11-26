@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config';
 import { INTERIOR_ART, furnitureAt, interiorArtPoint, interiorArtRect, type Interior, type PixelRect } from './interiors';
 import { mapArtKey } from './mapArt';
-import { interiorBackgroundPieces } from './interiorLayers';
+import { INTERIOR_OCCLUDERS, interiorBackgroundPieces } from './interiorLayers';
 
 /** 원화의 벽·바닥 조각과 독립된 가구 객체를 조립한다. 그림과 충돌은 같은 가구 데이터를 공유한다. */
 export function drawInterior(scene: Phaser.Scene, interior: Interior): void {
@@ -27,21 +27,52 @@ export function drawInterior(scene: Phaser.Scene, interior: Interior): void {
   for (const bounds of interiorBackgroundPieces(interior)) piece(bounds, 'map-art-background', -110);
   for (const f of interior.furniture) {
     const at = furnitureAt(interior, f);
-    // 가구 조각은 원화를 사각형으로 잘라 낸 것이라 주변 바닥도 함께 들어 있다(투명하지 않다).
-    // 그래서 앞쪽 끝이 아니라 뒤쪽 끝(바닥 접촉 영역의 위쪽)을 깊이로 쓴다: 가구 옆에 선 사람은 가구 앞에 그려지고,
-    // 정말 가구 뒤에 선 사람만 가려진다. 앞쪽 끝을 쓰면 옆에 선 사람까지 바닥 사각형에 잘려 보인다.
-    piece(f.art, `interior-furniture-${f.id}`, at.y - f.d)
+    // Restore the original painting under the actors. Only the masked overlay occludes them.
+    piece(f.art, `interior-furniture-${f.id}`, -110)
       .setData({ furnitureId: f.id, kind: f.kind, footprint: { x: at.x, y: at.y - f.d / 2, w: f.w, d: f.d } });
   }
+  const source = texture.getSourceImage() as HTMLImageElement;
+  for (const [index, occluder] of INTERIOR_OCCLUDERS[interior.id].entries()) {
+    const outlines = occluder.outlines.map(outline => outline.map((value, i) =>
+      i % 2 === 0 ? value * width / 768 : value * height / 512));
+    const xs = outlines.flatMap(outline => outline.filter((_, i) => i % 2 === 0));
+    const ys = outlines.flatMap(outline => outline.filter((_, i) => i % 2 === 1));
+    const x = Math.floor(Math.min(...xs)), y = Math.floor(Math.min(...ys));
+    const w = Math.ceil(Math.max(...xs)) - x, h = Math.ceil(Math.max(...ys)) - y;
+    const maskKey = `${key}-foreground-${index}`;
+    if (!scene.textures.exists(maskKey)) {
+      const mask = scene.textures.createCanvas(maskKey, w, h);
+      if (!mask) throw new Error(`Unable to allocate interior texture ${maskKey}`);
+      const ctx = mask.context;
+      ctx.save();
+      ctx.beginPath();
+      for (const outline of outlines) {
+        ctx.moveTo(outline[0] - x, outline[1] - y);
+        for (let i = 2; i < outline.length; i += 2) ctx.lineTo(outline[i] - x, outline[i + 1] - y);
+        ctx.closePath();
+      }
+      ctx.clip();
+      ctx.drawImage(source, x, y, w, h, 0, 0, w, h);
+      ctx.restore();
+      mask.refresh();
+    }
+    if ('furniture' in occluder) {
+      const f = interior.furniture[occluder.furniture];
+      scene.add.image(rect.left + x, rect.top + y, maskKey).setOrigin(0)
+        .setDepth(furnitureAt(interior, f).y - f.d).setName('interior-occluder').setData('furnitureId', f.id);
+    } else {
+      scene.add.image(rect.left + x, rect.top + y, maskKey).setOrigin(0)
+        .setDepth(interiorArtPoint(interior, 0, occluder.frontY * art.height / 512).y).setName('map-art-foreground');
+    }
+  }
+
   const foreground = [
-    ...(art.foreground ?? []),
     [0, art.floor[3], art.doorX - 110, art.height],
     [art.doorX + 110, art.floor[3], art.width, art.height],
   ];
   for (const [left, top, right, bottom] of foreground) {
     const depth = interiorArtPoint(interior, left, bottom).y;
-    // 원화 전체(__BASE)를 써야 한다. 프레임을 생략하면 위에서 잘라 붙인 첫 조각이 기본 프레임이 되어
-    // 자르기 영역이 엉뚱해지고(높이 0) 계산대 앞면이 그려지지 않아, 그 뒤의 사람이 계산대를 뚫고 서 있는 것처럼 보였다.
+    // Keep the front wall below the walkable floor as a separate occluding strip.
     const x = pixelX(left), y = pixelY(top);
     scene.add.image(rect.left, rect.top, key, '__BASE').setOrigin(0)
       .setCrop(x, y, pixelX(right) - x, pixelY(bottom) - y)

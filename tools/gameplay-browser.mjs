@@ -1487,13 +1487,43 @@ test('실내 전경(계산대 앞면·문턱)은 원화 전체에서 잘라 그�
       const s = window.__game.scene.getScene('game');
       const fg = s.children.list.filter(o => o.name === 'map-art-foreground');
       const npc = s.npcs.find(n => n.def.id === '${id}');
-      // 계산대 앞면 조각: 자르기 높이가 있고, 그 사람보다 앞(깊이가 크다)에 그려진다.
-      const counter = fg.filter(o => o._crop.height > 0 && o.depth > npc.depth && o.depth < npc.depth + 200);
-      return { all: fg.every(o => o._crop.width > 0 && o._crop.height > 0), counter: counter.length };
+      const counters = fg.filter(o => o.texture.key.includes('-foreground-') && o.depth > npc.depth && o.depth < npc.depth + 200);
+      const walls = fg.filter(o => !o.texture.key.includes('-foreground-'));
+      return { all: walls.length === 2 && walls.every(o => o._crop.width > 0 && o._crop.height > 0),
+        counter: counters.filter(o => o.width > 0 && o.height > 0).length };
     })()`);
     assert.equal(r.all, true, map + ': 잘린 전경이 비어 있지 않다');
     assert.ok(r.counter >= 1, map + ': 계산대 앞면이 ' + id + '보다 앞에 그려진다');
   }
+});
+
+test('시온 집의 상자와 바구니 윤곽만 가리며 옆 통로의 바닥은 시온을 덮지 않는다', async () => {
+  await load('in-home');
+  const result = await evaluate(`(async () => {
+    const { interiorArtRect } = await import('/src/world/interiors.ts');
+    const s = window.__game.scene.getScene('game');
+    const rect = interiorArtRect(s.map.interior);
+    const width = rect.right - rect.left, height = rect.bottom - rect.top;
+    const point = (x, y) => ({ x: rect.left + x * width / 768, y: rect.top + y * height / 512 });
+    const alphaAt = (object, point) => {
+      const x = Math.floor(point.x - object.x), y = Math.floor(point.y - object.y);
+      if (x < 0 || y < 0 || x >= object.width || y >= object.height) return 0;
+      return object.texture.context.getImageData(x, y, 1, 1).data[3];
+    };
+    const foot = point(560, 342);
+    s.player.placeAt(foot.x, foot.y);
+    const overlays = s.children.list.filter(o => o.name === 'interior-occluder' && o.depth > s.player.depth);
+    const basket = overlays.find(o => o.getData('furnitureId') === 'home-barrel-10');
+    const chest = s.children.list.find(o => o.name === 'interior-occluder' && o.getData('furnitureId') === 'home-crate-9');
+    return {
+      walkable: s.walkArea.contains(foot.x, foot.y),
+      floor: overlays.every(o => alphaAt(o, point(566, 334)) === 0),
+      basketGap: basket && alphaAt(basket, point(568, 353)) === 0,
+      solidBasket: basket && alphaAt(basket, point(587, 379)) === 255,
+      solidChest: chest && alphaAt(chest, point(657, 354)) === 255,
+    };
+  })()`);
+  assert.deepEqual(result, { walkable: true, floor: true, basketGap: true, solidBasket: true, solidChest: true });
 });
 
 test('잡화점 안의 메리나에게 카운터 앞에서 말을 걸면 대화 뒤 잡화점이 열린다', async () => {
