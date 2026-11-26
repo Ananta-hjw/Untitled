@@ -1,3 +1,4 @@
+import type { FerryInteriorPropId } from './ferryInteriors.ts';
 import { mapLength, mapPoint, mapObstacle, mapProp } from './mapScale.ts';
 import { WORLD_WIDTH, WORLD_HEIGHT } from '../config.ts';
 import type { Obstacle } from './obstacles';
@@ -112,12 +113,14 @@ export type FerryObjectId = 'inn' | 'marta-smithy' | 'morgan-warehouse' | 'watch
 
 export interface VillageProp {
   frame: 'oak' | 'pine' | 'boulders' | 'shrub' | 'rock' | 'flowers' | 'sign' | 'stump' | 'dead-tree' | 'cliff-straight' | 'cliff-corner' | 'stone-shelter'
-    | FerryObjectId;
+    | FerryObjectId | FerryInteriorPropId;
   texture?: string;
   x: number;
   y: number;
   width: number;
-  footprint?: { rx: number; ry: number };
+  footprint?: { rx: number; ry: number; shape?: 'rect'; offsetY?: number };
+  depth?: number;
+  id?: string;
   /** 그림 위에 띄우는 이름(건물 그림을 소품으로 놓을 때, 예: 물안개 나루) */
   label?: string;
 }
@@ -185,7 +188,11 @@ export const NORTH_PROPS = BASE_NORTH_PROPS.map(mapProp);
 
 /** 소품의 바닥 접점(줄기·바위 밑동)만 장애물로 만든다. 다른 맵도 같은 규칙을 쓴다. */
 export function propObstacles(props: readonly VillageProp[]): Obstacle[] {
-  return props.flatMap((p) => p.footprint ? [{ x: p.x, y: p.y - p.footprint.ry * .45, ...p.footprint }] : []);
+  return props.flatMap(({ x, y, footprint }) => {
+    if (!footprint) return [];
+    const { rx, ry, offsetY = -ry * .45, shape } = footprint;
+    return [{ x, y: y + offsetY, rx, ry, ...(shape ? { shape } : {}) }];
+  });
 }
 
 export function buildingObstacles(buildings: readonly Building[]): Obstacle[] {

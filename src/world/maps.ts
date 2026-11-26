@@ -1,5 +1,6 @@
 import { EAST_PASS } from './eastPass.ts';
 import { FERRY_FROM_SWAMP, FERRY_VILLAGE } from './ferryVillage.ts';
+import { FERRY_DOORS, FERRY_INTERIOR_MAPS, type FerryRoomId } from './ferryInteriors.ts';
 import { mapLength, mapPoint, mapRect, mapProp } from './mapScale.ts';
 import { VILLAGE_GATES, perimeterObstacles } from './villagePerimeter.ts';
 import type { EnemyKey } from '../combat/monsterTypes.ts';
@@ -28,7 +29,7 @@ import {
  * 이 파일은 Phaser를 쓰지 않아 tools/maps.test.mjs가 직접 불러 검사한다.
  */
 
-export type MapId = 'village' | 'village-north' | 'south-field' | 'west-forest' | 'east-stream' | 'east-pass' | 'reed-swamp' | 'ferry-village' | `in-${InteriorId}`;
+export type MapId = 'village' | 'village-north' | 'south-field' | 'west-forest' | 'east-stream' | 'east-pass' | 'reed-swamp' | 'ferry-village' | `in-${InteriorId}` | FerryRoomId;
 
 export interface Rect { left: number; top: number; right: number; bottom: number }
 export interface Point { x: number; y: number }
@@ -72,6 +73,8 @@ export interface GameMap {
   interactables: Interactable[];
   /** 건물 실내 (실내 맵만). 원화의 바닥·가구 좌표와 일치한다. */
   interior?: Interior;
+  /** 문턱 좌표로 연결하는 별도 소품 방식의 실내. */
+  indoorThreshold?: Point;
 }
 
 const FULL_BOUNDS: Rect = { ...VILLAGE_BOUNDS };
@@ -316,9 +319,14 @@ export const MAPS = {
   'east-stream': EAST_STREAM,
   'east-pass': EAST_PASS,
   'reed-swamp': REED_SWAMP,
-  'ferry-village': FERRY_VILLAGE,
+  'ferry-village': { ...FERRY_VILLAGE, interactables: FERRY_DOORS },
+  ...FERRY_INTERIOR_MAPS,
   ...Object.fromEntries(INTERIORS.map((i) => [`in-${i.id}`, interiorMap(i)])),
 } as Record<MapId, GameMap>;
+
+export function isIndoorMap(map: GameMap): boolean {
+  return !!(map.interior || map.indoorThreshold);
+}
 
 /** 새 게임은 시온의 집 앞(마을 북쪽)에서 시작한다. */
 export const START_MAP: MapId = 'village-north';

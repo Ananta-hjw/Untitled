@@ -4785,3 +4785,56 @@ test('안개 실 잣기는 바닥을 예고하고 시온·에반을 묶으며 �
   })()`);
   assert.deepEqual(dodged, {fixed: true, moved: true, escaped: true});
 });
+
+test('나루의 아홉 실내가 기본 행동 버튼으로 열리고 원본 크기 배경과 투명 가구를 그린다', { timeout: 90000 }, async () => {
+  await load('ferry-village&companion=none');
+  const results = await evaluate(`(async () => {
+    const game = window.__game, s = game.scene.getScene('game');
+    let time = performance.now();
+    const step = () => game.headlessStep(time += 16, 16);
+    async function useDoor(spot, offsetY, action, target) {
+      s.player.placeAt(spot.x, spot.y + offsetY);
+      step();
+      if (s.attackButton.text.text !== action) throw Error(spot.id + ': ' + s.attackButton.text.text);
+      s.attackButton.pressed = true;
+      for (let i = 0; i < 400; i++) {
+        step();
+        if (s.mapId === target && s.sys.isActive() && s.minimap?.title.text === s.map.name) {
+          step();
+          return;
+        }
+        await new Promise(resolve => setTimeout(resolve, 8));
+      }
+      throw Error('지도 이동 시간 초과: ' + target);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const results = [];
+    for (const door of s.map.interactables) {
+      await useDoor(door, 0, '들어가기', door.enter.to);
+      const bg = s.children.getByName('map-art-background');
+      results.push({
+        map: s.mapId,
+        background: [bg.displayWidth, bg.displayHeight, bg.scaleX, bg.scaleY],
+        safeArrival: s.walkArea.contains(s.player.x, s.player.y),
+        props: s.map.props.every(p => {
+          const object = s.children.getByName('village-prop-' + p.id);
+          if (!object || object.texture.key !== p.texture || object.depth !== (p.depth ?? p.y)) return false;
+          ctx.clearRect(0, 0, 1, 1);
+          ctx.drawImage(object.texture.getSourceImage(), 0, 0);
+          if (ctx.getImageData(0, 0, 1, 1).data[3] !== 0) return false;
+          return !p.footprint || !s.walkArea.contains(p.x, p.y + p.footprint.offsetY);
+        }),
+      });
+      await useDoor(s.map.interactables[0], -10, '나가기', 'ferry-village');
+      results.at(-1).returned = s.walkArea.contains(s.player.x, s.player.y);
+    }
+    return results;
+  })()`, 85000);
+  assert.equal(results.length, 9);
+  for (const room of results) {
+    assert.deepEqual(room.background, [1536, 1024, 1, 1], room.map);
+    assert.ok(room.safeArrival && room.props && room.returned, room.map);
+  }
+});

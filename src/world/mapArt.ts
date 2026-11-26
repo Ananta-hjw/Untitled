@@ -17,6 +17,9 @@ import type { GameMap } from './maps';
 const URLS: Record<string, string> = { home, linea, chief, clinic, hall, store, smithy, inn, 'south-field': field, 'reed-swamp': swamp };
 export const mapArtKey = (id: string): string => `map-art-${id}`;
 const tileUrls = import.meta.glob<string>('../assets/maps/{east-pass,ferry-village}/ground-*.webp', { eager: true, query: '?url', import: 'default' });
+const interiorUrls = import.meta.glob<string>('../assets/maps/ferry-village/interiors/rooms/*.webp', {
+  eager: true, query: '?url', import: 'default',
+});
 interface GroundPiece { key: string; x: number; y: number; width: number; height: number }
 
 const tiledGround = new Map(Object.entries({ 'east-pass': passAssets.ground, 'ferry-village': ferryGround })
@@ -35,7 +38,9 @@ export function preloadMapArt(scene: Phaser.Scene, map: GameMap): void {
     for (const { key, url } of ground.tiles) if (!scene.textures.exists(key)) scene.load.image(key, url);
     return;
   }
-  const id = map.interior?.id ?? map.id, url = URLS[id];
+  const id = map.interior?.id ?? map.id;
+  const url = map.indoorThreshold ? interiorUrls[`../assets/maps/ferry-village/interiors/rooms/${id}.webp`] : URLS[id];
+  if (map.indoorThreshold && !url) throw new Error(`Missing ferry interior ground ${id}`);
   if (url && !scene.textures.exists(mapArtKey(id))) scene.load.image(mapArtKey(id), url);
 }
 

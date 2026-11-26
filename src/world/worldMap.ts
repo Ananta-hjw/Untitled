@@ -4,7 +4,7 @@ import type { MapId } from './maps.ts';
  * 지역 연결과 방문 기록. 현재 지도 UI는 ui/WorldMap.ts에서 실제 맵 원화를 보여 준다.
  *
  * 지역마다 지도 위의 칸 위치(gx, gy: 로웬 마을이 가운데 0, 0)와 이어진 길을 정한다.
- * 건물 실내는 방문 기록상 로웬 마을에 속한다.
+ * 건물 실내는 방문 기록상 건물이 있는 마을에 속한다.
  * 북쪽 유적처럼 아직 갈 수 없는 곳(mapId 없음)은 방문 기록에서 제외한다.
  * 가 본 지역은 기기에 따로 저장한다(untitled-rpg.visited).
  * 이 파일은 Phaser를 쓰지 않아 tools/world-map.test.mjs가 직접 불러 검사한다.
@@ -46,8 +46,9 @@ export const ROUTES: Array<[RegionId, RegionId]> = [
   ['ferry-village', 'reed-swamp'],
 ];
 
-/** 맵이 속한 지역. 건물 실내와 마을 북쪽도 로웬 마을이다. */
+/** 맵이 속한 지역. */
 export function regionOf(mapId: MapId): RegionId {
+  if (mapId.startsWith('in-ferry-')) return 'ferry-village';
   if (mapId.startsWith('in-') || mapId === 'village-north') return 'village';
   return REGIONS.find((r) => r.mapId === mapId)?.id ?? 'village';
 }

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ferryTexture } from './ferryVillage';
-import type { FerryObjectId } from './villageLayout';
+import type { FerryObjectId, VillageProp } from './villageLayout';
 
 const urls = import.meta.glob<string>('../assets/maps/ferry-village/objects/*.webp', { eager: true, query: '?url', import: 'default' });
 
@@ -10,6 +10,22 @@ export function preloadFerryVillage(scene: Phaser.Scene): void {
     const id = path.slice(path.lastIndexOf('/') + 1, -'.webp'.length) as FerryObjectId;
     const key = ferryTexture(id);
     if (!scene.textures.exists(key)) scene.load.image(key, url);
+  }
+}
+
+const interiorUrls = import.meta.glob<string>('../assets/maps/ferry-village/interiors/props/*.webp', {
+  eager: true, query: '?url', import: 'default',
+});
+
+export function preloadFerryInterior(scene: Phaser.Scene, props: readonly VillageProp[]): void {
+  const loaded = new Set<string>();
+  for (const { frame, texture } of props) {
+    if (!texture || loaded.has(texture) || scene.textures.exists(texture)) continue;
+    const url = interiorUrls[`../assets/maps/ferry-village/interiors/props/${frame}.webp`]
+      ?? urls[`../assets/maps/ferry-village/objects/${frame}.webp`];
+    if (!url) throw new Error(`Missing ferry interior prop ${frame}`);
+    scene.load.image(texture, url);
+    loaded.add(texture);
   }
 }
 

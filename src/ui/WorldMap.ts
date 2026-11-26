@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH_UI, VIEW_HEIGHT } from '../config';
-import { MAPS, type GameMap, type MapId, type Point } from '../world/maps';
+import { MAPS, isIndoorMap, type GameMap, type MapId, type Point } from '../world/maps';
 import { CARDINAL, exitDirection, exitPoint, type Cardinal } from '../world/mapNavigation';
 import { mapPreview, type MapPreview } from './mapPreview';
 
@@ -54,7 +54,7 @@ export class WorldMap {
     }
     const passages = map.exits.map(exit => ({ point: exitPoint(map, exit), target: exit.to,
       direction: exitDirection(map, exitPoint(map, exit)) }));
-    if (map.interior) {
+    if (isIndoorMap(map)) {
       for (const spot of map.interactables) if (spot.enter && spot.enter.to in MAPS) passages.push({
         point: spot, target: spot.enter.to as keyof typeof MAPS, direction: 'south',
       });

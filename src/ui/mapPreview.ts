@@ -48,7 +48,7 @@ export function mapPreview(scene: Phaser.Scene, map: GameMap): MapPreview {
       ...perimeterPieces(map.id).map(p => ({ ...p, texture: PERIMETER_TEXTURE, frame: p.frame as string })),
       ...map.props.map(p => ({ ...p, texture: p.texture ?? 'village-props', frame: p.frame as string })),
       ...map.buildings.map(b => ({ ...b, texture: 'village-buildings', frame: b.frame as string })),
-    ].sort((a, b) => a.y - b.y);
+    ].sort((a, b) => ('depth' in a ? a.depth ?? a.y : a.y) - ('depth' in b ? b.depth ?? b.y : b.y));
     for (const object of objects) {
       const source = scene.textures.get(object.texture);
       const frame = source.get(source.has(object.frame) ? object.frame : '__BASE'), w = object.width * scale, h = 'height' in object ? object.height * scale : w * frame.cutHeight / frame.cutWidth;

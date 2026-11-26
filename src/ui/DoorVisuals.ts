@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH_LIGHTING } from '../config';
-import { doorOf, type Interior } from '../world/interiors';
+import { doorOf } from '../world/interiors';
 import type { GameMap } from '../world/maps';
 
 export type WorldBadgeKind = 'exit' | 'enter' | 'talk';
@@ -50,7 +50,6 @@ const BADGE_STYLES: Record<WorldBadgeKind, BadgeStyle> = {
 export class DoorVisuals {
   private readonly floorGlow: Phaser.GameObjects.Graphics;
   private readonly badgeBg: Phaser.GameObjects.Graphics;
-  private readonly interior?: Interior;
   private readonly indoorDoor?: { x: number; y: number };
   private outdoorSpot?: { x: number; y: number };
   private indoorActive = false;
@@ -58,8 +57,7 @@ export class DoorVisuals {
   private lastBadgeKey = '';
 
   constructor(scene: Phaser.Scene, map: GameMap) {
-    this.interior = map.interior;
-    this.indoorDoor = map.interior ? doorOf(map.interior) : undefined;
+    this.indoorDoor = map.interior ? doorOf(map.interior) : map.indoorThreshold;
     // 실내 바닥(-110) 위, 캐릭터·가구 가림막(y좌표)·전경 벽보다 아래에 그려 자연스럽게 밟고 지나간다.
     this.floorGlow = scene.add
       .graphics()

@@ -4,7 +4,7 @@ import { FIELD_PROPS } from '../src/world/southFieldLayout.ts';
 import { DIALOGUES } from '../src/story/dialogues.ts';
 import { findInteractable } from '../src/world/interactables.ts';
 import { FERRY_BUILDINGS } from '../src/world/ferryVillage.ts';
-import { MAPS, START_MAP, findExit, insideRect, isMapId, mapObstacles, walkable } from '../src/world/maps.ts';
+import { MAPS, START_MAP, findExit, insideRect, isIndoorMap, isMapId, mapObstacles, walkable } from '../src/world/maps.ts';
 
 const maps = Object.values(MAPS);
 
@@ -128,12 +128,12 @@ test('사냥터의 표지판은 대사가 있고, 시작점에서는 대화 버�
         // 건물 문: 들어가는 실내가 있고, 들어가면 걸을 수 있는 자리에 선다.
         // 실내의 "나가기": 나가면 바깥 마을의 걸을 수 있는 자리에 선다.
         const target = MAPS[spot.enter.to];
-        if (map.interior) assert.ok(!target.interior, spot.id);
-        else assert.ok(target?.interior, spot.id);
+        const indoor = isIndoorMap(map);
+        assert.notEqual(isIndoorMap(target), indoor, spot.id);
         assert.equal(walkable(target, spot.enter.at.x, spot.enter.at.y), true, spot.id);
-        const y = map.interior ? spot.y - 20 : spot.y + 20;
+        const y = indoor ? spot.y - 20 : spot.y + 20;
         assert.equal(findInteractable(spot.x, y, map.interactables)?.id, spot.id);
-        if (map.interior) assert.equal(walkable(map, spot.x, y), true, `${spot.id} 문 앞`);
+        if (indoor || map.id === 'ferry-village') assert.equal(walkable(map, spot.x, y), true, `${spot.id} 문 앞`);
         continue;
       }
       const lines = DIALOGUES[spot.dialogue];
@@ -176,4 +176,31 @@ test('물안개 나루의 건물은 벽으로 막히고, 입구에서 모든 건
   }
   // 두 잔교 끝까지 걸어갈 수 있다
   assert.ok(near(3650, 1045) && near(3650, 2120));
+});
+
+
+test('나루 실내의 방마다 문과 가구 접점이 있고 문에서 방 안까지 걸을 수 있다', () => {
+  const ferry = MAPS['ferry-village'];
+  assert.equal(ferry.interactables.length, 9);
+  const exterior = reachable(ferry, ferry.spawn);
+  for (const door of ferry.interactables) {
+    const room = MAPS[door.enter.to];
+    assert.ok(exterior.some(p => findInteractable(p.x, p.y, ferry.interactables) === door), door.id);
+    assert.equal(room.interactables[0].enter.to, ferry.id);
+    assert.ok(reachable(room, room.spawn).some(p => findInteractable(p.x, p.y, room.interactables)), room.id);
+    assert.equal(walkable(room, room.indoorThreshold.x, room.bounds.top - 50), false, `${room.id} 뒷벽`);
+    assert.equal(walkable(room, room.bounds.left - 2, room.spawn.y), false, `${room.id} 옆벽`);
+    assert.equal(walkable(room, room.indoorThreshold.x - 190, room.indoorThreshold.y - 10), false, `${room.id} 앞벽`);
+    assert.equal(new Set(room.props.map(p => p.id)).size, room.props.length);
+    for (const prop of room.props) {
+      if (prop.footprint) {
+        const { offsetY } = prop.footprint;
+        assert.ok(mapObstacles(room).some(o => o.x === prop.x && o.y === prop.y + offsetY), prop.id);
+        assert.equal(walkable(room, prop.x, prop.y + offsetY), false, prop.id);
+      } else {
+        assert.equal(walkable(room, prop.x, prop.y), true, prop.id);
+        assert.ok(prop.depth < 0, prop.id);
+      }
+    }
+  }
 });
