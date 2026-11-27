@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 // 맵 크기·좌표는 게임 코드에서 그대로 가져온다(맵을 넓히거나 줄여도 기대값이 따라간다).
-import { WORLD_HEIGHT, WORLD_WIDTH } from '../src/config.ts';
+import { PLAYER, WORLD_HEIGHT, WORLD_WIDTH } from '../src/config.ts';
+import { ITEMS, ITEM_IDS } from '../src/items/inventory.ts';
 import { mapLength } from '../src/world/mapScale.ts';
 import { PLAYER_SPAWN } from '../src/world/villageLayout.ts';
 import { VILLAGE_EDGE, VILLAGE_GATES, WALL_HALF_WIDTH, WALL_INNER_LEFT, WALL_INNER_RIGHT } from '../src/world/villagePerimeter.ts';
@@ -2417,6 +2418,8 @@ test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공�
     const settle = () => { for (let i = 0; i < 60; i++) g.step(t += 16, 16); };
     s.derived.evadeChance = 0;
     const strike = (side) => {
+      // 막기 판정은 주인공이 보는 쪽(위·아래 포함)으로 정한다. 이 검사는 옆을 보고 막는다.
+      p.sprite.setAttackFacing(p.facing > 0 ? 'right' : 'left');
       e.character.placeAt(p.x + 80 * side * p.facing, p.y);
       e.character.facing = -side * p.facing;
       p.invulnerableUntil = 0; p.hp = p.maxHp;
@@ -2885,13 +2888,15 @@ test('습격의 부식의 추적자와 잿빛 나방은 8방향 전용 공격 �
     const directions = [[0,1],[-1,0],[1,0],[0,-1],[-1,1],[1,1],[-1,-1],[1,-1]];
     return Object.fromEntries(['corrosion-tracker', 'ashen-moth'].map(kind => {
       const enemy = s.enemies.find(e => e.kind === kind), sprite = enemy.character.sprite;
-      const { windupMs, strikeMs, returnMs } = enemy.stats;
+      const { strikeMs, returnMs } = enemy.stats;
       return [kind, directions.map(([x,y], i) => {
         let hits = 0;
         const now = s.now + i * 5000;
         enemy.beginWindup(now, x, y);
+        // 연타 묶음의 타마다 예비 동작 길이가 다를 수 있어 이번 타의 길이를 쓴다. dt 0이면 지연 추적으로 돌지 않는다.
+        const windupMs = enemy.windupMs;
         const at = (time) => {
-          enemy.updateStrike(now + time, () => { hits++; return true; }, s.walkArea);
+          enemy.updateStrike(now + time, 0, { x: 0, y: 0, alive: false }, () => { hits++; return true; }, s.walkArea);
           return { frame: sprite.image.frame.name, key: sprite.image.texture.key };
         };
         const strike = windupMs + strikeMs, end = strike + returnMs;
@@ -3767,6 +3772,8 @@ test('네 검은 정면 찌르기와 좌우·앞대각선 공격에서 주먹에
 });
 
 test('타격 뒤 잠깐 멈춰도 세계 시계와 예약 입력·회피는 동작한다', async () => {
+  // 각 타의 잔심 멈춤 구간(config.ts의 followPauseAtMs·followPauseMs). 경계의 자세 전환을 피해 안쪽 5ms만 쓴다.
+  const holds = PLAYER.combo.map((c, stage) => [stage, c.followPauseAtMs + 5, c.followPauseMs - 5]);
   await load('village');
   const result = await evaluate(`(() => {
     const s=window.__game.scene.getScene('game'),p=s.player,h=p.sprite,runs=[];
@@ -3778,7 +3785,7 @@ test('타격 뒤 잠깐 멈춰도 세계 시계와 예약 입력·회피는 동�
       s.attackButton.isDown=false;s.comboStage=stage;s.comboExpiresAt=1e9;s.nextAttackAt=0;
       s.dodgeProgress=1;s.dodgeUntil=0;s.dodgeReadyAt=0;s.hitStopLeft=0;s.slowMotionLeft=0;
     };
-    for(const [stage,holdAt,holdMs] of [[0,300,90],[1,200,90],[2,260,120]]){
+    for(const [stage,holdAt,holdMs] of ${JSON.stringify(holds)}){
       reset(stage,1000+stage*2000);const began=s.now;s.startAttack(began,1);const ready=s.nextAttackAt;
       while(s.now<began+holdAt)tick();
       const before={x:p.x,y:p.y,frame:h.image.frame.name,rotation:h.weaponFront.rotation,clock:s.now,count:starts};
@@ -4294,7 +4301,8 @@ test('페른의 수레는 여행 물품만 팔고, 푸른 이슬은 마나를, �
   assert.equal(result.usedHerb, true);
   assert.equal(result.slowedAfter, false);
   assert.equal(result.unused, false, '느려지지 않았으면 해독 약초를 쓰지 않는다');
-  assert.deepEqual(result.tileIds, ['potion', 'lunch', 'travel-biscuit', 'blue-dew', 'antidote-herb', 'serena-lunch', 'dried-fig']);
+  // 빠른 칸 창은 소모품 전부를 아이템 목록 순서로 늘어놓는다(새 소모품이 생기면 함께 늘어난다).
+  assert.deepEqual(result.tileIds, ITEM_IDS.filter(id => ITEMS[id].kind === 'consumable'));
   assert.equal(result.overlap, false);
   assert.equal(result.inside, true);
 });
