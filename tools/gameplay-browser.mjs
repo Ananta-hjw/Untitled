@@ -5674,3 +5674,103 @@ test('2단 패링(내상·회복), 헛막기 연타, 차지 패링, 보스 산�
   assert.equal(result.armorBeforeFourth, 0);
   assert.equal(result.armorAfterFourth, 1);
 });
+
+test('2장 후반의 보라색 버섯과 나루 물 마물이 전투에서 새 시트를 쓴다', { timeout: 90000 }, async () => {
+  await load('reed-swamp&companion=none&monsters=foundry-waterdrop-mushroom');
+  const mushroom = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    const enemy = s.enemies.find(e => e.kind === 'foundry-waterdrop-mushroom');
+    const art = enemy.character.sprite.list[0];
+    const idle = art.texture.key.startsWith('monster-foundry-waterdrop-mushroom-walk');
+    const frames = new Set();
+    let violetShot = false;
+    for (let i = 0; i < 120; i++) {
+      s.update(0, 16);
+      frames.add(art.texture.key);
+      violetShot ||= enemy.projectile?.image.texture.key === 'monster-foundry-water-shot';
+    }
+    const attacks = [...frames].some(key => key.startsWith('monster-foundry-waterdrop-mushroom-attack'));
+    return { idle, attacks, violetShot, originalEnemiesRemoved: s.enemies.every(e => e.kind === enemy.kind) };
+  })()`);
+  assert.deepEqual(mushroom, { idle: true, attacks: true, violetShot: true, originalEnemiesRemoved: true });
+
+  await load('reed-swamp&companion=none&monsters=river-fish-hunter');
+  const river = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player;
+    const enemy = s.enemies.find(e => e.kind === 'river-fish-hunter');
+    const art = enemy.character.sprite.list[0];
+    const surface = art.texture.key === 'monster-river-surface' && enemy.untouchable;
+    const initialHp = p.hp;
+    const frames = new Set();
+    let exposed = false;
+    for (let i = 0; i < 120; i++) {
+      s.update(0, 16);
+      frames.add(art.frame.name);
+      if (art.frame.name === 'snap') exposed ||= !enemy.untouchable;
+    }
+    const atWaterline = enemy.character.x === 935 && enemy.character.y === 405
+      && !s.walkArea.contains(enemy.character.x, enemy.character.y);
+    const damage = p.hp < initialHp;
+    p.placeAt(950, 466);
+    p.knockback.set(0, 0);
+    for (let i = 0; i < 210 && art.frame.name !== 'breach'; i++) s.update(0, 16);
+    p.sprite.setMovement(0, -1);
+    enemy.character.hp = 1;
+    s.onAttackKeyDown();
+    for (let i = 0; i < 42 && enemy.character.alive; i++) s.update(0, 16);
+    return { surface, exposed, atWaterline, damage, defeated: !enemy.character.alive,
+      defeatArt: art.texture.key === 'monster-river-fish-hunter-idle',
+      sequence: ['prepare', 'breach', 'snap', 'submerge'].every(frame => frames.has(frame)) };
+  })()`);
+  assert.deepEqual(river, { surface: true, exposed: true, atWaterline: true, damage: true,
+    sequence: true, defeated: true, defeatArt: true });
+});
+
+test('안개 분신은 매듭과 고치에서 각자 새 동작을 쓰고 검에 흩어진다', async () => {
+  await load('reed-swamp&companion=none&monsters=mist-weaver&clones=1');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    const {threads, clones} = s.mistWeaver;
+    const tick = n => { for (let i = 0; i < n; i++) s.update(0, 16); };
+    const untie = s.children.getByName.bind(s.children, 'mist-clone-untie');
+    const reaching = () => s.children.list.filter(o => o.name === 'mist-clone-reach');
+    tick(139);
+    const works = untie()?.texture.key === 'mist-clone-untie' && reaching().length === 2
+      && reaching().every(actor => actor.texture.key === 'mist-clone-reach');
+    const targets = s.children.list.filter(o => o.name === 'mist-clone-target-cocoon').length === 2
+      && !!s.children.getByName('mist-clone-target-knot');
+    const firstPose = untie()?.frame.name;
+    tick(19);
+    const advances = untie()?.frame.name !== firstPose && !threads.active;
+    for (const actor of [untie(), ...reaching()]) {
+      const blade = { base: { x: actor.x - 30, y: actor.y - 85 }, tip: { x: actor.x + 30, y: actor.y - 85 } };
+      clones.cut({ previous: blade, current: blade }, s.now);
+    }
+    tick(1);
+    const dissolves = untie()?.texture.key === 'mist-weaver-form';
+    tick(33);
+    return {works, targets, advances, dissolves, cleared: !clones.active && !untie() && reaching().length === 0};
+  })()`);
+  assert.deepEqual(result, {works: true, targets: true, advances: true, dissolves: true, cleared: true});
+});
+
+test('구출 후 확인 씬에서 배 위 여섯 명과 두 회복 동작을 재생한다', async () => {
+  await load('east-stream&companion=none&npcs=rescue-aftermath');
+  const result = await evaluate(`(() => {
+    const game = window.__game, s = game.scene.getScene('game');
+    const boat = s.children.getByName('rescue-aftermath-boat');
+    const aboard = s.children.list.filter(o => o.name?.startsWith('rescue-aboard-'));
+    const fisher = s.children.getByName('rescue-fisher-sit-up');
+    const joan = s.children.getByName('rescue-joan-supported-stand');
+    const first = [fisher.frame.name, joan.frame.name];
+    const registered = [fisher, joan].every(o => o.texture.getFrameNames().length === 4);
+    let t = performance.now();
+    for (let i = 0; i < 110; i++) game.headlessStep(t += 16, 16);
+    return { aboard: aboard.length, onDeck: aboard.every(o => o.depth > boat.depth),
+      first, registered, later: [fisher.frame.name, joan.frame.name] };
+  })()`);
+  assert.equal(result.aboard, 6);
+  assert.equal(result.onDeck && result.registered, true);
+  assert.deepEqual(result.first, ['resting', 'lean']);
+  assert(result.later.every((name, i) => name !== result.first[i]));
+});

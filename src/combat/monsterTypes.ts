@@ -7,11 +7,20 @@ export function monsterKind(key: EnemyKey): MonsterKind | undefined {
   return key === 'retainer-ash' ? undefined : key;
 }
 
+const WATERDROP_MUSHROOM = { name: '물방울 버섯', hp: 28, damage: 6, xp: 12, height: 115, speed: 85,
+  windupMs: 650, strikeMs: 110, returnMs: 220, recoverMs: 1500, color: 0x77bbd7 } as const;
+
+export function isWaterdropMushroom(kind: MonsterKind | undefined): boolean {
+  return kind === 'waterdrop-mushroom' || kind === 'foundry-waterdrop-mushroom';
+}
+
 export const MONSTERS = {
   slime: { name: '슬라임', hp: ENEMY.maxHp, damage: ENEMY.damage, xp: PROGRESSION.slimeXp, height: 95, speed: ENEMY.chaseSpeed,
     windupMs: ENEMY.windupMs, strikeMs: ENEMY.strikeMs, returnMs: ENEMY.returnMs, recoverMs: ENEMY.recoverMs, color: 0x8fe06a },
-  'waterdrop-mushroom': { name: '물방울 버섯', hp: 28, damage: 6, xp: 12, height: 115, speed: 85,
-    windupMs: 650, strikeMs: 110, returnMs: 220, recoverMs: 1500, color: 0x77bbd7 },
+  'waterdrop-mushroom': WATERDROP_MUSHROOM,
+  'foundry-waterdrop-mushroom': { ...WATERDROP_MUSHROOM, name: '보랏빛 물방울 버섯', color: 0xa078d4 },
+  'river-fish-hunter': { name: '나루의 물 마물', hp: 56, damage: 10, xp: 21, height: 100, speed: 0,
+    windupMs: 760, strikeMs: 240, returnMs: 360, recoverMs: 1400, color: 0x5d7873 },
   'iron-scale-lizard': { name: '쇠비늘 도마뱀', hp: 52, damage: 12, xp: 18, height: 105, speed: 145,
     windupMs: 560, strikeMs: 320, returnMs: 220, recoverMs: 1100, color: 0xa88b69 },
   // 소멸(네이룬)의 하급 권속. 해 질 무렵부터 나타나 부식성 가루를 뿌리며 덮친다. 약하지만 닿으면 몸이 무거워진다.

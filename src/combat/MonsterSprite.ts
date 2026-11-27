@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { FROST_SHELL, MONSTERS, monsterKind, type EnemyKey, type MonsterKind } from './monsterTypes';
+import { FROST_SHELL, MONSTERS, monsterKind, isWaterdropMushroom, type EnemyKey, type MonsterKind } from './monsterTypes';
 import { direction8, type Direction8 } from '../world/npcs';
 import phantomFadeUrl from '../assets/monsters/mist-phantom/fade.webp?url';
 import phantomFade from '../assets/monsters/mist-phantom/fade-frames.json';
@@ -7,6 +7,12 @@ import weaverShadowUrl from '../assets/monsters/mist-weaver/shadowless-pounce-sh
 import swampBurrow from '../assets/monsters/swamp-lurker/burrow-frames.json';
 import swampEmerge from '../assets/monsters/swamp-lurker/emerge-frames.json';
 
+import riverSurfaceUrl from '../assets/chapter2/river-fish-hunter/surface-idle.webp?url';
+import riverSurface from '../assets/chapter2/river-fish-hunter/surface-idle-frames.json';
+import riverAttackUrl from '../assets/chapter2/river-fish-hunter/breach-attack.webp?url';
+import riverAttack from '../assets/chapter2/river-fish-hunter/breach-attack-frames.json';
+import riverIdleUrl from '../assets/chapter2/river-fish-hunter/sd_idle.webp?url';
+import foundryShotUrl from '../assets/chapter2/foundry-waterdrop-mushroom/projectile.webp?url';
 import blinkFrames from '../assets/monsters/blink-fairy/blink-frames.json';
 import executionerMotion from '../assets/monsters/corrosion-executioner/skill-motion-frames.json';
 
@@ -24,8 +30,16 @@ interface Frame {
 interface FrameData { animations?: { walk: { fps: number; poses: number[] } }; frames: Frame[]; bounds: { top: number; bottom: number }; sheets: Record<string, { width: number; height: number }> }
 const DATA = import.meta.glob<FrameData>('../assets/monsters/*/animation_frames.json', { eager: true, import: 'default' });
 const URLS = import.meta.glob<string>('../assets/monsters/*/*.webp', { eager: true, query: '?url', import: 'default' });
+const FOUNDRY_URLS = import.meta.glob<string>('../assets/chapter2/foundry-waterdrop-mushroom/*.webp',
+  { eager: true, query: '?url', import: 'default' });
+const RIVER_SHEETS = [
+  { key: 'monster-river-surface', url: riverSurfaceUrl, data: riverSurface },
+  { key: 'monster-river-breach', url: riverAttackUrl, data: riverAttack },
+] as const;
+export const waterShotTexture = (kind?: MonsterKind): string =>
+  kind === 'foundry-waterdrop-mushroom' ? 'monster-foundry-water-shot' : 'monster-water-shot';
 const keyFor = (kind: MonsterKind, sheet: string) => `monster-${kind}-${sheet.replace('.png', '')}`;
-const frameData = (kind: MonsterKind): FrameData | undefined => DATA[`../assets/monsters/${kind}/animation_frames.json`];
+const frameData = (kind: MonsterKind): FrameData | undefined => DATA[`../assets/monsters/${kind === 'foundry-waterdrop-mushroom' ? 'waterdrop-mushroom' : kind}/animation_frames.json`];
 const idleKey = (kind: MonsterKind) => keyFor(kind, 'idle');
 /**
  * 안개 환영의 등장(안개 한 줄기에서 몸이 생긴다)·쓰러짐(몸이 흩어져 사라진다) 4칸씩 (tools/build_mist_phantom_fade.py).
@@ -49,6 +63,11 @@ const SWAMP_MOUTH: Record<Direction8, [number, number]> = {
 export function preloadMonsters(scene: Phaser.Scene, spawns: readonly { key: EnemyKey }[]): void {
   const kinds = new Set(spawns.map(s => monsterKind(s.key)).filter((k): k is MonsterKind => !!k));
   for (const kind of kinds) {
+    if (kind === 'river-fish-hunter') {
+      for (const { key, url } of RIVER_SHEETS) if (!scene.textures.exists(key)) scene.load.image(key, url);
+      if (!scene.textures.exists(idleKey(kind))) scene.load.image(idleKey(kind), riverIdleUrl);
+      continue;
+    }
     const data = frameData(kind);
     if (!data) {
       const key = idleKey(kind);
@@ -57,7 +76,11 @@ export function preloadMonsters(scene: Phaser.Scene, spawns: readonly { key: Ene
     }
     for (const sheet of Object.keys(data.sheets)) {
       const key = keyFor(kind, sheet);
-      if (!scene.textures.exists(key)) scene.load.image(key, URLS[`../assets/monsters/${kind}/${sheet.replace('.png', '.webp')}`]);
+      if (scene.textures.exists(key)) continue;
+      const file = sheet.replace('.png', '.webp');
+      const url = kind === 'foundry-waterdrop-mushroom' ? FOUNDRY_URLS[`../assets/chapter2/${kind}/${file}`]
+        : URLS[`../assets/monsters/${kind}/${file}`];
+      scene.load.image(key, url);
     }
     const special = specialAtlas(kind);
     if (special && !scene.textures.exists(keyFor(kind, special.sheet))) {
@@ -74,8 +97,9 @@ export function preloadMonsters(scene: Phaser.Scene, spawns: readonly { key: Ene
     }
     if (kind === 'mist-weaver' && !scene.textures.exists(WEAVER_SHADOW)) scene.load.image(WEAVER_SHADOW, weaverShadowUrl);
     if (kind === 'mist-phantom' && !scene.textures.exists(FADE_KEY)) scene.load.image(FADE_KEY, phantomFadeUrl);
-    if (kind === 'waterdrop-mushroom' && !scene.textures.exists('monster-water-shot')) {
-      scene.load.image('monster-water-shot', URLS['../assets/monsters/waterdrop-mushroom/projectile.webp']);
+    if (isWaterdropMushroom(kind) && !scene.textures.exists(waterShotTexture(kind))) {
+      scene.load.image(waterShotTexture(kind), kind === 'foundry-waterdrop-mushroom' ? foundryShotUrl
+        : URLS['../assets/monsters/waterdrop-mushroom/projectile.webp']);
     }
   }
 }
@@ -91,6 +115,8 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   private motion: 'idle' | 'walk' = 'idle';
   private elapsed = 0;
   private attackPose?: number;
+  private riverPose?: number;
+  private riverDefeated = false;
   private special?: { name: string; next?: string; remaining: number };
   /** 서리 딱정벌레가 마지막으로 몸을 돌린 시각(이 스프라이트가 받은 게임 시간 누계) */
   private turnedAt = -Infinity;
@@ -104,6 +130,19 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     super(scene, 0, 0);
     const data = this.sheetData = frameData(kind);
     this.frames = new Map(data?.frames.map(f => [f.name, f]));
+    if (kind === 'river-fish-hunter') {
+      for (const { key, data: sheet } of RIVER_SHEETS) {
+        const texture = scene.textures.get(key);
+        for (const f of sheet.frames) {
+          if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
+        }
+      }
+      this.scale0 = MONSTERS[kind].height / riverAttack.bodyHeight;
+      this.image = scene.add.image(0, 0, RIVER_SHEETS[0].key);
+      this.add(this.image);
+      this.showFrame();
+      return;
+    }
     if (!data) {
       this.image = scene.add.image(0, 0, idleKey(kind)).setOrigin(0.5, 1);
       this.scale0 = MONSTERS[kind].height / this.image.height;
@@ -169,6 +208,8 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     this.motion = key.endsWith('-walk') ? 'walk' : 'idle';
     this.elapsed = 0;
     this.attackPose = undefined;
+    this.riverPose = undefined;
+    this.riverDefeated = false;
     this.showFrame();
     return this;
   }
@@ -272,10 +313,22 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   }
 
   showAttack(elapsed: number, windup: number, strike: number, recovery: number): void {
+    if (this.kind === 'river-fish-hunter') {
+      this.riverPose = elapsed < windup * 0.55 ? 0 : elapsed < windup ? 1
+        : elapsed < windup + strike ? 2 : 3;
+    }
     this.attackPose = elapsed < windup ? 1 : elapsed < windup + strike ? 2 : elapsed < windup + strike + recovery ? 3 : undefined;
     this.showFrame();
   }
-  endStrike(): void { this.attackPose = undefined; this.showFrame(); }
+  endStrike(): void { this.attackPose = undefined; this.riverPose = undefined; this.showFrame(); }
+
+  get riverExposed(): boolean { return this.riverPose === 1 || this.riverPose === 2; }
+
+  showRiverDefeat(): void {
+    if (this.kind !== 'river-fish-hunter') return;
+    this.riverDefeated = true;
+    this.showFrame();
+  }
 
   /** A visual decoy only: no Character, HP, collision or ground shadow. */
   createAfterimage(x: number, y: number): Phaser.GameObjects.Image {
@@ -289,6 +342,17 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   }
 
   private showFrame(): void {
+    if (this.kind === 'river-fish-hunter') {
+      const flip = this.direction.endsWith('left');
+      if (this.riverDefeated) {
+        this.image.setTexture(idleKey(this.kind)).setOrigin(0.5, 0.75).setScale(this.scale0 * 0.60).setFlipX(flip);
+        return;
+      }
+      const sheet = RIVER_SHEETS[this.riverPose === undefined ? 0 : 1];
+      const frame = sheet.data.frames[this.riverPose ?? Math.floor(this.elapsed * sheet.data.fps / 1000) % sheet.data.frames.length];
+      this.image.setTexture(sheet.key, frame.name).setOrigin(frame.originX, frame.originY).setScale(this.scale0).setFlipX(flip);
+      return;
+    }
     if (!this.sheetData) return;
     if (this.fade) { this.showFade(this.fade.motion, this.fade.elapsed); return; }
     if (this.swampMotion) {

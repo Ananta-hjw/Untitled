@@ -11,6 +11,7 @@ import { CombatEffects, type AttackEffect } from '../combat/CombatEffects';
 import { Enemy } from '../combat/Enemy';
 import { MonsterSprite, preloadMonsters } from '../combat/MonsterSprite';
 import { MistThreads } from '../combat/MistThreads';
+import { MistWeaverClones, preloadMistWeaverClones } from '../combat/MistWeaverClones';
 import { MistWeaverEffects, preloadMistWeaverEffects } from '../combat/MistWeaverEffects';
 import { FogApparition, placePreviewBell, preloadFogEncounter, SHRINE_BELL_SPOT, SIA_APPARITION_SPOT } from '../story/fogApparition';
 import { ASH_SLOW, MONSTERS, enemyHitReaches, isCharger, monsterDamageTaken, shellBlocks, type EnemyHit, type EnemyKey } from '../combat/monsterTypes';
@@ -115,7 +116,7 @@ import { findInteractable, talkChoices, type Interactable } from '../world/inter
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
 import { drawFerryArtPreview, preloadFerryArtPreview } from '../world/ferryArtPreview';
-import { chapterTwoPreviewNpcs, isCastPreviewGroup, previewCastNpcs, type CastPreviewGroup } from '../world/chapterTwoNpcs';
+import { chapterTwoPreviewNpcs, isCastPreviewGroup, isFerryArtPreview, previewCastNpcs, type CastPreviewGroup } from '../world/chapterTwoNpcs';
 import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, eastPassBlockedDialogue, eastPassOpen, FERRY_PEOPLE, FERRY_WITNESS_POSES, FERRY_INN, FERRY_SMITHY, STORY_SPOT_ART, ferryInnRepaired, martaShopOpen, FERRY_INN_DOOR, FERRY_NIGHT_LEVEL, FERRY_RIVERBANK, FERRY_SLEEPWALK_PATH, ferryInnRestOpen, ferryNight, ferryNightSpawns, ferryNightStep, fernCartState, fernCartVisible, fernExtraStock, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
 import fernCartDamagedUrl from '../assets/village/rowen/fern-cart-damaged.webp?url';
 import fernCartRepairedUrl from '../assets/village/rowen/fern-cart-repaired.webp?url';
@@ -379,6 +380,7 @@ export class GameScene extends Phaser.Scene {
   private fogApparition?: FogApparition;
   private mistWeaver?: {
     caster: Enemy; evan: Npc; threads: MistThreads; effects: MistWeaverEffects;
+    clones: MistWeaverClones; nextCloneAt: number;
     aimAtEvan: boolean; threadCasts: number; nextSkillAt: number; extraSkill: number;
   };
   /** 지금 있는 맵. 재시작해도 유지되고, 맵을 옮길 때만 바뀐다. */
@@ -479,16 +481,28 @@ export class GameScene extends Phaser.Scene {
     if (isMapId(data.map)) this.mapId = data.map;
     else if (isMapId(fromUrl)) this.mapId = fromUrl;
     this.map = MAPS[this.mapId];
-    if (this.previewNpcGroup) {
+    const previewGroup = this.previewNpcGroup;
+    if (previewGroup) {
       // 본편의 1장 배치나 진행 조건을 바꾸지 않고 같은 NPC·대화 시스템으로 새 원화를 확인한다.
       const at = mapPoint({ x: 1400, y: 1250 });
-      this.map = { ...this.map, name: '2장 인물 확인', hint: '2장 인물 확인 · 가까이 가서 대화해 보세요',
-        spawn: { x: at.x, y: at.y + 170 }, npcs: previewCastNpcs(this.previewNpcGroup, at), enemies: [], exits: [],
+      const aftermath = previewGroup === 'rescue-aftermath';
+      this.map = { ...this.map, name: aftermath ? '나루 구출 후 확인' : '2장 인물 확인',
+        hint: aftermath ? '배 오른쪽은 조안과 에반 · 왼쪽은 회복 중인 어부' : '2장 인물 확인 · 원화와 동작을 확인하세요',
+        spawn: { x: at.x, y: at.y + 170 }, npcs: previewCastNpcs(previewGroup, at), enemies: [], exits: [],
         props: [], buildings: [], interactables: [], obstacles: [] };
     } else if (this.previewMistWeaver) {
       const spawn = this.map.spawn;
       this.map = { ...this.map, name: '안개를 잣는 자 연습', hint: '안개 전투 연습 · 북서쪽 시아의 환영 / 북동쪽 청동 종',
         spawn: { x: spawn.x + 205, y: spawn.y }, enemies: [] };
+    } else if (this.mapId === 'reed-swamp') {
+      const preview = this.previewMonsterKey;
+      if (preview === 'river-fish-hunter') {
+        this.map = { ...this.map, name: '나루 물 마물 연습', hint: '물 마물이 솟아오를 때 공격하세요',
+          spawn: { x: 1020, y: 490 }, enemies: [] };
+      } else if (preview === 'foundry-waterdrop-mushroom') {
+        this.map = { ...this.map, name: '주물터 버섯 연습', hint: '보랏빛 물방울 버섯의 공격을 확인하세요',
+          spawn: { x: 600, y: 915 }, enemies: [] };
+      }
     }
     if (data.stress !== undefined) this.stressCount = data.stress;
     this.arrival = data.at;
@@ -733,13 +747,14 @@ export class GameScene extends Phaser.Scene {
     preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...ferryNightSpawns(this.quests, this.mapId), ...raidSpawnsAnyStep(this.quests, this.mapId), ...this.previewMonsters()]);
     if (this.previewMistWeaver) {
       preloadMistWeaverEffects(this);
+      preloadMistWeaverClones(this);
       preloadFogEncounter(this);
     }
     preloadVillage(this, this.map);
     const preview = this.previewNpcGroup;
     preloadNpcs(this, [...NPCS, FERN, ...this.map.npcs, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 }),
       ...(this.mapId === 'ferry-village' || this.mapId.startsWith('in-ferry-') ? FERRY_PEOPLE : [])], !!preview);
-    if (preview === 'rescue' || preview === 'bell-carry') preloadFerryArtPreview(this, preview);
+    if (isFerryArtPreview(preview)) preloadFerryArtPreview(this, preview);
     preloadStorySpotArt(this, this.mapId);
     if (fernCartVisible(this.quests, this.mapId)) {
       this.load.image('fern-cart-damaged', fernCartDamagedUrl);
@@ -763,7 +778,7 @@ export class GameScene extends Phaser.Scene {
     this.bossHud = new BossHud(this);
     this.buildCharacters();
     const preview = this.previewNpcGroup;
-    if (preview === 'rescue' || preview === 'bell-carry') drawFerryArtPreview(this, preview, this.map.spawn);
+    if (isFerryArtPreview(preview)) drawFerryArtPreview(this, preview, this.map.spawn);
     this.effects = new CombatEffects(this);
     this.impacts = new ImpactEffects(this);
     this.absorbGround = this.add.graphics().setDepth(-48);
@@ -1068,7 +1083,7 @@ export class GameScene extends Phaser.Scene {
       const defender = this.defenderTarget(enemy);
       enemy.update(time, dt, this.player, this.walkArea, this.nav, this.onEnemyStrike, this.onBossHazard,
         defender ? { x: defender.x, y: defender.y, alive: defender.canFight } : undefined, this.onEnemyGlint);
-      this.applyKnockback(enemy.character, dt);
+      if (enemy.kind !== 'river-fish-hunter') this.applyKnockback(enemy.character, dt);
     }
     this.separateEnemies(dt);
     for (const npc of this.npcs) {
@@ -1338,18 +1353,22 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- 월드
 
+  private get previewMonsterKey(): string | null {
+    return import.meta.env.DEV ? new URLSearchParams(location.search).get('monsters') : null;
+  }
+
   private get previewMistWeaver(): boolean {
-    return import.meta.env.DEV && this.mapId === 'reed-swamp'
-      && new URLSearchParams(location.search).get('monsters') === 'mist-weaver';
+    return this.mapId === 'reed-swamp' && this.previewMonsterKey === 'mist-weaver';
   }
   /**
    * 개발용: ?monsters=종류 로 2장 몬스터의 원화와 동작을 확인한다.
    * 배포판에는 적용하지 않는다.
    */
   private previewMonsters(): Array<{ key: EnemyKey; x: number; y: number }> {
-    if (!import.meta.env.DEV) return [];
-    const key = new URLSearchParams(location.search).get('monsters');
+    const key = this.previewMonsterKey;
     const s = this.map.spawn;
+    if (key === 'river-fish-hunter') return this.mapId === 'reed-swamp' ? [{ key, x: 935, y: 405 }] : [];
+    if (key === 'foundry-waterdrop-mushroom' && this.mapId === 'reed-swamp') return [{ key, x: s.x, y: s.y - 145 }];
     if (this.mapId === 'reed-swamp' && (key === 'mist-phantom' || key === 'mist-weaver')) {
       return [{ key, x: s.x + 245, y: s.y }];
     }
@@ -1492,6 +1511,7 @@ export class GameScene extends Phaser.Scene {
         },
       }, this.now);
       this.mistWeaver = { caster: weaver, evan, threads: new MistThreads(this, weaverSprite, this.now), effects,
+        clones: new MistWeaverClones(this), nextCloneAt: new URLSearchParams(location.search).get('clones') === '1' ? this.now + 1050 : Infinity,
         aimAtEvan: false, threadCasts: 0, nextSkillAt: Infinity, extraSkill: 0 };
       this.fogApparition = new FogApparition(this, SIA_APPARITION_SPOT);
       placePreviewBell(this);
@@ -2052,9 +2072,12 @@ export class GameScene extends Phaser.Scene {
   private updateMistWeaver(time: number): void {
     const fight = this.mistWeaver;
     if (!fight || !this.player.alive) return;
-    const { caster, evan, threads, effects } = fight;
+    const { caster, evan, threads, effects, clones } = fight;
     effects.update(time, this.dodgeProgress < 1);
     if (effects.active || effects.sleeping) return;
+    const result = clones.update(time);
+    if (result) this.hud.showCallout(result === 'repelled' ? '분신을 모두 막았다' : '분신이 매듭과 고치에 닿았다');
+    if (clones.active) return;
     if (!evan.walking && !threads.holds(evan)) {
       const x = evan.def.x + (evan.x <= evan.def.x ? 38 : -38);
       evan.walkTo([{ x, y: evan.def.y }], 0.65);
@@ -2062,7 +2085,11 @@ export class GameScene extends Phaser.Scene {
     const target = fight.aimAtEvan ? evan : this.player;
     const c = caster.character;
     const range = Math.hypot(this.player.x - c.x, this.player.y - c.y);
-    if (!threads.active && range <= MIST_THREADS.castRange && time >= fight.nextSkillAt) {
+    if (!threads.active && range <= MIST_THREADS.castRange && time >= fight.nextCloneAt) {
+      fight.nextCloneAt = Infinity;
+      clones.start(time, c);
+      this.hud.showCallout('분신 · 매듭과 고치를 지키세요');
+    } else if (!threads.active && range <= MIST_THREADS.castRange && time >= fight.nextSkillAt) {
       switch (fight.extraSkill++ % 3) {
         case 0: effects.castGust(time); break;
         case 1: effects.castCocoon(time); break;
@@ -2076,6 +2103,7 @@ export class GameScene extends Phaser.Scene {
       if (fight.extraSkill % 3 === 0) {
         fight.threadCasts = 0;
         fight.nextSkillAt = Infinity;
+        fight.nextCloneAt = time + 1650;
       } else fight.nextSkillAt = time + 4750;
     } else if (fight.threadCasts < 2 && range <= MIST_THREADS.castRange && threads.cast(time, c, target)) {
       fight.aimAtEvan = !fight.aimAtEvan;
@@ -2333,6 +2361,7 @@ export class GameScene extends Phaser.Scene {
 
     const sweep = attackBladeSweep(longer(previous), longer(current), lastElapsed, elapsed, strikeAt, end);
     if (!sweep) return;
+    this.mistWeaver?.clones.cut(sweep, time);
     if (this.mistWeaver?.effects.bound && !trace.cutCocoon) {
       trace.cutCocoon = true;
       this.mistWeaver.effects.strikeCocoon(time);
@@ -2618,6 +2647,7 @@ export class GameScene extends Phaser.Scene {
     return this.bossWarningEnd !== undefined
       || !!this.mistWeaver?.threads.active
       || !!this.mistWeaver?.effects.active
+      || !!this.mistWeaver?.clones.active
       || this.enemies.some((e) => e.state === 'chase' || e.state === 'windup' || e.state === 'recover' || e.state === 'roar' || e.state === 'retreat' || e.state === 'volley' || e.state === 'veil');
   }
 
@@ -2746,6 +2776,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (target === SHRINE_BELL_SPOT && this.mistWeaver) {
       this.mistWeaver.threads.clear();
+      this.mistWeaver.clones.clear();
       this.mistWeaver.effects.ringBell(this.now);
       this.interactables = this.interactables.filter(spot => spot !== target);
       this.hud.showCallout('청동 종이 울렸다 · 안개를 잣는 자가 가라앉는다');
@@ -4481,6 +4512,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setZoom(1);
     this.mistWeaver?.threads.clear();
     this.mistWeaver?.effects.clear();
+    this.mistWeaver?.clones.clear();
     this.clearAttackInput();
     this.dodgeProgress = 1;
     this.dodgeUntil = 0;

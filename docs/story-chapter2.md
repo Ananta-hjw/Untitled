@@ -299,6 +299,13 @@
 
 구현: 1~5번은 게임에 들어갔다(`story/quests.ts`의 `linea-ink`, `fern-cover`, `dor-herbs`, `leaky-roof`, `tangled-nets`). 낚시 노인은 "멈춘 나루" 뒤 낮의 강가에서 낚시하며, 8번의 의뢰는 "다시 뜨는 배"가 구현되면 이어 붙인다. 메인은 7 "사라진 다섯"(`missing-five`)까지 들어갔다. 개발 빌드의 `?map=reed-swamp&monsters=mist-weaver`에서 시아의 환영과 안개를 잣는 자의 새 동작을 먼저 확인할 수 있다.
 
+개발 빌드 확인 경로
+
+- `?map=reed-swamp&monsters=foundry-waterdrop-mushroom`에서 주물터용 보랏빛 물방울 버섯과 발사체를 확인한다.
+- `?map=reed-swamp&monsters=river-fish-hunter`에서 수면 대기와 물 위로 솟는 나루 물 마물의 공격을 확인한다.
+- `?map=reed-swamp&monsters=mist-weaver&clones=1`에서 매듭과 고치를 노리는 분신이 먼저 나타난다. 일반 연습에서는 보스가 한 차례 기술을 돌린 뒤 분신을 보낸다.
+- `?map=east-stream&npcs=rescue-aftermath`에서 귀환하는 배 위의 주민 여섯 명, 어부가 몸을 일으키는 동작, 조안이 에반의 팔을 짚고 서는 동작을 확인한다.
+
 ### 조안: 잠깐 함께 다니는 동료
 
 조안(열여덟 살쯤)은 나루에서 강을 가장 잘 아는 젊은 사공이다. 몇 해 전 강에서 엄마를 잃었고, 사라진 밤에도 엄마의 목소리를 따라갔다. 깨어난 뒤 "다시는 그리움에 끌려가지 않겠다"고 마음먹고, 늘 궁금했던 강 건너 땅까지 시온의 길잡이가 되겠다고 나선다.
