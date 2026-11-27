@@ -106,6 +106,7 @@ import { OpeningDirector } from './OpeningDirector';
 import { OPENING, OPENING_HINT, OPENING_SAVE_KEY, OPENING_WALK_SCALE, shouldPlayOpening, type OpeningStep } from '../story/opening';
 import { BONFIRE, FESTIVAL, FESTIVAL_RAIDERS, FESTIVAL_SAVE_KEY, FESTIVAL_WALK_SCALE, RAIDER_ENTRY_MS, festivalNpcs, shouldPlayFestival } from '../story/festival';
 import { FestivalStage, preloadFestival } from './FestivalStage';
+import { RestStage, preloadRestArt } from './RestStage';
 import { NightBellStage } from './NightBellStage';
 import { INN_NIGHT, INN_SLEEPWALK_SPEED, NIGHT_BELL_INN, NIGHT_BELL_MORNING, NIGHT_BELL_WALK_SCALE, RIVER_WAKE_STEPS } from '../story/nightBell';
 import { DeathPanel } from '../ui/DeathPanel';
@@ -155,9 +156,7 @@ import {
 import { ProgressEffects } from '../ui/ProgressEffects';
 
 /** 고개의 쉼터에서 하룻밤을 보낼 때 화면이 어두워지고 밝아지는 시간 (ms, 연출만) */
-const NIGHT_FADE_MS = 900;
 /** 일반 휴식(시온의 집·여관·쉼터)에서 화면이 스르르 어두워졌다 밝아지는 시간 (ms, 연출만) */
-const REST_FADE_MS = 520;
 /** 위쪽 3타 찌르기 빛줄기를 원근으로 짧게 그린 칼끝 너머 먼 곳까지 늘이는 배율 */
 const UP_THRUST_REACH = 1.9;
 
@@ -373,6 +372,7 @@ export class GameScene extends Phaser.Scene {
   private festivalStage?: FestivalStage;
   /** 퀘스트 6 "밤의 종소리"의 종소리·안개 길 */
   private nightBellStage?: NightBellStage;
+  private restStage?: RestStage;
   /** 축제 연출 끝에 남문으로 걸어 들어오는 권속 (싸우지 않는 그림뿐. 연출이 끝나면 광장을 다시 열어 진짜 무리가 나온다) */
   private festivalRaiders: Array<{ enemy: Enemy; path: readonly Point[]; startedAt: number }> = [];
   /** 잿빛 나방의 가루에 닿아 느려진 상태가 끝나는 게임 시각 */
@@ -714,6 +714,7 @@ export class GameScene extends Phaser.Scene {
     this.cutsceneWalkScale = OPENING_WALK_SCALE;
     this.festivalStage = undefined;
     this.nightBellStage = undefined;
+    this.restStage = undefined;
     this.passScenery = undefined;
     this.ferryScenery = undefined;
     this.festivalRaiders = [];
@@ -741,6 +742,7 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     preloadHeroSprite(this);
+    preloadRestArt(this, this.mapId);
     if (this.playFestival) preloadFestival(this);
     preloadIcons(this);
     // 습격 중에는 이 맵에 나올 모든 무리의 그림을 미리 읽는다(대화 뒤 다음 무리가 바로 나타난다).
@@ -924,7 +926,11 @@ export class GameScene extends Phaser.Scene {
     // 게임 안의 모든 시간 계산은 이 시계 하나만 쓴다.
     // 프레임이 끊겨도 이동 거리와 타이밍이 서로 어긋나지 않게 하기 위해서다.
     const step = Math.min(delta, 50);
-    // 맵을 옮기는 동안에는 아무것도 진행하지 않는다.
+    // A rest shot owns the render clock while the game and inputs are frozen.
+    if (this.restStage) {
+      this.restStage.update(step);
+      return;
+    }
     if (this.traveling) return;
     // 메뉴·대화·창이 열려 게임이 멈춰 있는 동안에는 덜 자주 그린다(발열·전력).
     frameRate.fps = this.menuOpen() ? IDLE_FPS : PLAY_FPS;
@@ -1210,18 +1216,9 @@ export class GameScene extends Phaser.Scene {
 
   private npcById(id: string): Npc | undefined { return this.npcs.find(npc => npc.def.id === id); }
 
-  /** 방을 얻으면 화면이 어두워졌다가 여관의 밤 연출이 시작된다(story/nightBell.ts). 끝나면 나루(밤)의 여관 문 앞으로 나간다. */
+  /** 평소처럼 잠들었다가 아침 대신 종소리가 찾아온다. */
   private startNightBell(): void {
-    const camera = this.cameras.main;
-    this.traveling = true;
-    this.player.setMotion(false, 0);
-    this.attackButton.setVisible(false);
-    this.hideTalkMarker();
-    camera.fadeOut(700, 0, 0, 0);
-    camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      if (!this.scene.isActive()) return;
-      this.traveling = false;
-      this.applyRest('ferry-inn');
+    this.playRestStage('ferry-inn', { interrupted: true }, () => {
       this.npcById('innkeeper-wife')?.setVisible(false);
       this.drawChapterShade(this.scale.gameSize.width);
       const finn = () => this.npcById('finn'), innkeeper = () => this.npcById('fog-innkeeper');
@@ -1234,10 +1231,9 @@ export class GameScene extends Phaser.Scene {
         else if (name === 'sleepwalk') innkeeper()?.startSleepwalk([...INN_NIGHT.sleepwalk], INN_SLEEPWALK_SPEED);
         else if (name === 'innkeeper-out') innkeeper()?.setVisible(false);
       });
-      // 연출이 화면 고정 UI를 숨긴 뒤에 만들어야 종소리의 흐려짐이 함께 숨지 않는다.
+      // Keep the bell haze above the world and below the cutscene dialogue.
       this.nightBellStage = new NightBellStage(this);
       this.nightBellStage.layout(this.scale.gameSize.width);
-      camera.fadeIn(700, 0, 0, 0);
     });
   }
 
@@ -1787,6 +1783,7 @@ export class GameScene extends Phaser.Scene {
     this.drawChapterShade(width);
     this.festivalStage?.layout(width);
     this.nightBellStage?.layout(width);
+    this.restStage?.layout();
     this.pauseMenu.layout(width);
   }
 
@@ -2595,7 +2592,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private openPause(): void {
-    if (!this.player?.alive || this.opening || this.deathPanel?.isOpen || this.guideCard?.isOpen) return;
+    if (this.traveling || !this.player?.alive || this.opening || this.deathPanel?.isOpen || this.guideCard?.isOpen) return;
     if (this.storyChoice?.isOpen || this.quickSlotPanel?.isOpen) return;
     if (!this.pauseMenu || this.pauseMenu.isOpen || this.characterPanel?.isOpen || this.itemPanel?.isOpen || this.worldMap?.isOpen) return;
     this.pauseButton.setVisible(false);
@@ -2800,7 +2797,7 @@ export class GameScene extends Phaser.Scene {
         this.hud.showCallout('지금은 쉴 때가 아니야');
         return;
       }
-      this.storyChoice?.open(() => this.restWithFade('home'), {
+      this.storyChoice?.open(() => this.restWithPresentation('home'), {
         title: '시온의 집에서 쉬어 가기',
         text: '익숙한 내 침대에서 잠시 쉬어 갈까?',
         summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  시온의 집`,
@@ -2920,7 +2917,7 @@ export class GameScene extends Phaser.Scene {
         });
       }
       if (plainTalk && target.id === 'npc-dor' && shelterRestOpen(this.quests)) {
-        this.storyChoice?.open(() => this.restWithFade('shelter'), {
+        this.storyChoice?.open(() => this.restWithPresentation('shelter'), {
           title: '고개 쉼터에서 쉬어 가기',
           text: '도르가 모닥불에 장작을 한 아름 더 얹는다.',
           summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  동쪽 고갯길 고개 쉼터`,
@@ -2930,21 +2927,21 @@ export class GameScene extends Phaser.Scene {
       }
       // 나루 여관 주인: 평소 대화나 퀘스트 안내(진행·완료가 아닌 대화) 뒤에 쉬어 갈지 묻는다.
       if (!quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-fog-innkeeper' && ferryInnRestOpen(this.quests)) {
-        this.storyChoice?.open(() => this.restWithFade('ferry-inn'), {
-          title: '나루 여관에서 쉬어 가기',
+        this.storyChoice?.open(() => this.restWithPresentation('ferry-inn'), {
+          title: '나루 여관에서 잠자기',
           text: '여관 주인이 강 쪽 창을 닫고 방을 내준다.',
           summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  물안개 나루 여관`,
-          hint: '휴식은 무료이며 퀘스트 진행과 시간대는 바뀌지 않습니다.',
-          yes: '쉬어 가기', no: '돌아가기',
+          hint: '숙박은 무료입니다. 일반 숙박은 퀘스트 진행과 필드 시간대에 영향을 주지 않습니다.',
+          yes: '잠자기', no: '돌아가기',
         });
       }
       if (!quest && target.id === 'npc-rosetta' && canRest(this.quests)) {
-        this.storyChoice?.open(() => this.restWithFade('inn'), {
-          title: '여관에서 쉬어 가기',
+        this.storyChoice?.open(() => this.restWithPresentation('inn'), {
+          title: '여관에서 잠자기',
           text: '로제타가 준비한 방에서 잠시 쉬어 가세요.',
           summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  로웬 마을 여관`,
-          hint: '휴식은 무료이며 퀘스트 진행과 시간대는 바뀌지 않습니다.',
-          yes: '쉬어 가기', no: '돌아가기',
+          hint: '숙박은 무료입니다. 일반 숙박은 퀘스트 진행과 필드 시간대에 영향을 주지 않습니다.',
+          yes: '잠자기', no: '돌아가기',
         });
       }
       // 대화를 넘기려고 누른 공격 키가 닫힌 뒤 공격으로 이어지지 않게 한다.
@@ -2968,71 +2965,70 @@ export class GameScene extends Phaser.Scene {
     }, dialoguePoses ? index => talked?.setStoryAction(dialoguePoses[Math.min(index, dialoguePoses.length - 1)]) : undefined);
   }
 
-  /**
-   * 그 자리에서 하룻밤을 보낸다: 화면이 어두워지는 동안 게임을 멈추고(traveling), 쉬고, 다시 밝힌 뒤 안내한다.
-   * 화면 페이드는 보이는 연출뿐이라 카메라의 실시간 효과를 쓴다(게임 시계와 상관없다).
-   */
   private spendNight(id: RestPointId): void {
-    const camera = this.cameras.main;
-    this.traveling = true;
-    this.player.setMotion(false, 0);
-    this.attackButton.setVisible(false);
-    this.hideTalkMarker();
-    camera.fadeOut(NIGHT_FADE_MS, 0, 0, 0);
-    camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      if (!this.scene.isActive()) return;
-      this.applyRest(id);
-      this.drawHud();
-      camera.fadeIn(NIGHT_FADE_MS, 0, 0, 0);
-      camera.once(Phaser.Cameras.Scene2D.Events.FADE_IN_COMPLETE, () => {
-        if (!this.scene.isActive()) return;
-        this.traveling = false;
-        this.attackButton.setVisible(true);
-        this.hud.showCallout('고개의 쉼터에서 하룻밤을 보냈다 · 다음 날 아침');
-      });
-    });
+    this.playRestStage(id, { overnight: true }, () => this.hud.showCallout('고개의 쉼터 · 다음 날 아침'));
   }
 
-  /**
-   * 일반 휴식 연출(집·여관·쉼터): 바로 알림을 띄우지 않고 화면이 스르르 어두워졌다가 다시 밝아진 뒤 안내한다.
-   * 회복과 시작 위치 저장은 확인 즉시 반영해, 페이드 도중 앱을 닫아도 저장이 유실되지 않는다.
-   */
-  private restWithFade(id: RestPointId, callout?: string): void {
+  private restWithPresentation(id: RestPointId): void {
     if (this.traveling) return;
     if (!canRest(this.quests)) {
       this.hud.showCallout('지금은 쉴 때가 아니야');
       return;
     }
-    this.applyRest(id);
-    const camera = this.cameras.main;
-    this.traveling = true;
+    this.playRestStage(id, {}, () => {
+      const overnight = id === 'inn' || id === 'ferry-inn';
+      this.hud.showCallout(overnight ? '개운하게 일어났다 · 체력과 마나 회복' : '체력과 마나를 회복했다');
+    });
+  }
+
+  private playRestStage(id: RestPointId, options: { overnight?: boolean; interrupted?: boolean }, finish: () => void): void {
+    if (this.traveling) return;
+    const player = this.player;
+    const hp = player.hp, mp = this.mp, internal = this.internalDamage;
+    // The quest night heals Sion, but the inn becomes a restart point only after the quest's morning.
+    this.applyRest(id, !options.interrupted);
     this.clearAttackInput();
-    this.player.setMotion(false, 0);
+    this.joystick.vector.set(0, 0);
+    this.dodgeButton.consumePress();
+    this.clearQuickItemInput();
+    this.suppressAttackUntilRelease = true;
+    this.traveling = true;
+    player.knockback.set(0, 0);
+    player.setMotion(false);
     this.attackButton.setVisible(false);
     this.hideTalkMarker();
-    camera.fadeOut(REST_FADE_MS, 0, 0, 0);
-    camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      if (!this.scene.isActive()) return;
-      this.drawHud();
-      this.time.delayedCall(180, () => {
-        if (!this.scene.isActive()) return;
-        camera.fadeIn(REST_FADE_MS, 0, 0, 0);
-        camera.once(Phaser.Cameras.Scene2D.Events.FADE_IN_COMPLETE, () => {
-          if (!this.scene.isActive()) return;
-          this.traveling = false;
-          this.attackButton.setVisible(true);
-          this.hud.showCallout(callout ?? `푹 쉬었다 · 다음에는 ${REST_POINTS[id].name}에서 시작한다`);
-        });
-      });
+
+    const pose = id === 'home' ? { kind: 'seat' as const, at: { x: HOME_BED_SPOT.x, y: HOME_BED_SPOT.y - 12 } }
+      : id === 'shelter' ? { kind: 'camp' as const, at: REST_POINTS.shelter.at, overnight: options.overnight }
+      : { kind: 'sleep' as const, interrupted: options.interrupted };
+    if (pose.kind !== 'sleep') player.setVisible(false);
+    this.restStage = new RestStage(this, pose, {
+      sound: cue => this.combatAudio.playRestCue(cue),
+      recover: progress => {
+        this.hud.setHp(Math.round(hp + (player.hp - hp) * progress), player.maxHp, this.herb, Math.round(internal * (1 - progress)));
+        this.hud.setMp(Math.floor(mp + (this.mp - mp) * progress), this.maxMp);
+      },
+      finish: () => {
+        this.restStage = undefined;
+        this.clearAttackInput();
+        this.dodgeButton.consumePress();
+        for (const key of this.dodgeKeys) Phaser.Input.Keyboard.JustDown(key);
+        player.setVisible(true);
+        this.traveling = false;
+        this.attackButton.setVisible(true);
+        this.drawHud();
+        finish();
+      },
     });
   }
 
   /** 체력·마나 회복과 다음 시작 자리 저장만 수행한다 (HUD 갱신·알림은 호출 측 타이밍에 맞춘다). */
-  private applyRest(id: RestPointId): void {
+  private applyRest(id: RestPointId, save = true): void {
     this.player.setMaxHp(this.player.maxHp, true);
     this.internalDamage = 0;
     this.internalHealCarry = 0;
     this.mp = this.maxMp;
+    if (!save) return;
     try {
       this.storage?.setItem(REST_SAVE_KEY, serializeRestPoint(id));
     } catch {

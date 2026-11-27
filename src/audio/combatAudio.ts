@@ -56,6 +56,37 @@ export class CombatAudio {
     }
   }
 
+  /** Quiet ambience for the short recovery and overnight shots. */
+  playRestCue(cue: 'room' | 'fire' | 'morning' | 'bell'): void {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      const started = performance.now();
+      void ctx.resume().then(() => {
+        if (ctx.state === 'running' && performance.now() - started < 450) this.playRestCue(cue);
+      }).catch(() => {});
+      return;
+    }
+    if (ctx.state !== 'running') return;
+    const now = ctx.currentTime;
+    if (cue === 'bell') {
+      for (const [pitch, duration, gain] of [[273, 2.0, 0.10], [518, 1.45, 0.07], [769, 0.95, 0.03]]) {
+        this.playTone(ctx, now, 'sine', pitch, pitch * 0.998, duration, gain);
+      }
+    } else if (cue === 'morning') {
+      for (const [offset, start, end] of [[0, 1760, 2490], [0.11, 2490, 1950], [0.35, 2180, 2890], [0.46, 2830, 2120]]) {
+        this.playTone(ctx, now + offset, 'sine', start, end, 0.115, 0.027);
+      }
+    } else {
+      this.playNoise(ctx, now, 0.8, cue === 'fire' ? 510 : 360, 'lowpass', 0.62, 0.10);
+      if (cue === 'fire') {
+        for (const [offset, pitch] of [[0.07, 1550], [0.19, 1900], [0.38, 1120], [0.68, 1850], [0.87, 1250]]) {
+          this.playNoise(ctx, now + offset, 0.09, pitch, 'bandpass', 1.1, 0.07);
+        }
+      }
+    }
+  }
+
   /** 적 공격 직전 예고 안광 소리(흰빛 = 패링 가능, 붉은빛 = 회피 전용 강공격) */
   playGlint(unblockable = false): void {
     const ctx = this.ensureContext();
