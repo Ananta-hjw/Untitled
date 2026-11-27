@@ -2242,10 +2242,10 @@ test('도마뱀은 준비 중 멈추고 잠근 방향으로 돌진하며 한 번
   const r = await evaluate(`(() => {
     const s=window.__game.scene.getScene('game'),p=s.player,e=s.enemies.find(e=>e.kind==='iron-scale-lizard');
     const run=(evade)=>{
-      e.respawn(900,700);p.revive(1100,700);p.invulnerableUntil=0;e.beginWindup(0,200,0);
-      e.update(799,.05,p,s.walkArea,s.nav,s.onEnemyStrike);const still=e.character.x===900;
+      e.respawn(900,700);p.revive(1100,700);p.invulnerableUntil=0;e.beginWindup(0,200,0);const w=e.windupMs;
+      e.update(w-1,.05,p,s.walkArea,s.nav,s.onEnemyStrike);const still=e.character.x===900;
       if(evade)p.placeAt(1100,850);const hp=p.hp;
-      for(let t=800;t<=1400;t+=40){s.now=t;e.update(t,.04,p,s.walkArea,s.nav,s.onEnemyStrike);}
+      for(let t=w;t<=w+600;t+=40){s.now=t;e.update(t,.04,p,s.walkArea,s.nav,s.onEnemyStrike);}
       return {still,moved:e.character.x>1100,damage:hp-p.hp,y:e.character.y,expected:Math.max(1,Math.round(e.stats.damage*s.derived.damageTaken))};
     };
     const hit=run(false),miss=run(true);
@@ -2459,6 +2459,143 @@ test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공�
   assert.equal(result.back, result.open, '뒤에서 온 공격은 막지 못한다');
   assert.equal(result.late, result.open, '판정 시간이 지나면 막지 못한다');
   assert.equal(result.evaded, 0);
+});
+
+test('연타와 흡수: 추적자는 예비 동작 중 따라오며 2연타를 하고, 둘 다 정밀 패링하면 연타가 이어지다 파훼되며, 3단(2.5배)이 3초 이어지고 첫 명중에만 부식 웅덩이가 남는다', async () => {
+  await load('south-field&monsters=corrosion-tracker');
+  await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.some(e => e.kind === 'corrosion-tracker'); })()`));
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+    let t = performance.now();
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    const e = s.enemies.find(x => x.kind === 'corrosion-tracker');
+    for (const other of s.enemies) if (other !== e) other.character.placeAt(other.character.x, other.character.y + 2000);
+    s.enemies = [e];
+    s.derived.evadeChance = 0;
+    p.hp = p.maxHp;
+    e.character.placeAt(p.x + 90, p.y);
+    p.face(1);
+    for (let i = 0; i < 300 && e.state !== 'windup'; i++) step();
+    // 이번 묶음을 2연타로 정해 둔다.
+    e.comboWindups = [320, 230]; e.chainTotal = 2; e.chainLeft = 1; e.comboIndex = 0; e.windupMs = 320;
+    // 예비 동작 중 주인공이 물러서면 따라온다.
+    const startX = e.character.x;
+    p.placeAt(p.x - 60, p.y);
+    step(8);
+    const tracked = startX - e.character.x;
+    const log = [];
+    for (let i = 0; i < 400 && log.length < 2; i++) {
+      if (e.state === 'windup' && e.attackStartedAt !== undefined) {
+        const left = e.attackStartedAt + e.windupMs + e.stats.strikeMs - s.now;
+        if (left < 70 && s.now >= s.parryReadyAt && !s.blocking) s.blockButton.pressed = true;
+      }
+      p.face(Math.sign(e.character.x - p.x) || 1);
+      const before = s.parryChain.count;
+      step();
+      if (s.parryChain.count !== before) log.push({ state: e.state, pending: e.chainPending, tier: s.absorb.tier, element: s.absorb.element });
+    }
+    const stunLeft = e.parryStunUntil - s.now;
+    const hpAfterParries = p.hp;
+    const tierBefore = s.absorb.tier;
+    // 파훼로 멀리 밀려난 적 앞으로 다가가 벤다.
+    e.character.knockback.set(0, 0);
+    e.character.placeAt(p.x + 80, p.y);
+    const enemyHp = e.character.hp;
+    p.face(1);
+    s.attackBufferedUntil = s.now + 300; s.keyboardAttackPressed = true;
+    let pools = 0;
+    for (let i = 0; i < 40; i++) { step(); pools = Math.max(pools, s.allyPools.length); }
+    return { tracked, log, stunLeft, hpAfterParries, maxHp: p.maxHp, tierBefore, tierAfter: s.absorb.tier, charged: s.absorb.charged, left: s.absorb.until - s.now, pools, damage: enemyHp - e.character.hp };
+  })()`);
+  assert.ok(result.tracked > 15, `예비 동작 중 물러선 주인공을 따라온다: ${JSON.stringify(result)}`);
+  assert.equal(result.log.length, 2, JSON.stringify(result));
+  assert.equal(result.log[0].pending, true, '첫 타를 패링해도 연타가 이어진다');
+  assert.equal(result.log[0].tier, 1);
+  assert.equal(result.log[0].element, 'corrosion');
+  assert.equal(result.log[1].tier, 3, '마지막 타까지 정밀 패링하면 파훼로 두 단 더');
+  assert.ok(result.stunLeft > 1200, `파훼 경직: ${result.stunLeft}`);
+  assert.equal(result.hpAfterParries, result.maxHp);
+  assert.equal(result.tierBefore, 3);
+  assert.equal(result.tierAfter, 3, '단수는 3초 동안 이어진다');
+  assert.equal(result.charged, false, '속성은 첫 명중에 쓰였다');
+  assert.ok(result.left > 0 && result.left < 3000, JSON.stringify(result));
+  assert.equal(result.pools, 1, '부식 웅덩이가 남는다');
+  assert.ok(result.damage > 0);
+});
+
+test('흘리기: 막는 순간 조이스틱을 기울이면 근접 공격이 그쪽 적에게 맞고, 공격한 적은 그쪽으로 밀려 몸이 돌아간다. 적 쪽으로 밀면 그냥 패링이다', async () => {
+  await load('south-field&monsters=corrosion-tracker');
+  await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.filter(e => e.kind === 'corrosion-tracker').length >= 2; })()`));
+  const result = await evaluate(`(() => {
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+    let t = performance.now();
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    const [a, b] = s.enemies.filter(x => x.kind === 'corrosion-tracker');
+    for (const other of s.enemies) if (other !== a && other !== b) other.character.placeAt(other.character.x, other.character.y + 2000);
+    s.enemies = [a, b];
+    s.derived.evadeChance = 0;
+    const run = (input) => {
+      p.hp = p.maxHp; p.invulnerableUntil = 0;
+      a.state = 'wander'; b.state = 'wander';
+      a.character.placeAt(p.x + 80, p.y); a.character.facing = -1; a.character.knockback.set(0, 0);
+      b.character.placeAt(p.x + 20, p.y + 80); b.character.hp = b.character.maxHp;
+      p.face(1);
+      s.parryReadyAt = 0; s.blockButton.pressed = true; step();
+      s.joystick.vector.set(input.x, input.y);
+      s.onEnemyStrike(a);
+      s.joystick.vector.set(0, 0);
+      return { bDamage: b.character.maxHp - b.character.hp, pushY: a.character.knockback.y, facingY: a.character.sprite.facingVector().y, hp: p.maxHp - p.hp };
+    };
+    const down = run({ x: 0, y: 1 });
+    step(60);
+    const toward = run({ x: 1, y: 0 });
+    return { down, toward };
+  })()`);
+  assert.equal(result.down.hp, 0);
+  assert.ok(result.down.bDamage > 0, `흘린 쪽의 적이 맞는다: ${JSON.stringify(result)}`);
+  assert.ok(result.down.pushY > 0, '공격한 적이 아래로 밀린다');
+  assert.ok(result.down.facingY > 0, '공격한 적의 몸이 흘린 쪽으로 돌아간다');
+  assert.equal(result.toward.hp, 0);
+  assert.equal(result.toward.bDamage, 0, '적 쪽으로 밀면 흘리기가 아니다');
+});
+
+test('정예의 돌진은 정밀 패링해도 멈추지 않고 원래 가려던 자리까지 지나간 뒤 휘청이고, 보통 돌진(도마뱀)은 앞에서 멈춘다', async () => {
+  const charge = async (kind) => {
+    await load('south-field&monsters=' + kind);
+    await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.some(e => e.kind === ${JSON.stringify(kind)}); })()`));
+    return evaluate(`(() => {
+      const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+      let t = performance.now();
+      const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+      const e = s.enemies.find(x => x.kind === ${JSON.stringify(kind)});
+      for (const other of s.enemies) if (other !== e) other.character.placeAt(other.character.x, other.character.y + 2000);
+      s.enemies = [e];
+      s.derived.evadeChance = 0;
+      p.hp = p.maxHp;
+      e.character.placeAt(p.x + 200, p.y);
+      p.face(1);
+      for (let i = 0; i < 300 && e.state !== 'windup'; i++) step();
+      e.comboWindups = [e.windupMs]; e.chainTotal = 1; e.chainLeft = 0; e.comboIndex = 0;
+      const startX = e.character.x;
+      let parried = false;
+      for (let i = 0; i < 200 && e.state === 'windup'; i++) {
+        // 돌진은 몸이 주인공에게 닿기 조금 전에 막는다.
+        if (!parried && e.chargingNow(s.now) && e.character.x - p.x < 150) { s.parryReadyAt = 0; s.blockButton.pressed = true; parried = true; }
+        step();
+      }
+      return { startX, endX: e.character.x, heroX: p.x, state: e.state, stunned: e.parryStunUntil > s.now, chain: s.parryChain.count, hp: p.maxHp - p.hp, elite: e.elite };
+    })()`);
+  };
+  const elite = await charge('corrosion-executioner');
+  assert.equal(elite.elite, true);
+  assert.equal(elite.hp, 0, JSON.stringify(elite));
+  assert.equal(elite.chain, 1, '정밀 패링');
+  assert.ok(elite.endX < elite.heroX - 20, `주인공을 지나쳐 간다: ${JSON.stringify(elite)}`);
+  assert.equal(elite.stunned, true, '지나간 뒤 휘청인다');
+  const lizard = await charge('iron-scale-lizard');
+  assert.equal(lizard.elite, false);
+  assert.equal(lizard.hp, 0, JSON.stringify(lizard));
+  assert.ok(lizard.endX > lizard.heroX, `보통 돌진은 주인공 앞에서 멈춘다: ${JSON.stringify(lizard)}`);
 });
 
 test('패링마다 공명 구슬이 1/3씩 차고, 구슬 다섯 개가 다 차야 10초 동안 주는 피해 1.2배·받는 피해 80%가 되며, 끝나면 돌아온다', async () => {

@@ -140,6 +140,14 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     }
     this.showFrame();
   }
+  /** 곧바로 그쪽을 본다 (서리 딱정벌레의 느린 몸 돌리기도 건너뛴다: 흘리기에 몸이 돌아갈 때) */
+  snapFacing(dx: number, dy: number): void {
+    const wanted = direction8(dx, dy, this.direction);
+    this.direction = wanted;
+    this.turnedAt = this.clock;
+    if (!this.sheetData && (wanted.endsWith('left') || wanted.endsWith('right'))) this.image.setFlipX(wanted.endsWith('left'));
+    this.showFrame();
+  }
   /** 바라보는 방향 (화면 좌표의 단위 벡터에 가까운 값) */
   facingVector(): { x: number; y: number } {
     const v: Record<Direction8, [number, number]> = {

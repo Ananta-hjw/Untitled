@@ -7,7 +7,9 @@ import { Character } from '../entities/Character';
 import type { NavGrid } from '../world/navGrid';
 import type { WalkArea } from '../world/walkArea';
 import { MonsterSprite } from './MonsterSprite';
-import { MONSTERS, WATER_SHOT, isCharger, monsterKind, enemyHitReaches, type EnemyHit, type EnemyKey, type MonsterKind, type MonsterStats } from './monsterTypes';
+import { MONSTERS, WATER_SHOT, isCharger, isEliteKind, monsterKind, enemyHitReaches, type EnemyHit, type EnemyKey, type MonsterKind, type MonsterStats } from './monsterTypes';
+import { ENEMY_COMBO, isTracking, pickCombo, type ComboPattern } from './enemyCombo';
+import { bendCharge } from './deflect';
 import { FOG_CROW, fogEscape } from './fogCrow';
 import { scaleMonster } from './monsterLevel';
 import { BOSS, fanDirections, insideEllipse, retreatDone, shouldVeil, wantsVolley, type BossPhase } from './bossPattern';
@@ -25,7 +27,12 @@ export interface ParryBreakResult {
   outcome: BossParryOutcome;
   step: number;
   total: number;
+  /** 돌진을 멈추지 않고 지나가게 했는지 (정예·보스의 돌진, 흘린 돌진) */
+  passing?: boolean;
 }
+
+/** 패링당한 돌진이 끝난 뒤에 줄 경직 (지나가는 동안은 미뤄 둔다) */
+interface DeferredParry { outcome: BossParryOutcome; stun: number; perfect: boolean }
 
 /**
  * 슬라임 근접·버섯 원거리·도마뱀 돌진과 습격 임시 권속의 AI.
@@ -85,6 +92,16 @@ export class Enemy {
   private veilUsed = false;
   private shotReadyAt = 0;
   private volleyDirs: Array<{ x: number; y: number }> = [];
+  /** 이번 연타 묶음(타마다의 예비 동작, combat/enemyCombo.ts)과 지금 몇 번째 타인지 */
+  private comboWindups?: ComboPattern;
+  private comboIndex = 0;
+  /** 지금 공격의 예비 동작 길이 */
+  private windupMs = 0;
+  /** 흡수한 서리로 언 동안 (combat/absorb.ts): 이동 속도 배율과 예비 동작 배율 */
+  private chillUntil = 0;
+  private chillSpeed = 1;
+  private chillWindup = 1;
+  private deferredParry?: DeferredParry;
 
   constructor(scene: Phaser.Scene, key: EnemyKey, x: number, y: number, level = 1, boss = false) {
     this.scene = scene;
@@ -192,7 +209,11 @@ export class Enemy {
           : Math.abs(dx) < ENEMY.attackRangeX && Math.abs(dy) < ENEMY.attackRangeY;
         if (inRange) {
           // 보스는 1페이즈 2연타(BOSS.chain), 2페이즈 3연타(BOSS.phaseTwoChain) 돌진을 잇달아 한다.
-          const total = this.boss ? (this.phase === 2 ? BOSS.phaseTwoChain : BOSS.chain) : 1;
+          // 중급 이상의 적은 연타 묶음(enemyCombo.ts) 하나를 골라 몰아친다.
+          const pattern = this.boss ? undefined : pickCombo(this.kind, Math.random());
+          const total = this.boss ? (this.phase === 2 ? BOSS.phaseTwoChain : BOSS.chain) : pattern?.length ?? 1;
+          this.comboWindups = pattern;
+          this.comboIndex = 0;
           this.chainTotal = total;
           this.chainLeft = total - 1;
           this.comboParries = 0;
@@ -207,7 +228,7 @@ export class Enemy {
         // 플레이어의 옆자리(같은 높이)로 붙는다.
         const side = dx > 0 ? -1 : 1;
         const goalX = opponent.x + side * (this.waterJet ? SWAMP_JET.standOff : ranged ? 180 : ENEMY.attackRangeX - 25);
-        const step = this.stats.speed * dt;
+        const step = this.stats.speed * this.speedScale(time) * dt;
         // 곧장 갈 수 있으면 곧장 가고, 테이블이나 카운터에 막혀 있으면 격자가 알려 주는 길로 돌아간다.
         if (!chaseTarget && !area.hasClearPath(c.x, c.y, goalX, opponent.y) && nav.next(c.x, c.y, this.waypoint)) {
           this.stepToward(this.waypoint.x, this.waypoint.y, step, area);
@@ -219,6 +240,7 @@ export class Enemy {
 
       case 'windup':
         c.setMotion(false);
+        this.trackDuringWindup(time, dt, opponent, area);
         this.updateStrike(time, onStrike, area, onGlint);
         break;
 
@@ -226,9 +248,10 @@ export class Enemy {
         c.setMotion(false);
         if (time < this.timer) break;
         if (this.chainPending && opponent.alive) {
-          // 연속 공격의 다음 돌진: 쉬는 동안 움직인 주인공 쪽을 다시 겨눈다.
+          // 연속 공격의 다음 타: 쉬는 동안 움직인 주인공 쪽을 다시 겨눈다.
           this.chainPending = false;
-          this.beginWindup(time, dx, dy);
+          const aimY = isCharger(this.kind) || this.kind === 'waterdrop-mushroom' || this.waterJet ? dy : 0;
+          this.beginWindup(time, dx, aimY);
         } else {
           this.chainPending = false;
           this.state = 'chase';
@@ -316,6 +339,7 @@ export class Enemy {
     dirY: number,
     push: number,
     perfect: boolean,
+    pass?: { x: number; y: number } | 'straight',
   ): ParryBreakResult {
     const c = this.character;
     if (this.state === 'dead' || this.state === 'roar' || this.state === 'retreat' || this.state === 'veil') {
@@ -324,18 +348,35 @@ export class Enemy {
     if (perfect) this.comboParries += 1;
     const step = this.comboParries;
     const total = Math.max(step, this.chainTotal);
-    const outcome = bossParryOutcome(this.boss, this.chainLeft, step, perfect);
+    const outcome = bossParryOutcome(this.boss || this.comboWindups !== undefined, this.chainLeft, step, perfect);
+    const breakStun = this.boss ? BOSS.parryChainStunMs : ENEMY_COMBO.breakStunMs;
+
+    // 정예·보스의 돌진(또는 흘린 돌진)은 멈추지 않고 원래 가려던 자리까지 지나간다. 경직은 돌진이 끝나면 준다.
+    if (pass && this.chargingNow(time)) {
+      this.strikeLanded = true;
+      this.hazards?.clearAim();
+      if (pass !== 'straight') {
+        const bent = bendCharge(this.aim, pass);
+        this.aim.x = bent.x;
+        this.aim.y = bent.y;
+        if (c.sprite instanceof MonsterSprite) c.sprite.snapFacing(bent.x, bent.y);
+      }
+      this.deferredParry = { outcome, stun: outcome === 'chainBreak' ? breakStun : durationMs, perfect };
+      c.flash(outcome === 'chainBreak' ? 0xffe880 : perfect ? 0xbef0ff : 0xffb35a);
+      return { outcome, step, total, passing: true };
+    }
 
     if (outcome === 'continueChain') {
       // 보스 연타 유지: 튕겨 나갔다가 짧은 리듬 간격 뒤에 바로 다음 돌진으로 이어진다.
       this.hazards?.clearAim();
       this.cancelStrike();
       this.chainLeft = Math.max(0, this.chainLeft - 1);
+      this.comboIndex++;
       this.chainPending = true;
       this.parryStunUntil = 0;
       this.staggerMark.setVisible(false);
       this.state = 'recover';
-      this.timer = time + BOSS.parryChainGapMs;
+      this.timer = time + (this.boss ? BOSS.parryChainGapMs : ENEMY_COMBO.parryGapMs);
       this.hitAt = time;
       const { scaleX, scaleY } = hitSquash(0);
       c.sprite.setScale(scaleX, scaleY).setPosition(0, 0);
@@ -344,7 +385,7 @@ export class Enemy {
       return { outcome, step, total };
     }
 
-    const stun = outcome === 'chainBreak' ? BOSS.parryChainStunMs : durationMs;
+    const stun = outcome === 'chainBreak' ? breakStun : durationMs;
     const pushScale = outcome === 'chainBreak' ? 1.45 : this.boss ? 0.7 : 1;
     this.interrupt(time, stun);
     if (this.state === 'recover') {
@@ -547,6 +588,7 @@ export class Enemy {
   }
 
   private cancelStrike(): void {
+    this.deferredParry = undefined;
     this.attackStartedAt = undefined;
     this.strikeLanded = false;
     this.glintShown = false;
@@ -564,6 +606,8 @@ export class Enemy {
     this.aim.x = dx / distance;
     this.aim.y = dy / distance;
     this.chargeProgress = 0;
+    const base = this.comboWindups?.[this.comboIndex] ?? this.stats.windupMs;
+    this.windupMs = base * (time < this.chillUntil ? this.chillWindup : 1);
     this.character.setMotion(false, dx);
     if (this.character.sprite instanceof MonsterSprite) this.character.sprite.setMovement(dx, dy);
     this.character.sprite.setScale(1).setPosition(0, 0);
@@ -575,7 +619,8 @@ export class Enemy {
     if (this.attackStartedAt === undefined) return;
     const elapsed = time - this.attackStartedAt;
     const sprite = this.character.sprite;
-    const { windupMs, strikeMs, returnMs, recoverMs } = this.stats;
+    const { strikeMs, returnMs, recoverMs } = this.stats;
+    const windupMs = this.windupMs;
     const strikeAt = windupMs + strikeMs;
     const endAt = strikeAt + returnMs;
     // 공격이 닿기 BLOCK.glintLeadMs 전: 패링 타이밍을 읽어낼 수 있게 무기/앞쪽에서 십자 안광이 번쩍인다.
@@ -643,14 +688,105 @@ export class Enemy {
       if (this.boss && this.phase === 2 && isCharger(this.kind)) this.hazards?.addPool(this.character.x, this.character.y, 1, time);
       this.state = 'recover';
       const chained = this.chainLeft > 0;
-      if (chained) this.chainLeft--;
+      if (chained) {
+        this.chainLeft--;
+        this.comboIndex++;
+      }
       this.chainPending = chained;
-      this.timer = this.attackStartedAt + endAt + (chained ? BOSS.chainGapMs : recoverMs);
+      this.timer = this.attackStartedAt + endAt + (chained ? (this.boss ? BOSS.chainGapMs : ENEMY_COMBO.gapMs) : recoverMs);
       this.attackStartedAt = undefined;
       this.waterJet?.clear();
       sprite.setPosition(0, 0).setScale(1);
       if (sprite instanceof MonsterSprite) sprite.endStrike();
+      this.applyDeferredParry(time);
     }
+  }
+
+  /** 패링당한 채 지나간 돌진이 끝났다: 미뤄 둔 경직을 준다 (연타가 남았으면 짧은 박자로 다음 타). */
+  private applyDeferredParry(time: number): void {
+    const d = this.deferredParry;
+    if (!d) return;
+    this.deferredParry = undefined;
+    if (d.outcome === 'continueChain') {
+      this.timer = time + (this.boss ? BOSS.parryChainGapMs : ENEMY_COMBO.parryGapMs);
+      return;
+    }
+    this.interrupt(time, d.stun);
+    this.hitAt = time;
+    this.parryStunUntil = time + d.stun;
+    this.parryStunPerfect = d.perfect;
+    const { scaleX, scaleY } = hitSquash(0);
+    this.character.sprite.setScale(scaleX, scaleY);
+  }
+
+  /** 돌진하는 몸이 실제로 움직이는 중인지 (예비 동작이 끝나고 돌진이 끝나기 전) */
+  chargingNow(time: number): boolean {
+    if (this.state !== 'windup' || !isCharger(this.kind) || this.attackStartedAt === undefined) return false;
+    const elapsed = time - this.attackStartedAt;
+    return elapsed >= this.windupMs && elapsed < this.windupMs + this.stats.strikeMs;
+  }
+
+  /** 정예(상급 이상) 또는 보스 */
+  get elite(): boolean {
+    return this.boss || isEliteKind(this.kind);
+  }
+
+  /** 지금 치는 타의 공격력 배율: 연타의 둘째 타부터는 조금 약하다 */
+  get strikeDamageScale(): number {
+    return !this.boss && this.comboIndex > 0 ? ENEMY_COMBO.followDamageScale : 1;
+  }
+
+  /** 흡수한 서리에 맞아 언다: until까지 느려지고 예비 동작도 길어진다 */
+  chill(until: number, speedScale: number, windupScale: number): void {
+    this.chillUntil = Math.max(this.chillUntil, until);
+    this.chillSpeed = speedScale;
+    this.chillWindup = windupScale;
+  }
+
+  chilled(time: number): boolean {
+    return time < this.chillUntil;
+  }
+
+  private speedScale(time: number): number {
+    return time < this.chillUntil ? this.chillSpeed : 1;
+  }
+
+  /** 흘려진 적이 흘린 쪽으로 몸을 돌린다 (서리 딱정벌레도 단번에 돌아가 옆구리·등을 드러낸다) */
+  turnTo(x: number, y: number): void {
+    if (this.character.sprite instanceof MonsterSprite) this.character.sprite.snapFacing(x, y);
+    this.character.face(x);
+  }
+
+  /**
+   * 연타 묶음을 쓰는 적은 예비 동작 동안 주인공을 따라 방향을 고치며 다가선다.
+   * 닿기 ENEMY_COMBO.trackLockMs 전부터는 방향을 굳혀, 마지막 순간에 크게 비켜서면 빗나간다.
+   */
+  private trackDuringWindup(time: number, dt: number, opponent: { x: number; y: number }, area: WalkArea): void {
+    if (!this.comboWindups || this.boss || this.attackStartedAt === undefined || this.waterJet) return;
+    if (!isTracking(time - this.attackStartedAt, this.windupMs)) return;
+    const c = this.character;
+    const dx = opponent.x - c.x, dy = opponent.y - c.y;
+    if (isCharger(this.kind)) {
+      const d = Math.hypot(dx, dy) || 1;
+      this.aim.x = dx / d;
+      this.aim.y = dy / d;
+      c.setMotion(false, dx);
+      if (c.sprite instanceof MonsterSprite) c.sprite.setMovement(dx, dy);
+      return;
+    }
+    this.aim.x = Math.sign(dx) || this.aim.x;
+    this.aim.y = 0;
+    c.setMotion(false, dx);
+    if (c.sprite instanceof MonsterSprite) c.sprite.setMovement(dx, dy);
+    // 옆자리(같은 높이)로 붙는다. 이미 닿는 자리면 서 있는다.
+    const side = dx > 0 ? -1 : 1;
+    const goalX = opponent.x + side * (ENEMY.attackRangeX - 25), goalY = opponent.y;
+    const gx = goalX - c.x, gy = goalY - c.y;
+    const distance = Math.hypot(gx, gy);
+    if (distance < 12) return;
+    const step = Math.min(distance, this.stats.speed * ENEMY_COMBO.trackSpeedScale * this.speedScale(time) * dt);
+    const next = area.move(c.x, c.y, (gx / distance) * step, (gy / distance) * step, this.scratch);
+    c.placeAt(next.x, next.y);
   }
 
   private fireProjectile(time: number): void {

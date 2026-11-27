@@ -327,13 +327,14 @@ export const RESONANCE = {
  *  - perfectWindowMs ~ windowMs 사이(불완전 막기): 원래 피해의 일부를 회복 가능한 내상으로만 받고(죽지 않음),
  *    뒤로 밀리며 적은 짧게 멈칫한다. 막기 쿨은 헛막기보다 짧게 돌아온다.
  *  - 헛막으면 cooldownMs(450ms) 동안 다시 막을 수 없고, whiffMemoryMs(800ms) 안에 또 헛연타하면
- *    정밀 패링 창만 단계적으로 줄어든다(130 → 80 → 60ms). 성공하거나 잠깐 쉬면 즉시 130ms로 복구된다.
+ *    정밀 패링 창만 단계적으로 줄어든다(170 → 110 → 80ms). 성공하거나 잠깐 쉬면 즉시 170ms로 복구된다.
+ *  - 적의 예비 동작이 짧고 연타로 몰아치는 대신(combat/enemyCombo.ts) 판정 창은 넉넉하게 둔다.
  */
 export const BLOCK = {
-  perfectWindowMs: 130,
-  whiffPerfectWindowsMs: [130, 80, 60] as const,
+  perfectWindowMs: 170,
+  whiffPerfectWindowsMs: [170, 110, 80] as const,
   whiffMemoryMs: 800,
-  windowMs: 260,
+  windowMs: 300,
   imperfectDamageRatio: 0.4,
   internalHealDelayMs: 2400,
   internalHealPerSec: 12,

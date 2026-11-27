@@ -13,31 +13,39 @@ export const MONSTERS = {
   'waterdrop-mushroom': { name: '물방울 버섯', hp: 28, damage: 6, xp: 12, height: 115, speed: 85,
     windupMs: 650, strikeMs: 110, returnMs: 220, recoverMs: 1500, color: 0x77bbd7 },
   'iron-scale-lizard': { name: '쇠비늘 도마뱀', hp: 52, damage: 12, xp: 18, height: 105, speed: 145,
-    windupMs: 800, strikeMs: 320, returnMs: 220, recoverMs: 1100, color: 0xa88b69 },
+    windupMs: 560, strikeMs: 320, returnMs: 220, recoverMs: 1100, color: 0xa88b69 },
   // 소멸(네이룬)의 하급 권속. 해 질 무렵부터 나타나 부식성 가루를 뿌리며 덮친다. 약하지만 닿으면 몸이 무거워진다.
   'ashen-moth': { name: '잿빛 나방', hp: 20, damage: 5, xp: 10, height: 100, speed: 120,
     windupMs: 450, strikeMs: 140, returnMs: 200, recoverMs: 1300, color: 0x9c96b3 },
   // 습격의 권속 (소멸·네이룬 계열 중급). 추적자는 낮게 달려들어 할퀴고, 집행자는 길게 준비한 뒤 무겁게 돌진한다.
   'corrosion-tracker': { name: '부식의 추적자', hp: 30, damage: 7, xp: 12, height: 100, speed: 150,
-    windupMs: 420, strikeMs: 120, returnMs: 200, recoverMs: 850, color: 0x6d6278 },
+    windupMs: 320, strikeMs: 120, returnMs: 200, recoverMs: 850, color: 0x6d6278 },
   // 수호(바르덴)의 하급 권속. 2장 동쪽 고갯길. 느리고 단단하며 얼음 껍질이 정면 공격을 막는다(FROST_SHELL).
   'frost-beetle': { name: '서리 딱정벌레', hp: 70, damage: 12, xp: 22, height: 105, speed: 70,
-    windupMs: 720, strikeMs: 200, returnMs: 240, recoverMs: 1400, color: 0x9fd8ee },
+    windupMs: 520, strikeMs: 200, returnMs: 240, recoverMs: 1400, color: 0x9fd8ee },
   'fog-crow': { name: '안개 까마귀', hp: 22, damage: 5, xp: 12, height: 76, speed: 205,
     windupMs: 360, strikeMs: 180, returnMs: 180, recoverMs: 900, color: 0x9daac7 },
-  'swamp-lurker': { name: '늪의 잠복 마물', hp: 135, damage: 15, defense: 1.1, xp: 55, height: 130, speed: 78,
+  'swamp-lurker': { name: '늪의 잠복 마물', hp: 135, damage: 15, defense: 1.1, xp: 55, height: 130, speed: 78, rank: 'elite',
     windupMs: 760, strikeMs: 450, returnMs: 320, recoverMs: 1450, color: 0x747e53 },
   'reed-stalker': { name: '갈대밭의 마물', hp: 46, damage: 9, xp: 19, height: 105, speed: 115,
-    windupMs: 530, strikeMs: 150, returnMs: 260, recoverMs: 1250, color: 0x537f7d },
+    windupMs: 360, strikeMs: 150, returnMs: 260, recoverMs: 1250, color: 0x537f7d },
   'mist-phantom': { name: '안개 환영', hp: 32, damage: 9, xp: 18, height: 110, speed: 142,
-    windupMs: 460, strikeMs: 130, returnMs: 220, recoverMs: 1100, color: 0xa8b8ba },
+    windupMs: 340, strikeMs: 130, returnMs: 220, recoverMs: 1100, color: 0xa8b8ba },
   // 안개섬의 종 설치 전투가 들어오기 전에는 원화 확인용으로만 표시한다.
   'mist-weaver': { name: '안개를 잣는 자', hp: 1, damage: 0, xp: 0, height: 208, speed: 0,
     windupMs: 0, strikeMs: 0, returnMs: 0, recoverMs: 0, color: 0x8d9fac },
   // 1장 보스. 레벨 7에서 체력 1000·공격력 41·방어 1.2 (combat/bossPattern.ts의 패턴을 쓴다)
-  'corrosion-executioner': { name: '부식의 집행자', hp: 400, damage: 21.6, defense: 1.2, xp: 80, height: 150, speed: 95,
-    windupMs: 950, strikeMs: 340, returnMs: 260, recoverMs: 1300, color: 0x5e5468 },
+  'corrosion-executioner': { name: '부식의 집행자', hp: 400, damage: 21.6, defense: 1.2, xp: 80, height: 150, speed: 95, rank: 'elite',
+    windupMs: 760, strikeMs: 340, returnMs: 260, recoverMs: 1300, color: 0x5e5468 },
 } as const;
+
+/**
+ * 정예(상급 이상): 습격의 집행자와 늪의 잠복 마물. 보스도 정예로 친다(Enemy.elite).
+ * 정예와 보스의 돌진은 정밀 패링을 당해도 멈추지 않고 원래 가려던 자리까지 지나간 뒤 경직한다.
+ */
+export function isEliteKind(kind: MonsterKind | undefined): boolean {
+  return kind !== undefined && (MONSTERS[kind] as { rank?: 'elite' }).rank === 'elite';
+}
 
 /** 잠근 방향으로 실제 위치를 옮겨 돌진·덮치기 공격을 하는 몬스터 */
 export function isCharger(kind: MonsterKind | undefined): boolean {
@@ -65,6 +73,8 @@ export interface MonsterStats {
   windupMs: number; strikeMs: number; returnMs: number; recoverMs: number; color: number;
   /** 방어: 받는 피해를 이 값으로 나눈다 (없으면 1) */
   defense?: number;
+  /** 정예(상급 이상) */
+  rank?: 'elite';
 }
 
 /** 방어를 반영해 몬스터가 실제로 받는 피해 (최소 1) */

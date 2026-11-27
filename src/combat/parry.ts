@@ -20,8 +20,8 @@ export interface WhiffState {
 
 /**
  * 헛막기 연타 상태에 따른 이번 막기의 정밀 패링 인정 시간(ms).
- * - 정상: 130ms / 1회 연타: 80ms / 2회 이상 연타: 60ms.
- * - whiffMemoryMs(800ms) 이상 쉬거나 한 번이라도 막기에 성공하면 즉시 130ms로 복구된다.
+ * - 정상: 170ms / 1회 연타: 110ms / 2회 이상 연타: 80ms.
+ * - whiffMemoryMs(800ms) 이상 쉬거나 한 번이라도 막기에 성공하면 즉시 170ms로 복구된다.
  */
 export function effectivePerfectWindowMs(
   whiff: WhiffState,
@@ -182,20 +182,21 @@ export function parryImpactShadeAlpha(
 }
 
 /**
- * 보스 연속 패링 결과 판정.
- * - 'continueChain': 보스 연타 중 아직 남은 타격이 있어 바로 끊기지 않고 다음 타를 짧은 박자(parryChainGapMs)로 이어 간다.
- * - 'chainBreak': 보스 연타의 마지막 타까지 정밀 패링으로 이어 받아 파훼했다(대경직 + 보너스 공명).
- * - 'normalBreak': 일반 적이거나, 보스 단타·불완전 막기로 마무리된 경우.
+ * 연타 중 패링 결과 판정 (보스의 연속 돌진과 중급 이상 적의 연타 묶음, combat/enemyCombo.ts).
+ * - 'continueChain': 연타 중 아직 남은 타격이 있어 바로 끊기지 않고 다음 타를 짧은 박자로 이어 간다.
+ * - 'chainBreak': 연타의 마지막 타까지 정밀 패링으로 이어 받아 파훼했다(대경직 + 보너스 공명).
+ * - 'normalBreak': 연타를 쓰지 않는 적이거나, 단타·불완전 막기로 마무리된 경우.
+ * chained: 이 적이 지금 연타를 하는지 (보스이거나 연타 묶음을 쓰는 적)
  */
 export type BossParryOutcome = 'continueChain' | 'chainBreak' | 'normalBreak';
 
 export function bossParryOutcome(
-  boss: boolean,
+  chained: boolean,
   chainLeft: number,
   comboParries: number,
   perfect: boolean,
 ): BossParryOutcome {
-  if (!boss) return 'normalBreak';
+  if (!chained) return 'normalBreak';
   if (chainLeft > 0) return 'continueChain';
   if (perfect && comboParries >= 2) return 'chainBreak';
   return 'normalBreak';
