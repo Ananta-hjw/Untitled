@@ -15,8 +15,12 @@ test('레벨 1의 능력치는 기존 플레이어 수치와 같고, 레벨마�
   assert.deepEqual(statsForLevel(PROGRESSION.maxLevel + 5), statsForLevel(PROGRESSION.maxLevel));
 });
 
-test('필요 경험치는 레벨마다 늘고, 최고 레벨에서는 0이다', () => {
+test('필요 경험치는 2차 곡선(100 + 60×(L-1) + 30×(L-1)²)으로 가파르게 늘고, 최고 레벨에서는 0이다', () => {
   assert.equal(xpToNext(1), PROGRESSION.xpBase);
+  assert.equal(xpToNext(1), 100);
+  assert.equal(xpToNext(2), 190);
+  assert.equal(xpToNext(5), 820);
+  assert.equal(xpToNext(10), 3070);
   for (let level = 2; level < PROGRESSION.maxLevel; level++) assert.ok(xpToNext(level) > xpToNext(level - 1));
   assert.equal(xpToNext(PROGRESSION.maxLevel), 0);
 });
@@ -41,14 +45,17 @@ test('최고 레벨을 넘지 않고, 그 뒤로는 경험치가 쌓이지 않�
   assert.deepEqual(addXp({ level: max, xp: 0 }, 500), { level: max, xp: 0, levelsGained: 0 });
 });
 
-test('슬라임만 잡아도 처음 몇 레벨은 금방 오른다', () => {
-  // 레벨 2까지 3마리, 레벨 5까지 25마리 안팎
+test('2차 경험치 곡선에서는 레벨이 오를수록 필요한 사냥 마릿수가 크게 늘어난다', () => {
+  // Lv.1 슬라임(10 XP)만 잡으면 Lv.2까지 10마리, Lv.5까지 누적 1,180 XP(118마리)
   let progress = { level: 1, xp: 0 };
   let kills = 0;
+  let killsToLv2 = 0;
   while (progress.level < 5) {
     progress = addXp(progress, PROGRESSION.slimeXp);
     kills++;
-    if (progress.level === 2 && kills <= 3) assert.equal(kills, Math.ceil(xpToNext(1) / PROGRESSION.slimeXp));
+    if (progress.level === 2 && killsToLv2 === 0) killsToLv2 = kills;
   }
-  assert.ok(kills >= 15 && kills <= 30, `레벨 5까지 ${kills}마리`);
+  assert.equal(killsToLv2, Math.ceil(xpToNext(1) / PROGRESSION.slimeXp));
+  assert.equal(killsToLv2, 10);
+  assert.equal(kills, 118, `레벨 5까지 ${kills}마리`);
 });

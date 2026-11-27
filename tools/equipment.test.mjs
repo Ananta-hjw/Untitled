@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  ACCESSORY_SLOT_IDS, ARMOR_SLOT_IDS, ENHANCE_SLOT_IDS, GEAR, GEAR_IDS, MAX_RANK, PROMOTION_STAGES, SLOT_IDS,
+  ACCESSORY_SLOT_IDS, ARMOR_SLOT_IDS, CURRENT_CHAPTER_MAX_RANK, ENHANCE_SLOT_IDS, GEAR, GEAR_IDS, MAX_RANK, PROMOTION_STAGES, SLOT_IDS,
   addGear, armorAppearanceLabel, armorAppearanceRank, armorPromotionStatus, buyGear, canAffordPromotion, canSmithyWork,
   enhanceCost, enhanceSlot, equip, gearBonus, gearForSale, grantEnhance, grantSlotRank, isArmorSlot, isEnhanceSlot,
   promoteSlotWithCost, promotionRecipe, rankLabel, sellGear, slotDisplayName, slotFor, slotIconId, slotStats,
@@ -113,6 +113,11 @@ test('승급은 골드+재료가 모두 필요하며, 무기 승급 시 즉시 �
   assert.equal(res2.appearanceChanged, true);
   assert.equal(weaponVisualForRank(res2.gear.rank.weapon), 'long-sword');
 
+  // 현재 장 승급 상한(+1 = 1단계 진화): 1단계까지는 가능하고, 1단계 → 2단계는 상한에 막힌다
+  assert.equal(CURRENT_CHAPTER_MAX_RANK, 1);
+  assert.equal(canAffordPromotion(inv2, 'weapon', 1, CURRENT_CHAPTER_MAX_RANK), false);
+  assert.equal(promoteSlotWithCost(inv2, res1.gear, 'weapon', 'marta', CURRENT_CHAPTER_MAX_RANK), null);
+
   // 5단계(최대 승급) 이후에는 추가 승급 불가
   assert.equal(promotionRecipe('weapon', MAX_RANK), null);
 });
@@ -202,7 +207,7 @@ test('장신구는 구매·판매·착용·해제가 되고 빈 장신구 칸부
   assert.equal(slotFor(worn, 'blue-bead'), 'accessory2');
   worn = equip(worn, 'blue-bead');
   assert.equal(worn.equipped.accessory2, 'blue-bead');
-  assert.deepEqual(gearBonus(worn), { str: 1, def: 1, luk: 3, int: 3 });
+  assert.deepEqual(gearBonus(worn), { str: 1, def: 3, vit: 2, dex: 3 });
 
   const removed = unequip(worn, 'accessory1');
   assert.equal(removed.equipped.accessory1, undefined);
@@ -246,10 +251,10 @@ test('상태·장비 저장은 무제한 강화와 승급 단계·장신구를 �
   assert.deepEqual(parseCharacter(null, 5), newCharacter());
   assert.deepEqual(parseCharacter('{oops', 5), newCharacter());
 
-  // 깨진 값은 안전하게 걸러 낸다 (rank는 0~5 클램프, enhance는 무제한 비음수)
+  // 깨진 값 및 삭제된 능력치(int·luk)는 안전하게 걸러 낸다 (기존 포인트 자동 환급, rank는 0~5 클램프, enhance는 무제한 비음수)
   const odd = JSON.stringify({
     version: CHARACTER_SAVE_VERSION,
-    alloc: { str: -3, luk: 'x' },
+    alloc: { str: -3, int: 4, luk: 'x' },
     gear: {
       enhance: { weapon: 42, head: -2, body: 4 },
       rank: { weapon: 99, head: -1, body: 2 },

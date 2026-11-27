@@ -1,12 +1,12 @@
 import type { MonsterKind } from './monsterTypes.ts';
 
 /**
- * 흡수: 정밀 패링으로 받아 낸 적의 힘을 칼에 담는다 (게임 시계 ms).
+ * 흡수: 정밀 패링으로 받아 낸 적의 힘을 칼에 담는다.
  *  - 칼의 기본 공격력은 약하다: 담긴 힘이 없으면 칼질 피해가 damageScale[0](0.5배)이다.
  *  - 정밀 패링마다 한 단씩(최대 maxTier) 쌓이고, 막은 적의 속성이 칼에 묻는다(마지막에 막은 적의 속성).
  *    연속 패링 파훼는 한 단 더, 차지 패링은 단번에 가득 찬다.
- *  - 담긴 힘은 마지막 정밀 패링부터 keepMs(5초) 동안 이어지며, 그동안의 일반 칼질(1·2·3타)이
- *    단수만큼 세진다(0.9 / 1.4 / 2.5배). 막지 못하고 맞으면 사라진다.
+ *  - 담긴 힘은 시간 제한 없이 **피격되거나 불완전 막기(일반 막기)를 하기 전까지** 계속 유지되며,
+ *    그동안의 일반 칼질(1·2·3타)이 단수만큼 세진다(0.9 / 1.4 / 2.5배).
  *  - 속성은 3단일 때만, 정밀 패링 뒤 맨 첫 명중 한 번에만 실린다(charged, elementReady). 다시 정밀 패링하면 또 실린다.
  * 속성별로 첫 명중의 효과가 다르다:
  *  - 기운(force): 피해와 밀어내기만 커진다.
@@ -19,7 +19,6 @@ export type AbsorbElement = 'force' | 'frost' | 'corrosion' | 'mist';
 
 export const ABSORB = {
   maxTier: 3,
-  keepMs: 5000,
   /** 단수별 칼질 피해 배율 (0단: 기본 0.5배, 1단 0.9배, 2단 1.4배 < 회피 일섬 2배 < 3단 2.5배) */
   damageScale: [0.5, 0.9, 1.4, 2.5],
   force: { knockbackScale: 1.7 },
@@ -36,8 +35,8 @@ export const ABSORB_LOOK: Record<AbsorbElement, { name: string; color: number; t
 };
 
 /** charged: 아직 속성을 싣지 않았다 (정밀 패링 뒤 첫 명중을 기다리는 중) */
-export interface AbsorbState { tier: number; element: AbsorbElement; until: number; charged: boolean }
-export const NO_ABSORB: AbsorbState = { tier: 0, element: 'force', until: -Infinity, charged: false };
+export interface AbsorbState { tier: number; element: AbsorbElement; charged: boolean }
+export const NO_ABSORB: AbsorbState = { tier: 0, element: 'force', charged: false };
 
 /** 막은 적의 속성 */
 export function absorbElementOf(kind: MonsterKind | undefined): AbsorbElement {
@@ -49,15 +48,15 @@ export function absorbElementOf(kind: MonsterKind | undefined): AbsorbElement {
   }
 }
 
-/** 정밀 패링 한 번(또는 tiers단)을 담는다 */
-export function absorbParry(state: AbsorbState, element: AbsorbElement, now: number, tiers = 1, keepMs: number = ABSORB.keepMs): AbsorbState {
-  const base = activeAbsorb(state, now)?.tier ?? 0;
-  return { tier: Math.min(ABSORB.maxTier, base + Math.max(1, Math.floor(tiers))), element, until: now + keepMs, charged: true };
+/** 정밀 패링 한 번(또는 tiers단)을 담는다. 피격·불완전 막기 전까지 단수가 유지된다. */
+export function absorbParry(state: AbsorbState, element: AbsorbElement, tiers = 1): AbsorbState {
+  const base = activeAbsorb(state)?.tier ?? 0;
+  return { tier: Math.min(ABSORB.maxTier, base + Math.max(1, Math.floor(tiers))), element, charged: true };
 }
 
-/** 지금 칼에 담긴 힘 (없거나 시간이 지났으면 undefined) */
-export function activeAbsorb(state: AbsorbState, now: number): AbsorbState | undefined {
-  return state.tier > 0 && now < state.until ? state : undefined;
+/** 지금 칼에 담긴 힘 (0단이면 undefined). 시간으로 사라지지 않고 피격·불완전 막기 시에만 깨진다. */
+export function activeAbsorb(state: AbsorbState): AbsorbState | undefined {
+  return state.tier > 0 ? state : undefined;
 }
 
 /** 다음 명중에 속성이 실리는지: 3단(maxTier)이고 정밀 패링 뒤 아직 속성을 쓰지 않았다 */
@@ -65,7 +64,7 @@ export function elementReady(state: AbsorbState | undefined): boolean {
   return !!state && state.charged && state.tier >= ABSORB.maxTier;
 }
 
-/** 첫 명중에 속성을 실어 쓴 뒤: 단수와 남은 시간은 그대로, 속성만 비운다 */
+/** 첫 명중에 속성을 실어 쓴 뒤: 단수는 그대로 남고 속성만 비운다 */
 export function spendElement(state: AbsorbState): AbsorbState {
   return state.charged ? { ...state, charged: false } : state;
 }

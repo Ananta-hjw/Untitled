@@ -19,10 +19,11 @@ export interface LevelStats {
   damageMax: number;
 }
 
-/** 이 레벨에서 다음 레벨까지 필요한 경험치. 최고 레벨이면 0. */
+/** 이 레벨에서 다음 레벨까지 필요한 경험치(2차 곡선). 최고 레벨이면 0. */
 export function xpToNext(level: number): number {
   if (level >= PROGRESSION.maxLevel) return 0;
-  return PROGRESSION.xpBase + PROGRESSION.xpStep * (level - 1);
+  const step = level - 1;
+  return PROGRESSION.xpBase + PROGRESSION.xpStep * step + PROGRESSION.xpCurve * step * step;
 }
 
 /** 레벨별 최대 체력과 공격력 */

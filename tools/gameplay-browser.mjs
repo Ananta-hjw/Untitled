@@ -999,10 +999,10 @@ test('적을 쓰러뜨리면 경험치가 쌓이고 레벨이 오르면 체력·
     const before = { level: s.progress.level, xp: s.progress.xp, maxHp: p.maxHp, damageMax: s.stats.damageMax };
     p.hurt(30);
     const hurtHp = p.hp;
-    // 실제 처치 경로와 같은 함수로 경험치를 준다. 레벨 2까지 36이 필요하다(10 + 10 + 16).
+    // 실제 처치 경로와 같은 함수로 경험치를 준다. 레벨 2까지 100이 필요하다(10 + 10 + 80).
     s.gainXp(10, p.x, p.y); s.gainXp(10, p.x, p.y);
     const twoKills = { level: s.progress.level, xp: s.progress.xp, hp: p.hp };
-    s.gainXp(16, p.x, p.y);
+    s.gainXp(80, p.x, p.y);
     const levelUp = { level: s.progress.level, xp: s.progress.xp, hp: p.hp, maxHp: p.maxHp,
       damageMax: s.stats.damageMax, label: p.list.find((o) => o.text?.startsWith?.('Lv.'))?.text };
     s.scene.restart(); g.step(performance.now(), 16); g.step(performance.now() + 16, 16);
@@ -2359,11 +2359,12 @@ test('캐릭터 창: 포인트로 능력치를 올리고, 도란에게 장비를
   const result = await evaluate(`(() => {
     const g = window.__game, s = g.scene.getScene('game');
     let t = performance.now();
-    const before = { damage: s.stats.damageMax, maxHp: s.player.maxHp, points: s.characterView().pointsLeft };
+    const before = { damage: s.stats.damageMax, maxHp: s.player.maxHp, points: s.characterView().pointsLeft, critChance: s.derived.critChance, critDamage: s.derived.critDamage };
     // 정보 버튼으로 상태 탭을 열면 게임이 멈춘다.
     s.characterButton.pressed = true;
     g.step(t += 16, 16);
     const opened = s.characterPanel.isOpen && s.characterPanel.currentTab === 'status';
+    const panelCounts = { stats: s.characterPanel.statRows.length, metrics: s.characterPanel.metrics.length };
     const clock = s.now; g.step(t += 16, 16);
     const frozen = s.now === clock;
     s.allocateStat('vit'); s.allocateStat('vit');
@@ -2389,17 +2390,19 @@ test('캐릭터 창: 포인트로 능력치를 올리고, 도란에게 장비를
     const hands = s.character.gear.enhance.hands;
     const equipped = s.character.gear.equipped.accessory1;
     s.characterPanel.close();
-    return { before, opened, frozen, vit, smithy, gold, hands, equipped, damage: s.stats.damageMax };
+    return { before, opened, panelCounts, frozen, vit, smithy, gold, hands, equipped, damage: s.stats.damageMax, critChance: s.derived.critChance, critDamage: s.derived.critDamage };
   })()`);
   assert.equal(result.opened, true);
+  assert.deepEqual(result.panelCounts, { stats: 4, metrics: 8 });
   assert.equal(result.frozen, true);
   assert.equal(result.before.points, 6);
-  assert.deepEqual(result.vit, { maxHp: result.before.maxHp + 20, points: 4 });
+  assert.deepEqual(result.vit, { maxHp: result.before.maxHp + 10, points: 4 });
   assert.equal(result.smithy, true, JSON.stringify(result));
   assert.equal(result.gold, 310);
   assert.equal(result.hands, 1);
   assert.equal(result.equipped, 'clover-charm');
   assert.ok(result.damage > result.before.damage, JSON.stringify(result));
+  assert.ok(result.critChance > result.before.critChance && result.critDamage > result.before.critDamage, JSON.stringify(result));
   // 다시 불러와도 분배·강화·장신구가 남는다.
   await load('in-smithy');
   const reloaded = await evaluate(`(() => { const s = window.__game.scene.getScene('game');
@@ -2429,7 +2432,7 @@ test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공�
     const parry = () => { s.parryReadyAt = 0; s.blockButton.pressed = true; g.step(t += 16, 16); };
     parry();
     const blocking = s.blocking, shield = s.shield.visible;
-    // 회피 대기 시간이 3초 남은 상태에서 패링하면 1초 줄어든다.
+    // 회피 대기 시간이 3초 남은 상태에서 정밀 패링하면 0.5초 줄어든다.
     s.dodgeReadyAt = s.now + 3000;
     const front = strike(1);
     const stunned = e.parryStunUntil > s.now, counter = s.counterUntil > s.now, again = s.now >= s.parryReadyAt;
@@ -2458,14 +2461,14 @@ test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공�
   assert.equal(result.stunned, false, '일반 정밀 패링은 기절을 주지 않는다');
   assert.equal(result.counter, false, '일섬(counter)은 저스트 회피 전용이며 패링에서는 열리지 않는다');
   assert.equal(result.again, true, '패링에 성공하면 바로 다시 막을 수 있다');
-  assert.ok(Math.abs(result.dodgeLeft - 2000) < 1, `패링하면 회피 대기 시간 1초 감소: ${result.dodgeLeft}`);
-  assert.ok(result.dodgeFloor <= 0 && result.dodgeFloor > -1, `남은 시간이 1초보다 적으면 바로 회피할 수 있다: ${result.dodgeFloor}`);
+  assert.ok(Math.abs(result.dodgeLeft - 2500) < 1, `패링하면 회피 대기 시간 0.5초 감소: ${result.dodgeLeft}`);
+  assert.ok(result.dodgeFloor <= 0 && result.dodgeFloor > -1, `남은 시간이 0.5초보다 적으면 바로 회피할 수 있다: ${result.dodgeFloor}`);
   assert.equal(result.back, result.open, '뒤에서 온 공격은 막지 못한다');
   assert.equal(result.late, result.open, '판정 시간이 지나면 막지 못한다');
   assert.equal(result.evaded, 0);
 });
 
-test('연타와 흡수: 추적자는 예비 동작 중 따라오며 2연타를 하고, 둘 다 정밀 패링하면 연타가 이어지다 파훼되며, 3단(2.5배)이 5초 이어지고 첫 명중에만 부식 웅덩이가 남는다', async () => {
+test('연타와 흡수: 추적자는 예비 동작 중 따라오며 2연타를 하고, 둘 다 정밀 패링하면 연타가 이어지다 파훼되며, 3단(2.5배)은 시간으로 사라지지 않고 첫 명중에만 부식 웅덩이가 남으며 불완전 막기에 깨진다', async () => {
   await load('south-field&monsters=corrosion-tracker');
   await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.some(e => e.kind === 'corrosion-tracker'); })()`));
   const result = await evaluate(`(() => {
@@ -2512,7 +2515,20 @@ test('연타와 흡수: 추적자는 예비 동작 중 따라오며 2연타를 �
     s.attackBufferedUntil = s.now + 300; s.keyboardAttackPressed = true;
     let pools = 0;
     for (let i = 0; i < 40; i++) { step(); pools = Math.max(pools, s.allyPools.length); }
-    return { tracked, log, stunLeft, hpAfterParries, maxHp: p.maxHp, tierBefore, tierAfter: s.absorb.tier, charged: s.absorb.charged, left: s.absorb.until - s.now, pools, damage: enemyHp - e.character.hp };
+    const tierAfterHit = s.absorb.tier;
+    const charged = s.absorb.charged;
+    // 10초가 지나도 맞거나 불완전 막기를 하기 전까지는 단수가 그대로 유지된다.
+    s.now += 10000;
+    step(10);
+    const tierAfterWait = s.absorb.tier;
+    // 불완전 막기(일반 막기) 시 담아 둔 기운이 깨진다.
+    e.character.placeAt(p.x + 80, p.y);
+    p.face(1); p.sprite.setAttackFacing('right');
+    s.parryReadyAt = 0; s.blockButton.pressed = true; s.updatePlayer(s.now, 0);
+    s.now += 200;
+    s.onEnemyStrike(e, { fromX: p.x + 80, fromY: p.y, toX: p.x, toY: p.y, radiusX: 60, radiusY: 40, dx: -1, dy: 0, melee: true });
+    const tierAfterImperfect = s.absorb.tier;
+    return { tracked, log, stunLeft, hpAfterParries, maxHp: p.maxHp, tierBefore, tierAfterHit, tierAfterWait, tierAfterImperfect, charged, pools, damage: enemyHp - e.character.hp };
   })()`);
   assert.ok(result.tracked > 15, `예비 동작 중 물러선 주인공을 따라온다: ${JSON.stringify(result)}`);
   assert.equal(result.log.length, 2, JSON.stringify(result));
@@ -2523,9 +2539,10 @@ test('연타와 흡수: 추적자는 예비 동작 중 따라오며 2연타를 �
   assert.ok(result.stunLeft > 1200, `파훼 경직: ${result.stunLeft}`);
   assert.equal(result.hpAfterParries, result.maxHp);
   assert.equal(result.tierBefore, 3);
-  assert.equal(result.tierAfter, 3, '단수는 5초 동안 이어진다');
+  assert.equal(result.tierAfterHit, 3, '단수는 공격 후에도 유지된다');
+  assert.equal(result.tierAfterWait, 3, '시간이 오래 지나도 피격 전까지 유지된다');
+  assert.equal(result.tierAfterImperfect, 0, '불완전 막기를 하면 담아 둔 기운이 깨진다');
   assert.equal(result.charged, false, `속성은 첫 명중에 쓰였다: ${JSON.stringify(result)}`);
-  assert.ok(result.left > 0 && result.left < 5000, JSON.stringify(result));
   assert.equal(result.pools, 1, '부식 웅덩이가 남는다');
   assert.ok(result.damage > 0);
 });
@@ -3149,7 +3166,7 @@ test('마나는 시간에 따라 자동 회복되며, 저스트 회피 일섬(2�
     const hitWith = (tier, dodge) => {
       step(30);
       e.character.placeAt(p.x + 80, p.y);
-      s.absorb = tier > 0 ? { tier, element: 'force', until: s.now + 5000, charged: false } : { tier: 0, element: 'force', until: -Infinity, charged: false };
+      s.absorb = tier > 0 ? { tier, element: 'force', charged: false } : { tier: 0, element: 'force', charged: false };
       s.comboStage = 0; s.comboExpiresAt = 0; s.nextAttackAt = 0;
       const before = e.character.hp;
       if (dodge) { s.onJustDodge(e); s.hitStopLeft = 0; s.slowMotionLeft = 0; }
@@ -5668,14 +5685,15 @@ test('2단 패링(내상·회복), 헛막기 연타, 차지 패링, 보스 산�
     step(40);
     const volleyHit = exec.character.hp < execHpBefore;
 
-    // 2) 불완전 막기(perfectWindowMs+20ms) → 내상 발생(HP 감소, 치명적이지 않음)
+    // 2) 불완전 막기(perfectWindowMs+20ms) → 담아 둔 기운이 깨지고 내상 발생(HP 감소, 치명적이지 않음)
     s.blockButton.isDown = false; step(40);
+    const tierBeforeImperfect = s.absorb.tier;
     p.hp = p.maxHp; p.invulnerableUntil = 0; s.internalDamage = 0;
     exec.character.placeAt(p.x + 80, p.y);
     s.parryReadyAt = 0; s.blockButton.pressed = true; s.updatePlayer(s.now, 0);
     s.now += BLOCK.perfectWindowMs + 20;
     s.onEnemyStrike(exec, { fromX: p.x + 80, fromY: p.y, toX: p.x, toY: p.y, radiusX: 60, radiusY: 40, dx: -1, dy: 0, melee: true });
-    const imperfectInternal = s.internalDamage > 0 && p.hp < p.maxHp && p.hp >= 1;
+    const imperfectInternal = s.internalDamage > 0 && p.hp < p.maxHp && p.hp >= 1 && tierBeforeImperfect > 0 && s.absorb.tier === 0;
 
     // 3) 헛막기 누적 → 다음 막기의 activePerfectWindowMs 축소(170 → 110)
     s.blockButton.isDown = false;
@@ -5687,7 +5705,7 @@ test('2단 패링(내상·회복), 헛막기 연타, 차지 패링, 보스 산�
     s.blockButton.pressed = true; s.updatePlayer(s.now, 0);
     const shrunkWindow = s.activePerfectWindowMs < BLOCK.perfectWindowMs;
 
-    // 4) 차지 패링: chargeHoldMs 충전 후 해제 → unboundUntil 활성, 공격 시 반사 피해 + 긴 경직
+    // 4) 차지 패링: chargeHoldMs 충전 후 해제 → unboundUntil 활성, 공격 시 반사 피해 + 3단 흡수 (대경직 없음)
     s.blockButton.isDown = false;
     s.now += BLOCK.cooldownMs + 50;
     s.parryReadyAt = 0; s.blockNeedsRelease = false;
@@ -5698,7 +5716,7 @@ test('2단 패링(내상·회복), 헛막기 연타, 차지 패링, 보스 산�
     p.invulnerableUntil = 0;
     const hpBeforeUnbound = exec.character.hp;
     s.onEnemyStrike(exec, { fromX: p.x + 80, fromY: p.y, toX: p.x, toY: p.y, radiusX: 60, radiusY: 40, dx: -1, dy: 0, melee: true });
-    const unboundWorked = exec.character.hp < hpBeforeUnbound && exec.parryStunUntil > s.now;
+    const unboundWorked = exec.character.hp < hpBeforeUnbound && exec.parryStunUntil <= s.now && s.absorb.tier === 3;
 
     // 5) 방어구 4부위(head/body/hands/feet) 모두 1단계 승급 시 armorAppearanceRank === 1
     s.quests['first-sword'] = { status: 'done', count: 1 };
@@ -5708,13 +5726,16 @@ test('2단 패링(내상·회복), 헛막기 연타, 차지 패링, 보스 산�
     const armorBeforeFourth = armorAppearanceRank(s.character.gear);
     s.promoteGearSlot('feet');
     const armorAfterFourth = armorAppearanceRank(s.character.gear);
+    // 현재 장 승급 상한(+1): 1단계에서 2단계로 추가 승급은 막힌다.
+    s.promoteGearSlot('feet');
+    const feetAfterCap = s.character.gear.rank.feet;
     s.characterPanel.close();
 
     return {
       volleyParried, volleyShots, volleyDx, volleyHit,
       imperfectInternal, afterWhiff, shrunkWindow,
       unboundArmed, unboundWorked,
-      armorBeforeFourth, armorAfterFourth,
+      armorBeforeFourth, armorAfterFourth, feetAfterCap,
     };
   })()`);
   assert.equal(result.volleyParried, true);
@@ -5728,6 +5749,7 @@ test('2단 패링(내상·회복), 헛막기 연타, 차지 패링, 보스 산�
   assert.equal(result.unboundWorked, true, '차지 패링 발동');
   assert.equal(result.armorBeforeFourth, 0);
   assert.equal(result.armorAfterFourth, 1);
+  assert.equal(result.feetAfterCap, 1, '현재 장에서는 1단계(+1)까지만 승급할 수 있다');
 });
 
 test('2장 후반의 보라색 버섯과 나루 물 마물이 전투에서 새 시트를 쓴다', { timeout: 90000 }, async () => {

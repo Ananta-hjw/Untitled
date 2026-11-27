@@ -41,6 +41,8 @@ test('치명타는 일반과 마무리 일격 사이의 무게이고, 반격에�
   assert.deepEqual(strikeKind(true, true, 0), { kind: 'counter', crit: false });
   assert.equal(strikeKind(false, false, HIT_FEEL.critChance).crit, false);
   assert.equal(critMultiplier(true), HIT_FEEL.critDamage);
+  assert.equal(critMultiplier(true, 1.9), 1.9);
+  assert.equal(critMultiplier(false, 1.9), 1);
   assert.equal(critMultiplier(false), 1);
   assert.equal(heavierKind(undefined, 'normal'), 'normal');
   assert.equal(heavierKind('crit', 'normal'), 'crit');

@@ -45,6 +45,8 @@ export function isArmorSlot(slot: SlotId): slot is ArmorSlotId {
 
 /** 승급(진화) 최대 단계: 0(기본) ~ 5(5단계 진화). */
 export const MAX_RANK = 5;
+/** 현재 장(1~2장)까지 허용되는 최대 승급 단계: 1단계 진화(+1). 이후 단계는 추후 장에서 해금한다. */
+export const CURRENT_CHAPTER_MAX_RANK = 1;
 
 export interface PromotionStageDef {
   rank: number;
@@ -200,9 +202,11 @@ export function promotionRecipe(slot: EnhanceSlotId, currentRank: number): Promo
   };
 }
 
-/** 골드와 재료가 모두 충분한지 확인한다. */
-export function canAffordPromotion(inv: Inventory, slot: EnhanceSlotId, currentRank: number): boolean {
-  const recipe = promotionRecipe(slot, currentRank);
+/** 골드와 재료가 모두 충분하고 허용 최대 승급(maxRank) 미만인지 확인한다. */
+export function canAffordPromotion(inv: Inventory, slot: EnhanceSlotId, currentRank: number, maxRank = MAX_RANK): boolean {
+  const rk = clampRank(currentRank);
+  if (rk >= clampRank(maxRank)) return false;
+  const recipe = promotionRecipe(slot, rk);
   if (!recipe || inv.gold < recipe.gold) return false;
   return recipe.materials.every((m) => countOf(inv, m.id) >= m.count);
 }
@@ -231,12 +235,12 @@ export interface GearDef {
 }
 
 export const GEAR: Record<GearId, GearDef> = {
-  'clover-charm': { id: 'clover-charm', name: '네잎 부적', description: '행운을 부른다는 작은 부적.', kind: 'accessory', stats: { luk: 3 }, price: 150, sellPrice: 60 },
-  'blue-bead': { id: 'blue-bead', name: '푸른 구슬 목걸이', description: '마음이 맑아지는 푸른 구슬.', kind: 'accessory', stats: { int: 3 }, price: 150, sellPrice: 60 },
+  'clover-charm': { id: 'clover-charm', name: '네잎 부적', description: '발걸음을 가볍게 하고 급소를 노리게 해 주는 작은 부적.', kind: 'accessory', stats: { dex: 3 }, price: 150, sellPrice: 60 },
+  'blue-bead': { id: 'blue-bead', name: '푸른 구슬 목걸이', description: '몸을 단단히 지켜 주는 푸른 구슬 목걸이.', kind: 'accessory', stats: { def: 2, vit: 2 }, price: 150, sellPrice: 60 },
   // 1장 서브 퀘스트 "축제 장식용 들꽃" 보상: 리네아가 엮어 준 약속의 팔찌라 상점에 팔 수 없다.
   'wildflower-bracelet': { id: 'wildflower-bracelet', name: '리네아의 들꽃 팔찌', description: '리네아가 하늘색 들꽃으로 엮어 준 팔찌. 손목에 차면 마음이 놓인다.', kind: 'accessory', stats: { vit: 2 }, sellPrice: 0 },
   // 2장 물안개 나루 마르타의 대장간: 종을 부었던 집안의 청동 장신구
-  'bronze-bell-earring': { id: 'bronze-bell-earring', name: '청동 방울 귀걸이', description: '울리지 않게 속을 막은 작은 청동 방울. 머리가 맑아진다.', kind: 'accessory', stats: { int: 4, luk: 2 }, price: 300, sellPrice: 115, shop: 'marta' },
+  'bronze-bell-earring': { id: 'bronze-bell-earring', name: '청동 방울 귀걸이', description: '울리지 않게 속을 막은 작은 청동 방울. 손놀림과 일격이 날카로워진다.', kind: 'accessory', stats: { str: 3, dex: 3 }, price: 300, sellPrice: 115, shop: 'marta' },
   // 2장 페른의 수레: 길 떠나는 사람의 장신구
   'reed-knot-bracelet': { id: 'reed-knot-bracelet', name: '갈대 매듭 팔찌', description: '물가 사람들이 무사히 돌아오라고 엮는 갈대 매듭 팔찌.', kind: 'accessory', stats: { vit: 3, dex: 3 }, price: 300, sellPrice: 115, shop: 'fern' },
 };
@@ -333,11 +337,18 @@ export interface PromoteResult {
  * 대장간 승급: 골드 + 재료를 소모해 지정 칸의 승급 단계를 +1 올린다(최대 5단계 진화).
  * 무기는 승급 즉시 외형이 바뀌며, 방어구는 4부위(머리·몸·장갑·신발) 승급이 모두 맞춰졌을 때 외형이 바뀐다.
  */
-export function promoteSlotWithCost(inv: Inventory, gear: Gear, slot: EnhanceSlotId, shop: GearShopId = 'doran'): PromoteResult | null {
+export function promoteSlotWithCost(
+  inv: Inventory,
+  gear: Gear,
+  slot: EnhanceSlotId,
+  shop: GearShopId = 'doran',
+  maxRank = MAX_RANK,
+): PromoteResult | null {
   if (!canSmithyWork(shop)) return null;
   const current = clampRank(gear.rank[slot]);
+  if (current >= clampRank(maxRank)) return null;
   const recipe = promotionRecipe(slot, current);
-  if (!recipe || !canAffordPromotion(inv, slot, current)) return null;
+  if (!recipe || !canAffordPromotion(inv, slot, current, maxRank)) return null;
   let nextInv: Inventory = { ...inv, gold: inv.gold - recipe.gold };
   for (const mat of recipe.materials) {
     const after = removeItem(nextInv, mat.id, mat.count);

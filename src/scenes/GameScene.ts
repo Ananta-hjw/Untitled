@@ -71,7 +71,7 @@ import { DUSK_MOTH_LEVEL, levelHint, spawnLevel, xpForKill } from '../combat/mon
 import { allocate, deriveStats, mitigate, pointsLeft, totalStats, type DerivedStats, type StatId } from '../entities/attributes';
 import { CHARACTER_SAVE_KEY, newCharacter, parseCharacter, serializeCharacter, type CharacterData } from '../entities/characterData';
 import {
-  GEAR, MAX_RANK, SLOT_INFO, addGear, armorAppearanceRank, buyGear, enhanceSlot, equip, gearBonus,
+  CURRENT_CHAPTER_MAX_RANK, GEAR, MAX_RANK, SLOT_INFO, addGear, armorAppearanceRank, buyGear, enhanceSlot, equip, gearBonus,
   grantEnhance, grantSlotRank, promoteSlotWithCost, promotionRecipe, rankLabel, sellGear, unequip, weaponAppearanceLabel,
   type EnhanceSlotId, type GearId, type GearShopId,
 } from '../items/equipment';
@@ -2278,8 +2278,8 @@ export class GameScene extends Phaser.Scene {
       this.effects.spawnGhost(hero, player.x, player.y, player.y - 1, time, 0x7ee0ff, 0.45);
     }
     this.attackLunge = { startedAt: time, stage, direction, progress: 0, distance: lungeDistance, counter, nextGhostAt: time + 24 };
-    // 칼에 담긴 힘(정밀 패링 뒤 5초)만큼 일반 칼질이 세진다. 3단이고 아직 속성을 싣지 않았으면 첫 명중에 싣는다.
-    const absorbed = activeAbsorb(this.absorb, time);
+    // 칼에 담긴 힘(피격·불완전 막기 전까지 유지)만큼 일반 칼질이 세진다. 3단이고 아직 속성을 싣지 않았으면 첫 명중에 싣는다.
+    const absorbed = activeAbsorb(this.absorb);
     if (absorbed && elementReady(absorbed)) this.effects.spawnGhost(hero, player.x, player.y, player.y - 1, time, ABSORB_LOOK[absorbed.element].color, 0.4);
     this.attackTrace = { startedAt: time, stage, direction, previous: hero.getBlade(), elapsed: 0, hit: new Set(), counter, absorb: absorbed };
   }
@@ -2401,13 +2401,13 @@ export class GameScene extends Phaser.Scene {
       if (this.shellBlocked(enemy, trace.counter || elementHit, bounds.centerX, bounds.centerY)) continue;
 
       hitCount++;
-      // 행운(LUK)만큼 치명타 확률이 오른다: 굴린 값을 그만큼 낮춘다.
+      // 민첩(DEX)만큼 치명타 확률과 치명타 피해 배율이 오른다: 굴린 값을 확률 증가분만큼 낮춘다.
       const strike = strikeKind(trace.counter, finisher, Math.random() - (this.derived.critChance - HIT_FEEL.critChance));
       heaviest = heavierKind(heaviest, strike.kind);
       // 일섬은 저스트 회피 전용이며 흡수 단수에 영향받지 않고 기본 공격력의 정확히 2배 피해를 준다.
       const stageMultiplier = trace.counter ? JUST_DODGE.counterDamage : combo.damage;
       const absorbScale = trace.counter ? 1 : absorbDamageScale(trace.absorb?.tier ?? 0);
-      const damage = monsterDamageTaken(Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * stageMultiplier * critMultiplier(strike.crit) * this.resonanceDamage() * absorbScale), enemy.stats.defense);
+      const damage = monsterDamageTaken(Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * stageMultiplier * critMultiplier(strike.crit, this.derived.critDamage) * this.resonanceDamage() * absorbScale), enemy.stats.defense);
       const died = c.hurt(damage);
       if (elementHit) this.releaseAbsorb(trace, enemy, bounds.centerX, bounds.centerY, died);
       if (died) {
@@ -3371,11 +3371,9 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  /** 몬스터 보상을 바로 줍는다. 슬라임은 점액, 권속·나방·늪 마물 등은 승급 재료를 떨어뜨린다. */
+  /** 몬스터 보상을 바로 줍는다. 몬스터 레벨에 비례해 골드가 늘며, 슬라임은 점액·권속/나방/늪 마물 등은 승급 재료를 떨어뜨린다. */
   private collectDrop(x: number, y: number, enemy: Enemy): void {
-    const rolled = enemyDrop(enemy.kind, Math.random);
-    // 행운(LUK)만큼 골드를 더 줍는다.
-    const drop = { ...rolled, gold: Math.round(rolled.gold * this.derived.goldGain) };
+    const drop = enemyDrop(enemy.kind, Math.random, enemy.level);
     this.inventory = applyDrop(this.inventory, drop);
     this.progressEffects.showPopup(x, y - 150, `+${drop.gold} G`, '#ffd23f');
     drop.items.forEach((item, i) => this.progressEffects.showPopup(x, y - 120 + i * 26, `${ITEMS[item.id].name} +${item.count}`, '#a8f0ff'));
@@ -3542,12 +3540,15 @@ export class GameScene extends Phaser.Scene {
     }
     const shop = this.characterPanel?.shop ?? 'doran';
     const current = this.character.gear.rank[slot];
-    if (current >= MAX_RANK) {
-      this.characterPanel?.setStatus(`${SLOT_INFO[slot].name} 칸은 이미 최대 승급(${rankLabel(MAX_RANK)})입니다.`, true);
+    if (current >= CURRENT_CHAPTER_MAX_RANK) {
+      const msg = current >= MAX_RANK
+        ? `${SLOT_INFO[slot].name} 칸은 이미 최대 승급(${rankLabel(MAX_RANK)})입니다.`
+        : `현재 장에서는 ${rankLabel(CURRENT_CHAPTER_MAX_RANK)}(+${CURRENT_CHAPTER_MAX_RANK})까지 승급할 수 있어요.`;
+      this.characterPanel?.setStatus(msg, true);
       return;
     }
     const recipe = promotionRecipe(slot, current);
-    const result = promoteSlotWithCost(this.inventory, this.character.gear, slot, shop);
+    const result = promoteSlotWithCost(this.inventory, this.character.gear, slot, shop, CURRENT_CHAPTER_MAX_RANK);
     if (!result) {
       const needGold = recipe && this.inventory.gold < recipe.gold;
       this.characterPanel?.setStatus(needGold ? '승급에 필요한 골드가 부족해요.' : '승급에 필요한 재료가 부족해요.', true);
@@ -3595,6 +3596,7 @@ export class GameScene extends Phaser.Scene {
       inventory: this.inventory,
       gear: this.character.gear,
       promotionUnlocked: this.quests['first-sword']?.status === 'done',
+      maxPromotionRank: CURRENT_CHAPTER_MAX_RANK,
     };
   }
 
@@ -3896,7 +3898,9 @@ export class GameScene extends Phaser.Scene {
         return true;
       }
 
-      // 불완전 막기: 피해 일부를 회복 가능한 내상으로만 받고(죽지 않음), 밀려나며 짧은 막기 쿨타임을 갖는다.
+      // 불완전 막기(일반 막기): 담아 둔 정밀 패링 기운이 깨지고, 회복 가능한 내상만 입으며 밀려난다.
+      if (activeAbsorb(this.absorb)) this.progressEffects.showPopup(player.x, player.y - 230, '기운이 흩어졌다', '#c8c8c8');
+      this.absorb = NO_ABSORB;
       this.parryChain = { count: 0, lastAt: -Infinity };
       this.combatAudio.playParry('imperfect', 1);
       this.impacts.parryBurst(x, y, -awayX, -awayY, 'imperfect', 1, now, player.y + 2);
@@ -3968,7 +3972,7 @@ export class GameScene extends Phaser.Scene {
       this.internalDamage = 0;
       this.internalHealCarry = 0;
       // 칼에 담아 둔 힘도 흩어진다.
-      if (activeAbsorb(this.absorb, this.now)) this.progressEffects.showPopup(player.x, player.y - 230, '기운이 흩어졌다', '#c8c8c8');
+      if (activeAbsorb(this.absorb)) this.progressEffects.showPopup(player.x, player.y - 230, '기운이 흩어졌다', '#c8c8c8');
       this.absorb = NO_ABSORB;
       this.parryChain = { count: 0, lastAt: -Infinity };
       this.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
@@ -3999,7 +4003,7 @@ export class GameScene extends Phaser.Scene {
   private readonly onBossHazard = (enemy: Enemy, kind: 'pool' | 'veil', hit: boolean, dirX: number, dirY: number): void => {
     const player = this.player, now = this.now;
     const veil = kind === 'veil';
-    // 차지 패링: 바라보는 8방향(±22.5°)에서 터진 부식의 장막 폭발을 정면으로 받아쳐 보스를 대경직시킨다.
+    // 차지 패링: 바라보는 8방향(±22.5°)에서 터진 부식의 장막 폭발을 정면으로 받아쳐 장막을 파훼한다(대경직 없음).
     if (veil && hit && player.alive && !this.dialogue.isOpen) {
       const c = enemy.character;
       const heroDir = player.sprite instanceof HeroSprite ? player.sprite.lookDirection : (player.facing < 0 ? 'left' : 'right');
@@ -4036,7 +4040,7 @@ export class GameScene extends Phaser.Scene {
   /** 흡수: 정밀 패링으로 막아 낸 적의 힘(속성)을 칼에 tiers단 담는다 */
   private gainAbsorb(enemy: Enemy, tiers: number): void {
     const element = absorbElementOf(enemy.kind);
-    this.absorb = absorbParry(this.absorb, element, this.now, tiers);
+    this.absorb = absorbParry(this.absorb, element, tiers);
     const look = ABSORB_LOOK[element];
     this.progressEffects.showPopup(this.player.x, this.player.y - 230, `${look.name} ${'◆'.repeat(this.absorb.tier)}`, look.text);
   }
@@ -4123,7 +4127,6 @@ export class GameScene extends Phaser.Scene {
         this.showDamage(tc.x, tc.y - 110, damage, shot.unbound ? '#ffe878' : '#bfe9ff', shot.unbound ? 52 : 44, shot.dx);
         this.impacts.impact(tc.x, tc.y - 60, shot.dx, shot.dy, shot.unbound ? 'finisher' : 'counter', time, tc.y);
         this.impacts.slashCut(tc.x, tc.y - 60, Math.atan2(shot.dy * VERTICAL_SPEED_RATIO, shot.dx), 'counter', time);
-        if (!died && !hitTarget.boss && shot.unbound) hitTarget.interrupt(time, BOSS.unboundStunMs);
         this.resolveEnemyHit(hitTarget, died, shot.dx, shot.dy, PLAYER.knockback * (shot.unbound ? 1.5 : 1.1));
         continue;
       }
@@ -4158,7 +4161,7 @@ export class GameScene extends Phaser.Scene {
     glow.clear();
     ground.clear();
     const player = this.player;
-    const stored = player.alive ? activeAbsorb(this.absorb, time) : undefined;
+    const stored = player.alive ? activeAbsorb(this.absorb) : undefined;
     const held = stored;
     if (held && player.sprite instanceof HeroSprite) {
       const look = ABSORB_LOOK[held.element];
@@ -4167,28 +4170,25 @@ export class GameScene extends Phaser.Scene {
       const drawn = player.sprite.getBlade(), reach = swing ? absorbReach(swing) : 1;
       const blade = { base: drawn.base, tip: { x: drawn.base.x + (drawn.tip.x - drawn.base.x) * reach, y: drawn.base.y + (drawn.tip.y - drawn.base.y) * reach } };
       const pulse = 0.55 + 0.25 * Math.sin(time / 70);
-      // 꺼져 가기 1초 전부터 깜빡인다.
-      const fading = held.until - time < 1000 ? 0.5 + 0.5 * Math.sin(time / 40) : 1;
       glow.setDepth(player.y + 6);
       // 칼을 뽑은 동안(공격·막기)은 칼날이 빛나고, 칼집에 있을 때는 발밑에 기운이 감돈다.
       if (Math.hypot(blade.tip.x - blade.base.x, blade.tip.y - blade.base.y) > 10) {
-        glow.lineStyle(10 + held.tier * 4, look.color, 0.22 * pulse * fading).lineBetween(blade.base.x, blade.base.y, blade.tip.x, blade.tip.y);
-        glow.lineStyle(3 + held.tier, look.color, 0.85 * fading).lineBetween(blade.base.x, blade.base.y, blade.tip.x, blade.tip.y);
+        glow.lineStyle(10 + held.tier * 4, look.color, 0.22 * pulse).lineBetween(blade.base.x, blade.base.y, blade.tip.x, blade.tip.y);
+        glow.lineStyle(3 + held.tier, look.color, 0.85).lineBetween(blade.base.x, blade.base.y, blade.tip.x, blade.tip.y);
       }
     }
     if (stored && player.sprite instanceof HeroSprite) {
       const look = ABSORB_LOOK[stored.element], held = stored;
       const pulse = 0.55 + 0.25 * Math.sin(time / 70);
-      const fading = held.until - time < 1000 ? 0.5 + 0.5 * Math.sin(time / 40) : 1;
       const ring = 1 + 0.06 * Math.sin(time / 120);
       // 3단이고 속성을 아직 싣지 않았으면 고리가 또렷하고, 그 밖에는 흐리다.
       const charge = elementReady(held) ? 1 : 0.4;
-      glow.lineStyle(2 + held.tier, look.color, 0.7 * fading * charge).strokeEllipse(player.x, player.y, 96 * ring, 32 * ring);
-      glow.fillStyle(look.color, 0.12 * pulse * fading).fillEllipse(player.x, player.y, 96 * ring, 32 * ring);
+      glow.lineStyle(2 + held.tier, look.color, 0.7 * charge).strokeEllipse(player.x, player.y, 96 * ring, 32 * ring);
+      glow.fillStyle(look.color, 0.12 * pulse).fillEllipse(player.x, player.y, 96 * ring, 32 * ring);
       // 단수만큼의 마름모는 이름 위에 띄운다(발밑은 바위·풀에 가려진다).
       for (let i = 0; i < held.tier; i++) {
         const px = player.x + (i - (held.tier - 1) / 2) * 18, py = player.y - 236;
-        glow.fillStyle(look.color, 0.95 * fading).fillPoints([
+        glow.fillStyle(look.color, 0.95).fillPoints([
           new Phaser.Math.Vector2(px, py - 6), new Phaser.Math.Vector2(px + 5, py),
           new Phaser.Math.Vector2(px, py + 6), new Phaser.Math.Vector2(px - 5, py),
         ], true);
@@ -4290,7 +4290,7 @@ export class GameScene extends Phaser.Scene {
       const refDir = reflectDirection(rangedHit.dx, rangedHit.dy);
       this.launchReflectedShot(enemy, x, y, refDir.x, refDir.y, true, rangedHit.damageScale ?? 1);
     } else {
-      // 보스·적 초대형 경직 + 차지 패링 반사 충격파 피해
+      // 보스·적 패턴 파훼 + 차지 패링 반사 충격파 피해 (대경직 없음)
       enemy.onUnboundParried(now, BOSS.unboundStunMs, enemyPushX, enemyPushY, BLOCK.enemyKnockback);
       if (c.alive && !enemy.untouchable) {
         const shockDamage = monsterDamageTaken(
@@ -4541,6 +4541,7 @@ export class GameScene extends Phaser.Scene {
 
   private onPlayerDeath(): void {
     const player = this.player;
+    this.absorb = NO_ABSORB;
     this.internalDamage = 0;
     this.internalHealCarry = 0;
     this.parryChain = { count: 0, lastAt: -Infinity };
