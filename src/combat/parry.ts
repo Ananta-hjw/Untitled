@@ -1,4 +1,5 @@
 import { BLOCK } from '../config.ts';
+import { attackVector, type Facing } from '../entities/heroFrames.ts';
 
 /**
  * 나인솔즈 스타일 2단 패링(정밀 패링 / 불완전 막기), 내상(회복 가능 체력),
@@ -47,11 +48,34 @@ export function recordParryWhiff(
   return { count: chained ? Math.min(maxTier, previous.count + 1) : 1, lastWhiffAt: whiffAt };
 }
 
+/** 8방향 막기 1개 섹터의 반각(±22.5°, 총 45°) 코사인 기준. */
+const GUARD_SECTOR_COS = Math.cos(Math.PI / 8);
+
 /**
- * 막기 버튼을 누른 뒤 elapsedMs가 지났을 때 앞쪽에서 온 공격을 어떻게 막았는지 판정한다.
+ * 공격이 들어온 방향(플레이어 → 공격 출처 벡터 fromX, fromY)이
+ * 현재 막기 방향(8방향: 상·하·좌·우 + 대각선 4방향, 각 ±22.5° / 총 45° 구간)과 일치하는지 판정한다.
+ *
+ * - 오른쪽에서 온 공격은 오른쪽 막기(`right`)일 때만, 오른쪽 위 대각선 공격은 오른쪽 위 막기(`up-right`)일 때만 막힌다.
+ * - 정확한 22.5° 경계는 미세 여유를 두어 인접한 두 방향 모두 허용함으로써 사각지대를 없앤다.
+ */
+export function isAttackInGuardDirection(
+  heroDir: Facing,
+  fromX: number,
+  fromY: number,
+): boolean {
+  const len = Math.hypot(fromX, fromY);
+  if (len <= 1e-6) return true;
+  const fx = fromX / len;
+  const fy = fromY / len;
+  const dir = attackVector(heroDir);
+  return fx * dir.x + fy * dir.y >= GUARD_SECTOR_COS - 1e-6;
+}
+
+/**
+ * 막기 버튼을 누른 뒤 elapsedMs가 지났을 때 막기 방향에서 온 공격을 어떻게 막았는지 판정한다.
  * - 0 ~ perfectWindowMs: 정밀 패링 ('perfect')
  * - perfectWindowMs ~ windowMs: 불완전 막기 ('imperfect')
- * - 그 밖이나 뒤쪽 공격: 막지 못함 ('none')
+ * - 그 밖이나 다른 방향 공격: 막지 못함 ('none')
  */
 export function gradeParry(
   blocking: boolean,
@@ -213,9 +237,9 @@ export function isChargeParryReady(heldMs: number, chargeHoldMs = BLOCK.chargeHo
   return heldMs >= chargeHoldMs;
 }
 
-/** 충전한 막기 버튼을 뗀 직후 차지 패링 판정 창 안에 있는지. */
-export function isUnboundActive(now: number, unboundUntil: number): boolean {
-  return now < unboundUntil;
+/** 충전한 막기 버튼을 뗀 직후 차지 패링 판정 창 안에 있고(필요 시 8방향 막기 각도 일치 포함) 발동 가능한지. */
+export function isUnboundActive(now: number, unboundUntil: number, inGuardDir = true): boolean {
+  return inGuardDir && now < unboundUntil;
 }
 
 /** 공명 조각을 여러 개 한 번에 채운다(최대치 초과 방지). */

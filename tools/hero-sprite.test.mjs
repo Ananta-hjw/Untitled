@@ -159,9 +159,12 @@ test('검 막기는 50도 기울인 칼날 중간을 왼손으로 받치고 오�
   assert.equal(guard.frames.length, 5);
   assert.equal(guardFrame('down'), 'guard-front');
   assert.equal(guardFrame('up'), 'guard-back');
-  for (const facing of ['left', 'right', 'down-left', 'down-right', 'up-left', 'up-right']) {
-    assert.equal(guardFrame(facing), 'guard-side', `${facing} 막기는 4방향 옆 포즈`);
-  }
+  assert.equal(guardFrame('left'), 'guard-side');
+  assert.equal(guardFrame('right'), 'guard-side');
+  assert.equal(guardFrame('down-left'), 'guard-down');
+  assert.equal(guardFrame('down-right'), 'guard-down');
+  assert.equal(guardFrame('up-left'), 'guard-up-back');
+  assert.equal(guardFrame('up-right'), 'guard-up-back');
   for (const facing of ['left','right','down','up','down-left','down-right','up-left','up-right']) {
     assert.ok(guard.frames.some(f => f.name === guardFrame(facing)));
   }

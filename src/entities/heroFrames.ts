@@ -14,8 +14,8 @@ export const ACTION_DURATION = { attack1: 350 + PLAYER.combo[0].followPauseMs, a
 const DEATH_POSE_STARTS = [0, 80, 170, 270, 390, 520];
 
 /**
- * 공격·막기 캐릭터 포즈는 고퀄리티 4방향(상·하·좌·우)으로 통일한다(A안).
- * 대각선 공격/막기 입력은 좌/우(side) 고해상도 포즈를 쓰고, 전진 방향·타격 판정·검기는 8방향 그대로 유지한다.
+ * 공격 캐릭터 포즈는 고퀄리티 4방향(상·하·좌·우)으로 통일한다(A안).
+ * 대각선 공격 입력은 좌/우(side) 고해상도 포즈를 쓰고, 전진 방향·타격 판정·검기는 8방향 그대로 유지한다.
  */
 export function cardinalPoseFacing(facing: Facing): 'right' | 'left' | 'down' | 'up' {
   if (facing === 'down') return 'down';
@@ -23,10 +23,19 @@ export function cardinalPoseFacing(facing: Facing): 'right' | 'left' | 'down' | 
   return facing.includes('left') ? 'left' : 'right';
 }
 
+/**
+ * 막기는 8방향 판정과 맞춰 8방향 전용 자세를 사용한다(좌측 측면·대각선은 좌우 반전).
+ * - right / left: guard-side
+ * - down-right / down-left: guard-down
+ * - up-right / up-left: guard-up-back
+ * - down: guard-front
+ * - up: guard-back
+ */
 export function guardFrame(facing: Facing): string {
-  const dir = cardinalPoseFacing(facing);
-  if (dir === 'down') return 'guard-front';
-  if (dir === 'up') return 'guard-back';
+  if (facing === 'down') return 'guard-front';
+  if (facing === 'up') return 'guard-back';
+  if (facing === 'down-left' || facing === 'down-right') return 'guard-down';
+  if (facing === 'up-left' || facing === 'up-right') return 'guard-up-back';
   return 'guard-side';
 }
 // Put the drawn striking pose inside each configured damage window.

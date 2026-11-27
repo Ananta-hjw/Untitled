@@ -2478,6 +2478,7 @@ test('연타와 흡수: 추적자는 예비 동작 중 따라오며 2연타를 �
     p.hp = p.maxHp;
     e.character.placeAt(p.x + 90, p.y);
     p.face(1);
+    p.sprite.setAttackFacing('right');
     for (let i = 0; i < 300 && e.state !== 'windup'; i++) step();
     // 이번 묶음을 2연타로 정해 둔다.
     e.comboWindups = [320, 230]; e.chainTotal = 2; e.chainLeft = 1; e.comboIndex = 0; e.windupMs = 320;
@@ -2492,7 +2493,9 @@ test('연타와 흡수: 추적자는 예비 동작 중 따라오며 2연타를 �
         const left = e.attackStartedAt + e.windupMs + e.stats.strikeMs - s.now;
         if (left < 70 && s.now >= s.parryReadyAt && !s.blocking) s.blockButton.pressed = true;
       }
-      p.face(Math.sign(e.character.x - p.x) || 1);
+      const dir = Math.sign(e.character.x - p.x) || 1;
+      p.face(dir);
+      p.sprite.setAttackFacing(dir > 0 ? 'right' : 'left');
       const before = s.parryChain.count;
       step();
       if (s.parryChain.count !== before) log.push({ state: e.state, pending: e.chainPending, tier: s.absorb.tier, element: s.absorb.element });
@@ -2542,7 +2545,7 @@ test('흘리기: 막는 순간 조이스틱을 기울이면 근접 공격이 그
       a.state = 'wander'; b.state = 'wander';
       a.character.placeAt(p.x + 80, p.y); a.character.facing = -1; a.character.knockback.set(0, 0);
       b.character.placeAt(p.x + 20, p.y + 80); b.character.hp = b.character.maxHp;
-      p.face(1);
+      p.face(1); p.sprite.setAttackFacing('right');
       s.parryReadyAt = 0; s.blockButton.pressed = true; step();
       s.joystick.vector.set(input.x, input.y);
       s.onEnemyStrike(a);
@@ -2576,7 +2579,7 @@ test('정예의 돌진은 정밀 패링해도 멈추지 않고 원래 가려던 
       s.derived.evadeChance = 0;
       p.hp = p.maxHp;
       e.character.placeAt(p.x + 200, p.y);
-      p.face(1);
+      p.face(1); p.sprite.setAttackFacing('right');
       for (let i = 0; i < 300 && e.state !== 'windup'; i++) step();
       e.comboWindups = [e.windupMs]; e.chainTotal = 1; e.chainLeft = 0; e.comboIndex = 0;
       const startX = e.character.x;
@@ -2613,6 +2616,7 @@ test('패링마다 공명 구슬이 1/3씩 차고, 구슬 다섯 개가 다 차�
     // 앞선 시험의 약초 기운(보너스 최대 체력)이 남아 있으면 첫 피격 때 최대 체력이 바뀌어 피해를 잘못 잰다.
     s.herb = 0; p.setMaxHp(s.stats.maxHp, true);
     const hit = () => {
+      p.sprite.setAttackFacing(p.facing > 0 ? 'right' : 'left');
       e.character.placeAt(p.x + 80 * p.facing, p.y); e.character.facing = -p.facing;
       p.invulnerableUntil = 0; p.hp = p.maxHp; s.onEnemyStrike(e); return p.maxHp - p.hp;
     };
@@ -3910,11 +3914,15 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
       const palm=m.transformPoint(f.supportGrip.x-f.originX*f.w,f.supportGrip.y-f.h);
       const vx=blade.tip.x-blade.base.x,vy=blade.tip.y-blade.base.y;
       const palmDistance=Math.abs((palm.x-blade.base.x)*vy-(palm.y-blade.base.y)*vx)/Math.hypot(vx,vy);
-      // 4방향 막기 통일(A안): 좌·우와 대각선 모두 guard-side 포즈를 좌우 반전해 사용한다.
-      const palmVisible=h.supportHand.visible&&h.list.indexOf(h.weaponFront)>h.list.indexOf(h.supportHand);
+      // 8방향 막기: 뒤대각선(guard-up-back)은 칼·보조손이 몸 뒤에 숨고, 측면·앞대각선은 보조손이 칼날 앞에 겹친다.
+      const rear=facing.startsWith('up');
+      const palmVisible=rear?!h.supportHand.visible&&h.list.indexOf(h.weaponFront)<h.list.indexOf(h.image)
+        :h.supportHand.visible&&h.list.indexOf(h.weaponFront)>h.list.indexOf(h.supportHand);
       const held=h.isGuarding&&s.shield.visible&&!p.isAttacking&&h.weaponFront.frame.name==='iron-sword-blade';
       h.setWeapon('wooden-sword');const wood=h.weaponFront.frame.name==='wooden-sword-blade';h.setWeapon('iron-sword');
-      e.character.revive(p.x+80*p.facing,p.y);e.character.face(-p.facing);p.invulnerableUntil=0;const hp=p.hp;s.onEnemyStrike(e);
+      const dlen=Math.hypot(dx,dy)||1;
+      e.character.revive(p.x+80*dx/dlen,p.y+40*dy/dlen);e.character.face(-dx);p.invulnerableUntil=0;const hp=p.hp;
+      s.onEnemyStrike(e,{fromX:e.character.x,fromY:e.character.y,toX:p.x,toY:p.y,radiusX:80,radiusY:60,dx:-dx/dlen,dy:-dy/dlen,melee:true});
       const contact=contacts.at(-1),error=Math.hypot(contact.x-blade.base.x-(blade.tip.x-blade.base.x)*.55,contact.y-blade.base.y-(blade.tip.y-blade.base.y)*.55);
       // 정밀 패링 뒤 막기 자세는 반동(guardPoseUntil, 150ms)만큼 유지되고 그다음 돌아온다.
       s.now=Math.max(s.now,s.guardPoseUntil??0)+5;s.updatePlayer(s.now,0);s.drawShield(s.now);const restored=!h.isGuarding&&h.image.texture.key!=='hero-academy-guard';
@@ -3936,7 +3944,7 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
   })()`);
   for (const run of result.runs) {
     assert.equal(run.texture, 'hero-academy-guard');
-    assert.equal(run.name, 'guard-side');
+    assert.equal(run.name, run.facing.startsWith('up') ? 'guard-up-back' : run.facing.startsWith('down') ? 'guard-down' : 'guard-side');
     assert.equal(run.mirror, run.facing.includes('left'));
     for (const key of ['raised','slanted','palmVisible','held','wood','restored','protected']) assert.equal(run[key],true,JSON.stringify({key,...run}));
     assert.ok(run.error<.001,JSON.stringify(run));

@@ -10,6 +10,7 @@ import {
   effectivePerfectWindowMs,
   gradeParry,
   imperfectGuardDamage,
+  isAttackInGuardDirection,
   isChargeParryReady,
   isUnboundActive,
   nextParryChain,
@@ -189,6 +190,55 @@ test('헛막기 쿨타임(450ms)과 연타 시 정밀 창 축소(170 → 110 →
 
   // 800ms 이상 쉬면 즉시 기본 170ms로 복구된다.
   assert.equal(effectivePerfectWindowMs(whiff, 1750 + BLOCK.whiffMemoryMs + 1), 170);
+});
+
+test('8방향 막기 방향 판정: 상·하·좌·우 및 4대각선 모두 자기 방향(±22.5°)에서 온 공격만 막힌다', () => {
+  const dirs = [
+    ['right', 1, 0],
+    ['down-right', 1, 1],
+    ['down', 0, 1],
+    ['down-left', -1, 1],
+    ['left', -1, 0],
+    ['up-left', -1, -1],
+    ['up', 0, -1],
+    ['up-right', 1, -1],
+  ];
+
+  // 1) 8방향 각각 정확히 자기 방향에서 온 공격만 막고 나머지 7방향은 모두 실패한다.
+  for (const [expectedDir, fx, fy] of dirs) {
+    for (const [guardDir] of dirs) {
+      assert.equal(
+        isAttackInGuardDirection(guardDir, fx, fy),
+        guardDir === expectedDir,
+        `${expectedDir} 방향 공격을 ${guardDir} 막기로 판정`,
+      );
+    }
+  }
+
+  // 2) 섹터 안쪽 경사각: 15° 오른쪽 위 → right만 통과 / 35° 오른쪽 위 → up-right만 통과
+  const rad15 = (15 * Math.PI) / 180;
+  const rad35 = (35 * Math.PI) / 180;
+  assert.equal(isAttackInGuardDirection('right', Math.cos(rad15), -Math.sin(rad15)), true);
+  assert.equal(isAttackInGuardDirection('up-right', Math.cos(rad15), -Math.sin(rad15)), false);
+  assert.equal(isAttackInGuardDirection('up-right', Math.cos(rad35), -Math.sin(rad35)), true);
+  assert.equal(isAttackInGuardDirection('right', Math.cos(rad35), -Math.sin(rad35)), false);
+  assert.equal(isAttackInGuardDirection('up', Math.cos(rad35), -Math.sin(rad35)), false);
+
+  // 3) 정확한 22.5° 경계(right ↔ up-right)는 인접 두 방향 모두 허용(사각지대 없음), 나머지는 실패
+  const rad22_5 = Math.PI / 8;
+  assert.equal(isAttackInGuardDirection('right', Math.cos(rad22_5), -Math.sin(rad22_5)), true);
+  assert.equal(isAttackInGuardDirection('up-right', Math.cos(rad22_5), -Math.sin(rad22_5)), true);
+  assert.equal(isAttackInGuardDirection('up', Math.cos(rad22_5), -Math.sin(rad22_5)), false);
+  assert.equal(isAttackInGuardDirection('down-right', Math.cos(rad22_5), -Math.sin(rad22_5)), false);
+
+  // 4) gradeParry 및 차지 패링(isUnboundActive) 연동: 대각선 공격은 직교 막기로 막히지 않고 같은 대각선 막기에서만 발동한다
+  assert.equal(gradeParry(true, 0, isAttackInGuardDirection('right', 1, -1)), 'none');
+  assert.equal(gradeParry(true, 0, isAttackInGuardDirection('up', 1, -1)), 'none');
+  assert.equal(gradeParry(true, 0, isAttackInGuardDirection('up-right', 1, -1)), 'perfect');
+  assert.equal(isUnboundActive(1000, 1240, isAttackInGuardDirection('right', 1, -1)), false);
+  assert.equal(isUnboundActive(1000, 1240, isAttackInGuardDirection('left', 1, 0)), false);
+  assert.equal(isUnboundActive(1000, 1240, isAttackInGuardDirection('up-right', 1, -1)), true);
+  assert.equal(isUnboundActive(1000, 1240, isAttackInGuardDirection('right', 1, 0)), true);
 });
 
 

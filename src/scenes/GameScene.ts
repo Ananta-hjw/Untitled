@@ -22,6 +22,7 @@ import {
   effectivePerfectWindowMs,
   gradeParry,
   imperfectGuardDamage,
+  isAttackInGuardDirection,
   isChargeParryReady,
   isUnboundActive,
   nextParryChain,
@@ -1825,6 +1826,12 @@ export class GameScene extends Phaser.Scene {
       this.combatAudio.unlock();
       this.clearAttackInput();
       player.endAttack();
+      // 방향 입력과 함께 막기를 누르면 벽에 막혀 있거나 속박 중이어도 즉시 그 방향을 보고 막는다.
+      if (force > 0 && player.sprite instanceof HeroSprite) {
+        const nextFacing = movementFacing(v.x, v.y, player.sprite.lookDirection, false);
+        player.sprite.setAttackFacing(nextFacing);
+        if (Math.abs(v.x) > 0.05) player.face(v.x);
+      }
       this.attackTrace = undefined;
       this.attackLunge = undefined;
       this.spinHitAt = undefined;
@@ -1910,8 +1917,21 @@ export class GameScene extends Phaser.Scene {
     }
     const rate = locomotionRate(player.x - fromX, player.y - fromY, dt, PLAYER_SPEED);
     // 걸음 그림은 실제로 움직인 속도에 맞춘다 (발이 바닥에서 미끄러지지 않게).
-    player.setMotion(rate > 0, v.x, rate * PLAYER_SPEED / HERO_WALK_NATURAL_SPEED);
-    if (player.sprite instanceof HeroSprite) player.sprite.setMovement(player.x - fromX, player.y - fromY);
+    const unboundActive = isUnboundActive(time, this.unboundUntil) && !player.isAttacking;
+    const lockGuardFacing = this.blocking || unboundActive;
+    player.setMotion(rate > 0, lockGuardFacing ? 0 : v.x, rate * PLAYER_SPEED / HERO_WALK_NATURAL_SPEED);
+    if (player.sprite instanceof HeroSprite) {
+      if (chargingParry) {
+        // 차지 패링 충전 중에는 벽에 밀리거나 세로 비율에 휘지 않도록 8방향 입력 그대로 조준 방향을 맞춘다.
+        if (force > 0) {
+          player.sprite.setAttackFacing(movementFacing(v.x, v.y, player.sprite.lookDirection, false));
+          if (Math.abs(v.x) > 0.05) player.face(v.x);
+        }
+      } else if (!lockGuardFacing) {
+        // 일반 막기 창과 차지 패링 방출 중에는 시작 시점의 8방향을 고정해 흘리기(Deflect) 입력으로 막기 방향이 꺾이지 않게 한다.
+        player.sprite.setMovement(player.x - fromX, player.y - fromY);
+      }
+    }
   }
 
   private dismissHint(): void {
@@ -3707,7 +3727,7 @@ export class GameScene extends Phaser.Scene {
       this.impacts.dust(player.x, player.y, 3, now, 30);
       return true;
     }
-    // 0) 차지 패링: 충전 후 뗀 판정 창 안에서는 전방위 모든 공격을 압도적으로 파훼한다.
+    // 0) 차지 패링·2단 패링 공통: 바라보는 8방향 막기(상·하·좌·우 + 4대각선, 각 ±22.5°)와 일치하는 공격만 받아낸다.
     const sourceX = hit ? player.x - hit.dx : c.x;
     const awayX = sourceX >= player.x ? -1 : 1;
     const awayY = Math.sign(player.y - c.y) * 0.25;
@@ -3716,16 +3736,14 @@ export class GameScene extends Phaser.Scene {
     const blade = player.sprite instanceof HeroSprite ? player.sprite.getBlade() : undefined;
     const impactX = blade ? blade.base.x + (blade.tip.x - blade.base.x) * 0.55 : player.x + player.facing * 60;
     const impactY = blade ? blade.base.y + (blade.tip.y - blade.base.y) * 0.55 : player.y - 95;
-    if (isUnboundActive(now, this.unboundUntil)) {
+    const heroDir = player.sprite instanceof HeroSprite ? player.sprite.lookDirection : (player.facing < 0 ? 'left' : 'right');
+    const incomingFromX = hit ? -hit.dx : c.x - player.x;
+    const incomingFromY = hit ? -hit.dy : c.y - player.y;
+    const inFront = isAttackInGuardDirection(heroDir, incomingFromX, incomingFromY);
+    if (isUnboundActive(now, this.unboundUntil, inFront)) {
       this.triggerUnboundCounter(enemy, impactX, impactY, awayX, awayY, enemyPushX, enemyPushY);
       return true;
     }
-    // 2단 패링: 앞쪽(바라보는 쪽 — 상·하 막기 포함)에서 온 공격을 정밀 패링 또는 불완전 막기로 받아낸다.
-    const heroDir = player.sprite instanceof HeroSprite ? player.sprite.lookDirection : (player.facing < 0 ? 'left' : 'right');
-    const sourceY = hit ? player.y - hit.dy : c.y;
-    const inFront = heroDir === 'up' ? sourceY <= player.y + 8
-      : heroDir === 'down' ? sourceY >= player.y - 8
-      : (sourceX - player.x) * player.facing >= 0;
     const grade = gradeParry(this.blocking, now - this.parryStartedAt, inFront, this.activePerfectWindowMs);
     if (grade !== 'none') {
       const x = impactX, y = impactY;
@@ -3914,15 +3932,18 @@ export class GameScene extends Phaser.Scene {
   private readonly onBossHazard = (enemy: Enemy, kind: 'pool' | 'veil', hit: boolean, dirX: number, dirY: number): void => {
     const player = this.player, now = this.now;
     const veil = kind === 'veil';
-    // 차지 패링: 붉은 안광의 부식의 장막 폭발을 정면으로 받아쳐 보스를 대경직시킨다.
-    if (veil && hit && player.alive && !this.dialogue.isOpen && isUnboundActive(now, this.unboundUntil)) {
+    // 차지 패링: 바라보는 8방향(±22.5°)에서 터진 부식의 장막 폭발을 정면으로 받아쳐 보스를 대경직시킨다.
+    if (veil && hit && player.alive && !this.dialogue.isOpen) {
       const c = enemy.character;
-      const awayX = dirX || (c.x >= player.x ? -1 : 1);
-      const awayY = dirY * 0.25;
-      const enemyPushX = Math.sign(c.x - player.x) || -awayX;
-      const enemyPushY = Math.sign(c.y - player.y) * 0.25;
-      this.triggerUnboundCounter(enemy, player.x, player.y - 95, awayX, awayY, enemyPushX, enemyPushY);
-      return;
+      const heroDir = player.sprite instanceof HeroSprite ? player.sprite.lookDirection : (player.facing < 0 ? 'left' : 'right');
+      if (isUnboundActive(now, this.unboundUntil, isAttackInGuardDirection(heroDir, c.x - player.x, c.y - player.y))) {
+        const awayX = dirX || (c.x >= player.x ? -1 : 1);
+        const awayY = dirY * 0.25;
+        const enemyPushX = Math.sign(c.x - player.x) || -awayX;
+        const enemyPushY = Math.sign(c.y - player.y) * 0.25;
+        this.triggerUnboundCounter(enemy, player.x, player.y - 95, awayX, awayY, enemyPushX, enemyPushY);
+        return;
+      }
     }
     if (veil) {
       this.cameras.main.shake(320, 0.012);
