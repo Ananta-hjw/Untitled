@@ -485,7 +485,7 @@ export class Enemy {
     return { outcome, step, total };
   }
 
-  /** 차지 패링 파훼: 부식의 장막이나 보스 연타까지 모두 끊고 초대형 경직에 빠뜨린다. */
+  /** 차지 패링 파훼: 부식의 장막이나 보스 연타를 즉시 끊고 밀쳐낸다(대경직·기절 없음). */
   onUnboundParried(time: number, durationMs: number, dirX: number, dirY: number, push: number): void {
     if (this.state === 'dead' || this.state === 'roar' || this.state === 'retreat') return;
     const c = this.character;
@@ -496,10 +496,11 @@ export class Enemy {
     this.chainPending = false;
     this.comboParries = 0;
     this.state = 'recover';
-    this.timer = time + durationMs;
+    this.timer = time + (durationMs > 0 ? durationMs : this.stats.recoverMs);
     this.hitAt = time;
-    this.parryStunUntil = time + durationMs;
-    this.parryStunPerfect = true;
+    this.parryStunUntil = durationMs > 0 ? time + durationMs : 0;
+    this.parryStunPerfect = durationMs > 0;
+    if (durationMs <= 0) this.staggerMark.setVisible(false);
     const { scaleX, scaleY } = hitSquash(0);
     c.sprite.setScale(scaleX, scaleY).setPosition(0, 0);
     c.flash(0xfff2a6);

@@ -156,7 +156,7 @@ test('차지 패링: 길게 눌러 충전하고 떼는 창에서 최고 등급 �
   assert.ok(HIT_FEEL.shake.parry[1] < HIT_FEEL.shake.chainBreak[1]);
   assert.ok(HIT_FEEL.shake.chainBreak[1] < HIT_FEEL.shake.unbound[1]);
   assert.ok(BLOCK.zoomPeak < BLOCK.zoomChainBreakPeak && BLOCK.zoomChainBreakPeak < BLOCK.zoomUnboundPeak);
-  assert.ok(BOSS.unboundStunMs > BOSS.parryChainStunMs);
+  assert.equal(BOSS.unboundStunMs, 0, '차지 패링은 대경직·기절을 주지 않는다');
 
   // 차지 패링 슬로우아웃은 정밀 패링보다 더 깊고 길다.
   assert.equal(gameTimeScale(0, 0, BLOCK.unboundSlowOutMs, BLOCK.unboundSlowOutScale, BLOCK.unboundSlowOutMs), BLOCK.unboundSlowOutScale);
@@ -167,7 +167,8 @@ test('차지 패링: 길게 눌러 충전하고 떼는 창에서 최고 등급 �
   assert.equal(addResonanceParts(14, BLOCK.unboundResonanceParts, maxCharge(RESONANCE)), maxCharge(RESONANCE));
 });
 
-test('헛막기 쿨타임(450ms)과 연타 시 정밀 창 축소(170 → 110 → 80ms) 및 휴식 후 복구', () => {
+test('헛막기 쿨타임(450ms)과 정밀 패링 회피 쿨 감소(0.5초), 연타 시 정밀 창 축소(170 → 110 → 80ms) 및 휴식 후 복구', () => {
+  assert.equal(BLOCK.dodgeRefundMs, 500);
   assert.equal(BLOCK.cooldownMs, 450);
   assert.ok(BLOCK.imperfectCooldownMs < BLOCK.cooldownMs, '불완전 막기 쿨은 헛막기보다 짧다');
   assert.ok(BLOCK.cooldownMs > BLOCK.windowMs, '막기 창 뒤에 빈틈이 남아 단순 연타는 위험하다');

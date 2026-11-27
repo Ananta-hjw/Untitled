@@ -46,9 +46,16 @@ test('잡화점: 골드가 있으면 사고, 모자라면 못 사고, 재료는 
   assert.equal(sell(inv, 'slime-gel'), null);
 });
 
-test('슬라임은 골드 3~6과 가끔 점액을 떨어뜨린다', () => {
+test('슬라임은 골드 3~6과 가끔 점액을 떨어뜨리고, 모든 몬스터 골드는 레벨(+20%/레벨)과 정예/보스 가중치에 비례한다', async () => {
+  const { enemyDrop, scaleGoldForLevel, GOLD_LEVEL_SCALE } = await import('../src/items/inventory.ts');
+  assert.equal(GOLD_LEVEL_SCALE, 0.2);
   assert.deepEqual(slimeDrop(() => 0), { gold: 3, items: [{ id: 'slime-gel', count: 1 }, { id: 'potion', count: 1 }] });
   assert.deepEqual(slimeDrop(() => 0.99), { gold: 6, items: [] });
+  assert.equal(slimeDrop(() => 0, 6).gold, 6, 'Lv.6 슬라임은 Lv.1의 2배 골드');
+  assert.equal(enemyDrop('reed-stalker', () => 0, 1).gold, 5);
+  assert.equal(enemyDrop('reed-stalker', () => 0, 11).gold, 15, 'Lv.11 일반 몹은 3배 골드');
+  assert.equal(enemyDrop('swamp-lurker', () => 0, 11).gold, 30, 'Lv.11 정예는 2배 가중치');
+  assert.equal(enemyDrop('corrosion-executioner', () => 0, 7).gold, scaleGoldForLevel(5 * 3, 7), '보스는 3배 가중치');
   const inv = applyDrop(emptyInventory(), slimeDrop(() => 0));
   assert.deepEqual(inv, { gold: 3, items: { 'slime-gel': 1, potion: 1 } });
 });

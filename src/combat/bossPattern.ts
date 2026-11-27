@@ -22,8 +22,8 @@ export const BOSS = {
   parryChainGapMs: 360,
   /** 보스 연타의 마지막 타까지 연속 패링으로 파훼했을 때의 대경직 시간(ms) */
   parryChainStunMs: 2000,
-  /** 차지 패링으로 보스 강공격·장막을 파훼했을 때의 초대형 경직(ms)과 반사 피해 배율 */
-  unboundStunMs: 2400,
+  /** 차지 패링으로 보스 강공격·장막을 파훼할 때의 반사 피해 배율 (대경직 없음) */
+  unboundStunMs: 0,
   unboundCounterScale: 1.6,
   phaseTwoAt: 0.5,
   roarMs: 1700,

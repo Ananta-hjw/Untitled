@@ -61,9 +61,9 @@ export function strikeKind(counter: boolean, finisher: boolean, roll: number): {
   return { kind: crit ? 'crit' : 'normal', crit };
 }
 
-/** 피해 배율: 치명타면 critDamage를 곱한다. */
-export function critMultiplier(crit: boolean): number {
-  return crit ? HIT_FEEL.critDamage : 1;
+/** 피해 배율: 치명타면 critDamage(민첩 반영)를 곱한다. */
+export function critMultiplier(crit: boolean, critDamage = HIT_FEEL.critDamage): number {
+  return crit ? critDamage : 1;
 }
 
 /** 여러 적을 한 번에 베었을 때는 가장 무거운 타격 하나로 연출한다. */

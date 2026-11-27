@@ -44,6 +44,8 @@ export interface CharacterView {
   gear: Gear;
   /** 대장간 승급 기능 해금 여부(1장 '도란의 검' 완료 후 해금). 생략 시 true */
   promotionUnlocked?: boolean;
+  /** 현재 장에서 허용되는 최대 승급 단계 (생략 시 MAX_RANK) */
+  maxPromotionRank?: number;
 }
 
 export interface CharacterActions {
@@ -61,7 +63,7 @@ export interface CharacterActions {
 type Entry = { type: 'item'; id: ItemId; count: number } | { type: 'gear'; id: GearId; count: number };
 
 const STAT_COLORS: Record<StatId, number> = {
-  str: 0x8a3a2c, vit: 0x3f7a3a, def: 0x4a5a72, dex: 0x2f7a72, int: 0x4b4a8f, luk: 0x8a7a2c,
+  str: 0x8a3a2c, vit: 0x3f7a3a, def: 0x4a5a72, dex: 0x2f7a72,
 };
 
 export function itemFallback(entry: Entry): IconFallback {
@@ -154,7 +156,7 @@ export class CharacterPanel {
       });
     }
     this.summaryTitle = this.text('전투 능력', 21, MENU_COLOR.ink, true).setOrigin(0, .5);
-    for (const label of ['공격력', '체력', '마나', '받는 피해', '회피 확률', '회피 재사용 대기', '치명타 확률', '스킬·마법 피해', '골드 획득']) {
+    for (const label of ['공격력', '체력', '마나', '받는 피해', '회피 확률', '회피 재사용 대기', '치명타 확률', '치명타 피해']) {
       this.metrics.push({
         label: this.text(label, 18, MENU_COLOR.muted).setOrigin(0, .5),
         value: this.text('', 18, MENU_COLOR.ink, true).setOrigin(1, .5),
@@ -409,16 +411,16 @@ export class CharacterPanel {
     this.header.setText(`남은 포인트  ${view.pointsLeft}`).setPosition(x, y + 17).setVisible(true);
     STAT_IDS.forEach((id, i) => {
       const row = this.statRows[i];
-      const left = x + (i % 2) * (cardWidth + columnGap), top = y + 41 + Math.floor(i / 2) * 121;
+      const left = x + (i % 2) * (cardWidth + columnGap), top = y + 41 + Math.floor(i / 2) * 182;
       const info = STAT_INFO[id], bonus = view.bonus[id] ?? 0;
-      drawMenuCard(g, left, top, cardWidth, 110);
-      row.icon.set('stats', id, { glyph: info.short, color: STAT_COLORS[id] }).setPosition(left + 30, top + 28).setVisible(true);
-      row.name.setText(info.name).setPosition(left + 58, top + 18).setVisible(true);
+      drawMenuCard(g, left, top, cardWidth, 166);
+      row.icon.set('stats', id, { glyph: info.short, color: STAT_COLORS[id] }).setPosition(left + 30, top + 32).setVisible(true);
+      row.name.setText(info.name).setPosition(left + 58, top + 22).setVisible(true);
       row.value.setOrigin(0, .5).setText(bonus ? `${view.stats[id]}  (+${bonus})` : `${view.stats[id]}`)
-        .setPosition(left + 58, top + 41).setVisible(true);
-      row.gain.setText(statGain(view.level, view.stats, id).replace(/ \(포인트당 .+\)$/, ''))
-        .setPosition(left + 12, top + 59).setWordWrapWidth(cardWidth - 24, true).setVisible(true);
-      placeMenuButton(g, row.plus, left + cardWidth - 32, top + 30, 46, 46, view.pointsLeft ? 'primary' : 'disabled');
+        .setPosition(left + 58, top + 45).setVisible(true);
+      row.gain.setText(statGain(view.level, view.stats, id))
+        .setPosition(left + 12, top + 72).setWordWrapWidth(cardWidth - 24, true).setVisible(true);
+      placeMenuButton(g, row.plus, left + cardWidth - 32, top + 34, 46, 46, view.pointsLeft ? 'primary' : 'disabled');
     });
 
     const d = view.derived;
@@ -428,13 +430,13 @@ export class CharacterPanel {
       `${view.hp} / ${d.maxHp}`,
       `${Math.floor(view.mp)} / ${d.maxMp}`,
       pct(d.damageTaken), pct(d.evadeChance), pct(d.dodgeCooldown),
-      pct(d.critChance), pct(d.skillDamage), pct(d.goldGain),
+      pct(d.critChance), pct(d.critDamage),
     ];
     drawMenuCard(g, summaryX, y, summaryWidth, 393);
     this.summaryTitle.setPosition(summaryX + 18, y + 24).setVisible(true);
     g.lineStyle(1, 0x4e4338).lineBetween(summaryX + 18, y + 51, right - 18, y + 51);
     this.metrics.forEach(({ label, value }, i) => {
-      const rowY = y + 75 + i * 35;
+      const rowY = y + 78 + i * 39;
       label.setPosition(summaryX + 18, rowY).setVisible(true);
       value.setText(values[i]).setPosition(right - 18, rowY).setVisible(true);
     });
@@ -571,15 +573,21 @@ export class CharacterPanel {
       return;
     }
 
-    const recipe = promotionRecipe(slot, rk);
+    const maxRank = Math.min(MAX_RANK, view.maxPromotionRank ?? MAX_RANK);
+    const recipe = rk < maxRank ? promotionRecipe(slot, rk) : null;
     if (!recipe) {
-      lines.push(`최대 승급(${rankLabel(MAX_RANK)})에 도달했습니다.`);
+      if (rk >= MAX_RANK) {
+        lines.push(`최대 승급(${rankLabel(MAX_RANK)})에 도달했습니다.`);
+      } else {
+        lines.push(`현재 장에서는 ${rankLabel(maxRank)}(+${maxRank})까지 승급할 수 있습니다.`);
+        lines.push(`${rankLabel(maxRank + 1)} 이상 승급은 이후 장에서 해금될 예정입니다.`);
+      }
       if (slot === 'weapon') lines.push(`현재 무기 외형  ${weaponAppearanceLabel(rk)}`);
       else lines.push(`현재 방어구 외형  ${armorAppearanceLabel(armor.stage)}`);
       this.detailText.setText(lines.join('\n')).setPosition(x + 18, y + 98)
         .setWordWrapWidth(right - x - 36, true).setVisible(true);
       const buttonY = bottom - 36, buttonWidth = right - x - 36;
-      this.actionButton.setText(`최대 승급 (${rankLabel(MAX_RANK)})`);
+      this.actionButton.setText(rk >= MAX_RANK ? `최대 승급 (${rankLabel(MAX_RANK)})` : `현재 장 최대 승급 (${rankLabel(maxRank)})`);
       placeMenuButton(g, this.actionButton, x + 18 + buttonWidth / 2, buttonY, buttonWidth, 48, 'disabled');
       return;
     }

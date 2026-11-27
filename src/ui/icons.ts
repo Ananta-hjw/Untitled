@@ -14,6 +14,7 @@ export type IconGroup = 'items' | 'stats' | 'slots';
 const URLS = import.meta.glob<string>([
   '../assets/icons/*/*.{png,webp}',
   '!../assets/icons/items/{short-sword.webp,bronze-helm.png,bronze-bracers.png,scale-armor.png,heron-feather-boots.png}',
+  '!../assets/icons/stats/{int.png,luk.png}',
 ], { eager: true, query: '?url', import: 'default' });
 
 export function iconKey(group: IconGroup, id: string): string {

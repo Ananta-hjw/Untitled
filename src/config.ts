@@ -178,8 +178,8 @@ export const HIT_FEEL = {
   /** 적을 쓰러뜨린 막타의 시원한 짧은 정지 */
   killHitStopMs: 55,
   hurtHitStopMs: 60,
-  /** 치명타 확률과 피해 배율 (반격에는 치명타가 붙지 않는다. 반격 자체가 강하다) */
-  critChance: 0.15,
+  /** 치명타 확률(기본 10%)과 기본 치명타 피해 배율(160%, 반격에는 치명타가 붙지 않는다) */
+  critChance: 0.1,
   critDamage: 1.6,
   /** 화면 흔들림: [길이(ms), 세기]. 묵직하게, 하지만 화면이 어지럽지 않게 짧게 */
   shake: {
@@ -230,21 +230,19 @@ export const KNOCKBACK_DAMPING = 7;
 
 /**
  * 경험치와 레벨.
- *  - 다음 레벨까지 필요한 경험치 = xpBase + xpStep × (현재 레벨 - 1)  →  36, 60, 84, 108 …
- *    (예전 30, 50, 70 …보다 레벨마다 20% 더 필요하다. 천천히 오르도록)
+ *  - 다음 레벨까지 필요한 경험치 = xpBase + xpStep × (L - 1) + xpCurve × (L - 1)²
+ *    → Lv.1→2: 100, Lv.2→3: 190, Lv.3→4: 340, Lv.4→5: 550, Lv.5→6: 820, Lv.10→11: 3,070 …
+ *    (레벨이 오를수록 필요 경험치가 2차 곡선으로 가파르게 늘어난다)
  *  - 레벨이 오를 때마다 최대 체력 +hpPerLevel, 공격력(최소·최대 모두) +damagePerLevel (소수점은 반올림)
  *    레벨만으로 오르는 기본 성장이다. 나머지는 레벨업 포인트로 올리는 능력치(ATTRIBUTES)와 장비가 더한다.
  * 레벨 1의 체력·공격력은 위의 PLAYER.maxHp, damageMin, damageMax다.
- *
- * TODO(경험치 재조정): 최고 레벨을 30에서 100으로 올렸지만 경험치 곡선(xpBase, xpStep)은 그대로다.
- * 3장 이후 몬스터 레벨대와 전직 레벨(entities/jobs.ts의 JOB_ADVANCE, 임시 20·50)이 정해지면
- * 필요 경험치와 몬스터 경험치를 함께 다시 맞춘다.
  */
 export const PROGRESSION = {
   /** 슬라임 한 마리를 잡으면 얻는 경험치 */
   slimeXp: 10,
-  xpBase: 36,
-  xpStep: 24,
+  xpBase: 100,
+  xpStep: 60,
+  xpCurve: 30,
   maxLevel: 100,
   hpPerLevel: 4,
   damagePerLevel: 0.5,
@@ -252,7 +250,7 @@ export const PROGRESSION = {
 
 /**
  * 마나.
- *  - 최대 마나 = base + perLevel × (레벨 - 1) + 지능(INT)의 몫. 레벨이 오르면 가득 찬다.
+ *  - 최대 마나 = base + perLevel × (레벨 - 1). 레벨이 오르면 가득 찬다.
  *  - 게임 시계로 초당 regenPerSecond씩 저절로 차고, 검으로 적을 벨 때마다 perHit씩 찬다.
  *  - 집·여관에서 쉬거나 치유소에서 치료받으면 가득 찬다.
  */
@@ -266,28 +264,26 @@ export const MANA = {
 /**
  * 능력치(상태창). 모두 base에서 시작하고, 레벨이 오를 때마다 pointsPerLevel 포인트를 받아 직접 올린다.
  * 장비도 능력치를 더한다. 각 능력치가 base보다 1 높을 때마다:
- *  - 힘(STR): 공격력 +damagePerStr
- *  - 체력(VIT): 최대 체력 +hpPerVit
+ *  - 힘(STR): 공격력 +damagePerStr (+1.05)
+ *  - 체력(VIT): 최대 체력 +hpPerVit (+5)
  *  - 방어력(DEF): 받는 피해 = 100 / (100 + defensePerDef × 초과분) 배 (최소 1)
- *  - 민첩(DEX): 적의 공격을 그냥 피할 확률 +evadePerDex (최대 maxEvade),
+ *  - 민첩(DEX): 치명타 확률 +critPerDex (기본 10%에서 시작, 최대 100%),
+ *               치명타 배율 +critDamagePerDex (기본 1.6배에서 시작),
+ *               적의 공격을 그냥 피할 확률 +evadePerDex (최대 maxEvade),
  *               회피 재사용 대기 −dodgePerDex (1 − dodgePerDex × 초과분 배, 최소 minDodgeScale, 즉 최대 30% 감소)
- *  - 지능(INT): 최대 마나 +mpPerInt, 스킬·마법 피해 +skillPerInt
- *  - 행운(LUK): 치명타 확률 +critPerLuk, 골드 +goldPerLuk
  */
 export const ATTRIBUTES = {
   base: 5,
   pointsPerLevel: 3,
-  damagePerStr: 1.2,
-  hpPerVit: 10,
+  damagePerStr: 1.05,
+  hpPerVit: 5,
   defensePerDef: 5,
   evadePerDex: 0.002,
   maxEvade: 0.3,
   dodgePerDex: 0.005,
   minDodgeScale: 0.7,
-  mpPerInt: 3,
-  skillPerInt: 0.03,
-  critPerLuk: 0.005,
-  goldPerLuk: 0.02,
+  critPerDex: 0.005,
+  critDamagePerDex: 0.01,
 };
 
 /**
@@ -308,8 +304,8 @@ export const RESONANCE = {
 
 /**
  * 막기(2단 패링, 막기 버튼·키 L): 누르는 순간부터 windowMs 동안만 막는다(누르고 있어도 길어지지 않는다).
- *  - perfectWindowMs 안(정밀 패링): 피해 0, 공명 충전, 적 대경직(stunMs), 반격 창, 회피 쿨 1초 감소, 막기 쿨 즉시 초기화.
- *  - perfectWindowMs ~ windowMs 사이(불완전 막기): 원래 피해의 일부를 회복 가능한 내상으로만 받고(죽지 않음),
+ *  - perfectWindowMs 안(정밀 패링): 피해 0, 공명 충전, 힘 흡수(피격·불완전 막기 전까지 유지), 회피 쿨 0.5초 감소, 막기 쿨 즉시 초기화(기절 없음).
+ *  - perfectWindowMs ~ windowMs 사이(불완전 막기): 담아 둔 정밀 패링 기운이 흩어지고, 원래 피해의 일부를 회복 가능한 내상으로만 받으며(죽지 않음),
  *    뒤로 밀리며 적은 짧게 멈칫한다. 막기 쿨은 헛막기보다 짧게 돌아온다.
  *  - 헛막으면 cooldownMs(450ms) 동안 다시 막을 수 없고, whiffMemoryMs(800ms) 안에 또 헛연타하면
  *    정밀 패링 창만 단계적으로 줄어든다(170 → 110 → 80ms). 성공하거나 잠깐 쉬면 즉시 170ms로 복구된다.
@@ -352,5 +348,5 @@ export const BLOCK = {
   /** 일반 정밀 패링은 기절(스턴)을 주지 않고 공격만 끊어 평소 회복으로 넘긴다(연속 파훼·차지 패링만 특수 경직). */
   stunMs: 0,
   moveScale: 0.4,
-  dodgeRefundMs: 1000,
+  dodgeRefundMs: 500,
 };

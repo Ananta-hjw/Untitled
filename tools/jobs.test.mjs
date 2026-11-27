@@ -52,7 +52,7 @@ test('경로와 능력치 보너스는 거쳐 온 단계를 모두 더한다', (
   assert.equal(jobRoot('twilight-blade'), 'swordsman');
   const sum = (bonus) => Object.values(bonus).reduce((a, b) => a + b, 0);
   assert.deepEqual(jobStatBonus('swordsman'), { str: 2, dex: 1, vit: 1 });
-  assert.deepEqual(jobStatBonus('spellblade'), { str: 5, dex: 1, vit: 2, int: 4 });
+  assert.deepEqual(jobStatBonus('spellblade'), { str: 7, dex: 3, vit: 2 });
   for (const id of JOB_IDS) {
     // 단계별 총량: 기본 4, 1차 +8, 2차 +12 (계열끼리 공평하게)
     assert.equal(sum(jobStatBonus(id)), [0, 4, 12, 24][JOBS[id].tier], id);

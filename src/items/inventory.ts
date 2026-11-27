@@ -191,19 +191,29 @@ export function sell(inv: Inventory, id: ItemId, count = 1): Inventory | null {
 
 export interface Drop { gold: number; items: Array<{ id: ItemId; count: number }> }
 
+/** 몬스터 레벨 1 초과분 1레벨당 드롭 골드 증가 비율 (+20%/레벨). */
+export const GOLD_LEVEL_SCALE = 0.2;
+
+/** 레벨에 비례해 드롭 골드를 늘린다 (Lv.1 = 1배, Lv.6 = 2배, Lv.11 = 3배). */
+export function scaleGoldForLevel(baseGold: number, level = 1): number {
+  const steps = Math.max(0, Math.floor(level) - 1);
+  return Math.max(1, Math.round(baseGold * (1 + GOLD_LEVEL_SCALE * steps)));
+}
+
 /** 슬라임 한 마리가 떨어뜨리는 것. rand는 0 이상 1 미만의 수를 돌려준다. */
-export function slimeDrop(rand: () => number): Drop {
-  const gold = 3 + Math.floor(rand() * 4);
+export function slimeDrop(rand: () => number, level = 1): Drop {
+  const gold = scaleGoldForLevel(3 + Math.floor(rand() * 4), level);
   const items: Drop['items'] = [];
   if (rand() < 0.35) items.push({ id: 'slime-gel', count: 1 });
   if (rand() < 0.04) items.push({ id: 'potion', count: 1 });
   return { gold, items };
 }
 
-/** 몬스터 종류별 전리품(골드 + 승급 재료). */
-export function enemyDrop(kind: MonsterKind | undefined, rand: () => number): Drop {
-  if (kind === 'slime') return slimeDrop(rand);
-  const gold = 5 + Math.floor(rand() * 5);
+/** 몬스터 종류·레벨별 전리품(레벨 비례 골드 + 정예/보스 가중치 + 승급 재료). */
+export function enemyDrop(kind: MonsterKind | undefined, rand: () => number, level = 1): Drop {
+  if (kind === 'slime') return slimeDrop(rand, level);
+  const tierScale = kind === 'corrosion-executioner' ? 3 : kind === 'swamp-lurker' ? 2 : 1;
+  const gold = scaleGoldForLevel((5 + Math.floor(rand() * 5)) * tierScale, level);
   const items: Drop['items'] = [];
   if (kind === 'corrosion-executioner') {
     items.push({ id: 'iron-shard', count: 3 });
