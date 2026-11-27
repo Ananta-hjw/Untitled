@@ -41,7 +41,7 @@ export const FERN: NpcDef = {
  * 서로의 대화 자리는 대화가 닿는 거리(110px)의 두 배보다 멀리 둔다.
  */
 export const FERRY_OUTSIDE_PEOPLE: NpcDef[] = [
-  { id: 'evan', name: '에반', role: '나루의 사공', x: 3060, y: 2480, height: 148, dialogue: 'npc-evan', facing: 'right' },
+  { id: 'evan', name: '에반', role: '나루의 사공', x: 3060, y: 2480, height: 148, dialogue: 'npc-evan', facing: 'right', storyAction: 'riverbank-sit' },
   { id: 'morgan', name: '모르간', role: '나루의 후원자', x: 1720, y: 1660, height: 150, dialogue: 'npc-morgan', facing: 'right' },
   // 서브 퀘스트 "엉킨 그물"의 의뢰인: 어부의 집 앞 그물 건조대 곁 강가
   { id: 'ferry-fisher', name: '나루 어부', role: '나루의 어부', x: 2300, y: 2440, height: 146, dialogue: 'npc-ferry-fisher', facing: 'down-right' },
@@ -64,6 +64,12 @@ export const FERRY_SMITHY: MapId = 'in-ferry-marta-smithy';
 export const FERRY_SMITHY_PEOPLE: NpcDef[] = [
   { id: 'marta', name: '마르타', role: '대장장이', x: 720, y: 600, height: 138, dialogue: 'npc-marta', facing: 'left' },
 ];
+
+export const FERRY_WITNESS_POSES: Partial<Record<NpcId, readonly string[]>> = {
+  evan: ['riverbank-rise', 'riverbank-point', 'riverbank-warn'],
+  'fisher-daughter': ['fidget-twine', 'tell-story', 'lower-gaze'],
+  'herbalist-elder': ['add-herb', 'offer-cup', 'reassuring-nod'],
+};
 
 /**
  * 퀘스트 7 "사라진 다섯"의 증인들 (실내 원화 좌표): 어부의 딸은 어부의 집 깔개 앞에서 아버지의 찌를 쥐고,

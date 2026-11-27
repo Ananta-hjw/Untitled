@@ -1,0 +1,42 @@
+{
+  "frames": [
+    {
+      "name": "sleepwalk-1",
+      "x": 0,
+      "y": 0,
+      "w": 256,
+      "h": 256,
+      "originX": 0.5,
+      "originY": 0.898438
+    },
+    {
+      "name": "sleepwalk-2",
+      "x": 256,
+      "y": 0,
+      "w": 256,
+      "h": 256,
+      "originX": 0.5,
+      "originY": 0.898438
+    },
+    {
+      "name": "sleepwalk-3",
+      "x": 0,
+      "y": 256,
+      "w": 256,
+      "h": 256,
+      "originX": 0.5,
+      "originY": 0.898438
+    },
+    {
+      "name": "sleepwalk-4",
+      "x": 256,
+      "y": 256,
+      "w": 256,
+      "h": 256,
+      "originX": 0.5,
+      "originY": 0.898438
+    }
+  ],
+  "fps": 4,
+  "bodyHeight": 199.0
+}

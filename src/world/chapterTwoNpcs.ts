@@ -1,3 +1,4 @@
+import type { FerryArtPreview } from './ferryArtPreview';
 import type { ChapterTwoNpcId, NpcDef, SuccessorNpcId } from './npcs.ts';
 
 /** 2장 배치를 위한 인물 정의. 실제 지역·구출 단계는 2장 맵을 구현할 때 지정한다. */
@@ -48,11 +49,12 @@ export const SUCCESSOR_CAST: ReadonlyArray<{ id: SuccessorNpcId; name: string; r
   { id: 'velka', name: '벨카', role: '여행자', height: 150 },
   { id: 'razen', name: '라젠', role: '정보상', height: 152 },
 ];
-export type CastPreviewGroup = 'chapter2' | 'support' | 'successors' | 'all' | 'innkeeper';
+export type CastPreviewGroup = 'chapter2' | 'support' | 'successors' | 'all' | 'innkeeper' | FerryArtPreview;
 export function isCastPreviewGroup(value: string | null): value is CastPreviewGroup {
-  return value !== null && ['chapter2', 'support', 'successors', 'all', 'innkeeper'].includes(value);
+  return value !== null && ['chapter2', 'support', 'successors', 'all', 'innkeeper', 'rescue', 'bell-carry'].includes(value);
 }
 export function previewCastNpcs(group: CastPreviewGroup, at: { x: number; y: number }): NpcDef[] {
+  if (group === 'rescue' || group === 'bell-carry') return [];
   if (group === 'chapter2') return chapterTwoPreviewNpcs(at);
   if (group === 'innkeeper') return [{ ...FOG_INNKEEPER, ...at }];
   const successors: NpcDef[] = SUCCESSOR_CAST.map(n => ({ ...n, x: 0, y: 0, dialogue: `npc-${n.id}`, wander: 60 }));

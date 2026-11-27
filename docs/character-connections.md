@@ -9,8 +9,8 @@
 
 | 인물 | 연결된 그림/동작 |
 | --- | --- |
-| 토비 | 전신 초상화, 기본 SD, 풀무질 2자세, 안개 고치 |
-| 가짜 종 사내 | 전신 초상화, 기본 SD, 종 울리기 4자세 |
+| 토비 | 전신 초상화, 8방향 걷기, 몽유 4자세, 풀무질 2자세, 안개 고치 |
+| 가짜 종 사내 | 전신 초상화, 8방향 걷기, 종 울리기 4자세, 붙잡힌 자세 |
 | 사내의 어머니 | 전신 초상화, 걸상에 앉은 SD |
 | 브람·미렐·카이렌·벨카·라젠 | 각자의 초상화와 8방향 대기·이동 시트 |
 
@@ -28,7 +28,7 @@
   말을 걸면 시온이 상태를 살피며 잠든 토비의 대사는 나오지 않는다.
 - 위 주소에 `&action=idle`: 조연들의 기본 SD.
 - `?map=east-stream&npcs=successors&companion=none`: 계승자 다섯 명.
-- `?map=east-stream&npcs=all&companion=none`: 기존 2장 여섯 명과 조연·계승자 총 15명.
+- `?map=east-stream&npcs=all&companion=none`: 기존 2장 여섯 명과 조연·계승자.
 - 기존 `npcs=chapter2` 여섯 명, `npcs=innkeeper&sleepwalk=1`도 유지한다.
 
 확인 모드는 개발 빌드에만 적용한다. 등장 시점이 정해지면 같은 NpcDef를 실제 지역의
@@ -49,3 +49,11 @@ NPC 목록에 배치하면 된다. 본편 고갯길의 도르·퀘스트 3은 �
 
 `PYTHONDONTWRITEBYTECODE=1 python3 tools/build_successor_runtime.py`는 계승자 원본을
 보존하며 초상화 768높이 사본과 60% 크기의 걷기 WebP를 재생성한다.
+
+## 2장 특수 동작 확인
+
+- 본편에서 도르는 쉼터 불을 돌보고, 에반은 강가에 앉아 있다. 「사라진 다섯」의 어부의 딸·약초 가게 할머니·에반은 대사에 맞춰 자세를 바꾼다.
+- 1장 습격에서 쓰러진 일반 경비병은 전용 그림을 쓴다. 갈대밭 늪의 잠복 마물은 멀리 있을 때 몸을 숨기고, 시온이 접근하면 출현한 뒤 물줄기 공격을 한다.
+- `?map=east-stream&npcs=support&actor=toby&action=sleepwalk`에서 토비가 몽유로 걷는다. `actor=fisher-daughter&action=walk`처럼 지정하면 인물의 보행을 확인할 수 있다.
+- `?map=east-stream&npcs=all&actor=evan&action=rope-pull`처럼 인물 ID와 등록된 동작 이름을 지정해 다음 장면의 원화를 본다. 예를 들어 `actor=bell-ringer&action=caught`로 붙잡힌 종 사내를 확인할 수 있다.
+- `?map=east-stream&npcs=rescue`와 `?map=east-stream&npcs=bell-carry`는 각각 실종자 네 명의 구출과 종 운반을 재생한다. `?map=reed-swamp&monsters=mist-weaver`에서 안개를 잣는 자와 본체 그림자를 확인한다.

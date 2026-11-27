@@ -73,6 +73,7 @@ export class Character extends Phaser.GameObjects.Container {
 
     if (options.monster) {
       this.sprite = new MonsterSprite(scene, options.monster).setScale(this.baseScale);
+      this.sprite.attachWeaverShadow(this.shadow);
     } else if (options.hero) {
       this.sprite = new HeroSprite(scene).setScale(this.baseScale);
     } else {
@@ -277,6 +278,15 @@ export class Character extends Phaser.GameObjects.Container {
     this.flashTimer = this.scene.time.delayedCall(90, () => {
       this.sprite.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
     });
+  }
+
+  setConcealed(concealed: boolean): void {
+    if (this.shadow.visible === !concealed) return;
+    this.shadow.setVisible(!concealed);
+    this.levelTagText?.setVisible(!concealed);
+    this.nameText?.setVisible(!concealed);
+    if (concealed) this.hpBar?.setVisible(false);
+    else if (this.hp < this.maxHp) this.drawHpBar();
   }
 
   private drawHpBar(): void {

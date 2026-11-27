@@ -13,6 +13,11 @@ import {
   type Direction8, type DutyPoint, type NpcDef, type NpcSkin,
 } from '../world/npcs';
 
+import fallenUrl from '../assets/characters/soldier/fallen.webp?url';
+import fallenData from '../assets/characters/soldier/fallen-frames.json';
+
+const FALLEN_SOLDIER = 'npc-soldier-fallen';
+
 interface WalkFrame {
   name: string; sheet: string; direction: string; pose: number;
   x: number; y: number; w: number; h: number; originX: number; originY: number; scale: number;
@@ -48,9 +53,16 @@ const sheetUrl = (id: NpcSkin, sheet: string) => SHEET_URLS[`../assets/character
 const walkData = (id: NpcSkin) => FRAME_DATA[`../assets/characters/${id}/walk_frames.json`];
 const combatData = (id: NpcSkin) => COMBAT_DATA[`../assets/characters/${id}/combat-frames.json`];
 
-export function preloadNpcs(scene: Phaser.Scene, npcs: readonly NpcDef[]): void {
-  for (const id of new Set(npcs.map(npcSkin))) {
-    preloadNpcStoryActions(scene, id);
+export function preloadNpcs(scene: Phaser.Scene, npcs: readonly NpcDef[], preview = false): void {
+  const bySkin = new Map<NpcSkin, Set<string>>();
+  for (const npc of npcs) {
+    const skin = npcSkin(npc);
+    if (!bySkin.has(skin)) bySkin.set(skin, new Set());
+    if (npc.storyAction) bySkin.get(skin)!.add(npc.storyAction);
+  }
+  for (const [id, requested] of bySkin) {
+    preloadNpcStoryActions(scene, id, preview, requested);
+    if (id === 'soldier' && !scene.textures.exists(FALLEN_SOLDIER)) scene.load.image(FALLEN_SOLDIER, fallenUrl);
     if (id === 'fog-innkeeper' && !scene.textures.exists('npc-fog-innkeeper-sleepwalk')) {
       scene.load.image('npc-fog-innkeeper-sleepwalk', innSleepUrl);
     }
@@ -242,7 +254,7 @@ export class Npc extends Phaser.GameObjects.Container {
   /** Prepared character-specific event poses. Unsupported actions leave the current pose intact. */
   setStoryAction(name?: string): boolean {
     const action = name === undefined ? undefined : npcStoryAction(this.skin, name);
-    if (name !== undefined && !action) return false;
+    if (name !== undefined && (!action || !this.scene.textures.exists(action.key))) return false;
     this.storyAction = action;
     this.storyActionName = name;
     this.storyElapsed = 0;
@@ -280,7 +292,8 @@ export class Npc extends Phaser.GameObjects.Container {
 
   /** Story-ready sleepwalking along a collision-checked path; no wall or water bypass. */
   startSleepwalk(path: { x: number; y: number }[], speed = 0.45): void {
-    if (this.skin !== 'fog-innkeeper') return;
+    if (this.skin !== 'fog-innkeeper' && this.skin !== 'toby') return;
+    this.setStoryAction();
     this.sleeping = true;
     this.sleepElapsed = 0;
     this.walkTo(path, speed);
@@ -579,6 +592,13 @@ export class Npc extends Phaser.GameObjects.Container {
       return;
     }
     if (this.sleeping) {
+      const action = npcStoryAction(this.skin, 'sleepwalk');
+      if (action) {
+        const frame = action.frames[Math.floor(this.sleepElapsed * action.fps / 1000) % action.frames.length];
+        this.figure.setTexture(action.key, frame.name).setFlipX(false)
+          .setOrigin(frame.originX, frame.originY).setScale(this.def.height / action.bodyHeight);
+        return;
+      }
       const f = innSleepFrames.frames[Math.floor(this.sleepElapsed * innSleepFrames.fps / 1000) % innSleepFrames.frames.length];
       this.figure.setTexture('npc-fog-innkeeper-sleepwalk', f.name).setFlipX(false)
         .setOrigin(f.originX, f.originY).setScale(this.def.height / (f.h - 24));
@@ -599,6 +619,15 @@ export class Npc extends Phaser.GameObjects.Container {
   }
 
   private showCombat(pose: NpcCombatPose): void {
+    if (this.skin === 'soldier' && pose === 'injured') {
+      const variant = Math.abs(Math.round(this.def.x + this.def.y)) % fallenData.frames.length;
+      const frame = fallenData.frames[variant];
+      const texture = this.scene.textures.get(FALLEN_SOLDIER);
+      if (!texture.has(frame.name)) texture.add(frame.name, 0, frame.x, frame.y, frame.w, frame.h);
+      this.figure.setTexture(FALLEN_SOLDIER, frame.name).setFlipX(false)
+        .setOrigin(frame.originX, frame.originY).setScale(fallenData.displayWidth / frame.w);
+      return;
+    }
     const frame = combatData(this.skin)?.frames.find(f => f.name === pose);
     if (!frame) { this.showFrame(this.walk.idlePose, true); return; }
     this.figure.setTexture(`npc-${this.skin}-combat`, pose).setFlipX(this.fighter!.facingX < 0)

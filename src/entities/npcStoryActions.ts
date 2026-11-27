@@ -6,6 +6,8 @@ import ringData from '../assets/characters/bell-ringer/ring-frames.json';
 import bellowsUrl from '../assets/characters/toby/bellows.webp?url';
 import bellowsData from '../assets/characters/toby/bellows-frames.json';
 import cocoonUrl from '../assets/characters/toby/cocoon-512.webp?url';
+import tobySleepwalkUrl from '../assets/characters/toby/sleepwalk.webp?url';
+import tobySleepwalkData from '../assets/characters/toby/sleepwalk-frames.json';
 import lineaRecoveryUrl from '../assets/characters/linea/recovery.webp?url';
 import lineaRecoveryData from '../assets/characters/linea/recovery-frames.json';
 import eilaTreatmentUrl from '../assets/characters/eila/treatment.webp?url';
@@ -29,6 +31,17 @@ import fisherDaughterData from '../assets/characters/fisher-daughter/testimony-f
 import herbalistUrl from '../assets/characters/herbalist-elder/tend-patient.webp?url';
 import herbalistData from '../assets/characters/herbalist-elder/tend-patient-frames.json';
 
+const SPECIAL_URLS = import.meta.glob<string>('../assets/characters/{bell-ringer,dor,evan,finn,marta,mill-apprentice,morgan}/*.webp',
+  { eager: true, query: '?url', import: 'default' });
+const SPECIAL_DATA = import.meta.glob<{ frames: StoryFrame[] }>('../assets/characters/{bell-ringer,dor,evan,finn,marta,mill-apprentice,morgan}/*-frames.json',
+  { eager: true, import: 'default' });
+
+function specialAction(skin: NpcSkin, name: string, bodyHeight = 320, loop = false): StoryAction {
+  const base = `../assets/characters/${skin}/${name}`;
+  return { key: `npc-${skin}-${name}`, url: SPECIAL_URLS[`${base}.webp`],
+    frames: SPECIAL_DATA[`${base}-frames.json`].frames, fps: 3, bodyHeight, onTalk: 'pause', loop, deferred: true };
+}
+
 export interface StoryFrame { name: string; x: number; y: number; w: number; h: number; originX: number; originY: number }
 export interface StoryAction {
   key: string; url: string; frames: StoryFrame[]; fps: number; bodyHeight: number;
@@ -37,7 +50,9 @@ export interface StoryAction {
   labelOffset?: number;
   activity?: string;
   loop?: boolean;
+  deferred?: boolean;
 }
+const evanRiverbank = specialAction('evan', 'riverbank');
 const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
   ...Object.fromEntries(([
     ['herman', 'record', '피해 상황 기록 중'],
@@ -56,6 +71,22 @@ const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
       fps: name === 'repair' ? 2 : 1, bodyHeight: skin === 'teon' ? 304 : 380,
       labelOffset: skin === 'teon' ? undefined : 125, onTalk: 'pause' as const,
     }]))])),
+  dor: { 'tend-fire': { ...specialAction('dor', 'tend-fire', 430, true), deferred: false, labelOffset: 118 } },
+  evan: {
+    ...Object.fromEntries(['defense', 'oar-swing', 'rowing', 'mooring', 'rope-pull', 'cocoon-guard', 'reunion']
+      .map(name => [name, specialAction('evan', name)])),
+    riverbank: evanRiverbank,
+    ...Object.fromEntries(evanRiverbank.frames.map(frame => [frame.name, {
+      ...evanRiverbank, frames: [frame], fps: 0, deferred: frame.name !== 'riverbank-sit',
+    }])),
+  },
+  morgan: Object.fromEntries(['pole-row', 'work', 'bell-ring', 'confession']
+    .map(name => [name, specialAction('morgan', name)])),
+  marta: {
+    'bell-repair': specialAction('marta', 'bell-repair'),
+    'wax-earplugs': specialAction('marta', 'wax-earplugs'),
+  },
+  'mill-apprentice': { 'bell-strike': specialAction('mill-apprentice', 'bell-strike') },
   doran: {
     hammer: { key: 'npc-doran-hammer', url: doranHammerUrl, frames: doranHammerData.frames,
       fps: doranHammerData.fps, bodyHeight: doranHammerData.bodyHeight, onTalk: 'pause' },
@@ -79,9 +110,9 @@ const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
   // 물가에서 깨어나는 여관 주인(깨어남 → 발이 물에 빠짐 → 뒤로 물러섬 → 정신 차림). 한 자세씩 쓴다.
   // 몸 높이는 서 있는 자세(핀 warn-father, 여관 주인 river-awake)의 발바닥~머리끝 픽셀이다.
   // `-left`는 좌우를 뒤집은 그림이다(여관 안에서 왼쪽 아래 문으로 나가는 아버지를 가리킬 때).
-  finn: Object.fromEntries(finnNightData.frames.flatMap(frame => [false, true].map(flipX => [`${frame.name}${flipX ? '-left' : ''}`, {
+  finn: { ...Object.fromEntries(finnNightData.frames.flatMap(frame => [false, true].map(flipX => [`${frame.name}${flipX ? '-left' : ''}`, {
     key: 'npc-finn-night-watch', url: finnNightUrl, frames: [frame], fps: 0, bodyHeight: 346, onTalk: 'keep' as const, flipX,
-  }]))),
+  }]))), 'kite-flight': specialAction('finn', 'kite-flight', 346, true) },
   'fog-innkeeper': Object.fromEntries(innRiverData.frames.map(frame => [frame.name, {
     key: 'npc-fog-innkeeper-river-wake', url: innRiverUrl, frames: [frame], fps: 0, bodyHeight: 329, onTalk: 'keep' as const,
   }])),
@@ -94,6 +125,7 @@ const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
     key: 'npc-herbalist-elder-tend', url: herbalistUrl, frames: [frame], fps: 0, bodyHeight: 350, onTalk: 'keep' as const,
   }])),
   'bell-ringer': {
+    caught: specialAction('bell-ringer', 'caught', 296),
     ring: { key: 'npc-bell-ringer-ring', url: ringUrl, frames: ringData.frames, fps: ringData.fps, bodyHeight: 296, onTalk: 'stop' },
   },
   joan: {
@@ -104,6 +136,8 @@ const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
   },
   toby: {
     bellows: { key: 'npc-toby-bellows', url: bellowsUrl, frames: bellowsData.frames, fps: 3, bodyHeight: 430, onTalk: 'pause' },
+    sleepwalk: { key: 'npc-toby-sleepwalk', url: tobySleepwalkUrl, frames: tobySleepwalkData.frames,
+      fps: tobySleepwalkData.fps, bodyHeight: tobySleepwalkData.bodyHeight, onTalk: 'keep' },
     cocoon: { key: 'npc-toby-cocoon', url: cocoonUrl, frames: [{ name: 'cocoon', x: 0, y: 0, w: 283, h: 512, originX: 0.5, originY: 0.99 }],
       fps: 0, bodyHeight: 430, onTalk: 'keep', dialogue: 'toby-cocoon' },
   },
@@ -112,13 +146,16 @@ export function npcStoryAction(skin: NpcSkin, name: string): StoryAction | undef
   const actions = ACTIONS[skin];
   return actions && Object.hasOwn(actions, name) ? actions[name] : undefined;
 }
-export function preloadNpcStoryActions(scene: Phaser.Scene, skin: NpcSkin): void {
-  for (const action of new Map(Object.values(ACTIONS[skin] ?? {}).map(a => [a.key, a])).values()) {
+export function preloadNpcStoryActions(scene: Phaser.Scene, skin: NpcSkin, preview = false, requested?: ReadonlySet<string>): void {
+  const actions = Object.entries(ACTIONS[skin] ?? {}).filter(([name, action]) =>
+    !action.deferred || preview || requested?.has(name));
+  for (const action of new Map(actions.map(([, a]) => [a.key, a])).values()) {
     if (!scene.textures.exists(action.key)) scene.load.image(action.key, action.url);
   }
 }
 export function registerNpcStoryActions(scene: Phaser.Scene, skin: NpcSkin): void {
   for (const action of Object.values(ACTIONS[skin] ?? {})) {
+    if (!scene.textures.exists(action.key)) continue;
     const texture = scene.textures.get(action.key);
     for (const f of action.frames) if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
   }

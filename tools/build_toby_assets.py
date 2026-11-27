@@ -1,9 +1,39 @@
 """Package Toby's generated source art for game use without changing the originals."""
 import json
+from argparse import ArgumentParser
+from statistics import median
 
 from PIL import Image
 
-from build_rowen_assets import CHARACTERS, bbox, fit_height
+from build_npc_frames import SHEETS, build as build_walk_frames
+from build_rowen_assets import CHARACTERS, WALK_SCALE, bbox, fit_height
+
+
+def build_motion():
+    folder = CHARACTERS / 'toby'
+    build_walk_frames('toby')
+    for filename in SHEETS:
+        source = folder / filename
+        with Image.open(source) as image:
+            size = tuple(round(n * WALK_SCALE) for n in image.size)
+            image.resize(size, Image.Resampling.LANCZOS).save(
+                source.with_name(f'{source.stem}-60.webp'), quality=88, method=6)
+
+    cell = 256
+    with Image.open(folder / 'sleepwalk-source.png') as source:
+        sheet = source.resize((cell * 2, cell * 2), Image.Resampling.LANCZOS)
+    frames = []
+    heights = []
+    for pose in range(4):
+        x, y = pose % 2 * cell, pose // 2 * cell
+        left, top, right, bottom = bbox(sheet.crop((x, y, x + cell, y + cell)))
+        assert 0 < left < right < cell and 0 < top < bottom < cell, pose
+        heights.append(bottom - top)
+        frames.append(dict(name=f'sleepwalk-{pose + 1}', x=x, y=y, w=cell, h=cell,
+                           originX=0.5, originY=round(bottom / cell, 6)))
+    sheet.save(folder / 'sleepwalk.webp', quality=88, method=6)
+    data = dict(frames=frames, fps=4, bodyHeight=median(heights))
+    (folder / 'sleepwalk-frames.json').write_text(json.dumps(data, indent=2) + '\n')
 
 
 def main():
@@ -61,4 +91,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = ArgumentParser(description=__doc__)
+    parser.add_argument('--motion', action='store_true', help='Only package the walk and sleepwalk sheets.')
+    if parser.parse_args().motion:
+        build_motion()
+    else:
+        main()
