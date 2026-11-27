@@ -4708,8 +4708,8 @@ test('밤의 종소리: 여관에서 방을 얻으면 밤 연출 → 잠든 여�
   assert.equal(result.asleep, 'asleep');
   assert.deepEqual(result.cues, ['room', 'bell']);
   assert.deepEqual(result.day, { people: ['finn', 'fog-innkeeper', 'innkeeper-wife'], marker: 'target', spot: true });
-  // 방을 얻는 순간 여관이 쉬는 자리가 된다(밤의 추격에서 쓰러지면 여관에서 다시 시작한다).
-  assert.deepEqual(result.inn, { opening: true, shade: true, stage: true, finn: 'watch-awake', step: 1, rest: 'ferry-inn' });
+  // 종소리에 잠이 깨어 쉬지 못했으므로 아직 여관이 쉬는 자리가 되지 않는다(아침에 저장한다).
+  assert.deepEqual(result.inn, { opening: true, shade: true, stage: true, finn: 'watch-awake', step: 1, rest: null });
   assert.deepEqual(result.chase, { shade: true, phantoms: 3, sleeping: true, talkable: false, finn: 'warn-father', others: ['finn', 'fog-innkeeper'] });
   assert.deepEqual(result.bank, { step: 2, talkable: true, fog: 8 });
   assert.deepEqual(result.river, { opening: true, step: 3, stillAsleep: true });
