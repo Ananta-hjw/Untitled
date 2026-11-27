@@ -112,8 +112,9 @@ import { DIALOGUES, HERO_NAME } from '../story/dialogues';
 import { findInteractable, talkChoices, type Interactable } from '../world/interactables';
 import { MARKER_STYLE, Npc, preloadNpcs } from '../entities/Npc';
 import { NPCS, nextStressCount, stressNpcs } from '../world/npcs';
+import { drawFerryArtPreview, preloadFerryArtPreview } from '../world/ferryArtPreview';
 import { chapterTwoPreviewNpcs, isCastPreviewGroup, previewCastNpcs, type CastPreviewGroup } from '../world/chapterTwoNpcs';
-import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, eastPassBlockedDialogue, eastPassOpen, FERRY_PEOPLE, FERRY_INN, FERRY_SMITHY, STORY_SPOT_ART, ferryInnRepaired, martaShopOpen, FERRY_INN_DOOR, FERRY_NIGHT_LEVEL, FERRY_RIVERBANK, FERRY_SLEEPWALK_PATH, ferryInnRestOpen, ferryNight, ferryNightSpawns, ferryNightStep, fernCartState, fernCartVisible, fernExtraStock, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
+import { CHAPTER_TWO_INSPECTIONS, FERN, FERN_CART, FERN_CART_FOOTPRINT, chapterTwoDialogue, chapterTwoNpcs, chapterTwoSpots, eastPassBlockedDialogue, eastPassOpen, FERRY_PEOPLE, FERRY_WITNESS_POSES, FERRY_INN, FERRY_SMITHY, STORY_SPOT_ART, ferryInnRepaired, martaShopOpen, FERRY_INN_DOOR, FERRY_NIGHT_LEVEL, FERRY_RIVERBANK, FERRY_SLEEPWALK_PATH, ferryInnRestOpen, ferryNight, ferryNightSpawns, ferryNightStep, fernCartState, fernCartVisible, fernExtraStock, fernMothHunt, fernShopOpen, shelterRestOpen } from '../story/chapterTwo';
 import fernCartDamagedUrl from '../assets/village/rowen/fern-cart-damaged.webp?url';
 import fernCartRepairedUrl from '../assets/village/rowen/fern-cart-repaired.webp?url';
 import { PerfOverlay } from '../ui/PerfOverlay';
@@ -718,7 +719,10 @@ export class GameScene extends Phaser.Scene {
     // 습격 중에는 이 맵에 나올 모든 무리의 그림을 미리 읽는다(대화 뒤 다음 무리가 바로 나타난다).
     preloadMonsters(this, [...this.map.enemies, ...this.duskSpawns(), ...ferryNightSpawns(this.quests, this.mapId), ...raidSpawnsAnyStep(this.quests, this.mapId), ...this.previewMonsters()]);
     preloadVillage(this, this.map);
-    preloadNpcs(this, [...NPCS, FERN, ...this.map.npcs, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 }), ...(this.mapId === 'ferry-village' || this.mapId.startsWith('in-ferry-') ? FERRY_PEOPLE : [])]);
+    const preview = this.previewNpcGroup;
+    preloadNpcs(this, [...NPCS, FERN, ...this.map.npcs, ...GUARDS, ...chapterTwoPreviewNpcs({ x: 0, y: 0 }),
+      ...(this.mapId === 'ferry-village' || this.mapId.startsWith('in-ferry-') ? FERRY_PEOPLE : [])], !!preview);
+    if (preview === 'rescue' || preview === 'bell-carry') preloadFerryArtPreview(this, preview);
     preloadStorySpotArt(this, this.mapId);
     if (fernCartVisible(this.quests, this.mapId)) {
       this.load.image('fern-cart-damaged', fernCartDamagedUrl);
@@ -741,6 +745,8 @@ export class GameScene extends Phaser.Scene {
       (x, y) => this.walkArea.contains(x, y));
     this.bossHud = new BossHud(this);
     this.buildCharacters();
+    const preview = this.previewNpcGroup;
+    if (preview === 'rescue' || preview === 'bell-carry') drawFerryArtPreview(this, preview, this.map.spawn);
     this.effects = new CombatEffects(this);
     this.impacts = new ImpactEffects(this);
     this.absorbGround = this.add.graphics().setDepth(-48);
@@ -1375,8 +1381,22 @@ export class GameScene extends Phaser.Scene {
     const action = group && new URLSearchParams(location.search).get('action');
     if (group === 'support' || group === 'all') {
       for (const npc of this.npcs) {
-        if (npc.def.id === 'toby') npc.setStoryAction(action === 'cocoon' ? 'cocoon' : action === 'idle' ? undefined : 'bellows');
+        if (npc.def.id === 'toby') {
+          npc.setStoryAction(action === 'cocoon' || action === 'sleepwalk' ? action : action === 'idle' ? undefined : 'bellows');
+        }
         if (npc.def.id === 'bell-ringer' && action !== 'idle') npc.setStoryAction('ring');
+      }
+    }
+    if (group && action) {
+      const id = new URLSearchParams(location.search).get('actor');
+      const npc = this.npcs.find(n => n.def.id === id);
+      if (npc?.def.id === 'toby' && action === 'sleepwalk') {
+        npc.startSleepwalk([{ x: npc.x + 160, y: npc.y + 50 }]);
+      } else if (npc && action === 'walk') {
+        npc.setStoryAction();
+        npc.walkTo([{ x: npc.x + 96, y: npc.y }]);
+      } else {
+        npc?.setStoryAction(action);
       }
     }
     if (action === 'joan-cocoon' || action === 'joan-awaken') {
@@ -2656,7 +2676,10 @@ export class GameScene extends Phaser.Scene {
     const signLines = target.id === 'village-sign' ? villageSignDialogue(this.quests) : undefined;
     const lines = quest?.lines.length ? quest.lines
       : signLines ?? ((npc && (chapterTwoDialogue(npc, this.quests) ?? chapterDialogue(npc, this.quests))) || (target.dialogue ? DIALOGUES[target.dialogue] : []));
+    const witnesses = npc && quest?.progressed?.id === 'missing-five' ? FERRY_WITNESS_POSES[npc] : undefined;
+    const previousPose = talked?.currentStoryAction;
     this.dialogue.open(lines, () => {
+      if (witnesses) talked?.setStoryAction(previousPose);
       if (quest) {
         this.quests = quest.state;
         this.saveQuests();
@@ -2758,7 +2781,7 @@ export class GameScene extends Phaser.Scene {
           this.travel({ to: 'village', arrive: at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: at });
         }
       }
-    });
+    }, witnesses ? index => talked?.setStoryAction(witnesses[Math.min(index, witnesses.length - 1)]) : undefined);
   }
 
   /**

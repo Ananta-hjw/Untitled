@@ -1,0 +1,43 @@
+{
+  "frames": [
+    {
+      "name": "cocoon-asleep",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.889952
+    },
+    {
+      "name": "cocoon-loosen",
+      "x": 320,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.889952
+    },
+    {
+      "name": "cocoon-release",
+      "x": 0,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.889952
+    },
+    {
+      "name": "cocoon-awake",
+      "x": 320,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.889952
+    }
+  ],
+  "fps": 3,
+  "loop": false,
+  "bodyHeight": 235
+}

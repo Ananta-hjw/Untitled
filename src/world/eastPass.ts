@@ -23,7 +23,7 @@ export const EAST_PASS: GameMap = {
   artBounds: { left: 0, top: 0, right: 4800, bottom: 3200 },
   bounds: { left: 80, top: 780, right: 4720, bottom: 3060 },
   props, buildings: [],
-  npcs: [{ id: 'dor', name: '도르', role: '고개 쉼터의 약초꾼', x: 1690, y: 1560, height: 144, dialogue: 'npc-dor', facing: 'down-right' }],
+  npcs: [{ id: 'dor', name: '도르', role: '고개 쉼터의 약초꾼', x: 1690, y: 1560, height: 144, dialogue: 'npc-dor', facing: 'down-right', storyAction: 'tend-fire' }],
   obstacles: [
     // The open front is passable; side and rear stone walls remain solid.
     { x: 1795, y: 1250, rx: 190, ry: 35, shape: 'rect' },

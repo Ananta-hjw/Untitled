@@ -1,0 +1,88 @@
+{
+  "frames": [
+    {
+      "name": "roar-windup",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.910156
+    },
+    {
+      "name": "roar-cast",
+      "x": 320,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.910156
+    },
+    {
+      "name": "roar-recover",
+      "x": 640,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.910156
+    },
+    {
+      "name": "volley-windup",
+      "x": 0,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.910156
+    },
+    {
+      "name": "volley-cast",
+      "x": 320,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.910156
+    },
+    {
+      "name": "volley-recover",
+      "x": 640,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.910156
+    },
+    {
+      "name": "veil-windup",
+      "x": 0,
+      "y": 640,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.910156
+    },
+    {
+      "name": "veil-cast",
+      "x": 320,
+      "y": 640,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.910156
+    },
+    {
+      "name": "veil-recover",
+      "x": 640,
+      "y": 640,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.910156
+    }
+  ],
+  "bodyHeight": 206,
+  "fps": 4,
+  "loop": false
+}

@@ -172,6 +172,15 @@ export class Enemy {
     const dy = opponent.y - c.y;
     // 보스는 나타나면 주인공이 어디 있든 쫓는다.
     const playerNear = opponent.alive && (this.boss || (Math.abs(dx) < ENEMY.aggroX && Math.abs(dy) < ENEMY.aggroY));
+    if (this.waterJet && c.sprite instanceof MonsterSprite) {
+      if (playerNear && c.sprite.swampConcealed) c.sprite.setMovement(dx, dy);
+      const transitioning = c.sprite.setSwampBurrowed(this.state === 'wander' && !playerNear);
+      c.setConcealed(c.sprite.swampConcealed);
+      if (transitioning) {
+        c.setMotion(false);
+        return;
+      }
+    }
 
     switch (this.state) {
       case 'wander': {
@@ -529,9 +538,10 @@ export class Enemy {
     if (scaleX === 1 && scaleY === 1) this.hitAt = undefined;
   }
 
-  /** 포효해서 칼에 맞지 않는 중 (보스의 페이즈 전환) */
+  /** 페이즈 전환·안개 본체·잠복에는 직접 공격이 통하지 않는다. */
   get untouchable(): boolean {
-    return this.state === 'roar' || this.kind === 'mist-weaver';
+    return this.state === 'roar' || this.kind === 'mist-weaver'
+      || (this.character.sprite instanceof MonsterSprite && this.character.sprite.swampConcealed);
   }
 
   private startVolley(time: number, dx: number, dy: number): void {

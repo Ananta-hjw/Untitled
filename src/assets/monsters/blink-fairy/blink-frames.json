@@ -1,0 +1,43 @@
+{
+  "frames": [
+    {
+      "name": "blink-ready",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.881978
+    },
+    {
+      "name": "blink-break",
+      "x": 320,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.881978
+    },
+    {
+      "name": "blink-trace",
+      "x": 0,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.881978
+    },
+    {
+      "name": "blink-return",
+      "x": 320,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.881978
+    }
+  ],
+  "bodyHeight": 209,
+  "fps": 4,
+  "loop": false
+}

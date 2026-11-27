@@ -4178,7 +4178,10 @@ test('마을 수비대는 습격 중 실제 공격·막기·피격·부상 그�
       const hit=s.onEnemyStrike(enemy)&&npc.fighter.hp<before&&npc.figure.frame.name==='hit';
       npc.receiveCombatHit(s.now+800,enemy.character,9999);
       npc.update(s.now+900,.1,s.player,s.walkArea);
-      const injured=npc.figure.frame.name==='injured'&&!npc.canFight;
+      const injuryFrame=skin==='soldier'
+        ? npc.figure.texture.key==='npc-soldier-fallen' && npc.figure.frame.name.startsWith('fallen-')
+        : npc.figure.frame.name==='injured';
+      const injured=injuryFrame&&!npc.canFight;
       runs.push({skin,attack,selected,damage,once,blocked,hit,injured});
     }
     // 아군 마무리도 같은 습격 처치 이벤트를 사용한다.
@@ -4805,7 +4808,20 @@ test('사라진 다섯·새는 지붕·엉킨 그물: 증인은 각자 집에서
       throw Error('맵 재시작 시간 초과: ' + map);
     };
     const flush = () => { while (s.dialogue.isOpen) s.dialogue.advance(); if (s.storyChoice?.isOpen) s.storyChoice.cancel(); if (s.characterPanel?.isOpen) s.characterPanel.close(); };
-    const talk = id => { const n = s.npcs.find(n => n.def.id === id); if (!n) throw Error('NPC 없음: ' + id + ' @' + s.mapId); s.openDialogue(n.spot); const portrait = s.dialogue.portrait.texture.key; flush(); return portrait; };
+    const witnessPoses = {};
+    const talk = id => {
+      const n = s.npcs.find(n => n.def.id === id);
+      if (!n) throw Error('NPC 없음: ' + id + ' @' + s.mapId);
+      s.openDialogue(n.spot);
+      const portrait = s.dialogue.portrait.texture.key;
+      if (['fisher-daughter', 'herbalist-elder', 'evan'].includes(id)) {
+        const poses = new Set();
+        while (s.dialogue.isOpen) { poses.add(n.figure.frame.name); s.dialogue.advance(); }
+        witnessPoses[id] = [...poses];
+      }
+      flush();
+      return portrait;
+    };
     const inspectAll = () => { for (const spot of s.interactables.filter(i => i.id.startsWith('story-'))) { s.openDialogue(spot); flush(); } };
     // 사라진 다섯: 여관 주인 → 증인 셋(각자 집) → 에반 → 마르타
     talk('fog-innkeeper');
@@ -4827,12 +4843,17 @@ test('사라진 다섯·새는 지붕·엉킨 그물: 증인은 각자 집에서
     await restart('in-ferry-inn'); talk('innkeeper-wife');
     await restart('ferry-village'); talk('ferry-fisher');
     const innAfter = s.children.getByName('village-prop-inn').texture.key;
-    const result = { portraits, missing, art, ready, roof: s.quests['leaky-roof'].status, nets: s.quests['tangled-nets'].status,
+    const result = { portraits, witnessPoses, missing, art, ready, roof: s.quests['leaky-roof'].status, nets: s.quests['tangled-nets'].status,
       fish: s.inventory.items['dried-fish'] ?? 0, innBefore, innAfter };
     localStorage.removeItem('untitled-rpg.quests'); localStorage.removeItem('untitled-rpg.inventory');
     return result;
   })()`);
   assert.deepEqual(result.portraits, ['portrait-fisher-daughter', 'portrait-herbalist-elder', 'portrait-mill-apprentice']);
+  assert.deepEqual(result.witnessPoses, {
+    'fisher-daughter': ['fidget-twine', 'tell-story', 'lower-gaze'],
+    'herbalist-elder': ['add-herb', 'offer-cup', 'reassuring-nod'],
+    evan: ['riverbank-rise', 'riverbank-point', 'riverbank-warn'],
+  });
   assert.equal(result.missing, 'done');
   assert.deepEqual(result.art, ['quest-net-1', 'quest-reed-bundle']);
   assert.deepEqual(result.ready, [3, 3]);
@@ -4967,10 +4988,44 @@ test('미연결 조연: 토비·종 사내·어머니는 전용 외형과 초상
   assert.deepEqual(result.ids,['bell-ringer','bell-ringer-mother','ferry-fisher','fisher-daughter','fog-innkeeper','herbalist-elder','innkeeper-wife','mill-apprentice','toby']);
   for(const key of ['bellows','frozen','ringing','stopped','talkPause','resumed','set','asleep'])assert.equal(result[key],true,key);
   assert.deepEqual(result.portraits,['portrait-bell-ringer','portrait-bell-ringer-mother','portrait-toby','portrait-fisher-daughter','portrait-herbalist-elder','portrait-mill-apprentice','portrait-innkeeper-wife','portrait-ferry-fisher']);
-  assert.equal(result.cocoon,'npc-toby-cocoon');assert.equal(result.hero,'portrait-hero-neutral');assert.equal(result.idle,'npc-toby-idle');assert.equal(result.normalTalk,'npc-toby');
+  assert.equal(result.cocoon,'npc-toby-cocoon');assert.equal(result.hero,'portrait-hero-neutral');
+  assert.match(result.idle,/^npc-toby-(cardinal|diagonal)$/);assert.equal(result.normalTalk,'npc-toby');
   assert.equal(result.mother,'npc-bell-ringer-mother-idle');assert.equal(result.motherHeight,118);assert.equal(result.unsupported,false);assert.equal(result.unknown,false);
-  await load('east-stream&npcs=support&companion=none');
+  await load('east-stream&npcs=support&companion=none&action=sleepwalk');
   assert.equal(await evaluate(`window.__game.scene.getScene('game').textures.get('npc-bell-ringer-ring').getFrameNames().length`),4);
+  const motion = await evaluate(`(() => {
+    const scene = window.__game.scene.getScene('game');
+    const toby = scene.npcs.find(n => n.def.id === 'toby');
+    const first = toby.figure.frame.name;
+    toby.update(scene.now, .26, scene.player, scene.walkArea);
+    const sleepwalk = { texture: toby.figure.texture.key, advanced: toby.figure.frame.name !== first };
+    toby.setStoryAction();
+    const directions = [[0,1],[-1,0],[1,0],[0,-1],[-1,1],[1,1],[-1,-1],[1,-1]];
+    const frames = directions.map(([x,y]) => {
+      toby.faceTowards(toby.x + x * 100, toby.y + y * 100);
+      return toby.figure.frame.name;
+    });
+    toby.walkTo([{ x: toby.x + 80, y: toby.y }]);
+    toby.update(scene.now, .25, scene.player, scene.walkArea);
+    return { sleepwalk, frames, walk: toby.figure.frame.name };
+  })()`);
+  assert.deepEqual(motion.sleepwalk, { texture: 'npc-toby-sleepwalk', advanced: true });
+  assert.deepEqual(motion.frames, ['down-0', 'left-0', 'right-0', 'up-0', 'down-left-0', 'down-right-0', 'up-left-0', 'up-right-0']);
+  assert.match(motion.walk, /^right-[123]$/);
+
+  await load('east-stream&npcs=support&companion=none&actor=toby&action=sleepwalk');
+  const route = await evaluate(`(() => {
+    const scene = window.__game.scene.getScene('game');
+    const toby = scene.npcs.find(n => n.def.id === 'toby'), x = toby.x;
+    const frames = new Set([toby.figure.frame.name]);
+    for (let i = 0; i < 5; i++) {
+      toby.update(scene.now + i * 100, .1, scene.player, scene.walkArea);
+      frames.add(toby.figure.frame.name);
+    }
+    return { moving: toby.x > x, sleeping: toby.sleepwalking, frames: [...frames] };
+  })()`);
+  assert.equal(route.moving && route.sleeping, true);
+  assert(route.frames.length > 1 && route.frames.every(name => name.startsWith('sleepwalk-')));
 });
 
 test('미연결 계승자 다섯은 각자의 8방향 이동·초상화를 쓰며 본편에 일찍 배치되지 않는다', async () => {
@@ -5178,6 +5233,7 @@ test('안개 실 잣기는 바닥을 예고하고 시온·에반을 묶으며 �
     until(() => threads.active);
     const warned = pattern.commandBuffer.length > 0 && !threads.holds(p)
       && caster.character.sprite.list[0].frame.name === 'attack-left-1';
+    const realShadow = caster.character.shadow.frame.name === 'shadow-left-1';
     const hp = p.hp, bossHp = caster.character.hp;
     const caught = until(() => threads.holds(p));
     const heldArt = tethers.commandBuffer.length > 0;
@@ -5206,7 +5262,7 @@ test('안개 실 잣기는 바닥을 예고하고 시온·에반을 묶으며 �
     const evanFreed = until(() => !threads.holds(evan));
     tick(8);
     const evanWalked = evan.x !== evanX;
-    return {warned,caught,heldArt,rooted,selfFreed,walkingAgain,evanCaught,evanRooted,bodyUnaffected,missedEvan,evanFreed,evanWalked};
+    return {warned,realShadow,caught,heldArt,rooted,selfFreed,walkingAgain,evanCaught,evanRooted,bodyUnaffected,missedEvan,evanFreed,evanWalked};
   })()`);
   for (const [key, ok] of Object.entries(bound)) assert.equal(ok, true, key);
 
@@ -5277,4 +5333,55 @@ test('나루의 아홉 실내가 기본 행동 버튼으로 열리고 원본 크
     assert.deepEqual(room.background, [1536, 1024, 1, 1], room.map);
     assert.ok(room.safeArrival && room.props && room.returned, room.map);
   }
+});
+
+test('나루의 후반부 원화와 늪 마물의 잠복·출현을 재생한다', { timeout: 120000 }, async () => {
+  await load('east-stream&npcs=all&actor=bell-ringer&action=caught&companion=none');
+  const actions = await evaluate(`(() => {
+    const scene = window.__game.scene.getScene('game');
+    const groups = {
+      evan: ['riverbank', 'defense', 'oar-swing', 'rowing', 'mooring', 'rope-pull', 'cocoon-guard', 'reunion'],
+      morgan: ['pole-row', 'work', 'bell-ring', 'confession'],
+      marta: ['bell-repair', 'wax-earplugs'], finn: ['kite-flight'], 'mill-apprentice': ['bell-strike'],
+    };
+    const missing = [];
+    for (const [id, names] of Object.entries(groups)) {
+      const npc = scene.npcs.find(n => n.def.id === id);
+      for (const name of names) {
+        if (!npc.setStoryAction(name) || npc.figure.texture.key !== 'npc-' + id + '-' + name) missing.push([id, name]);
+      }
+    }
+    const caught = scene.npcs.find(n => n.def.id === 'bell-ringer').figure.texture.key;
+    return { missing, caught };
+  })()`);
+  assert.deepEqual(actions, { missing: [], caught: 'npc-bell-ringer-caught' });
+
+  for (const [group, count, first] of [['rescue', 4, 'cocoon-asleep'], ['bell-carry', 1, 'carry-step-1']]) {
+    await load('east-stream&companion=none&npcs=' + group);
+    const found = await evaluate(`window.__game.scene.getScene('game').children.list
+      .filter(o => o.texture?.key.startsWith('../assets/chapter2/'))
+      .map(o => [o.frame.name, o.texture.getFrameNames().length])`);
+    assert.equal(found.length, count);
+    assert(found.every(([name, size]) => name === first && size > 1), JSON.stringify(found));
+  }
+
+  await load('reed-swamp&companion=none');
+  const swamp = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    const enemy = s.enemies.find(e => e.kind === 'swamp-lurker');
+    const c = enemy.character, sprite = c.sprite;
+    const tick = (dt) => { s.now += dt * 1000; enemy.update(s.now, dt, s.player, s.walkArea, s.nav, () => false); };
+    s.player.placeAt(c.x - 1000, c.y);
+    tick(0); tick(.5);
+    const hidden = [sprite.image.frame.name, enemy.untouchable, c.levelTagText.visible];
+    s.player.placeAt(c.x - 100, c.y);
+    tick(0);
+    const emerge = sprite.image.texture.key;
+    tick(.5);
+    return { hidden, emerge, ready: enemy.state, frame: sprite.image.texture.key };
+  })()`);
+  assert.deepEqual(swamp.hidden, ['burrow-hidden', true, false]);
+  assert.equal(swamp.emerge, 'monster-swamp-lurker-emerge');
+  assert.equal(swamp.ready, 'chase');
+  assert.match(swamp.frame, /^monster-swamp-lurker-walk_/);
 });

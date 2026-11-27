@@ -3,6 +3,9 @@ import { FROST_SHELL, MONSTERS, monsterKind, type EnemyKey, type MonsterKind } f
 import { direction8, type Direction8 } from '../world/npcs';
 import phantomFadeUrl from '../assets/monsters/mist-phantom/fade.webp?url';
 import phantomFade from '../assets/monsters/mist-phantom/fade-frames.json';
+import weaverShadowUrl from '../assets/monsters/mist-weaver/shadowless-pounce-shadow.png?url';
+import swampBurrow from '../assets/monsters/swamp-lurker/burrow-frames.json';
+import swampEmerge from '../assets/monsters/swamp-lurker/emerge-frames.json';
 
 interface Frame {
   name: string; animation: string; direction: string; pose: number; sheet: string;
@@ -21,6 +24,11 @@ const idleKey = (kind: MonsterKind) => keyFor(kind, 'idle');
 const FADE_KEY = 'monster-mist-phantom-fade';
 export const FADE_FRAME_MS = { materialize: 130, dissipate: 120 };
 export type FadeMotion = keyof typeof FADE_FRAME_MS;
+const WEAVER_SHADOW = 'monster-mist-weaver-shadow';
+const SHADOW_DIRECTIONS: Direction8[] = ['down', 'left', 'right', 'up', 'down-left', 'down-right', 'up-left', 'up-right'];
+const SHADOW_CELL = 313;
+const SWAMP_TRANSITIONS = { burrow: swampBurrow.frames, emerge: swampEmerge.frames };
+const SWAMP_FRAME_MS = 120;
 // 입을 벌린 타격 프레임에서 잰 입 위치. 원본 시트 px, 프레임의 기준점 상대 좌표.
 const SWAMP_MOUTH: Record<Direction8, [number, number]> = {
   down: [13, -119], left: [-100, -97], right: [99, -97], up: [13, -223],
@@ -44,6 +52,13 @@ export function preloadMonsters(scene: Phaser.Scene, spawns: readonly { key: Ene
     if (kind === 'fog-crow' && !scene.textures.exists('monster-fog-afterimage')) {
       scene.load.image('monster-fog-afterimage', URLS['../assets/monsters/fog-crow/afterimage-512.webp']);
     }
+    if (kind === 'swamp-lurker') {
+      for (const name of Object.keys(SWAMP_TRANSITIONS)) {
+        const key = keyFor(kind, name);
+        if (!scene.textures.exists(key)) scene.load.image(key, URLS[`../assets/monsters/${kind}/${name}.webp`]);
+      }
+    }
+    if (kind === 'mist-weaver' && !scene.textures.exists(WEAVER_SHADOW)) scene.load.image(WEAVER_SHADOW, weaverShadowUrl);
     if (kind === 'mist-phantom' && !scene.textures.exists(FADE_KEY)) scene.load.image(FADE_KEY, phantomFadeUrl);
     if (kind === 'waterdrop-mushroom' && !scene.textures.exists('monster-water-shot')) {
       scene.load.image('monster-water-shot', URLS['../assets/monsters/waterdrop-mushroom/projectile.webp']);
@@ -67,6 +82,8 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   private clock = 0;
   /** 등장·쓰러짐 동작 중이면 그 동작과 시작한 뒤 흐른 시간 */
   private fade?: { motion: FadeMotion; elapsed: number };
+  private castShadow?: Phaser.GameObjects.Image;
+  private swampMotion?: { phase: keyof typeof SWAMP_TRANSITIONS; elapsed: number };
 
   constructor(scene: Phaser.Scene, readonly kind: MonsterKind) {
     super(scene, 0, 0);
@@ -94,6 +111,14 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     if (kind === 'ashen-moth') this.image.setY(-28);
     if (kind === 'fog-crow') this.image.setY(-12);
     this.add(this.image);
+    if (kind === 'swamp-lurker') {
+      for (const [name, frames] of Object.entries(SWAMP_TRANSITIONS)) {
+        const texture = scene.textures.get(keyFor(kind, name));
+        for (const frame of frames) {
+          if (!texture.has(frame.name)) texture.add(frame.name, 0, frame.x, frame.y, frame.w, frame.h);
+        }
+      }
+    }
     if (kind === 'mist-phantom') {
       const texture = scene.textures.get(FADE_KEY);
       phantomFade.frames.forEach((name, i) => {
@@ -158,6 +183,30 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     return { x, y };
   }
 
+  attachWeaverShadow(shadow: Phaser.GameObjects.Image): void {
+    if (this.kind !== 'mist-weaver') return;
+    const texture = this.scene.textures.get(WEAVER_SHADOW);
+    for (let row = 0; row < SHADOW_DIRECTIONS.length; row++) {
+      for (let pose = 0; pose < 4; pose++) {
+        const name = `shadow-${SHADOW_DIRECTIONS[row]}-${pose}`;
+        if (!texture.has(name)) texture.add(name, 0, pose * SHADOW_CELL, row * SHADOW_CELL, SHADOW_CELL, SHADOW_CELL);
+      }
+    }
+    this.castShadow = shadow.setTexture(WEAVER_SHADOW, 'shadow-down-0').setDisplaySize(180, 180).setAlpha(0.75);
+    this.showFrame();
+  }
+
+  get swampConcealed(): boolean { return this.swampMotion?.phase === 'burrow'; }
+
+  /** Returns true while the ground transition owns the sprite and pauses the chase. */
+  setSwampBurrowed(burrowed: boolean): boolean {
+    if (burrowed !== this.swampConcealed) {
+      this.swampMotion = { phase: burrowed ? 'burrow' : 'emerge', elapsed: 0 };
+      this.showFrame();
+    }
+    return this.swampMotion !== undefined;
+  }
+
   swampMouthOffset(): { x: number; y: number } {
     const [x, y] = SWAMP_MOUTH[this.direction];
     const scale = this.scale0 * this.frames.get(`attack-${this.direction}-2`)!.scale;
@@ -171,6 +220,12 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   advance(deltaMs: number): void {
     this.elapsed += deltaMs * this.anims.timeScale;
     this.clock += deltaMs;
+    if (this.swampMotion) {
+      this.swampMotion.elapsed += deltaMs;
+      if (this.swampMotion.phase === 'emerge' && this.swampMotion.elapsed >= SWAMP_FRAME_MS * swampEmerge.frames.length) {
+        this.swampMotion = undefined;
+      }
+    }
     if (this.fade) {
       this.fade.elapsed += deltaMs;
       // 등장이 끝나면 평소 그림으로 돌아간다.
@@ -198,12 +253,21 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   private showFrame(): void {
     if (!this.sheetData) return;
     if (this.fade) { this.showFade(this.fade.motion, this.fade.elapsed); return; }
+    if (this.swampMotion) {
+      const { phase, elapsed } = this.swampMotion;
+      const frames = SWAMP_TRANSITIONS[phase];
+      const frame = frames[Math.min(frames.length - 1, Math.floor(elapsed / SWAMP_FRAME_MS))];
+      this.image.setTexture(keyFor(this.kind, phase), frame.name).setOrigin(frame.originX, frame.originY)
+        .setScale(MONSTERS[this.kind].height / 270).setFlipX(this.direction.endsWith('left'));
+      return;
+    }
     const flight = this.kind === 'fog-crow';
     const cycle = this.sheetData.animations?.walk;
     const poses = flight ? (cycle?.poses ?? [0, 1, 2, 3]) : [1, 2, 3, 2];
     const animate = this.motion === 'walk' || flight;
     const fps = flight ? (cycle?.fps ?? 10) : 8;
     const pose = this.attackPose ?? (animate ? poses[Math.floor(this.elapsed * fps / 1000) % poses.length] : 0);
+    this.castShadow?.setFrame(`shadow-${this.direction}-${pose}`);
     const f = this.frames.get(`${this.attackPose === undefined ? 'walk' : 'attack'}-${this.direction}-${pose}`)
       ?? this.frames.get(`walk-${this.direction}-${pose}`)!;
     const texture = this.scene.textures.get(keyFor(this.kind, f.sheet));

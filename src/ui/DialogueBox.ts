@@ -107,6 +107,7 @@ export class DialogueBox {
   private shown = 0;
   private elapsed = 0;
   private onClose?: () => void;
+  private onLine?: (index: number) => void;
   private width = 0;
 
   constructor(scene: Phaser.Scene) {
@@ -151,10 +152,11 @@ export class DialogueBox {
     return this.lines.length > 0;
   }
 
-  open(lines: readonly DialogueLine[], onClose?: () => void): void {
+  open(lines: readonly DialogueLine[], onClose?: () => void, onLine?: (index: number) => void): void {
     if (lines.length === 0) return;
     this.lines = lines;
     this.onClose = onClose;
+    this.onLine = onLine;
     this.index = 0;
     this.setVisible(true);
     this.showLine();
@@ -183,6 +185,7 @@ export class DialogueBox {
     this.setVisible(false);
     const onClose = this.onClose;
     this.onClose = undefined;
+    this.onLine = undefined;
     onClose?.();
   }
 
@@ -209,6 +212,7 @@ export class DialogueBox {
   }
 
   private showLine(): void {
+    this.onLine?.(this.index);
     const line = this.lines[this.index];
     this.shown = 0;
     this.elapsed = 0;
