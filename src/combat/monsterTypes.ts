@@ -86,8 +86,8 @@ export function monsterDamageTaken(damage: number, defense = 1): number {
 export const ASH_SLOW = { durationMs: 2000, speedScale: 0.55 };
 
 export const WATER_SHOT = { speed: 360, lifetimeMs: 1800, radiusX: 24, radiusY: 30 };
-/** damageScale: 몬스터 공격력에 곱하는 배율 (보스의 부식 산탄 등). 없으면 1 */
-export interface EnemyHit { fromX: number; fromY: number; toX: number; toY: number; radiusX: number; radiusY: number; dx: number; dy: number; damageScale?: number }
+/** damageScale: 몬스터 공격력에 곱하는 배율 (보스의 부식 산탄 등). 없으면 1. melee: 근접 스텝 공격 여부 */
+export interface EnemyHit { fromX: number; fromY: number; toX: number; toY: number; radiusX: number; radiusY: number; dx: number; dy: number; damageScale?: number; melee?: boolean }
 /** Swept ellipse: prevents fast projectiles and charges tunnelling between game steps. */
 export function enemyHitReaches(hit: EnemyHit, x: number, y: number): boolean {
   const ax = (x - hit.fromX) / hit.radiusX, ay = (y - hit.fromY) / hit.radiusY;

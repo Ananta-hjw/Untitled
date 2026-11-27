@@ -3,7 +3,7 @@ import type { MonsterKind } from './monsterTypes.ts';
 /**
  * 중급 이상 적의 연타 묶음 (게임 시계 ms).
  * 한 묶음은 타마다의 예비 동작 길이이고, 첫 타가 끝나면 gapMs 쉬고 곧장 다음 타를 준비한다.
- * 예비 동작 중에는 주인공을 따라 방향을 고치며 다가서다가(trackLockMs 전부터는 굳힌다) 친다.
+ * 예비 동작 중에는 옆자리로 다가선다(방향은 enemyTracking.ts의 지연 추적이 고치고, 안광 무렵 굳힌다).
  * 묶음 가운데 유독 긴 예비 동작은 늦게 들어오는 한 타(지연 타)다.
  * 묶음 전체가 한 기술이다: 연타 중에는 다른 기술을 쓰지 않는다(CLAUDE.md).
  * Phaser를 쓰지 않아 tools/enemy-combo.test.mjs가 직접 검사한다.
@@ -17,8 +17,6 @@ export const ENEMY_COMBO = {
   breakStunMs: 1800,
   /** 둘째 타부터의 공격력 배율 */
   followDamageScale: 0.75,
-  /** 닿기 이만큼 전부터는 방향을 굳힌다 (그 전까지는 주인공을 따라 고친다) */
-  trackLockMs: 150,
   /** 예비 동작 중 다가서는 빠르기 (이동 속도 배율) */
   trackSpeedScale: 1.1,
 } as const;
@@ -52,9 +50,4 @@ export function pickCombo(kind: MonsterKind | undefined, roll: number): ComboPat
   if (!list?.length) return undefined;
   const i = Math.min(list.length - 1, Math.max(0, Math.floor(roll * list.length)));
   return list[i];
-}
-
-/** 예비 동작 elapsed ms에 아직 주인공을 따라 방향을 고치는 중인지 */
-export function isTracking(elapsed: number, windupMs: number, lockMs: number = ENEMY_COMBO.trackLockMs): boolean {
-  return elapsed >= 0 && elapsed < windupMs - lockMs;
 }

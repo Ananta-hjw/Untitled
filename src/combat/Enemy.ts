@@ -8,8 +8,9 @@ import type { NavGrid } from '../world/navGrid';
 import type { WalkArea } from '../world/walkArea';
 import { MonsterSprite } from './MonsterSprite';
 import { MONSTERS, WATER_SHOT, isCharger, isEliteKind, monsterKind, enemyHitReaches, type EnemyHit, type EnemyKey, type MonsterKind, type MonsterStats } from './monsterTypes';
-import { ENEMY_COMBO, isTracking, pickCombo, type ComboPattern } from './enemyCombo';
+import { ENEMY_COMBO, pickCombo, type ComboPattern } from './enemyCombo';
 import { bendCharge } from './deflect';
+import { buildMeleeLungeHit, plannedMeleeLunge, stepAimTracking, trackLockMs, trackingTurnRate } from './enemyTracking';
 import { FOG_CROW, fogEscape } from './fogCrow';
 import { scaleMonster } from './monsterLevel';
 import { BOSS, fanDirections, insideEllipse, retreatDone, shouldVeil, wantsVolley, type BossPhase } from './bossPattern';
@@ -49,6 +50,11 @@ export class Enemy {
   readonly level: number;
   private readonly aim = { x: 1, y: 0 };
   private chargeProgress = 0;
+  /** 근접 전진 스텝(Lunge)의 목표 거리·진행도·시작 위치 */
+  private lungeDist = 0;
+  private lungeProgress = 0;
+  private lungeStartX = 0;
+  private lungeStartY = 0;
   private projectile?: { image: Phaser.GameObjects.Image; x: number; y: number; dx: number; dy: number; expires: number };
   private readonly waterJet?: SwampWaterJet;
   state: State = 'wander';
@@ -91,6 +97,7 @@ export class Enemy {
   readonly hazards?: BossHazards;
   private veilUsed = false;
   private shotReadyAt = 0;
+  private volleyStartedAt?: number;
   private volleyDirs: Array<{ x: number; y: number }> = [];
   /** 이번 연타 묶음(타마다의 예비 동작, combat/enemyCombo.ts)과 지금 몇 번째 타인지 */
   private comboWindups?: ComboPattern;
@@ -217,7 +224,7 @@ export class Enemy {
           this.chainTotal = total;
           this.chainLeft = total - 1;
           this.comboParries = 0;
-          this.beginWindup(time, dx, ranged || charge ? dy : 0);
+          this.beginWindup(time, dx, dy);
           if (this.waterJet && c.sprite instanceof MonsterSprite) {
             const mouth = c.sprite.swampMouthOffset();
             this.waterJet.prepare(area, c, { x: c.x + mouth.x, y: c.y + mouth.y }, this.aim.x, this.aim.y, Math.hypot(dx, dy));
@@ -241,7 +248,7 @@ export class Enemy {
       case 'windup':
         c.setMotion(false);
         this.trackDuringWindup(time, dt, opponent, area);
-        this.updateStrike(time, onStrike, area, onGlint);
+        this.updateStrike(time, dt, opponent, onStrike, area, onGlint);
         break;
 
       case 'recover':
@@ -250,8 +257,7 @@ export class Enemy {
         if (this.chainPending && opponent.alive) {
           // 연속 공격의 다음 타: 쉬는 동안 움직인 주인공 쪽을 다시 겨눈다.
           this.chainPending = false;
-          const aimY = isCharger(this.kind) || this.kind === 'waterdrop-mushroom' || this.waterJet ? dy : 0;
-          this.beginWindup(time, dx, aimY);
+          this.beginWindup(time, dx, dy);
         } else {
           this.chainPending = false;
           this.state = 'chase';
@@ -259,7 +265,20 @@ export class Enemy {
         break;
 
       case 'volley': {
-        // 웅크렸다가 겨눈 방향으로 부채꼴 산탄
+        // 웅크렸다가 겨눈 방향으로 부채꼴 산탄 (예고 앞 70% 구간까지 지연 추적 후 잠금)
+        const elapsed = this.volleyStartedAt !== undefined ? time - this.volleyStartedAt : BOSS.shot.windupMs;
+        if (elapsed <= BOSS.shot.windupMs * 0.7 && dt > 0 && opponent.alive) {
+          const next = stepAimTracking(this.aim, dx, dy, dt, trackingTurnRate(this.kind));
+          this.aim.x = next.x;
+          this.aim.y = next.y;
+          this.volleyDirs = fanDirections(this.aim.x, this.aim.y, BOSS.shot.count, BOSS.shot.spreadDeg);
+          this.hazards?.showAim(c.x, c.y, this.volleyDirs, time, this.timer);
+          if (c.sprite instanceof MonsterSprite) c.sprite.setMovement(this.aim.x, this.aim.y);
+        }
+        if (!this.glintShown && this.timer - time <= BLOCK.glintLeadMs) {
+          this.glintShown = true;
+          onGlint?.(this, c.x + this.aim.x * 36, c.y - Math.round((this.stats.height || 120) * 0.56), false);
+        }
         c.setMotion(false, this.aim.x);
         const t = 1 - Math.max(0, this.timer - time) / BOSS.shot.windupMs;
         c.sprite.setScale(1 + 0.12 * t, 1 - 0.14 * t);
@@ -267,6 +286,7 @@ export class Enemy {
           c.sprite.setScale(1);
           this.hazards?.fire(c.x, c.y, this.volleyDirs);
           this.shotReadyAt = time + BOSS.shot.cooldownMs;
+          this.volleyStartedAt = undefined;
           this.state = 'recover';
           this.timer = time + BOSS.shot.recoverMs;
         }
@@ -521,6 +541,8 @@ export class Enemy {
     this.aim.y = dy / distance;
     this.volleyDirs = fanDirections(this.aim.x, this.aim.y, BOSS.shot.count, BOSS.shot.spreadDeg);
     this.state = 'volley';
+    this.glintShown = false;
+    this.volleyStartedAt = time;
     this.timer = time + BOSS.shot.windupMs;
     this.hazards?.showAim(c.x, c.y, this.volleyDirs, time, this.timer);
     c.setMotion(false, dx);
@@ -590,8 +612,10 @@ export class Enemy {
   private cancelStrike(): void {
     this.deferredParry = undefined;
     this.attackStartedAt = undefined;
+    this.volleyStartedAt = undefined;
     this.strikeLanded = false;
     this.glintShown = false;
+    this.lungeProgress = 0;
     this.waterJet?.clear();
     if (this.character.sprite instanceof MonsterSprite) this.character.sprite.endStrike();
   }
@@ -608,30 +632,80 @@ export class Enemy {
     this.chargeProgress = 0;
     const base = this.comboWindups?.[this.comboIndex] ?? this.stats.windupMs;
     this.windupMs = base * (time < this.chillUntil ? this.chillWindup : 1);
+    this.lungeDist = plannedMeleeLunge(this.kind, distance);
+    this.lungeProgress = 0;
+    this.lungeStartX = this.character.x;
+    this.lungeStartY = this.character.y;
     this.character.setMotion(false, dx);
     if (this.character.sprite instanceof MonsterSprite) this.character.sprite.setMovement(dx, dy);
     this.character.sprite.setScale(1).setPosition(0, 0);
   }
 
   /** 명중과 자세 모두 씬의 게임 시계를 사용한다. Tween 완료로 피해를 주지 않는다. */
-  private updateStrike(time: number, onStrike: (enemy: Enemy, hit?: EnemyHit) => boolean | void,
-    area: WalkArea, onGlint?: GlintHandler): void {
+  private updateStrike(
+    time: number,
+    dt: number,
+    opponent: { x: number; y: number; alive: boolean },
+    onStrike: (enemy: Enemy, hit?: EnemyHit) => boolean | void,
+    area: WalkArea,
+    onGlint?: GlintHandler,
+  ): void {
     if (this.attackStartedAt === undefined) return;
     const elapsed = time - this.attackStartedAt;
-    const sprite = this.character.sprite;
+    const c = this.character;
+    const sprite = c.sprite;
     const { strikeMs, returnMs, recoverMs } = this.stats;
     const windupMs = this.windupMs;
     const strikeAt = windupMs + strikeMs;
     const endAt = strikeAt + returnMs;
-    // 공격이 닿기 BLOCK.glintLeadMs 전: 패링 타이밍을 읽어낼 수 있게 무기/앞쪽에서 십자 안광이 번쩍인다.
-    const impactLeadAt = this.waterJet || isCharger(this.kind) ? windupMs : strikeAt;
+    const immediate = this.waterJet !== undefined || isCharger(this.kind);
+    const lockAt = trackLockMs(windupMs, strikeMs, immediate);
+
+    // 1) 지연 추적(Late Tracking): 예고 앞쪽(안광 전) 구간에는 적이 플레이어 쪽으로 계속 방향을 틀며 조준한다.
+    if (elapsed <= lockAt && dt > 0 && opponent.alive) {
+      const tdx = opponent.x - c.x;
+      const tdy = opponent.y - c.y;
+      const tdist = Math.hypot(tdx, tdy);
+      if (tdist > 1e-3) {
+        const next = stepAimTracking(this.aim, tdx, tdy, dt, trackingTurnRate(this.kind));
+        this.aim.x = next.x;
+        this.aim.y = next.y;
+        this.lungeDist = plannedMeleeLunge(this.kind, tdist);
+        c.face(this.aim.x);
+        if (sprite instanceof MonsterSprite) sprite.setMovement(this.aim.x, this.aim.y);
+        if (this.waterJet && sprite instanceof MonsterSprite) {
+          const mouth = sprite.swampMouthOffset();
+          this.waterJet.prepare(area, c, { x: c.x + mouth.x, y: c.y + mouth.y }, this.aim.x, this.aim.y, tdist);
+        }
+      }
+    }
+
+    // 2) 공격이 닿기 BLOCK.glintLeadMs 전: 조준 잠금과 맞물려 십자 안광이 번쩍인다.
+    const impactLeadAt = immediate ? windupMs : strikeAt;
     if (!this.glintShown && elapsed >= Math.max(0, impactLeadAt - BLOCK.glintLeadMs)) {
       this.glintShown = true;
-      const c = this.character;
       const gx = c.x + this.aim.x * 36;
       const gy = c.y - Math.round((this.stats.height || 96) * 0.56) + this.aim.y * 12;
       onGlint?.(this, gx, gy, false);
     }
+
+    // 3) 근접 적 전진 스텝(Forward Lunge): 잠근 2D 방향으로 실제 몸을 훅 미끄러뜨려 걷기 날먹 회피를 차단한다.
+    const meleeLunge = !this.waterJet && !isCharger(this.kind) && this.kind !== 'waterdrop-mushroom';
+    if (meleeLunge && elapsed >= windupMs) {
+      if (this.lungeProgress === 0) {
+        this.lungeStartX = c.x;
+        this.lungeStartY = c.y;
+      }
+      const raw = Math.min(1, (elapsed - windupMs) / Math.max(1, strikeMs));
+      const eased = raw * raw;
+      if (eased > this.lungeProgress) {
+        const stepDist = (eased - this.lungeProgress) * this.lungeDist;
+        area.move(c.x, c.y, this.aim.x * stepDist, this.aim.y * stepDist, this.scratch);
+        c.placeAt(this.scratch.x, this.scratch.y);
+        this.lungeProgress = eased;
+      }
+    }
+
     if (sprite instanceof MonsterSprite) {
       sprite.showAttack(elapsed, windupMs, strikeMs, returnMs);
       if (this.waterJet) {
@@ -648,7 +722,7 @@ export class Enemy {
       } else if (isCharger(this.kind) && elapsed >= windupMs) {
         const progress = Math.min(1, (elapsed - windupMs) / strikeMs);
         if (progress > this.chargeProgress) {
-          const c = this.character, fromX = c.x, fromY = c.y;
+          const fromX = c.x, fromY = c.y;
           const distance = (progress - this.chargeProgress) * (this.kind === 'fog-crow' ? FOG_CROW.swoopDistance : 260);
           area.move(c.x, c.y, this.aim.x * distance, this.aim.y * distance, this.scratch);
           c.placeAt(this.scratch.x, this.scratch.y);
@@ -660,9 +734,9 @@ export class Enemy {
             if (this.state !== 'windup') return;
           }
         }
-      } else if (this.kind !== 'waterdrop-mushroom') {
-        const reach = elapsed < windupMs ? 0 : elapsed < strikeAt ? 46 * ((elapsed - windupMs) / strikeMs) ** 2
-          : 46 * (1 - Math.min(1, (elapsed - strikeAt) / returnMs));
+      } else if (meleeLunge) {
+        const reach = elapsed < windupMs ? 0 : elapsed < strikeAt ? 18 * ((elapsed - windupMs) / strikeMs) ** 2
+          : 18 * (1 - Math.min(1, (elapsed - strikeAt) / returnMs));
         sprite.setPosition(this.aim.x * reach, this.aim.y * reach);
       }
     } else if (elapsed < windupMs) {
@@ -670,17 +744,17 @@ export class Enemy {
       sprite.setScale(1 + 0.25 * p, 1 - 0.3 * p);
     } else if (elapsed < strikeAt) {
       const p = ((elapsed - windupMs) / strikeMs) ** 2;
-      sprite.setX(this.character.facing * 46 * p).setScale(1.25 - 0.35 * p, 0.7 + 0.45 * p);
+      sprite.setPosition(this.aim.x * 18 * p, this.aim.y * 18 * p).setScale(1.25 - 0.35 * p, 0.7 + 0.45 * p);
     } else {
       const p = 1 - (1 - Math.min(1, (elapsed - strikeAt) / returnMs)) ** 2;
-      sprite.setX(this.character.facing * 46 * (1 - p)).setScale(0.9 + 0.1 * p, 1.15 - 0.15 * p);
+      sprite.setPosition(this.aim.x * 18 * (1 - p), this.aim.y * 18 * (1 - p)).setScale(0.9 + 0.1 * p, 1.15 - 0.15 * p);
     }
     if (elapsed >= strikeAt && !this.strikeLanded && !this.waterJet && !isCharger(this.kind)) {
       this.strikeLanded = true;
       this.lastStrikeAt = this.attackStartedAt + strikeAt;
       if (sprite instanceof MonsterSprite) sprite.showAttack(strikeAt - 1, windupMs, strikeMs, returnMs);
       if (this.kind === 'waterdrop-mushroom') this.fireProjectile(time);
-      else onStrike(this);
+      else onStrike(this, buildMeleeLungeHit(this.kind, this.lungeStartX, this.lungeStartY, c.x, c.y, this.aim));
       if (this.state !== 'windup') return;
     }
     if (elapsed >= endAt) {
@@ -758,27 +832,15 @@ export class Enemy {
   }
 
   /**
-   * 연타 묶음을 쓰는 적은 예비 동작 동안 주인공을 따라 방향을 고치며 다가선다.
-   * 닿기 ENEMY_COMBO.trackLockMs 전부터는 방향을 굳혀, 마지막 순간에 크게 비켜서면 빗나간다.
+   * 연타 묶음을 쓰는 근접 적은 예비 동작 동안 주인공의 옆자리로 다가선다.
+   * 조준이 굳는 순간(enemyTracking.ts의 trackLockMs)부터는 서서 친다.
    */
   private trackDuringWindup(time: number, dt: number, opponent: { x: number; y: number }, area: WalkArea): void {
-    if (!this.comboWindups || this.boss || this.attackStartedAt === undefined || this.waterJet) return;
-    if (!isTracking(time - this.attackStartedAt, this.windupMs)) return;
+    // 방향 고치기는 updateStrike의 지연 추적(enemyTracking.ts)이 맡는다. 여기서는 근접 연타 적이 옆자리로 다가서기만 한다.
+    if (!this.comboWindups || this.boss || this.attackStartedAt === undefined || this.waterJet || isCharger(this.kind)) return;
+    if (time - this.attackStartedAt > trackLockMs(this.windupMs, this.stats.strikeMs, false)) return;
     const c = this.character;
-    const dx = opponent.x - c.x, dy = opponent.y - c.y;
-    if (isCharger(this.kind)) {
-      const d = Math.hypot(dx, dy) || 1;
-      this.aim.x = dx / d;
-      this.aim.y = dy / d;
-      c.setMotion(false, dx);
-      if (c.sprite instanceof MonsterSprite) c.sprite.setMovement(dx, dy);
-      return;
-    }
-    this.aim.x = Math.sign(dx) || this.aim.x;
-    this.aim.y = 0;
-    c.setMotion(false, dx);
-    if (c.sprite instanceof MonsterSprite) c.sprite.setMovement(dx, dy);
-    // 옆자리(같은 높이)로 붙는다. 이미 닿는 자리면 서 있는다.
+    const dx = opponent.x - c.x;
     const side = dx > 0 ? -1 : 1;
     const goalX = opponent.x + side * (ENEMY.attackRangeX - 25), goalY = opponent.y;
     const gx = goalX - c.x, gy = goalY - c.y;

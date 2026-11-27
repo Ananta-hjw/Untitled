@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { BLOCK } from '../src/config.ts';
-import { COMBO_PATTERNS, ENEMY_COMBO, hasCombos, isTracking, pickCombo } from '../src/combat/enemyCombo.ts';
+import { COMBO_PATTERNS, ENEMY_COMBO, hasCombos, pickCombo } from '../src/combat/enemyCombo.ts';
 import { MONSTERS, isCharger, isEliteKind } from '../src/combat/monsterTypes.ts';
 import { bossParryOutcome } from '../src/combat/parry.ts';
 
@@ -18,8 +18,6 @@ test('연타 묶음의 첫 타는 몬스터의 예비 동작과 같고, 이어�
       assert.equal(pattern[0], MONSTERS[kind].windupMs, `${kind} 첫 타`);
       // 보고 반응해 막을 수 있어야 한다: 예비 동작 + 쉬는 틈이 막기 창보다 길다.
       for (const w of pattern) assert.ok(w + ENEMY_COMBO.gapMs > BLOCK.windowMs, `${kind} ${w}`);
-      // 방향을 굳힌 뒤에 칠 시간이 남는다.
-      for (const w of pattern) assert.ok(w > ENEMY_COMBO.trackLockMs, `${kind} ${w}`);
     }
   }
 });
@@ -32,12 +30,6 @@ test('연타 묶음 고르기: 굴린 값으로 묶음을 고르고 범위를 �
   assert.equal(pickCombo('corrosion-tracker', -1), list[0]);
 });
 
-test('예비 동작 중 따라오다가 닿기 trackLockMs 전부터는 방향을 굳힌다', () => {
-  assert.equal(isTracking(0, 320), true);
-  assert.equal(isTracking(320 - ENEMY_COMBO.trackLockMs - 1, 320), true);
-  assert.equal(isTracking(320 - ENEMY_COMBO.trackLockMs, 320), false);
-  assert.equal(isTracking(-1, 320), false);
-});
 
 test('연타 중 패링: 남은 타가 있으면 이어 치고, 마지막 타까지 정밀 패링하면 파훼한다(보스가 아니어도)', () => {
   assert.equal(bossParryOutcome(true, 1, 1, true), 'continueChain');
