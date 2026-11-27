@@ -15,7 +15,6 @@ import { MistWeaverEffects, preloadMistWeaverEffects } from '../combat/MistWeave
 import { FogApparition, placePreviewBell, preloadFogEncounter, SHRINE_BELL_SPOT, SIA_APPARITION_SPOT } from '../story/fogApparition';
 import { ASH_SLOW, MONSTERS, enemyHitReaches, isCharger, monsterDamageTaken, shellBlocks, type EnemyHit, type EnemyKey } from '../combat/monsterTypes';
 import { ABSORB, ABSORB_LOOK, NO_ABSORB, absorbDamageScale, absorbElementOf, absorbParry, absorbReach, activeAbsorb, elementReady, insidePool, spendElement, type AbsorbState } from '../combat/absorb';
-import { DEFLECT, deflectDirection, pickDeflectTarget } from '../combat/deflect';
 import { isJustDodge, slowMotionScale, strikeReaches } from '../combat/justDodge';
 import { critMultiplier, gameTimeScale, heavierKind, hitStopMs, strikeKind, type HitKind, type StrikeHitKind } from '../combat/hitFeel';
 import {
@@ -31,6 +30,7 @@ import {
   parryZoom,
   recordParryWhiff,
   recoverInternal,
+  reflectDirection,
   stepInternalHeal,
   type ParryChainState,
   type WhiffState,
@@ -62,11 +62,10 @@ import {
   ATTACK_FEEL,
   HERO_WALK_NATURAL_SPEED,
   MANA,
-  SPIN_SLASH,
   RESONANCE,
   BLOCK,
 } from '../config';
-import { addMana, inSpinRadius, regenMana } from '../combat/mana';
+import { addMana, regenMana } from '../combat/mana';
 import { DUSK_MOTH_LEVEL, levelHint, spawnLevel, xpForKill } from '../combat/monsterLevel';
 import { allocate, deriveStats, mitigate, pointsLeft, totalStats, type DerivedStats, type StatId } from '../entities/attributes';
 import { CHARACTER_SAVE_KEY, newCharacter, parseCharacter, serializeCharacter, type CharacterData } from '../entities/characterData';
@@ -86,7 +85,7 @@ import { ActionButton } from '../ui/ActionButton';
 import { actionIcon, createActionIcons, type ActionIcon } from '../ui/actionIcons';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { HERO_SPRITE_HEIGHT, HeroSprite, preloadHeroSprite } from '../entities/HeroSprite';
-import { attackFacingFor, attackVector, dodgeFacingFor, insideAttackLane, insideDiagonalReach, insideFrontReach, movementFacing, strikePoseStart } from '../entities/heroFrames';
+import { attackFacingFor, attackVector, dodgeFacingFor, insideAttackLane, insideDiagonalReach, insideFrontReach, insideUpDiagonalReach, movementFacing, strikePoseStart } from '../entities/heroFrames';
 import { createPlaceholderArt } from '../world/placeholderArt';
 import type { WalkArea } from '../world/walkArea';
 import { NavGrid } from '../world/navGrid';
@@ -125,7 +124,7 @@ import { Minimap } from '../ui/Minimap';
 import { QuestTracker } from '../ui/QuestTracker';
 import { StoryChoice } from '../ui/StoryChoice';
 import { CLINIC_BED_SPOT, HOME_BED_SPOT, REST_POINTS, herbBonus, REST_SAVE_KEY, canRest, parseRestPoint, serializeRestPoint, type RestPointId } from '../story/restPoints';
-import { DUSK_MOTH_POINTS, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, chapterCanTalk, hasDuskMoths, lineaRecovery, isDusk, raidSpawns, raidSpawnsAnyStep, villageSignDialogue, INSPECTION_LINES, type RaidSpawn } from '../story/chapterOne';
+import { DUSK_MOTH_POINTS, SIA_KNOT_SPOT, chapterPhase, chapterNpcs, chapterSpots, chapterDialogue, chapterCanTalk, hasDuskMoths, lineaRecovery, isDusk, raidSpawns, raidSpawnsAnyStep, villageSignDialogue, INSPECTION_LINES, type RaidSpawn } from '../story/chapterOne';
 import { BOSS, entersPhaseTwo } from '../combat/bossPattern';
 import { COMPANION, COMPANION_SAVE_KEY, canEngage, companionDamage, companionNpcDef, followPlan, followSpot, isCompanionId, parseCompanion, type CompanionId } from '../entities/companion';
 import { ARENA, bossLanding, chooseArena, entryPoint, insideArena, pushTowardArena, type Arena } from '../combat/bossArena';
@@ -264,9 +263,11 @@ export class GameScene extends Phaser.Scene {
   private parryStartedAt = -Infinity;
   private parryUntil = 0;
   private parryReadyAt = 0;
-  /** 헛막기 연타 시 정밀 패링 창 축소 추적(130 → 80 → 60ms) */
+  /** 헛막기 연타 시 정밀 패링 창 축소 추적(170 → 110 → 80ms) */
   private parryWhiff: WhiffState = { count: 0, lastWhiffAt: -Infinity };
   private parryPendingWhiff = false;
+  private parryWhiffDeferred = false;
+  private blockNeedsRelease = false;
   private activePerfectWindowMs = BLOCK.perfectWindowMs;
   /** 연속 정밀 패링 체인(음정 상승·연출 격상) */
   private parryChain: ParryChainState = { count: 0, lastAt: -Infinity };
@@ -291,6 +292,9 @@ export class GameScene extends Phaser.Scene {
   private absorb: AbsorbState = NO_ABSORB;
   /** 흡수한 부식을 풀어 남긴 시온 편 웅덩이 */
   private allyPools: Array<{ x: number; y: number; until: number; nextTick: number; tier: number }> = [];
+  /** 패링으로 원래 온 방향으로 반사된 원거리 탄환 */
+  private reflectedShots: Array<{ x: number; y: number; dx: number; dy: number; travelled: number; damage: number; unbound: boolean; source: Enemy }> = [];
+  private reflectedGraphics?: Phaser.GameObjects.Graphics;
   private absorbGround?: Phaser.GameObjects.Graphics;
   private absorbGlow?: Phaser.GameObjects.Graphics;
   private internalHealAt = 0;
@@ -316,7 +320,7 @@ export class GameScene extends Phaser.Scene {
   private impacts!: ImpactEffects;
   /** 넉백으로 미끄러지는 캐릭터가 마지막으로 먼지를 일으킨 시각 */
   private readonly slideDustAt = new WeakMap<Character, number>();
-  /** 이 시각(게임 시계)까지 시작한 공격 한 번은 반격으로 강해진다 */
+  /** 이 시각(게임 시계)까지 시작한 공격 한 번은 저스트 회피 일섬(2배)으로 나간다 */
   private counterUntil = 0;
   private nextGhostAt = 0;
   private readonly dodgeDirection = new Phaser.Math.Vector2();
@@ -391,9 +395,6 @@ export class GameScene extends Phaser.Scene {
   /** HUD에 마지막으로 그린 마나(정수). 바뀔 때만 다시 그린다. */
   private shownMp = -1;
   private carriedMp?: number;
-  /** 회전 베기가 맞히는 시각 (게임 시계). 없으면 쓰는 중이 아님 */
-  private spinHitAt?: number;
-  private nextSpinAt = 0;
   /** 공명 게이지(구슬 조각 수, combat/resonance.ts)와 공명이 끝나는 시각(게임 시계) */
   private resonanceCharge = 0;
   private resonanceUntil = 0;
@@ -433,6 +434,8 @@ export class GameScene extends Phaser.Scene {
   /** 살펴보기 자리의 표시와 소품 그림 (퀘스트가 바뀔 때마다 지우고 다시 그린다) */
   private storyMarkers: Array<Phaser.GameObjects.Text | Phaser.GameObjects.Image> = [];
   private raidEnemies = new Set<Enemy>();
+  /** 2장 밤의 종소리 등 리스폰하지 않는 이야기 전용 적 */
+  private storyEnemies = new Set<Enemy>();
   /** 습격의 밤 그늘. Rectangle의 반투명 채우기는 Phaser 4에서 훨씬 옅게 그려져 Graphics로 그린다. */
   private chapterShade?: Phaser.GameObjects.Graphics;
   /** 마을의 가게 문 위 퀘스트 표시: 안에 있는 사람의 표시를 문 위에 보여 준다. */
@@ -579,6 +582,7 @@ export class GameScene extends Phaser.Scene {
     this.dialogueTap = undefined;
     this.storyMarkers = [];
     this.raidEnemies = new Set();
+    this.storyEnemies = new Set();
     this.chapterShade = undefined;
     this.doorMarkers = [];
     // 지난 장면의 UI는 재시작 때 사라지므로 새로 만들 때까지 비워 둔다.
@@ -639,6 +643,8 @@ export class GameScene extends Phaser.Scene {
     this.parryReadyAt = 0;
     this.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
     this.parryPendingWhiff = false;
+    this.parryWhiffDeferred = false;
+    this.blockNeedsRelease = false;
     this.activePerfectWindowMs = BLOCK.perfectWindowMs;
     this.parryChain = { count: 0, lastAt: -Infinity };
     this.parrySlowOutLeft = 0;
@@ -702,12 +708,12 @@ export class GameScene extends Phaser.Scene {
     this.shownMp = -1;
     this.carriedMp = undefined;
     this.carriedResonance = undefined;
-    this.spinHitAt = undefined;
-    this.nextSpinAt = 0;
     this.resonanceCharge = 0;
     this.resonanceUntil = 0;
     this.absorb = NO_ABSORB;
     this.allyPools = [];
+    this.reflectedShots = [];
+    this.reflectedGraphics = undefined;
     this.absorbGround = undefined;
     this.absorbGlow = undefined;
     this.resonanceButton = undefined;
@@ -762,6 +768,7 @@ export class GameScene extends Phaser.Scene {
     this.impacts = new ImpactEffects(this);
     this.absorbGround = this.add.graphics().setDepth(-48);
     this.absorbGlow = this.add.graphics();
+    this.reflectedGraphics = this.add.graphics().setDepth(9000);
     this.buildUi();
     this.damageNumbers = new DamageNumbers(this);
     this.progressEffects = new ProgressEffects(this);
@@ -1072,6 +1079,7 @@ export class GameScene extends Phaser.Scene {
     this.finishSerenaEvacuation();
     for (const door of this.doorMarkers) if (door.marker) door.text.setY(door.spot.y - 150 - Math.abs(Math.sin(time / 320)) * 8);
     this.applyKnockback(this.player, dt);
+    this.updateReflectedShots(time, dt);
     this.updateAbsorb(time);
     this.updateInternalHeal(time, dt);
     if (this.hitCombo.count > 0 && !isHitComboActive(this.hitCombo, time)) this.resetHitCombo();
@@ -1197,6 +1205,8 @@ export class GameScene extends Phaser.Scene {
     camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       if (!this.scene.isActive()) return;
       this.traveling = false;
+      this.applyRest('ferry-inn');
+      this.npcById('innkeeper-wife')?.setVisible(false);
       this.drawChapterShade(this.scale.gameSize.width);
       const finn = () => this.npcById('finn'), innkeeper = () => this.npcById('fog-innkeeper');
       this.startCutscene(NIGHT_BELL_INN, NIGHT_BELL_WALK_SCALE, () => this.finishNightBell(), (name) => {
@@ -1343,7 +1353,7 @@ export class GameScene extends Phaser.Scene {
     if (this.mapId === 'reed-swamp' && (key === 'mist-phantom' || key === 'mist-weaver')) {
       return [{ key, x: s.x + 245, y: s.y }];
     }
-    // 아무 몬스터나 셋을 시작 자리 둘레에 둔다(연타·흡수·흘리기 확인용). 안개를 잣는 자와 슬라임은 빼고.
+    // 아무 몬스터나 셋을 시작 자리 둘레에 둔다(연타·흡수 확인용). 안개를 잣는 자와 슬라임은 빼고.
     if (!key || !(key in MONSTERS) || key === 'mist-weaver' || key === 'slime') return [];
     return [-260, 0, 260].map((dx) => ({ key: key as EnemyKey, x: s.x + dx, y: s.y - 260 }));
   }
@@ -1358,7 +1368,11 @@ export class GameScene extends Phaser.Scene {
     // 사냥터 몬스터는 그 맵의 권장 레벨 범위를 차례로 받는다. 해 질 무렵의 나방은 따로 정한 레벨.
     this.map.enemies.forEach((spawn, i) => this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, spawnLevel(this.mapId, i))));
     for (const spawn of this.duskSpawns()) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, DUSK_MOTH_LEVEL));
-    for (const spawn of ferryNightSpawns(this.quests, this.mapId)) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, FERRY_NIGHT_LEVEL));
+    for (const spawn of ferryNightSpawns(this.quests, this.mapId)) {
+      const phantom = new Enemy(this, spawn.key, spawn.x, spawn.y, FERRY_NIGHT_LEVEL);
+      this.enemies.push(phantom);
+      this.storyEnemies.add(phantom);
+    }
     for (const spawn of this.previewMonsters()) this.enemies.push(new Enemy(this, spawn.key, spawn.x, spawn.y, 9));
     this.syncRaidEnemies(false);
     // 축제 연출 동안에는 마을 사람 모두가 광장의 잔치 자리에 있다.
@@ -1492,6 +1506,10 @@ export class GameScene extends Phaser.Scene {
     // 습격 중 광장에서는 바깥 사냥터로 나가지 못한다. 마을 북쪽(집들)으로는 갈 수 있다.
     if (chapterPhase(this.quests) === 'raid' && this.mapId === 'village' && exit.to !== 'village-north') {
       return '습격을 막은 뒤 이동할 수 있습니다';
+    }
+    // 2장 밤의 종소리 진행 중에는 나루를 벗어나 대낮 맵으로 이동하지 못한다.
+    if (this.mapId === 'ferry-village' && ferryNight(this.quests)) {
+      return '한밤중이다. 강가에서 들려오는 종소리부터 확인해야 한다';
     }
     // 1장 완료(도란의 검) 전에는 동쪽 개울가에서 동쪽 고갯길로 넘어가지 못한다.
     if (this.mapId === 'east-stream' && exit.to === 'east-pass' && !eastPassOpen(this.quests)) {
@@ -1854,6 +1872,7 @@ export class GameScene extends Phaser.Scene {
 
     // 막기는 공격보다 우선한다. 짧게 누르면 2단 패링, 길게 눌러(chargeHoldMs) 충전 후 떼면 차지 패링이 발동한다.
     const blockHeld = !this.opening && ((this.blockButton?.isDown ?? false) || this.blockKeys.some(k => k.isDown));
+    if (!blockHeld) this.blockNeedsRelease = false;
     this.blockButton?.setEnabled(time >= this.parryReadyAt || this.chargeHoldStart !== undefined);
     if (parryPressed && time >= this.parryReadyAt) {
       this.combatAudio.unlock();
@@ -1867,11 +1886,12 @@ export class GameScene extends Phaser.Scene {
       }
       this.attackTrace = undefined;
       this.attackLunge = undefined;
-      this.spinHitAt = undefined;
       this.comboStage = 0;
       this.comboExpiresAt = 0;
       this.guardPoseUntil = 0;
       this.unboundUntil = 0;
+      this.blockNeedsRelease = false;
+      this.parryWhiffDeferred = false;
       this.parryStartedAt = time;
       this.activePerfectWindowMs = effectivePerfectWindowMs(this.parryWhiff, time);
       this.parryPendingWhiff = true;
@@ -1881,7 +1901,7 @@ export class GameScene extends Phaser.Scene {
       this.chargeHoldStart = time;
       this.chargeParryReady = false;
       this.dismissHint();
-    } else if (blockHeld && this.chargeHoldStart === undefined && time >= this.parryReadyAt && !player.isAttacking) {
+    } else if (blockHeld && !this.blockNeedsRelease && this.chargeHoldStart === undefined && time >= this.parryReadyAt && !player.isAttacking) {
       this.combatAudio.unlock();
       this.chargeHoldStart = time;
       this.chargeParryReady = false;
@@ -1890,6 +1910,7 @@ export class GameScene extends Phaser.Scene {
       const heldMs = time - this.chargeHoldStart;
       if (!this.chargeParryReady && isChargeParryReady(heldMs)) {
         this.chargeParryReady = true;
+        this.parryWhiffDeferred = false;
         this.combatAudio.playChargeReady();
         player.flash(0xffe482);
         this.impacts.dust(player.x, player.y, 4, time, 45);
@@ -1899,23 +1920,30 @@ export class GameScene extends Phaser.Scene {
         this.unboundUntil = time + BLOCK.unboundWindowMs;
         this.parryUntil = 0;
         this.parryPendingWhiff = false;
+        this.parryWhiffDeferred = false;
         this.parryReadyAt = time + BLOCK.cooldownMs;
         this.guardPoseUntil = time + BLOCK.unboundWindowMs;
         this.nextAttackAt = Math.max(this.nextAttackAt, this.unboundUntil);
         this.combatAudio.playUnboundRelease();
         this.impacts.unboundReleasePulse(player.x, player.y - 85, time);
         if (player.sprite instanceof HeroSprite) player.sprite.triggerGuardRecoil();
+      } else if (this.parryWhiffDeferred) {
+        // 301~379ms 짧게 눌렀다 떼며 차지 패링도 완성하지 못한 경우 헛막기로 기록한다.
+        this.parryWhiffDeferred = false;
+        this.parryWhiff = recordParryWhiff(this.parryWhiff, time);
       }
       this.chargeHoldStart = undefined;
       this.chargeParryReady = false;
     }
     const chargingParry = blockHeld && this.chargeHoldStart !== undefined && !player.isAttacking && time >= this.parryUntil;
     this.blocking = time < this.parryUntil && !player.isAttacking;
-    // 막기 창이 아무 공격도 막지 못하고 끝났을 때(차지 홀드 전환 제외) 헛막기로 기록해 연타 시 정밀 창을 줄인다.
+    // 막기 창이 아무 공격도 막지 못하고 끝났을 때 헛막기로 기록한다(차지 충전 중이면 미완성 해제 시 기록).
     if (this.parryPendingWhiff && time >= this.parryUntil) {
       this.parryPendingWhiff = false;
       if (!chargingParry && !this.chargeParryReady) {
         this.parryWhiff = recordParryWhiff(this.parryWhiff, time);
+      } else if (chargingParry && !this.chargeParryReady) {
+        this.parryWhiffDeferred = true;
       }
     }
 
@@ -1954,14 +1982,11 @@ export class GameScene extends Phaser.Scene {
     const lockGuardFacing = this.blocking || unboundActive;
     player.setMotion(rate > 0, lockGuardFacing ? 0 : v.x, rate * PLAYER_SPEED / HERO_WALK_NATURAL_SPEED);
     if (player.sprite instanceof HeroSprite) {
-      if (chargingParry) {
-        // 차지 패링 충전 중에는 벽에 밀리거나 세로 비율에 휘지 않도록 8방향 입력 그대로 조준 방향을 맞춘다.
-        if (force > 0) {
-          player.sprite.setAttackFacing(movementFacing(v.x, v.y, player.sprite.lookDirection, false));
-          if (Math.abs(v.x) > 0.05) player.face(v.x);
-        }
-      } else if (!lockGuardFacing) {
-        // 일반 막기 창과 차지 패링 방출 중에는 시작 시점의 8방향을 고정해 흘리기(Deflect) 입력으로 막기 방향이 꺾이지 않게 한다.
+      if ((this.blocking || chargingParry) && force > 0) {
+        // 막기·차지 중 방향 입력이 있으면 벽에 밀리거나 세로 비율에 휘지 않도록 8방향 입력 그대로 막기 방향을 맞춘다.
+        player.sprite.setAttackFacing(movementFacing(v.x, v.y, player.sprite.lookDirection, false));
+        if (Math.abs(v.x) > 0.05) player.face(v.x);
+      } else if (!lockGuardFacing && !chargingParry) {
         player.sprite.setMovement(player.x - fromX, player.y - fromY);
       }
     }
@@ -2167,30 +2192,31 @@ export class GameScene extends Phaser.Scene {
       // 반격 돌진 일섬은 방금 패링·회피한 적을 최우선으로 추적한다.
       if (counter && this.counterTarget && this.counterTarget.character.alive && !this.counterTarget.untouchable) {
         const tc = this.counterTarget.character;
-        const dx = tc.x - player.x, dy = (tc.y - player.y) / VERTICAL_SPEED_RATIO;
-        const dist = Math.hypot(dx, dy);
+        const rawDx = tc.x - player.x, rawDy = tc.y - player.y;
+        const dist = Math.hypot(rawDx, rawDy / VERTICAL_SPEED_RATIO);
         if (dist <= ATTACK_FEEL.counterRushRange) {
           nearest = dist;
           targetDist = dist;
-          facing = movementFacing(dx, dy, hero.lookDirection, false);
+          // 8방향 막기·적 조준과 같은 화면 각도(rawDx, rawDy)로 방향을 맞춰 자동 조준 직후 막기가 어긋나지 않게 한다.
+          facing = movementFacing(rawDx, rawDy, hero.lookDirection, false);
         }
       }
       const held = this.mistWeaver?.threads.target;
       if (held && held !== player && targetDist === undefined) {
-        const dx = held.x - player.x, dy = (held.y - player.y) / VERTICAL_SPEED_RATIO;
-        const distance = Math.hypot(dx, dy);
+        const rawDx = held.x - player.x, rawDy = held.y - player.y;
+        const distance = Math.hypot(rawDx, rawDy / VERTICAL_SPEED_RATIO);
         if (distance < nearest) {
           nearest = distance;
-          facing = movementFacing(dx, dy, hero.lookDirection, false);
+          facing = movementFacing(rawDx, rawDy, hero.lookDirection, false);
         }
       }
       if (targetDist === undefined) {
         for (const enemy of this.enemies) {
           const c = enemy.character;
-          if (!c.alive || enemy === this.mistWeaver?.caster) continue;
-          const dx = c.x - player.x, dy = (c.y - player.y) / VERTICAL_SPEED_RATIO;
-          const candidate = movementFacing(dx, dy, hero.lookDirection, false);
-          const distance = Math.hypot(dx, dy);
+          if (!c.alive || enemy.untouchable || enemy === this.mistWeaver?.caster) continue;
+          const rawDx = c.x - player.x, rawDy = c.y - player.y;
+          const candidate = movementFacing(rawDx, rawDy, hero.lookDirection, false);
+          const distance = Math.hypot(rawDx, rawDy / VERTICAL_SPEED_RATIO);
           if (distance < nearest) {
             nearest = distance;
             if (counter) targetDist = distance;
@@ -2226,7 +2252,7 @@ export class GameScene extends Phaser.Scene {
       this.effects.spawnGhost(hero, player.x, player.y, player.y - 1, time, 0x7ee0ff, 0.45);
     }
     this.attackLunge = { startedAt: time, stage, direction, progress: 0, distance: lungeDistance, counter, nextGhostAt: time + 24 };
-    // 칼에 담긴 힘(정밀 패링 뒤 3초)만큼 이 칼질이 세진다. 3단이고 아직 속성을 싣지 않았으면 첫 명중에 싣는다.
+    // 칼에 담긴 힘(정밀 패링 뒤 5초)만큼 일반 칼질이 세진다. 3단이고 아직 속성을 싣지 않았으면 첫 명중에 싣는다.
     const absorbed = activeAbsorb(this.absorb, time);
     if (absorbed && elementReady(absorbed)) this.effects.spawnGhost(hero, player.x, player.y, player.y - 1, time, ABSORB_LOOK[absorbed.element].color, 0.4);
     this.attackTrace = { startedAt: time, stage, direction, previous: hero.getBlade(), elapsed: 0, hit: new Set(), counter, absorb: absorbed };
@@ -2328,14 +2354,20 @@ export class GameScene extends Phaser.Scene {
       if (!insideAttackLane(c.x - player.x, c.y - player.y, trace.direction,
         PLAYER.attackLane, VERTICAL_SPEED_RATIO)) continue;
       const bounds = c.sprite.getBounds(this.boundsScratch);
-      // 정면 공격은 원근으로 짧게 그려진 칼 대신 판정 띠 안의 사거리로도 맞는다(PLAYER.frontReach).
-      // 아래 대각선은 옆모습 자세로 그려져(4방향 통일) 칼날이 대각선 아래 앞까지 내려가지 않으므로 같은 사거리 규칙을 쓴다.
+      // 타격·패링 직후 시각적 납작해짐(hitSquash) 때문에 수평 베기가 머리 위로 빗나가지 않도록 최소 키는 원래 신장을 유지한다.
+      const hitHeight = Math.max(bounds.height, enemy.stats.height);
+      const hitCenterY = Math.min(bounds.centerY, c.y - hitHeight * 0.5);
+      // 정면·대각선 공격 사거리 보정(3단 안개 흡수로 늘어난 사거리 reach도 함께 반영한다).
       const facing = rig.activeAttackFacing;
+      const scaledReach = PLAYER.frontReach[trace.stage] * reach;
       const frontHit = facing === 'down'
-        ? insideFrontReach(c.y - player.y, PLAYER.frontReach[trace.stage], VERTICAL_SPEED_RATIO)
-        : facing.startsWith('down-') && insideDiagonalReach(c.x - player.x, c.y - player.y, PLAYER.frontReach[trace.stage], VERTICAL_SPEED_RATIO);
-      if (!frontHit && !bladeHitsEllipse(sweep.previous, sweep.current, { x: bounds.centerX, y: bounds.centerY },
-        bounds.width * 0.42 + PLAYER.bladeRadius, bounds.height * 0.42 + PLAYER.bladeRadius)) continue;
+        ? insideFrontReach(c.y - player.y, scaledReach, VERTICAL_SPEED_RATIO)
+        : facing.startsWith('down-')
+          ? insideDiagonalReach(c.x - player.x, c.y - player.y, scaledReach, VERTICAL_SPEED_RATIO)
+          : facing.startsWith('up-') && (trace.stage === 2 || trace.counter)
+            && insideUpDiagonalReach(c.x - player.x, c.y - player.y, scaledReach, VERTICAL_SPEED_RATIO);
+      if (!frontHit && !bladeHitsEllipse(sweep.previous, sweep.current, { x: bounds.centerX, y: hitCenterY },
+        bounds.width * 0.42 + PLAYER.bladeRadius, hitHeight * 0.42 + PLAYER.bladeRadius)) continue;
       trace.hit.add(enemy);
       // 서리 딱정벌레의 얼음 껍질: 정면에서 벤 칼은 튕겨 나간다(반격과 흡수한 힘을 푸는 칼은 껍질을 뚫는다).
       const elementHit = this.claimElement(trace, enemy);
@@ -2345,9 +2377,9 @@ export class GameScene extends Phaser.Scene {
       // 행운(LUK)만큼 치명타 확률이 오른다: 굴린 값을 그만큼 낮춘다.
       const strike = strikeKind(trace.counter, finisher, Math.random() - (this.derived.critChance - HIT_FEEL.critChance));
       heaviest = heavierKind(heaviest, strike.kind);
-      // 반격 돌진 일섬은 3타 자세를 쓰되 과도한 4배 대신 전용 2.4배 배율을 적용한다.
-      const stageMultiplier = trace.counter ? ATTACK_FEEL.counterRushDamage : combo.damage;
-      const absorbScale = absorbDamageScale(trace.absorb?.tier ?? 0);
+      // 일섬은 저스트 회피 전용이며 흡수 단수에 영향받지 않고 기본 공격력의 정확히 2배 피해를 준다.
+      const stageMultiplier = trace.counter ? JUST_DODGE.counterDamage : combo.damage;
+      const absorbScale = trace.counter ? 1 : absorbDamageScale(trace.absorb?.tier ?? 0);
       const damage = monsterDamageTaken(Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * stageMultiplier * critMultiplier(strike.crit) * this.resonanceDamage() * absorbScale), enemy.stats.defense);
       const died = c.hurt(damage);
       if (elementHit) this.releaseAbsorb(trace, enemy, bounds.centerX, bounds.centerY, died);
@@ -2381,7 +2413,7 @@ export class GameScene extends Phaser.Scene {
     if (hitCount > 0) this.bumpHitCombo(hitCount, trace.counter ? 'counter' : 'normal');
     if (heaviest) {
       const killed = killedCount > 0;
-      const lastKill = killed && (bossKilled || this.enemies.every(e => !e.character.alive || e.untouchable));
+      const lastKill = killed && (bossKilled || this.enemies.every(e => !e.character.alive || e.kind === 'mist-weaver'));
       const [ms, intensity] = HIT_FEEL.shake[heaviest];
       this.cameras.main.shake(ms, intensity);
       this.hitStop(killed ? heavierKind(heaviest, 'kill') : heaviest);
@@ -2425,15 +2457,15 @@ export class GameScene extends Phaser.Scene {
     if (died) {
       const wasBoss = enemy === this.boss;
       enemy.kill();
-      const lastKill = wasBoss || this.enemies.every(e => !e.character.alive || e.untouchable);
+      const lastKill = wasBoss || this.enemies.every(e => !e.character.alive || e.kind === 'mist-weaver');
       this.impacts.splatter(c.x, c.y, enemy.color, this.now);
       this.impacts.killBurst(c.x, c.y, enemy.color, dirX, dirY, lastKill, this.now);
       const raid = this.raidEnemies.has(enemy);
-      if (!raid && enemy.kind !== 'swamp-lurker') this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
+      if (!raid && !this.storyEnemies.has(enemy) && enemy.kind !== 'swamp-lurker') this.enemyRespawns.push({ at: this.now + ENEMY.respawnMs, enemy });
       // 주인공이 몬스터보다 너무 높으면 경험치가 줄어든다.
       this.gainXp(xpForKill(enemy.stats.xp, enemy.level, this.progress.level), c.x, c.y - 185);
       this.questEvent({ type: 'kill', map: this.mapId, monster: enemy.kind, ...(raid ? { encounter: 'village-raid' as const } : {}) });
-      if (!raid) this.collectDrop(c.x, c.y, enemy);
+      this.collectDrop(c.x, c.y, enemy);
       if (enemy === this.boss) this.onBossDefeated(enemy);
     } else if (enemy.boss) {
       // 보스는 보통 공격에 움찔하지 않고 조금만 밀린다. 체력이 절반 아래로 떨어지면 포효하며 2페이즈.
@@ -2623,6 +2655,10 @@ export class GameScene extends Phaser.Scene {
   private enterDoor(target: Interactable): void {
     const enter = target.enter;
     if (!enter || !isMapId(enter.to)) return;
+    if (this.mapId === 'ferry-village' && ferryNight(this.quests)) {
+      this.hud.showCallout('한밤중이다. 강가의 종소리부터 확인하자');
+      return;
+    }
     this.hud.dismissHint();
     this.clearAttackInput();
     this.travel({ to: enter.to, arrive: enter.at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: enter.at });
@@ -2786,10 +2822,17 @@ export class GameScene extends Phaser.Scene {
     this.dialogue.open(lines, () => {
       if (dialoguePoses) talked?.setStoryAction(previousPose);
       if (talked?.def.id === 'fishing-elder') talked.setStoryAction(talked.def.storyAction);
+      if (npc === 'sia' && quest?.progressed?.id === 'sia-knot') talked?.release();
       if (quest) {
         this.quests = quest.state;
         this.saveQuests();
-        this.refreshQuests();
+        if (quest.next?.id === 'sia-knot' && this.mapId === 'village-north') {
+          this.npcs.find(n => n.def.id === 'sia')?.placeAt(SIA_KNOT_SPOT.x, SIA_KNOT_SPOT.y);
+        }
+        const deferShade = quest.stepDone?.cutscene === 'night-bell'
+          || quest.completed?.id === 'night-bell'
+          || (beforePhase === 'raid' && chapterPhase(this.quests) === 'aftermath');
+        this.refreshQuests(deferShade);
       }
       // 단계 보상: 이 대화로 마친 단계가 기술을 가르쳐 주면 배운다(떠날 채비의 루안).
       if (quest?.stepDone?.rewardSkill) this.learnSkill(quest.stepDone.rewardSkill);
@@ -3053,9 +3096,9 @@ export class GameScene extends Phaser.Scene {
     if (announce) this.hud.showCallout('권속이 몰려온다!');
   }
 
-  private refreshQuests(): void {
+  private refreshQuests(deferShade = false): void {
     if (this.player) this.syncRaidEnemies();
-    this.drawChapterShade(this.scale.gameSize.width);
+    if (!deferShade) this.drawChapterShade(this.scale.gameSize.width);
     this.syncFerryNight();
     this.syncFernCart();
     this.syncFerryInnRoof();
@@ -3063,7 +3106,12 @@ export class GameScene extends Phaser.Scene {
     this.interactables = this.interactables.filter(spot => !spot.id.startsWith('story-'));
     for (const marker of this.storyMarkers) marker.destroy();
     this.storyMarkers = [];
-    const subSpotIds = new Set(['story-wildflower', 'story-ancient-tablet', 'story-silver-herb-1', 'story-silver-herb-2', 'story-silver-herb-3', 'story-stream-pebble', 'story-clear-water']);
+    const subSpotIds = new Set([
+      'story-wildflower', 'story-ancient-tablet', 'story-silver-herb-1', 'story-silver-herb-2', 'story-silver-herb-3', 'story-stream-pebble', 'story-clear-water',
+      'story-pass-herb-1', 'story-pass-herb-2', 'story-pass-herb-3', 'story-pass-herb-4', 'story-pass-herb-5',
+      'story-reed-bundle-1', 'story-reed-bundle-2', 'story-reed-bundle-3',
+      'story-tangled-net-1', 'story-tangled-net-2', 'story-tangled-net-3',
+    ]);
     const spotLabels: Record<string, string> = {
       'story-wildflower': '◆ 하늘색 들꽃',
       'story-ancient-tablet': '◆ 석판 조각',
@@ -3072,6 +3120,17 @@ export class GameScene extends Phaser.Scene {
       'story-silver-herb-3': '◆ 은빛 풀',
       'story-stream-pebble': '◆ 반짝이는 조약돌',
       'story-clear-water': '◆ 맑은 개울물',
+      'story-pass-herb-1': '◆ 고개 약초',
+      'story-pass-herb-2': '◆ 고개 약초',
+      'story-pass-herb-3': '◆ 고개 약초',
+      'story-pass-herb-4': '◆ 고개 약초',
+      'story-pass-herb-5': '◆ 고개 약초',
+      'story-reed-bundle-1': '◆ 마른 갈대 묶음',
+      'story-reed-bundle-2': '◆ 마른 갈대 묶음',
+      'story-reed-bundle-3': '◆ 마른 갈대 묶음',
+      'story-tangled-net-1': '◆ 엉킨 그물',
+      'story-tangled-net-2': '◆ 엉킨 그물',
+      'story-tangled-net-3': '◆ 엉킨 그물',
     };
     for (const spot of [...chapterSpots(this.quests, this.mapId), ...chapterTwoSpots(this.quests, this.mapId)]) {
       this.interactables.push(spot);
@@ -3162,35 +3221,19 @@ export class GameScene extends Phaser.Scene {
     const holdingCharge = this.chargeHoldStart !== undefined;
     this.blockButton?.setEnabled(time >= this.parryReadyAt || holdingCharge);
     this.blockButton?.setCooldown(holdingCharge ? 0 : Math.max(0, this.parryReadyAt - time), BLOCK.cooldownMs);
-    this.skillSlots.forEach((skill, i) => {
-      if (skill === 'spin') this.skillButtons[i]?.setCooldown(Math.max(0, this.nextSpinAt - time), SPIN_SLASH.cooldownMs);
-    });
   }
 
-  // ---------------------------------------------------------------- 마나와 회전 베기
+  // ---------------------------------------------------------------- 마나와 기술 칸
 
-  /** 마나가 저절로 차고, 스킬 버튼(또는 K)으로 회전 베기를 쓴다. 맞히는 순간도 여기서 처리한다. */
-  private updateSkill(time: number, gameStep: number): void {
+  /** 마나가 저절로 차고, 빈 기술 칸 입력을 비워 둔다. */
+  private updateSkill(_time: number, gameStep: number): void {
     const player = this.player;
     if (player.alive) this.mp = regenMana(this.mp, this.maxMp, gameStep);
-    if (this.spinHitAt !== undefined && time >= this.spinHitAt) {
-      this.spinHitAt = undefined;
-      if (player.alive) this.spinHit();
-    }
-    const ready = player.alive && time >= this.nextSpinAt && !player.isAttacking && !this.blocking && time >= this.dodgeUntil
-      && this.spinHitAt === undefined;
-    const enough = this.mp >= SPIN_SLASH.cost;
     this.skillButtons.forEach((button, i) => {
-      let pressed = button.consumePress();
+      button.consumePress();
       const key = this.skillKeys[i];
-      if (key && Phaser.Input.Keyboard.JustDown(key)) pressed = true;
-      const skill = this.skillSlots[i];
-      // 빈 칸은 눌러도 아무 일도 없다.
-      if (skill !== 'spin') return;
-      button.setEnabled(ready && enough);
-      if (!pressed || this.opening) return;
-      if (ready && enough) this.startSpin(time);
-      else if (ready) this.hud.showCallout('마나가 부족하다');
+      if (key) Phaser.Input.Keyboard.JustDown(key);
+      button.setEnabled(false);
     });
     this.drawMp();
   }
@@ -3256,82 +3299,9 @@ export class GameScene extends Phaser.Scene {
   private refreshSkillButtons(): void {
     this.skillButtons.forEach((button, i) => {
       const skill = this.skillSlots[i];
-      button.setLabel(skill ? SKILLS[skill].label : '');
-      if (!skill) button.setEnabled(false);
+      button.setLabel(skill && SKILLS[skill] ? SKILLS[skill].label : '');
+      if (!skill || !SKILLS[skill]) button.setEnabled(false);
     });
-  }
-
-  /** 회전 베기를 시작한다: 마나를 쓰고 세 번째 콤보 자세를 취한다. 제자리에서 돈다. */
-  private startSpin(time: number): void {
-    const player = this.player;
-    const hero = player.sprite;
-    this.mp -= SPIN_SLASH.cost;
-    this.dismissHint();
-    this.attackTrace = undefined;
-    this.attackLunge = undefined;
-    this.comboStage = 0;
-    const finisher = PLAYER.combo[PLAYER.combo.length - 1];
-    this.nextAttackAt = time + finisher.intervalMs;
-    this.nextSpinAt = time + SPIN_SLASH.cooldownMs;
-    this.spinHitAt = time + SPIN_SLASH.hitDelayMs;
-    if (hero instanceof HeroSprite) hero.setAttackFacing(attackFacingFor(hero.lookDirection, player.facing));
-    player.playAttack(PLAYER.combo.length);
-    this.impacts.dust(player.x, player.y, 6, time, SPIN_SLASH.radius * 0.4);
-    this.drawMp(true);
-  }
-
-  /** 회전 베기가 맞는 순간: 둘레(지면 타원) 안의 모든 적을 한 번씩 벤다. */
-  private spinHit(): void {
-    const player = this.player;
-    const now = this.now;
-    this.combatAudio.playSpinSlash();
-    this.impacts.spinRing(player.x, player.y, SPIN_SLASH.radius, now);
-    this.mistWeaver?.effects.strikeCocoon(now);
-    if (this.mistWeaver?.threads.cutWithSpin(player, SPIN_SLASH.radius, SPIN_SLASH.radius * VERTICAL_SPEED_RATIO, now)) {
-      this.hud.showCallout('안개 실을 끊었다');
-    }
-    let hits = 0;
-    let killedCount = 0;
-    let bossKilled = false;
-    for (const enemy of this.enemies) {
-      const c = enemy.character;
-      if (!c.alive || enemy.untouchable) continue;
-      const dx = c.x - player.x, dy = c.y - player.y;
-      if (!inSpinRadius(dx, dy, SPIN_SLASH.radius, VERTICAL_SPEED_RATIO)) continue;
-      const spinBounds = c.sprite.getBounds(this.boundsScratch);
-      if (this.shellBlocked(enemy, false, spinBounds.centerX, spinBounds.centerY)) continue;
-      hits++;
-      const length = Math.hypot(dx, dy / VERTICAL_SPEED_RATIO) || 1;
-      const dirX = dx / length, dirY = dy / VERTICAL_SPEED_RATIO / length;
-      const damage = monsterDamageTaken(Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * SPIN_SLASH.damage * this.derived.skillDamage * this.resonanceDamage()), enemy.stats.defense);
-      const died = c.hurt(damage);
-      if (died) {
-        killedCount++;
-        if (enemy === this.boss) bossKilled = true;
-      }
-      this.showDamage(c.x, c.y - 100, damage, '#8fc8ff', 48, dirX);
-      const bounds = c.sprite.getBounds(this.boundsScratch);
-      this.impacts.impact(bounds.centerX, bounds.centerY, dirX, dirY, 'finisher', now, c.y);
-      this.impacts.slashCut(bounds.centerX, bounds.centerY, Math.atan2(dirY * VERTICAL_SPEED_RATIO, dirX), 'finisher', now);
-      this.resolveEnemyHit(enemy, died, dirX, dirY, PLAYER.knockback * SPIN_SLASH.knockback);
-    }
-    // 빈 곳을 베어도 둘레에 바람과 먼지가 인다.
-    this.impacts.screenFlash(0x8fc8ff, hits ? 0.14 : 0.06);
-    if (hits) {
-      const killed = killedCount > 0;
-      const lastKill = killed && (bossKilled || this.enemies.every(e => !e.character.alive || e.untouchable));
-      this.bumpHitCombo(hits);
-      this.combatAudio.playHit('finisher', killed, lastKill);
-      const [ms, intensity] = HIT_FEEL.shake.finisher;
-      this.cameras.main.shake(ms, intensity);
-      this.hitStop('finisher');
-      this.triggerCameraZoom(attackZoomPeak('finisher', killed, lastKill), ATTACK_FEEL.zoomInMs, lastKill ? 240 : ATTACK_FEEL.zoomOutMs);
-      if (lastKill) {
-        this.parrySlowOutScaleVal = ATTACK_FEEL.lastKillSlowScale;
-        this.parrySlowOutDur = ATTACK_FEEL.lastKillSlowMs;
-        this.parrySlowOutLeft = ATTACK_FEEL.lastKillSlowMs;
-      }
-    }
   }
 
   /** 각 버튼은 해당 아이템만 사용한다. 두 슬롯은 20초 대기 시간을 공유한다. */
@@ -3482,7 +3452,9 @@ export class GameScene extends Phaser.Scene {
     this.exitHint?.update(this.player, true, false);
     this.setQuickButtonsVisible(false);
     const blocked = new Set(this.map.exits.filter(e => !!this.exitBlockReason(e)).map(e => e.to));
-    const blockNote = this.mapId === 'east-stream' ? '동쪽 고갯길은 1장을 마친 뒤 열립니다' : '습격 중에는 마을 밖 사냥터로 나갈 수 없습니다';
+    const blockNote = this.mapId === 'east-stream' ? '동쪽 고갯길은 1장을 마친 뒤 열립니다'
+      : ferryNight(this.quests) ? '밤의 종소리가 멈출 때까지 물안개 나루를 떠날 수 없습니다'
+      : '습격 중에는 마을 밖 사냥터로 나갈 수 없습니다';
     this.worldMap.show(this.player, { npcs: this.npcs.filter(n => n.visible).map(n => ({ x: n.x, y: n.y })),
       enemies: this.enemies.filter(e => e.character.alive).map(e => ({ x: e.character.x, y: e.character.y })) },
       blocked, blockNote);
@@ -3572,6 +3544,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private promoteGearSlot(slot: EnhanceSlotId): void {
+    if (this.quests['first-sword']?.status !== 'done') {
+      this.characterPanel?.setStatus("1장 '도란의 검' 퀘스트 완료 후 승급할 수 있어요.", true);
+      return;
+    }
     const shop = this.characterPanel?.shop ?? 'doran';
     const current = this.character.gear.rank[slot];
     if (current >= MAX_RANK) {
@@ -3591,7 +3567,7 @@ export class GameScene extends Phaser.Scene {
     this.refreshInventory();
     this.applyCharacterChange();
     const visualNote = result.appearanceChanged
-      ? (slot === 'weapon' ? ` · ${weaponAppearanceLabel(result.rank)} 외형 해금!` : ` · 방어구 4부위 일치 → ${rankLabel(result.armorStage)} 외형 해금!`)
+      ? (slot === 'weapon' ? ` · ${weaponAppearanceLabel(result.rank)} 외형 해금!` : ` · 방어구 4부위 일치 → ${rankLabel(result.armorStage)} 달성!`)
       : '';
     this.characterPanel?.setStatus(`${SLOT_INFO[slot].name} ${rankLabel(result.rank)} 승급 · −${result.gold} G${visualNote}`);
   }
@@ -3626,6 +3602,7 @@ export class GameScene extends Phaser.Scene {
       derived: { ...this.derived, maxHp: this.player?.maxHp ?? this.derived.maxHp },
       inventory: this.inventory,
       gear: this.character.gear,
+      promotionUnlocked: this.quests['first-sword']?.status === 'done',
     };
   }
 
@@ -3825,34 +3802,46 @@ export class GameScene extends Phaser.Scene {
     const incomingFromX = hit ? -hit.dx : c.x - player.x;
     const incomingFromY = hit ? -hit.dy : c.y - player.y;
     const inFront = isAttackInGuardDirection(heroDir, incomingFromX, incomingFromY);
+    const ranged = hit !== undefined && !hit.melee;
+    const charging = enemy.chargingNow(now);
+    const blockDown = (this.blockButton?.isDown ?? false) || this.blockKeys.some(k => k.isDown);
     if (isUnboundActive(now, this.unboundUntil, inFront)) {
-      this.triggerUnboundCounter(enemy, impactX, impactY, awayX, awayY, enemyPushX, enemyPushY);
+      if (blockDown) this.blockNeedsRelease = true;
+      this.blocking = false;
+      this.parryWhiffDeferred = false;
+      this.triggerUnboundCounter(enemy, impactX, impactY, awayX, awayY, enemyPushX, enemyPushY, ranged ? hit : undefined);
       return true;
     }
     const grade = gradeParry(this.blocking, now - this.parryStartedAt, inFront, this.activePerfectWindowMs);
     if (grade !== 'none') {
       const x = impactX, y = impactY;
+      this.blocking = false;
       this.parryPendingWhiff = false;
+      this.parryWhiffDeferred = false;
       this.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
+      if (blockDown) this.blockNeedsRelease = true;
+      // 같은 프레임·근접 산탄 다중 명중만 막고 연타(>=220ms)는 정상 패링되도록 짧은 90ms 보호만 준다.
+      player.invulnerableUntil = Math.max(player.invulnerableUntil, now + 90);
 
       if (grade === 'perfect') {
         this.parryChain = nextParryChain(this.parryChain, now);
         const chain = this.parryChain.count;
-        // 흘리기: 막는 순간 조이스틱을 기울인 쪽으로 공격을 흘려보낸다(combat/deflect.ts).
-        const input = this.readInput();
-        const deflect = deflectDirection(input.x, input.y, hit ? -hit.dx : c.x - player.x, hit ? -hit.dy : c.y - player.y);
-        // 돌진은 멈추지 않는다: 흘렸으면 그쪽으로 꺾여, 정예·보스는 흘리지 않아도 원래 가려던 자리까지 지나간다.
-        const charging = enemy.chargingNow(now);
-        const pass = charging ? deflect ?? (enemy.elite ? 'straight' as const : undefined) : undefined;
-        // 근접 공격을 흘리면 적이 그쪽으로 밀려나며 몸이 돌아간다(멀리서 쏜 공격은 쏜 적을 밀지 않는다).
-        const ranged = hit !== undefined && !hit.melee && !isCharger(enemy.kind);
-        const pushDir = deflect && !charging && !ranged ? deflect : { x: enemyPushX, y: enemyPushY };
-        const push = ranged ? 0 : BLOCK.enemyKnockback * (deflect && !charging ? DEFLECT.pushScale : 1);
-        const result = enemy.onParried(now, BLOCK.stunMs, pushDir.x, pushDir.y, push, true, pass);
-        const chainBreak = result.outcome === 'chainBreak';
-        const continuing = result.outcome === 'continueChain';
-        if (deflect && !charging && !ranged) enemy.turnTo(deflect.x, deflect.y);
-        if (deflect) this.deflectStrike(enemy, deflect, x, y);
+        // 정예·보스 돌진은 방향을 꺾지 않고 직진 통과하며, 원거리 공격은 원래 온 방향으로 그대로 되돌려 보낸다.
+        let chainBreak = false;
+        let continuing = false;
+        let step = 1;
+        let total = 1;
+        if (ranged && hit) {
+          const refDir = reflectDirection(hit.dx, hit.dy);
+          this.launchReflectedShot(enemy, x, y, refDir.x, refDir.y, false, hit.damageScale ?? 1);
+        } else {
+          const pass = charging && enemy.elite ? ('straight' as const) : undefined;
+          const result = enemy.onParried(now, BLOCK.stunMs, enemyPushX, enemyPushY, BLOCK.enemyKnockback, true, pass);
+          chainBreak = result.outcome === 'chainBreak';
+          continuing = result.outcome === 'continueChain';
+          step = result.step;
+          total = result.total;
+        }
         // 흡수: 막아 낸 적의 힘과 속성을 칼에 담는다(연속 패링 파훼는 한 단 더).
         this.gainAbsorb(enemy, chainBreak ? 2 : 1);
 
@@ -3865,7 +3854,8 @@ export class GameScene extends Phaser.Scene {
           this.combatAudio.playParry('perfect', chain);
           this.impacts.parryBurst(x, y, -awayX, -awayY, 'perfect', chain, now, player.y + 2);
           player.flash(chain >= 2 ? 0xfff0b0 : 0xd0f4ff);
-          const label = continuing ? `연속 패링 ${result.step}/${result.total}!`
+          const label = continuing ? `연속 패링 ${step}/${total}!`
+            : ranged ? '투사체 반사!'
             : chain >= 2 ? `완벽 패링 ×${chain}!` : '완벽 패링!';
           this.hud.showCallout(
             label,
@@ -3894,9 +3884,7 @@ export class GameScene extends Phaser.Scene {
           }
         }
         this.focusCompanion(enemy);
-        this.counterTarget = enemy;
         this.bumpHitCombo(1, 'counter');
-        this.counterUntil = now + JUST_DODGE.counterMs;
         this.parryUntil = 0;
         this.parryReadyAt = now;
         this.chargeHoldStart = undefined;
@@ -3934,14 +3922,16 @@ export class GameScene extends Phaser.Scene {
       player.knockback.set(awayX * BLOCK.imperfectKnockback, awayY * BLOCK.imperfectKnockback * VERTICAL_SPEED_RATIO);
       if (player.sprite instanceof HeroSprite) player.sprite.triggerGuardRecoil();
       this.guardPoseUntil = now + 130;
-      const impResult = enemy.onParried(now, BLOCK.imperfectStunMs, enemyPushX, enemyPushY, BLOCK.enemyKnockback * 0.55, false);
+      const impResult = ranged
+        ? undefined
+        : enemy.onParried(now, BLOCK.imperfectStunMs, enemyPushX, enemyPushY, BLOCK.enemyKnockback * 0.55, false, charging && enemy.elite ? 'straight' : undefined);
       this.parryUntil = 0;
       this.parryReadyAt = now + BLOCK.imperfectCooldownMs;
       this.chargeHoldStart = undefined;
       this.chargeParryReady = false;
       this.nextAttackAt = Math.min(this.nextAttackAt, now + 90);
       this.hud.showCallout(
-        impResult.outcome === 'continueChain' ? `막기 (${impResult.step}/${impResult.total})` : '막기',
+        impResult?.outcome === 'continueChain' ? `막기 (${impResult.step}/${impResult.total})` : '막기',
         { color: '#ffbe7a', stroke: '#3a1a08', scale: 1.15 },
       );
       const [shakeMs, shakeIntensity] = HIT_FEEL.shake.imperfectGuard;
@@ -4090,24 +4080,78 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 흘린 공격의 힘이 흘린 쪽의 가장 가까운 다른 적에게 맞는다(combat/deflect.ts). 맞을 적이 없으면 빛줄기만 남는다.
+   * 패링·차지 패링으로 받아친 원거리 공격을 원래 온 방향(dir)으로 그대로 되돌려 보낸다.
    */
-  private deflectStrike(attacker: Enemy, dir: { x: number; y: number }, x: number, y: number): void {
-    const player = this.player, now = this.now;
-    this.impacts.thrustCone(x, y, dir.x, dir.y * VERTICAL_SPEED_RATIO, 0xbfe9ff, now);
-    this.progressEffects.showPopup(player.x + dir.x * 70, player.y - 170, '흘리기', '#bfe9ff');
-    const targets = this.enemies.filter(e => e !== attacker && e.character.alive && !e.untouchable && e !== this.mistWeaver?.caster);
-    const index = pickDeflectTarget({ x: player.x, y: player.y }, dir, targets.map(e => ({ x: e.character.x, y: e.character.y })), VERTICAL_SPEED_RATIO);
-    if (index < 0) return;
-    const target = targets[index], tc = target.character;
-    const force = Math.max(this.stats.damageMax, attacker.stats.damage * attacker.strikeDamageScale);
-    const damage = monsterDamageTaken(Math.round(force * DEFLECT.damageScale * this.resonanceDamage()), target.stats.defense);
-    const died = tc.hurt(damage, 0xbfe9ff);
-    this.showDamage(tc.x, tc.y - 100, damage, '#bfe9ff', 46, dir.x);
-    this.impacts.impact(tc.x, tc.y - 60, dir.x, dir.y, 'counter', now, tc.y);
-    this.impacts.slashCut(tc.x, tc.y - 60, Math.atan2(dir.y * VERTICAL_SPEED_RATIO, dir.x), 'counter', now);
-    this.resolveEnemyHit(target, died, dir.x, dir.y, PLAYER.knockback * 1.3);
-    if (!died && target.boss && entersPhaseTwo(target.phase, tc.hp, tc.maxHp)) this.startBossRoar(target);
+  private launchReflectedShot(
+    source: Enemy,
+    x: number,
+    y: number,
+    dx: number,
+    dy: number,
+    unbound: boolean,
+    damageScale = 1,
+  ): void {
+    const base = Math.max(this.stats.damageMax, source.stats.damage * damageScale);
+    const mult = unbound ? BOSS.unboundCounterScale : 1.5;
+    const damage = Math.max(1, Math.round(base * mult * this.resonanceDamage()));
+    this.reflectedShots.push({ x: this.player.x + dx * 24, y: this.player.y + dy * 24, dx, dy, travelled: 0, damage, unbound, source });
+    this.impacts.thrustCone(x, y, dx, dy * VERTICAL_SPEED_RATIO, unbound ? 0xffe478 : 0xbfe9ff, this.now);
+  }
+
+  /** 반사된 원거리 탄환이 날아가며 경로상의 첫 적(쏜 적 포함)에게 명중한다. */
+  private updateReflectedShots(time: number, dt: number): void {
+    const g = this.reflectedGraphics;
+    if (g) g.clear();
+    if (!this.reflectedShots.length) return;
+    const speed = 640;
+    const maxRange = 720;
+    const remain: typeof this.reflectedShots = [];
+    for (const shot of this.reflectedShots) {
+      const step = speed * dt;
+      const nx = shot.x + shot.dx * step;
+      const ny = shot.y + shot.dy * step;
+      if (!this.walkArea.hasClearPath(shot.x, shot.y, nx, ny) || shot.travelled + step >= maxRange) {
+        this.impacts.dust(shot.x, shot.y, 4, time, 28);
+        continue;
+      }
+      const hitBox: EnemyHit = {
+        fromX: shot.x, fromY: shot.y, toX: nx, toY: ny,
+        radiusX: 46, radiusY: 34, dx: shot.dx, dy: shot.dy,
+      };
+      let hitTarget: Enemy | undefined;
+      for (const enemy of this.enemies) {
+        const c = enemy.character;
+        if (!c.alive || enemy.untouchable || enemy === this.mistWeaver?.caster) continue;
+        if (enemyHitReaches(hitBox, c.x, c.y)) { hitTarget = enemy; break; }
+      }
+      if (hitTarget) {
+        const tc = hitTarget.character;
+        const damage = monsterDamageTaken(shot.damage, hitTarget.stats.defense);
+        const died = tc.hurt(damage, shot.unbound ? 0xfff0a0 : 0xbfe9ff);
+        this.showDamage(tc.x, tc.y - 110, damage, shot.unbound ? '#ffe878' : '#bfe9ff', shot.unbound ? 52 : 44, shot.dx);
+        this.impacts.impact(tc.x, tc.y - 60, shot.dx, shot.dy, shot.unbound ? 'finisher' : 'counter', time, tc.y);
+        this.impacts.slashCut(tc.x, tc.y - 60, Math.atan2(shot.dy * VERTICAL_SPEED_RATIO, shot.dx), 'counter', time);
+        if (!died && !hitTarget.boss && shot.unbound) hitTarget.interrupt(time, BOSS.unboundStunMs);
+        this.resolveEnemyHit(hitTarget, died, shot.dx, shot.dy, PLAYER.knockback * (shot.unbound ? 1.5 : 1.1));
+        continue;
+      }
+      shot.x = nx;
+      shot.y = ny;
+      shot.travelled += step;
+      if (g) {
+        const vy = shot.y - 54;
+        const tailX = shot.x - shot.dx * 34;
+        const tailY = vy - shot.dy * 34;
+        const core = shot.unbound ? 0xfff4b0 : 0xe8fbff;
+        const aura = shot.unbound ? 0xffc84a : 0x67d6ff;
+        g.lineStyle(10, aura, 0.35).lineBetween(tailX, tailY, shot.x, vy);
+        g.lineStyle(4, core, 0.92).lineBetween(tailX, tailY, shot.x, vy);
+        g.fillStyle(aura, 0.55).fillCircle(shot.x, vy, shot.unbound ? 13 : 10);
+        g.fillStyle(core, 1).fillCircle(shot.x, vy, shot.unbound ? 7 : 5);
+      }
+      remain.push(shot);
+    }
+    this.reflectedShots = remain;
   }
 
   /**
@@ -4210,11 +4254,14 @@ export class GameScene extends Phaser.Scene {
     awayY: number,
     enemyPushX: number,
     enemyPushY: number,
+    rangedHit?: EnemyHit,
   ): void {
     const player = this.player, now = this.now, c = enemy.character;
     this.unboundUntil = 0;
     this.parryUntil = 0;
+    this.blocking = false;
     this.parryPendingWhiff = false;
+    this.parryWhiffDeferred = false;
     this.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
     this.parryReadyAt = now;
     this.chargeHoldStart = undefined;
@@ -4246,23 +4293,27 @@ export class GameScene extends Phaser.Scene {
       this.internalDamage = healed.internal;
     }
 
-    // 보스·적 초대형 경직 + 차지 패링 반사 충격파 피해
-    enemy.onUnboundParried(now, BOSS.unboundStunMs, enemyPushX, enemyPushY, BLOCK.enemyKnockback);
-    if (c.alive && !enemy.untouchable) {
-      const shockDamage = monsterDamageTaken(
-        Math.round(this.stats.damageMax * BOSS.unboundCounterScale * this.resonanceDamage()),
-        enemy.stats.defense,
-      );
-      const died = c.hurt(shockDamage, 0xfff0a0);
-      this.showDamage(c.x, c.y - 125, shockDamage, '#ffe878', 56);
-      if (died) this.resolveEnemyHit(enemy, true, enemyPushX, enemyPushY, BLOCK.enemyKnockback * 1.5);
-      else if (entersPhaseTwo(enemy.phase, c.hp, c.maxHp)) this.startBossRoar(enemy);
+    if (rangedHit) {
+      // 원거리 공격을 차지 패링한 경우 원래 온 방향으로 강한 반사탄을 되돌려 보낸다.
+      const refDir = reflectDirection(rangedHit.dx, rangedHit.dy);
+      this.launchReflectedShot(enemy, x, y, refDir.x, refDir.y, true, rangedHit.damageScale ?? 1);
+    } else {
+      // 보스·적 초대형 경직 + 차지 패링 반사 충격파 피해
+      enemy.onUnboundParried(now, BOSS.unboundStunMs, enemyPushX, enemyPushY, BLOCK.enemyKnockback);
+      if (c.alive && !enemy.untouchable) {
+        const shockDamage = monsterDamageTaken(
+          Math.round(this.stats.damageMax * BOSS.unboundCounterScale * this.resonanceDamage()),
+          enemy.stats.defense,
+        );
+        const died = c.hurt(shockDamage, 0xfff0a0);
+        this.showDamage(c.x, c.y - 125, shockDamage, '#ffe878', 56);
+        if (died) this.resolveEnemyHit(enemy, true, enemyPushX, enemyPushY, BLOCK.enemyKnockback * 1.5);
+        else if (enemy.boss && entersPhaseTwo(enemy.phase, c.hp, c.maxHp)) this.startBossRoar(enemy);
+      }
     }
 
     this.focusCompanion(enemy);
-    this.counterTarget = enemy;
     this.bumpHitCombo(1, 'counter');
-    this.counterUntil = now + JUST_DODGE.counterMs;
     this.dodgeReadyAt = Math.max(now, this.dodgeReadyAt - BLOCK.unboundDodgeRefundMs);
     this.questEvent({ type: 'parry' });
     this.hud.showCallout('차지 패링!!', { color: '#fff2a6', stroke: '#5a1408', scale: 1.65 });
@@ -4340,7 +4391,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (Math.hypot(tip.x - base.x, tip.y - base.y) < 1) return;
-    const inPerfect = time - this.parryStartedAt <= this.activePerfectWindowMs;
+    const inPerfect = this.blocking && time - this.parryStartedAt <= this.activePerfectWindowMs;
     const palm = hero.getGuardSupportPoint();
     const dx = tip.x - base.x, dy = tip.y - base.y, length = Math.hypot(dx, dy);
     const at = palm ? ((palm.x - base.x) * dx + (palm.y - base.y) * dy) / (length * length) : 0;
@@ -4384,15 +4435,16 @@ export class GameScene extends Phaser.Scene {
     this.hud.clearCombo();
   }
 
-  /** 저스트 회피 성공: 느린 화면, 다음 공격 강화, 회피 재사용 대기 초기화, 피한 적은 멈칫. */
+  /** 저스트 회피 성공: 느린 화면, 다음 공격 일섬(2배), 회피 재사용 대기 30% 단축, 피한 적은 멈칫. */
   private onJustDodge(enemy: Enemy): void {
     const now = this.now;
     this.justDodged = true;
     this.slowMotionLeft = JUST_DODGE.slowMs;
     this.counterTarget = enemy;
     this.counterUntil = now + JUST_DODGE.counterMs;
-    this.dodgeReadyAt = now;
-    this.dodgeButton.setEnabled(true);
+    const fullCooldown = DODGE.cooldownMs * this.derived.dodgeCooldown;
+    this.dodgeReadyAt = Math.max(now, this.dodgeReadyAt - fullCooldown * JUST_DODGE.cooldownRefundRatio);
+    this.dodgeButton.setEnabled(now >= this.dodgeReadyAt);
     enemy.interrupt(now, JUST_DODGE.stunMs);
     this.focusCompanion(enemy);
     this.hud.showCallout('저스트 회피!');
@@ -4407,6 +4459,8 @@ export class GameScene extends Phaser.Scene {
     this.parryChain = { count: 0, lastAt: -Infinity };
     this.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
     this.parryPendingWhiff = false;
+    this.parryWhiffDeferred = false;
+    this.blockNeedsRelease = false;
     this.chargeHoldStart = undefined;
     this.chargeParryReady = false;
     this.unboundUntil = 0;

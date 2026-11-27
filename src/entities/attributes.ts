@@ -63,7 +63,7 @@ export interface DerivedStats {
   dodgeCooldown: number;
   /** 치명타 확률 (0~1) */
   critChance: number;
-  /** 스킬·마법(지금은 회전 베기) 피해에 곱한다 */
+  /** 스킬·마법 피해에 곱한다 */
   skillDamage: number;
   /** 얻는 골드에 곱한다 */
   goldGain: number;

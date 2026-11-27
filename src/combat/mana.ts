@@ -19,8 +19,3 @@ export function regenMana(mp: number, max: number, ms: number): number {
 export function addMana(mp: number, max: number, amount: number): number {
   return Math.max(0, Math.min(max, mp + amount));
 }
-
-/** 회전 베기가 닿는지: 주인공 발에서 본 적의 발 위치가 지면 타원(가로 radius, 세로 radius × verticalRatio) 안인지 */
-export function inSpinRadius(dx: number, dy: number, radius: number, verticalRatio: number): boolean {
-  return Math.hypot(dx, dy / verticalRatio) <= radius;
-}

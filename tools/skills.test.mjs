@@ -19,15 +19,13 @@ test('이미 칸에 놓인 기술은 다시 넣지 않는다', () => {
   assert.deepEqual(result.state.slots, [null, 'spin'], '이미 칸에 있으면 또 넣지 않는다');
 });
 
-test('저장은 배운 기술과 칸을 그대로 되살리고, 깨졌거나 배우지 않은 기술은 버린다', () => {
-  const learned = learnSkill(emptySkills(5), 'spin').state;
-  assert.deepEqual(parseSkills(serializeSkills(learned), 5), learned);
+test('저장은 깨졌거나 없어진·알 수 없는 기술(구 저장의 spin 포함)은 안전하게 버린다', () => {
   assert.deepEqual(parseSkills(null, 5), emptySkills(5));
   assert.deepEqual(parseSkills('{깨짐', 5), emptySkills(5));
   assert.deepEqual(parseSkills(JSON.stringify({ version: 99, learned: ['spin'], slots: ['spin'] }), 5), emptySkills(5));
   assert.deepEqual(parseSkills(JSON.stringify({ version: 1, learned: [], slots: ['spin'] }), 3).slots, [null, null, null], '배우지 않은 기술은 칸에 둘 수 없다');
-  assert.deepEqual(parseSkills(JSON.stringify({ version: 1, learned: ['spin', 'fly'], slots: ['spin', 'spin', 'fly'] }), 3), { learned: ['spin'], slots: ['spin', null, null] });
-  assert.deepEqual(parseSkills(serializeSkills(learned), 2).slots, ['spin', null], '칸 수는 지금 화면에 맞춘다');
+  assert.deepEqual(parseSkills(JSON.stringify({ version: 1, learned: ['spin', 'fly'], slots: ['spin', 'spin', 'fly'] }), 3), emptySkills(3), '삭제된 회전 베기와 모르는 기술은 불러올 때 비운다');
+  assert.deepEqual(parseSkills(serializeSkills(emptySkills(5)), 2), emptySkills(2), '칸 수는 지금 화면에 맞춘다');
 });
 
 test('퀘스트 보상 기술은 모두 아는 기술이다', () => {

@@ -7,9 +7,6 @@ export const MAX_ASPECT = 2.4;
 export const WORLD_WIDTH = 3432;
 export const WORLD_HEIGHT = 2288;
 
-/** 벽과 바닥이 만나는 높이 */
-export const FLOOR_TOP = 400;
-
 /** 플레이어 이동 속도(px/초). 세로 이동은 원근감을 위해 조금 느리게 한다. */
 export const PLAYER_SPEED = 300;
 /**
@@ -143,9 +140,9 @@ export const ENEMY = {
  *  - windowMs: 공격이 닿는 순간보다 이만큼 먼저 회피를 시작했어도 인정한다 (그보다 이르면 일반 회피)
  *  - slowScale / slowMs / rampMs: 성공하면 게임 시간이 slowScale배로 느려진다.
  *    slowMs는 실제 시간(ms)이고, 마지막 rampMs 동안 원래 속도로 돌아온다.
- *  - counterMs / counterDamage: 그 뒤 counterMs(게임 시간) 안에 시작한 공격 한 번은 피해가 counterDamage배
+ *  - counterMs / counterDamage: 그 뒤 counterMs(게임 시간) 안에 시작한 공격 한 번은 반격 돌진 일섬(기본 공격의 counterDamage배)
  *  - stunMs: 피한 적은 이 시간 동안 멈칫한다
- * 성공하면 회피 재사용 대기 시간도 바로 끝난다.
+ *  - cooldownRefundRatio: 성공하면 회피 재사용 대기 시간의 이 비율(30%)만 줄어든다.
  */
 export const JUST_DODGE = {
   windowMs: 200,
@@ -155,6 +152,7 @@ export const JUST_DODGE = {
   counterMs: 1500,
   counterDamage: 2,
   stunMs: 1300,
+  cooldownRefundRatio: 0.3,
 };
 
 /**
@@ -213,7 +211,7 @@ export const ATTACK_FEEL = {
   counterRushMinLunge: 64,
   counterRushDefaultLunge: 92,
   counterRushMaxLunge: 155,
-  counterRushDamage: 2.4,
+  counterRushDamage: 2,
   critZoomPeak: 1.032,
   finisherZoomPeak: 1.04,
   killZoomPeak: 1.045,
@@ -253,7 +251,7 @@ export const PROGRESSION = {
 };
 
 /**
- * 마나와 회전 베기.
+ * 마나.
  *  - 최대 마나 = base + perLevel × (레벨 - 1) + 지능(INT)의 몫. 레벨이 오르면 가득 찬다.
  *  - 게임 시계로 초당 regenPerSecond씩 저절로 차고, 검으로 적을 벨 때마다 perHit씩 찬다.
  *  - 집·여관에서 쉬거나 치유소에서 치료받으면 가득 찬다.
@@ -263,19 +261,6 @@ export const MANA = {
   perLevel: 1,
   regenPerSecond: 0.5,
   perHit: 2,
-};
-
-/**
- * 회전 베기(스킬 버튼, 키 K): 마나를 써서 주인공 둘레(지면 타원, 반지름 radius)의 적을 한꺼번에 벤다.
- * 세 번째 콤보 자세를 쓰고, hitDelayMs 뒤에 한 번 맞힌다. 피해 = 공격력 × damage.
- */
-export const SPIN_SLASH = {
-  cost: 15,
-  radius: 230,
-  damage: 1.5,
-  knockback: 1.8,
-  hitDelayMs: 180,
-  cooldownMs: 900,
 };
 
 /**
@@ -364,7 +349,8 @@ export const BLOCK = {
   unboundResonanceParts: 3,
   glintLeadMs: 240,
   cooldownMs: 450,
-  stunMs: 1200,
+  /** 일반 정밀 패링은 기절(스턴)을 주지 않고 공격만 끊어 평소 회복으로 넘긴다(연속 파훼·차지 패링만 특수 경직). */
+  stunMs: 0,
   moveScale: 0.4,
   dodgeRefundMs: 1000,
 };

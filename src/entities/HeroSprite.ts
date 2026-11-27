@@ -10,12 +10,6 @@ import guardData from '../assets/hero/academy/guard/frames.json';
 import guardSheet from '../assets/hero/academy/guard/bodies.webp?url';
 import dodgeData from '../assets/hero/academy/dodge/frames.json';
 import dodgeSheet from '../assets/hero/academy/dodge/cardinal.webp?url';
-import attackFrontData from '../assets/hero/academy/combo-proto/attack-front_frames.json';
-import attackFrontSheet from '../assets/hero/academy/combo-proto/attack-front.png?url';
-import attackDownDiagData from '../assets/hero/academy/combo-proto/attack-down-diag_frames.json';
-import attackDownDiagSheet from '../assets/hero/academy/combo-proto/attack-down-diag.png?url';
-import attackCorrectionsData from '../assets/hero/academy/combo-proto/attack-corrections_frames.json';
-import attackCorrectionsSheet from '../assets/hero/academy/combo-proto/attack-corrections.webp?url';
 import attackSideData from '../assets/hero/academy/attack-six/attack-side_frames.json';
 import attackSideSheet from '../assets/hero/academy/attack-six/attack-side.webp?url';
 import attack2SideData from '../assets/hero/academy/attack-six/attack2-side_frames.json';
@@ -34,24 +28,10 @@ import attack2BackData from '../assets/hero/academy/attack-six/attack2-back_fram
 import attack2BackSheet from '../assets/hero/academy/attack-six/attack2-back.webp?url';
 import attack3BackData from '../assets/hero/academy/attack-six/attack3-back_frames.json';
 import attack3BackSheet from '../assets/hero/academy/attack-six/attack3-back.webp?url';
-import attack1DownDiagSixData from '../assets/hero/academy/attack-six/attack1-down-diag_frames.json';
-import attack1DownDiagSixSheet from '../assets/hero/academy/attack-six/attack1-down-diag.webp?url';
-import attack2DownDiagSixData from '../assets/hero/academy/attack-six/attack2-down-diag_frames.json';
-import attack2DownDiagSixSheet from '../assets/hero/academy/attack-six/attack2-down-diag.webp?url';
-import attack3DownDiagSixData from '../assets/hero/academy/attack-six/attack3-down-diag_frames.json';
-import attack3DownDiagSixSheet from '../assets/hero/academy/attack-six/attack3-down-diag.webp?url';
-import attack1UpDiagSixData from '../assets/hero/academy/attack-six/attack1-up-diag_frames.json';
-import attack1UpDiagSixSheet from '../assets/hero/academy/attack-six/attack1-up-diag.webp?url';
-import attack2UpDiagSixData from '../assets/hero/academy/attack-six/attack2-up-diag_frames.json';
-import attack2UpDiagSixSheet from '../assets/hero/academy/attack-six/attack2-up-diag.webp?url';
-import attack3UpDiagSixData from '../assets/hero/academy/attack-six/attack3-up-diag_frames.json';
-import attack3UpDiagSixSheet from '../assets/hero/academy/attack-six/attack3-up-diag.webp?url';
 import { isAttackFollowPause } from './attackTiming';
 import walkSheet from '../assets/hero/academy/unarmed/player_walk.webp?url';
 import combatSheet from '../assets/hero/academy/unarmed/player_combat.webp?url';
 import diagonalSheet from '../assets/hero/academy/unarmed/player_walk_diagonal.webp?url';
-import attackDownSheet from '../assets/hero/academy/unarmed/player_attack_down.webp?url';
-import attackUpSheet from '../assets/hero/academy/unarmed/player_attack_up.webp?url';
 import weaponAtlas from '../assets/hero/weapons/atlas.json';
 import weaponSheet from '../assets/hero/weapons/weapons.webp?url';
 import perspectiveAtlas from '../assets/hero/weapons/perspective_atlas.json';
@@ -74,13 +54,10 @@ interface SpriteFrame {
   weaponPerspective?: string;
 }
 const FRAMES = new Map<string, SpriteFrame>([
-  ...data.frames,
+  ...data.frames.filter(f => f.texture !== 'hero-academy-attack-down' && f.texture !== 'hero-academy-attack-up'),
   ...deathData.frames,
   ...guardData.frames,
   ...dodgeData.frames,
-  ...attackFrontData.frames,
-  ...attackDownDiagData.frames,
-  ...attackCorrectionsData.frames,
   ...attackSideData.frames,
   ...attack2SideData.frames,
   ...attack3SideData.frames,
@@ -90,12 +67,6 @@ const FRAMES = new Map<string, SpriteFrame>([
   ...attack1BackData.frames,
   ...attack2BackData.frames,
   ...attack3BackData.frames,
-  ...attack1DownDiagSixData.frames,
-  ...attack2DownDiagSixData.frames,
-  ...attack3DownDiagSixData.frames,
-  ...attack1UpDiagSixData.frames,
-  ...attack2UpDiagSixData.frames,
-  ...attack3UpDiagSixData.frames,
 ].map((f) => [f.name, f]));
 
 export function preloadHeroSprite(scene: Phaser.Scene): void {
@@ -110,22 +81,11 @@ export function preloadHeroSprite(scene: Phaser.Scene): void {
   if (!scene.textures.exists('hero-academy-attack-back6')) scene.load.image('hero-academy-attack-back6', attack1BackSheet);
   if (!scene.textures.exists('hero-academy-attack2-back6')) scene.load.image('hero-academy-attack2-back6', attack2BackSheet);
   if (!scene.textures.exists('hero-academy-attack3-back6')) scene.load.image('hero-academy-attack3-back6', attack3BackSheet);
-  if (!scene.textures.exists('hero-academy-attack-down-diag6')) scene.load.image('hero-academy-attack-down-diag6', attack1DownDiagSixSheet);
-  if (!scene.textures.exists('hero-academy-attack2-down-diag6')) scene.load.image('hero-academy-attack2-down-diag6', attack2DownDiagSixSheet);
-  if (!scene.textures.exists('hero-academy-attack3-down-diag6')) scene.load.image('hero-academy-attack3-down-diag6', attack3DownDiagSixSheet);
-  if (!scene.textures.exists('hero-academy-attack-up-diag6')) scene.load.image('hero-academy-attack-up-diag6', attack1UpDiagSixSheet);
-  if (!scene.textures.exists('hero-academy-attack2-up-diag6')) scene.load.image('hero-academy-attack2-up-diag6', attack2UpDiagSixSheet);
-  if (!scene.textures.exists('hero-academy-attack3-up-diag6')) scene.load.image('hero-academy-attack3-up-diag6', attack3UpDiagSixSheet);
-  if (!scene.textures.exists('hero-academy-attack-corrections')) scene.load.image('hero-academy-attack-corrections', attackCorrectionsSheet);
   if (!scene.textures.exists('hero-weapons')) scene.load.image('hero-weapons', weaponSheet);
   if (!scene.textures.exists('hero-weapons-perspective')) scene.load.image('hero-weapons-perspective', perspectiveSheet);
   if (!scene.textures.exists('hero-academy-walk')) scene.load.image('hero-academy-walk', walkSheet);
   if (!scene.textures.exists('hero-academy-combat')) scene.load.image('hero-academy-combat', combatSheet);
   if (!scene.textures.exists('hero-academy-diagonal')) scene.load.image('hero-academy-diagonal', diagonalSheet);
-  if (!scene.textures.exists('hero-academy-attack-down')) scene.load.image('hero-academy-attack-down', attackDownSheet);
-  if (!scene.textures.exists('hero-academy-attack-up')) scene.load.image('hero-academy-attack-up', attackUpSheet);
-  if (!scene.textures.exists('hero-academy-attack-front')) scene.load.image('hero-academy-attack-front', attackFrontSheet);
-  if (!scene.textures.exists('hero-academy-attack-down-diag')) scene.load.image('hero-academy-attack-down-diag', attackDownDiagSheet);
   if (!scene.textures.exists('hero-academy-guard')) scene.load.image('hero-academy-guard', guardSheet);
 }
 
@@ -386,8 +346,10 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     let { base, tip } = pose.blade;
     if (this.guarding && f.grip) {
       // A small settling motion keeps the blade and hilt rigid around the actual fist.
+      // guard-back은 원본 검이 왼쪽 위(-140°)를 향하므로 회전 각도 부호를 반전해 다른 7방향과 움직임을 맞춘다.
       const guardRecoil = this.guardRecoilAt >= 0 ? this.guardTime - this.guardRecoilAt : undefined;
-      const angle = guardMotion(this.guardTime, this.facing, guardRecoil, this.guardMode).swordAngle;
+      const rawAngle = guardMotion(this.guardTime, this.facing, guardRecoil, this.guardMode).swordAngle;
+      const angle = f.name === 'guard-back' ? -rawAngle : rawAngle;
       const grip = f.grip;
       const rotate = (p: { x: number; y: number }) => ({
         x: grip.x + (p.x - grip.x) * Math.cos(angle) - (p.y - grip.y) * Math.sin(angle),

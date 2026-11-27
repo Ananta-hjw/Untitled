@@ -35,9 +35,10 @@ test('담은 힘은 keepMs가 지나면 사라지고, 사라진 뒤 막으면 1�
   assert.equal(activeAbsorb(NO_ABSORB, 0), undefined);
 });
 
-test('기본 칼질은 0.3배, 1단 0.65배, 2단 1.1배, 3단 2.5배이고 3초 동안 이어진다', () => {
-  assert.equal(ABSORB.keepMs, 3000);
-  assert.deepEqual([0, 1, 2, 3].map(absorbDamageScale), [0.3, 0.65, 1.1, 2.5]);
+test('기본 칼질은 0.5배, 1단 0.9배, 2단 1.4배, 3단 2.5배이고 5초 동안 이어지며 2단 < 회피 일섬(2배) < 3단 위계를 지킨다', () => {
+  assert.equal(ABSORB.keepMs, 5000);
+  assert.deepEqual([0, 1, 2, 3].map(absorbDamageScale), [0.5, 0.9, 1.4, 2.5]);
+  assert.ok(absorbDamageScale(2) < 2 && absorbDamageScale(3) > 2);
 });
 
 test('속성은 3단일 때만 실린다', () => {

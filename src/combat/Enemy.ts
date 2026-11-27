@@ -9,7 +9,6 @@ import type { WalkArea } from '../world/walkArea';
 import { MonsterSprite } from './MonsterSprite';
 import { MONSTERS, WATER_SHOT, isCharger, isEliteKind, monsterKind, enemyHitReaches, type EnemyHit, type EnemyKey, type MonsterKind, type MonsterStats } from './monsterTypes';
 import { ENEMY_COMBO, pickCombo, type ComboPattern } from './enemyCombo';
-import { bendCharge } from './deflect';
 import { buildMeleeLungeHit, plannedMeleeLunge, stepAimTracking, trackLockMs, trackingTurnRate } from './enemyTracking';
 import { FOG_CROW, fogEscape } from './fogCrow';
 import { scaleMonster } from './monsterLevel';
@@ -179,9 +178,12 @@ export class Enemy {
     const opponent = chaseTarget ?? player;
     const dx = opponent.x - c.x;
     const dy = opponent.y - c.y;
-    // 보스는 나타나면 주인공이 어디 있든 쫓는다.
+    // 보스는 나타나면 주인공이 어디 있든 쫓는다. 순찰형(stone-sentry)은 자기 영역 안에서 접근 시 추격·교전한다.
+    const sentryLeash = this.patrolHome
+      ? Math.hypot(c.x - this.patrolHome.x, c.y - this.patrolHome.y) <= 260
+      : true;
     const playerNear = opponent.alive && (this.patrolHome
-      ? Math.abs(dx) < ENEMY.attackRangeX && Math.abs(dy) < ENEMY.attackRangeY
+      ? Math.abs(dx) < 220 && Math.abs(dy) < 110 && sentryLeash
         && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
       : this.boss || (Math.abs(dx) < ENEMY.aggroX && Math.abs(dy) < ENEMY.aggroY));
     if (this.waterJet && c.sprite instanceof MonsterSprite) {
@@ -220,7 +222,9 @@ export class Enemy {
       }
 
       case 'chase': {
-        if (!opponent.alive || (this.patrolHome ? !playerNear : !this.boss && Math.abs(dx) > ENEMY.aggroX * 1.5)) {
+        const lostSentry = this.patrolHome && (Math.abs(dx) > 300 || Math.abs(dy) > 150
+          || Math.hypot(c.x - this.patrolHome.x, c.y - this.patrolHome.y) > 260);
+        if (!opponent.alive || (this.patrolHome ? lostSentry : !this.boss && Math.abs(dx) > ENEMY.aggroX * 1.5)) {
           this.state = 'wander';
           if (!this.patrolHome) this.target.set(c.x, c.y);
           break;
@@ -387,28 +391,23 @@ export class Enemy {
     dirY: number,
     push: number,
     perfect: boolean,
-    pass?: { x: number; y: number } | 'straight',
+    pass?: 'straight',
   ): ParryBreakResult {
     const c = this.character;
     if (this.state === 'dead' || this.state === 'roar' || this.state === 'retreat' || this.state === 'veil') {
       return { outcome: 'normalBreak', step: 1, total: 1 };
     }
     if (perfect) this.comboParries += 1;
-    const step = this.comboParries;
+    const hitIndex = Math.max(1, Math.min(this.chainTotal, this.chainTotal - this.chainLeft));
+    const step = perfect ? this.comboParries : hitIndex;
     const total = Math.max(step, this.chainTotal);
-    const outcome = bossParryOutcome(this.boss || this.comboWindups !== undefined, this.chainLeft, step, perfect);
+    const outcome = bossParryOutcome(this.boss || this.comboWindups !== undefined, this.chainLeft, this.comboParries, perfect);
     const breakStun = this.boss ? BOSS.parryChainStunMs : ENEMY_COMBO.breakStunMs;
 
-    // 정예·보스의 돌진(또는 흘린 돌진)은 멈추지 않고 원래 가려던 자리까지 지나간다. 경직은 돌진이 끝나면 준다.
+    // 정예·보스의 돌진은 패링·막기를 당해도 방향을 꺾지 않고 원래 가려던 자리까지 직진 통과한 뒤 경직한다.
     if (pass && this.chargingNow(time)) {
       this.strikeLanded = true;
       this.hazards?.clearAim();
-      if (pass !== 'straight') {
-        const bent = bendCharge(this.aim, pass);
-        this.aim.x = bent.x;
-        this.aim.y = bent.y;
-        if (c.sprite instanceof MonsterSprite) c.sprite.snapFacing(bent.x, bent.y);
-      }
       this.deferredParry = { outcome, stun: outcome === 'chainBreak' ? breakStun : durationMs, perfect };
       c.flash(outcome === 'chainBreak' ? 0xffe880 : perfect ? 0xbef0ff : 0xffb35a);
       return { outcome, step, total, passing: true };
@@ -435,11 +434,34 @@ export class Enemy {
 
     const stun = outcome === 'chainBreak' ? breakStun : durationMs;
     const pushScale = outcome === 'chainBreak' ? 1.45 : this.boss ? 0.7 : 1;
+    if (stun <= 0) {
+      // 일반 정밀 패링: 기절(스턴) 없이 현재 공격만 끊고 평소 회복으로 넘어간다.
+      this.hazards?.clearAim();
+      this.cancelStrike();
+      this.chainLeft = 0;
+      this.chainPending = false;
+      this.comboParries = 0;
+      this.parryStunUntil = 0;
+      this.staggerMark.setVisible(false);
+      this.state = 'recover';
+      this.timer = time + this.stats.recoverMs;
+      this.hitAt = time;
+      const { scaleX, scaleY } = hitSquash(0);
+      c.sprite.setScale(scaleX, scaleY);
+      c.flash(0xbef0ff);
+      c.knockback.set(dirX * push * pushScale, dirY * push * pushScale * VERTICAL_SPEED_RATIO);
+      return { outcome, step, total };
+    }
     this.interrupt(time, stun);
     if (this.state === 'recover') {
       this.hitAt = time;
-      this.parryStunUntil = time + stun;
-      this.parryStunPerfect = perfect;
+      if (outcome === 'chainBreak') {
+        this.parryStunUntil = time + stun;
+        this.parryStunPerfect = true;
+      } else {
+        this.parryStunUntil = 0;
+        this.staggerMark.setVisible(false);
+      }
       const { scaleX, scaleY } = hitSquash(0);
       c.sprite.setScale(scaleX, scaleY);
       c.flash(outcome === 'chainBreak' ? 0xffe880 : perfect ? 0xbef0ff : 0xffb35a);
@@ -469,9 +491,16 @@ export class Enemy {
     c.knockback.set(dirX * push * 1.65, dirY * push * 1.65 * VERTICAL_SPEED_RATIO);
   }
 
-  /** 맞으면 준비 동작이 끊기고 잠깐 멈칫한다. 저스트 회피를 당하면 더 오래 멈춘다. */
+  /** 현재 패링 경직 상태인지 */
+  isParryStunned(time: number): boolean {
+    return this.state === 'recover' && time < this.parryStunUntil;
+  }
+
+  /** 맞으면 준비 동작이 끊기고 잠깐 멈칫한다. 이미 더 긴 패링 경직 중이거나 돌진 통과 경직 예약 중이면 덮어쓰지 않는다. */
   interrupt(time: number, durationMs: number = ENEMY.staggerMs): void {
     if (this.state === 'dead' || this.state === 'roar' || this.state === 'retreat' || this.state === 'veil') return;
+    if (this.deferredParry !== undefined) return;
+    if (this.state === 'recover' && this.timer > time + durationMs) return;
     this.hazards?.clearAim();
     this.cancelStrike();
     // 패링·저스트 회피로 멈칫하면 이어 하려던 돌진도 끊긴다.
@@ -484,7 +513,7 @@ export class Enemy {
 
   /** 패링으로 경직된 동안 몸이 흔들리고 머리 위에 경직 표식이 회전한다. */
   private updateParryStun(time: number): void {
-    const active = this.state === 'recover' && time < this.parryStunUntil;
+    const active = this.state === 'recover' && time < this.parryStunUntil && !this.untouchable;
     this.staggerMark.setVisible(active);
     if (!active) {
       if (this.parryStunUntil > 0) {
@@ -515,9 +544,10 @@ export class Enemy {
     }
   }
 
-  /** 칼에 맞았을 때: 그 자리에서 납작해졌다가 출렁이며 돌아온다 (게임 시계 기준). */
+  /** 칼에 맞았을 때: 그 자리에서 납작해졌다가 출렁이며 돌아온다 (게임 시계 기준). 패링 경직 중에는 점멸·도주하지 않는다. */
   onHit(time: number, area?: WalkArea, threat?: { x: number; y: number }): void {
-    if (this.kind === 'blink-fairy' && this.character.alive && area && threat
+    const stunned = this.isParryStunned(time) || this.deferredParry !== undefined;
+    if (!stunned && this.kind === 'blink-fairy' && this.character.alive && area && threat
       && !this.blink && time - this.escapedAt >= FAIRY_BLINK.cooldownMs) {
       const c = this.character;
       const point = fogEscape(c, threat, (x, y) => area.hasClearPath(c.x, c.y, x, y)
@@ -533,7 +563,7 @@ export class Enemy {
         return;
       }
     }
-    if (this.kind === 'fog-crow' && this.character.alive && area && threat && time - this.escapedAt >= FOG_CROW.cooldownMs) {
+    if (!stunned && this.kind === 'fog-crow' && this.character.alive && area && threat && time - this.escapedAt >= FOG_CROW.cooldownMs) {
       const c = this.character;
       const point = fogEscape(c, threat, (x, y) => area.hasClearPath(c.x, c.y, x, y)
         && [[0, 0], [-18, 0], [18, 0], [0, -12], [0, 12]].every(([dx, dy]) => area.contains(x + dx, y + dy)));
@@ -630,9 +660,10 @@ export class Enemy {
     if (c.sprite instanceof MonsterSprite) c.sprite.showSpecial('veil-windup');
   }
 
-  /** 보스 2페이즈 전환: 하던 공격을 멈추고 포효한 뒤 물러난다. */
+  /** 보스 2페이즈 전환: 하던 공격을 멈추고 포효한 뒤 물러난다. 포효 시작과 동시에 2페이즈로 전환해 후퇴 중 재발동을 막는다. */
   startRoar(time: number): void {
-    if (this.state === 'dead') return;
+    if (!this.boss || this.state === 'dead' || this.phase >= 2) return;
+    this.phase = 2;
     this.cancelStrike();
     this.clearProjectile();
     this.chainLeft = 0;
@@ -701,8 +732,15 @@ export class Enemy {
     this.strikeLanded = false;
     this.glintShown = false;
     const distance = Math.hypot(dx, dy) || 1;
-    this.aim.x = dx / distance;
-    this.aim.y = dy / distance;
+    // 서리 딱정벌레는 느리게 도는 개성을 유지하기 위해 현재 몸이 향한 방향에서부터 서서히 추적한다.
+    if (this.kind === 'frost-beetle' && this.character.sprite instanceof MonsterSprite) {
+      const f = this.character.sprite.facingVector();
+      this.aim.x = f.x;
+      this.aim.y = f.y;
+    } else {
+      this.aim.x = dx / distance;
+      this.aim.y = dy / distance;
+    }
     this.chargeProgress = 0;
     const base = this.comboWindups?.[this.comboIndex] ?? this.stats.windupMs;
     this.windupMs = base * (time < this.chillUntil ? this.chillWindup : 1);
@@ -804,7 +842,7 @@ export class Enemy {
           if (!this.strikeLanded) {
             this.lastStrikeAt = time;
             this.strikeLanded = onStrike(this, { fromX, fromY, toX: c.x, toY: c.y,
-              radiusX: this.kind === 'fog-crow' ? 42 : 65, radiusY: this.kind === 'fog-crow' ? 28 : 38, dx: this.aim.x, dy: this.aim.y }) === true;
+              radiusX: this.kind === 'fog-crow' ? 42 : 65, radiusY: this.kind === 'fog-crow' ? 28 : 38, dx: this.aim.x, dy: this.aim.y, melee: true }) === true;
             if (this.state !== 'windup') return;
           }
         }
@@ -859,19 +897,29 @@ export class Enemy {
       this.timer = time + (this.boss ? BOSS.parryChainGapMs : ENEMY_COMBO.parryGapMs);
       return;
     }
-    this.interrupt(time, d.stun);
-    this.hitAt = time;
-    this.parryStunUntil = time + d.stun;
-    this.parryStunPerfect = d.perfect;
     const { scaleX, scaleY } = hitSquash(0);
     this.character.sprite.setScale(scaleX, scaleY);
+    if (d.stun <= 0) {
+      this.parryStunUntil = 0;
+      this.staggerMark.setVisible(false);
+      return;
+    }
+    this.interrupt(time, d.stun);
+    this.hitAt = time;
+    if (d.outcome === 'chainBreak') {
+      this.parryStunUntil = time + d.stun;
+      this.parryStunPerfect = true;
+    } else {
+      this.parryStunUntil = 0;
+      this.staggerMark.setVisible(false);
+    }
   }
 
-  /** 돌진하는 몸이 실제로 움직이는 중인지 (예비 동작이 끝나고 돌진이 끝나기 전) */
+  /** 돌진하는 몸이 실제로 움직이는 중인지 (예비 동작이 끝나고 돌진 끝 프레임까지 포함) */
   chargingNow(time: number): boolean {
     if (this.state !== 'windup' || !isCharger(this.kind) || this.attackStartedAt === undefined) return false;
     const elapsed = time - this.attackStartedAt;
-    return elapsed >= this.windupMs && elapsed < this.windupMs + this.stats.strikeMs;
+    return elapsed >= this.windupMs && elapsed <= this.windupMs + this.stats.strikeMs;
   }
 
   /** 정예(상급 이상) 또는 보스 */
@@ -897,12 +945,6 @@ export class Enemy {
 
   private speedScale(time: number): number {
     return time < this.chillUntil ? this.chillSpeed : 1;
-  }
-
-  /** 흘려진 적이 흘린 쪽으로 몸을 돌린다 (서리 딱정벌레도 단번에 돌아가 옆구리·등을 드러낸다) */
-  turnTo(x: number, y: number): void {
-    if (this.character.sprite instanceof MonsterSprite) this.character.sprite.snapFacing(x, y);
-    this.character.face(x);
   }
 
   /**

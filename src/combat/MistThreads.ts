@@ -71,12 +71,6 @@ export class MistThreads {
     return this.sever(target, target === player ? sweep.current.base : knot, now);
   }
 
-  cutWithSpin(player: Point, rx: number, ry: number, now: number): Point | undefined {
-    const target = this.held;
-    if (!target || !insideEllipse(target.x - player.x, target.y - player.y, rx, ry)) return;
-    return this.sever(target, { x: target.x, y: target.y - THREADS.knotLift }, now);
-  }
-
   clear(): void {
     if (this.weave) this.caster.endStrike();
     this.weave = undefined;

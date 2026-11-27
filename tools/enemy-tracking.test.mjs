@@ -19,6 +19,9 @@ test('모든 전투 몬스터는 예고 앞쪽에서 지연 추적하고 안광(
   // 슬라임(480/110)은 안광(350ms) 직전에 잠겨 패링 시그널과 맞물린다
   const slimeLock = trackLockMs(MONSTERS.slime.windupMs, MONSTERS.slime.strikeMs, false);
   assert.ok(slimeLock <= MONSTERS.slime.windupMs + MONSTERS.slime.strikeMs - BLOCK.glintLeadMs + 1);
+  // 안개 까마귀(360/0, 돌진형)도 안광 시점(120ms)에 조준이 잠겨 안광 이후 방향이 틀어지지 않는다
+  const crowLock = trackLockMs(MONSTERS['fog-crow'].windupMs, MONSTERS['fog-crow'].strikeMs, true);
+  assert.ok(crowLock <= MONSTERS['fog-crow'].windupMs - BLOCK.glintLeadMs + 1, `fog-crow lock=${crowLock}`);
 });
 
 test('지연 추적 회전은 360도 부드럽게 플레이어를 따라가고, 서리 딱정벌레는 느린 회전 개성을 유지한다', () => {

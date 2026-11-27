@@ -156,24 +156,6 @@ export class ImpactEffects {
     }
   }
 
-  /** 회전 베기(스킬) 발동 시 바닥에 펼쳐지는 2겹 황금 원형 검기 링 + 사방 스파크 */
-  spinRing(x: number, y: number, radius: number, now: number): void {
-    const scale1 = (radius / 60) * 1.05;
-    this.spawn(TEX.ring, now, { x, y: y - 30, life: 240, scale0: 0.45, scale1, alpha0: 0.95, tint: 0xfff0c2, flat: 0.52, depthOffset: 402 });
-    this.spawn(TEX.ring, now, { x, y: y - 30, life: 310, scale0: 0.3, scale1: scale1 * 1.18, alpha0: 0.65, tint: 0xffb347, flat: 0.52, depthOffset: 401 });
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
-      const speed = 520 + Math.random() * 280;
-      this.spawn(TEX.streak, now, {
-        x: x + Math.cos(a) * radius * 0.35, y: y - 30 + Math.sin(a) * radius * 0.2,
-        vx: Math.cos(a) * speed, vy: Math.sin(a) * speed * 0.55,
-        life: 160 + Math.random() * 80, scale0: 0.95, scale1: 0.15,
-        alpha0: 0.95, tint: i % 2 === 0 ? 0xffffff : 0xffcc66, drag: 5, align: true, depthOffset: 403,
-      });
-    }
-    this.dust(x, y, 10, now, radius * 0.45);
-  }
-
   /** 적 처치(Kill) 피니시 폭발 연출 — 마지막 적·보스 막타에는 웅장한 십자 별빛과 충격파를 더한다. */
   killBurst(x: number, y: number, color: number, dirX: number, dirY: number, lastKill: boolean, now: number): void {
     const ang = Math.atan2(dirY, dirX);
@@ -402,7 +384,7 @@ export class ImpactEffects {
         this.impactShadeElapsed = -1;
         this.impactShade.setVisible(false);
       } else {
-        this.impactShade.setFillStyle(0x050a16, a).setVisible(true);
+        this.impactShade.setFillStyle(this.impactShade.fillColor, a).setVisible(true);
       }
     }
     if (this.screenLeft > 0) {

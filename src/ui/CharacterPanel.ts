@@ -42,6 +42,8 @@ export interface CharacterView {
   derived: DerivedStats;
   inventory: Inventory;
   gear: Gear;
+  /** 대장간 승급 기능 해금 여부(1장 '도란의 검' 완료 후 해금). 생략 시 true */
+  promotionUnlocked?: boolean;
 }
 
 export interface CharacterActions {
@@ -555,7 +557,20 @@ export class CharacterPanel {
       return;
     }
 
-    // 승급 모드 (골드 + 재료 필요, 무기 즉시 외형 변화 / 방어구 4부위 일치 시 외형 변화)
+    // 승급 모드 (1장 '도란의 검' 완료 후 해금 — 골드 + 재료 필요)
+    if (view.promotionUnlocked === false) {
+      lines.push("1장 '도란의 검' 퀘스트를 완료하면 대장간 승급이 해금됩니다.");
+      lines.push('지금은 [강화] 탭에서 골드로 장비 능력치를 올릴 수 있습니다.');
+      if (slot === 'weapon') lines.push(`현재 무기 외형  ${weaponAppearanceLabel(rk)}`);
+      else lines.push(`현재 방어구 외형  ${armorAppearanceLabel(armor.stage)}`);
+      this.detailText.setText(lines.join('\n')).setPosition(x + 18, y + 98)
+        .setWordWrapWidth(right - x - 36, true).setVisible(true);
+      const buttonY = bottom - 36, buttonWidth = right - x - 36;
+      this.actionButton.setText('도란의 검 완료 후 해금');
+      placeMenuButton(g, this.actionButton, x + 18 + buttonWidth / 2, buttonY, buttonWidth, 48, 'disabled');
+      return;
+    }
+
     const recipe = promotionRecipe(slot, rk);
     if (!recipe) {
       lines.push(`최대 승급(${rankLabel(MAX_RANK)})에 도달했습니다.`);
@@ -573,10 +588,10 @@ export class CharacterPanel {
     if (slot === 'weapon') {
       lines.push(`외형 변화  ${weaponAppearanceLabel(rk)} → ${weaponAppearanceLabel(recipe.targetRank)}`);
     } else {
-      lines.push(`방어구 외형  ${armorAppearanceLabel(armor.stage)}`);
+      lines.push(`방어구 단계  ${armorAppearanceLabel(armor.stage)}`);
       if (armor.nextStage !== null) {
         const miss = armor.missing.map((s) => SLOT_INFO[s].name).join('·');
-        lines.push(`4부위 모두 ${rankLabel(armor.nextStage)} 시 외형 변화 (${armor.readyCount}/${armor.total} · 미달: ${miss})`);
+        lines.push(`4부위 모두 ${rankLabel(armor.nextStage)} 달성 시 진화 (${armor.readyCount}/${armor.total} · 미달: ${miss})`);
       }
     }
     const matText = recipe.materials

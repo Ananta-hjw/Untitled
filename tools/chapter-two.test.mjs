@@ -72,7 +72,7 @@ test('습격 뒤 광장에서 일하는 사람들의 길은 페른의 수레를 
   }
 });
 
-test('떠날 채비: 남문의 수레 뒤 이어지고, 루안에게 회전 베기를 배운 뒤 세레나·리네아·에일라에게 인사하고 헤르만에게 여비를 받는다', () => {
+test('떠날 채비: 남문의 수레 뒤 이어지고, 루안·세레나·리네아·에일라에게 인사하고 헤르만에게 여비를 받는다', () => {
   let state = { ...afterSword, 'fern-cart': { status: 'ready', count: 1, step: 2 } };
   const shop = talkTo('fern', state);
   assert.equal(shop.completed?.id, 'fern-cart');
@@ -90,7 +90,7 @@ test('떠날 채비: 남문의 수레 뒤 이어지고, 루안에게 회전 베�
     state = r.state;
     completed = r.completed ?? completed;
   }
-  assert.deepEqual(skills, ['spin'], '루안에게서 회전 베기 하나');
+  assert.deepEqual(skills, [], '회전 베기 삭제 이후 떠날 채비에서 따로 기술을 지급하지 않는다');
   assert.equal(completed?.id, 'farewell');
   assert.equal(completed.rewardGold, 100);
   assert.equal(state.farewell.status, 'done');

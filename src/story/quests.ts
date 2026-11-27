@@ -59,7 +59,7 @@ export interface QuestObjective {
   encounter?: 'village-raid';
   monster?: MonsterKind;
   lines?: DialogueLine[];
-  /** 이 단계를 마치면 배우는 기술 (예: 떠날 채비에서 루안에게 배우는 회전 베기) */
+  /** 이 단계를 마치면 배우는 기술 */
   rewardSkill?: SkillId;
   /** 이 단계를 마친 대화 뒤 그 자리에서 하룻밤을 보낸다 (고개의 쉼터: 화면이 어두워졌다 밝아지고, 고개 쉼터가 다시 시작할 자리가 된다) */
   night?: boolean;
@@ -74,6 +74,8 @@ export interface QuestDef {
   giver: NpcId;
   /** 이 퀘스트를 끝내야 받을 수 있다 */
   requires?: QuestId;
+  /** 진행 중인 특정 퀘스트의 최소 단계(minStep 이상이거나 완료 시 해금) */
+  requiresStep?: { quest: QuestId; minStep: number };
   /** 메인 스토리 퀘스트인지 */
   main?: boolean;
   /** 1장 첫날(수확제 시작 전)에만 받고 진행할 수 있는 일상 서브 의뢰인지 */
@@ -429,10 +431,9 @@ export const QUESTS: QuestDef[] = [
     id: 'farewell', title: '떠날 채비', giver: 'ruan', main: true, requires: 'fern-cart', turnIn: 'herman', completeOnTarget: true,
     objective: { label: '광장의 루안에게 떠난다고 말하기', need: 1, event: 'talk', npc: 'ruan' },
     steps: [
-      { label: '광장의 루안에게 떠난다고 말하기', need: 1, event: 'talk', npc: 'ruan', rewardSkill: 'spin', lines: [
+      { label: '광장의 루안에게 떠난다고 말하기', need: 1, event: 'talk', npc: 'ruan', lines: [
         hero('스승님, 동쪽으로 가 보려고요. 시아를 데려간 그 무리가 그쪽으로 갔대요.'),
-        ruan('…그럴 줄 알았다. 앉은 채로라 미안하다만, 하나만 가르쳐 주마.'),
-        ruan('둘러싸였을 때 몸을 돌려 둘레를 한 번에 베는 법이다. 발을 디딘 채 허리로 돌아라.'),
+        ruan('…그럴 줄 알았다. 몸이 성치 않아 따라가 주지 못해 미안하구나. 네가 익힌 검과 눈을 믿어라.'),
         ruan('혼자 짊어지지 마라. 길에서 만나는 사람들에게 기대는 것도 실력이다.')] },
       { label: '리네아의 집에 있는 세레나에게 인사하기', need: 1, event: 'talk', npc: 'serena', lines: [
         line('serena', '세레나', '…가는구나. 말려도 소용없다는 거, 엄마가 제일 잘 알지.'),
@@ -617,8 +618,8 @@ export const QUESTS: QuestDef[] = [
   },
   // ---------------------------------------------------------------- 2장 서브 퀘스트 1~3
   {
-    // 1. 리네아의 첫 잉크: 떠날 채비에서 리네아를 만난 뒤. 일지를 쓸 잉크와 공책을 메리나에게 받아다 준다.
-    id: 'linea-ink', title: '리네아의 첫 잉크', giver: 'linea', requires: 'fern-cart', completeOnTarget: true,
+    // 1. 리네아의 첫 잉크: 떠날 채비에서 리네아를 만난 뒤(step 3 이상). 일지를 쓸 잉크와 공책을 메리나에게 받아다 준다.
+    id: 'linea-ink', title: '리네아의 첫 잉크', giver: 'linea', requires: 'fern-cart', requiresStep: { quest: 'farewell', minStep: 3 }, completeOnTarget: true,
     objective: { label: '잡화점의 메리나에게 잉크와 공책 받기', need: 1, event: 'talk', npc: 'merina' },
     steps: [
       { label: '잡화점의 메리나에게 잉크와 공책 받기', need: 1, event: 'talk', npc: 'merina', lines: [
@@ -738,7 +739,7 @@ export const QUESTS: QuestDef[] = [
     done: [line('doran', '도란', '오, 이 끈적한 것 좀 봐라. 좋아, 이걸로 한번 두들겨 보자고!')],
   },
   {
-    id: 'teon-lunch', title: '초소 도시락', giver: 'teon',
+    id: 'teon-lunch', title: '초소 도시락', giver: 'teon', dayOnly: true,
     objective: { label: '로제타에게 도시락 받기', need: 1, event: 'talk', npc: 'rosetta' },
     rewardXp: 15, rewardGold: 20, rewardItems: [{ id: 'lunch', count: 1 }],
     offer: [
@@ -883,7 +884,14 @@ export function isSubPaused(def: QuestDef, state: QuestState): boolean {
 }
 
 function canStart(def: QuestDef, state: QuestState): boolean {
-  return !isSubPaused(def, state) && !state[def.id] && (!def.requires || state[def.requires]?.status === 'done');
+  if (isSubPaused(def, state) || state[def.id]) return false;
+  if (def.requires && state[def.requires]?.status !== 'done') return false;
+  if (def.requiresStep) {
+    const req = state[def.requiresStep.quest];
+    if (!req) return false;
+    if (req.status !== 'done' && (req.step ?? 0) < def.requiresStep.minStep) return false;
+  }
+  return true;
 }
 
 /** 완료한 메인 다음 의뢰를 자동 수락한다. 첫 수련은 루안에게 직접 받는다. */
@@ -949,7 +957,8 @@ export function talkTo(npc: NpcId, state: QuestState): TalkResult | undefined {
   if (subTarget) return talkStep(subTarget);
   const offer = ordered.find(q => q.giver === npc && canStart(q, state));
   if (offer) return { lines: offer.offer, state: { ...state, [offer.id]: { status: 'active', count: 0 } }, accepted: offer };
-  const active = ordered.find(q => (q.giver === npc || reportTo(q) === npc) && state[q.id]?.status === 'active');
+  const active = ordered.find(q => state[q.id]?.status === 'active'
+    && (q.remindersByNpc?.[npc] !== undefined || q.giver === npc || reportTo(q) === npc));
   if (active) {
     const lines = active.remindersByNpc?.[npc] ?? (active.giver === npc ? active.reminder : undefined);
     if (lines?.length) return { lines, state };

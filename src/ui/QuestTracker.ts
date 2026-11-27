@@ -2,12 +2,12 @@ import Phaser from 'phaser';
 import { DEPTH_UI } from '../config';
 import { currentObjective, reportTo, trackedQuests, type QuestState } from '../story/quests';
 import { NPCS } from '../world/npcs';
-import { CHAPTER_TWO_CAST, FOG_INNKEEPER } from '../world/chapterTwoNpcs';
+import { CHAPTER_TWO_CAST, FOG_INNKEEPER, SUPPORTING_CAST } from '../world/chapterTwoNpcs';
 import { FERN } from '../story/chapterTwo';
 
 const FONT = 'system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 // 보고할 사람의 이름: 1장 마을 사람과 2장 인물(페른, 도르, 나루 사람들)
-const NAMES: Record<string, string> = Object.fromEntries([...NPCS, FERN, ...CHAPTER_TWO_CAST, FOG_INNKEEPER].map((n) => [n.id, n.name]));
+const NAMES: Record<string, string> = Object.fromEntries([...NPCS, FERN, ...CHAPTER_TWO_CAST, FOG_INNKEEPER, ...SUPPORTING_CAST].map((n) => [n.id, n.name]));
 /** 한 번에 보여 주는 퀘스트 수 (화면을 가리지 않게) */
 const MAX_LINES = 3;
 

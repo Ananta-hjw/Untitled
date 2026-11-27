@@ -177,3 +177,27 @@ test('퀘스트 진행은 저장했다가 그대로 불러오고, 깨진 값은 
   } });
   assert.deepEqual(parseQuests(raw), { 'ruan-training': { status: 'done', count: 3 }, 'ruan-dodge': { status: 'done', count: 3 }, 'ruan-parry': { status: 'done', count: 2 }, 'ruan-field': { status: 'ready', count: 5 } });
 });
+
+test('중간 진행 안내(remindersByNpc), 리네아의 첫 잉크 선행 단계, 테온의 도시락 낮 제한을 지킨다', () => {
+  // remindersByNpc: giver가 아닌 NPC(vernel, finn)에게 말 걸 때도 전용 안내 대사가 출력된다
+  const vernelState = { 'vernel-resonance': { status: 'active', count: 0 } };
+  const vernelRemind = talkTo('vernel', vernelState);
+  assert.ok(vernelRemind && vernelRemind.lines.some(l => l.speaker === '베르넬'));
+  const finnState = { 'still-ferry': { status: 'active', count: 0, step: 6 } };
+  const finnRemind = talkTo('finn', finnState);
+  assert.ok(finnRemind && finnRemind.lines.some(l => l.speaker === '핀'));
+
+  // 리네아의 첫 잉크는 떠날 채비에서 리네아와 인사(step 3 이상)하기 전에는 열리지 않는다
+  const beforeLinea = {
+    'fern-cart': { status: 'done', count: 1, step: 2 },
+    farewell: { status: 'active', count: 0, step: 1 },
+  };
+  assert.equal(markerFor('linea', beforeLinea), undefined);
+  assert.equal(talkTo('linea', beforeLinea), undefined);
+  const afterLinea = { ...beforeLinea, farewell: { status: 'active', count: 0, step: 3 } };
+  assert.equal(markerFor('linea', afterLinea), 'sub-new');
+
+  // 테온의 도시락은 낮 전용(dayOnly)이다
+  const teonLunch = QUESTS.find(q => q.id === 'teon-lunch');
+  assert.equal(teonLunch?.dayOnly, true);
+});

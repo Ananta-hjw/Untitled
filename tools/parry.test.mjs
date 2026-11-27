@@ -20,6 +20,7 @@ import {
   parryZoom,
   recordParryWhiff,
   recoverInternal,
+  reflectDirection,
   stepInternalHeal,
 } from '../src/combat/parry.ts';
 import { gameTimeScale, hitStopMs } from '../src/combat/hitFeel.ts';
@@ -239,6 +240,25 @@ test('8방향 막기 방향 판정: 상·하·좌·우 및 4대각선 모두 자
   assert.equal(isUnboundActive(1000, 1240, isAttackInGuardDirection('left', 1, 0)), false);
   assert.equal(isUnboundActive(1000, 1240, isAttackInGuardDirection('up-right', 1, -1)), true);
   assert.equal(isUnboundActive(1000, 1240, isAttackInGuardDirection('right', 1, 0)), true);
+});
+
+test('원거리 공격 패링 반사 방향: 날아온 방향(-dx, -dy)으로 정확히 정규화되어 되돌아간다', () => {
+  const cardinals = [
+    [[1, 0], [-1, 0]],
+    [[-1, 0], [1, 0]],
+    [[0, 1], [0, -1]],
+    [[0, -1], [0, 1]],
+  ];
+  for (const [[dx, dy], [ex, ey]] of cardinals) {
+    const r = reflectDirection(dx, dy);
+    assert.ok(Math.abs(r.x - ex) < 1e-6 && Math.abs(r.y - ey) < 1e-6);
+  }
+  const diag = reflectDirection(3, -4);
+  assert.ok(Math.abs(diag.x - (-0.6)) < 1e-6 && Math.abs(diag.y - 0.8) < 1e-6);
+  assert.ok(Math.abs(Math.hypot(diag.x, diag.y) - 1) < 1e-6);
+  // 0 벡터 방어
+  const zero = reflectDirection(0, 0);
+  assert.equal(Math.hypot(zero.x, zero.y), 1);
 });
 
 

@@ -150,7 +150,7 @@ function interiorMap(key: FerryRoomKey, room: Room): GameMap {
     spawn: arrival(room),
     interactables: [{
       id: `exit-ferry-${key}`, x, y: y - 20, radius: 75, markerHeight: 108,
-      reach: { rx: 110, up: 55, down: 35 },
+      reach: { rx: 120, up: 55, down: 35 },
       enter: { to: 'ferry-village', at: { x: door.x, y: door.y + 85 }, label: '나가기' },
     }],
   };

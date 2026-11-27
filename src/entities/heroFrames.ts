@@ -137,6 +137,14 @@ export function insideDiagonalReach(dx: number, dy: number, reach: number, verti
   return dy >= 0 && Math.hypot(dx, dy / verticalRatio) <= reach;
 }
 
+/**
+ * 위 대각선 3타 찌르기·반격 일섬의 사거리 판정: 수평 찌르기 자세가 위대각선 적의 몸통 아래로 지나쳐
+ * 빗나가는 문제를 막기 위해 판정 띠 안의 지면 거리 reach까지 맞힌다.
+ */
+export function insideUpDiagonalReach(dx: number, dy: number, reach: number, verticalRatio: number): boolean {
+  return dy <= 0 && Math.hypot(dx, dy / verticalRatio) <= reach;
+}
+
 /** Compare feet on the ground plane, not screen-space character overlap. */
 export function insideAttackLane(dx: number, dy: number, direction: { x: number; y: number },
   halfWidth: number, verticalRatio: number): boolean {

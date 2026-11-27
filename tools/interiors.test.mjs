@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { INTERIORS, WALKABLE_FURNITURE, arrivalOf, doorOf, furnitureAt, furnitureObstacles, interiorFor, roomRect } from '../src/world/interiors.ts';
+import { FERRY_INTERIOR_MAPS } from '../src/world/ferryInteriors.ts';
 import { MAPS, findExit, walkable } from '../src/world/maps.ts';
-import { findInteractable } from '../src/world/interactables.ts';
+import { findInteractable, interactablesInReach } from '../src/world/interactables.ts';
 import { BUILDINGS, PLAYER_SPAWN } from '../src/world/villageLayout.ts';
 
 test('남쪽 입구를 뺀 여덟 건물에 실내가 있고, 그 건물이 있는 마을 맵의 문 앞에 "들어가기"가 있다', () => {
@@ -161,5 +162,19 @@ test('실내 문턱 바닥 끝과 좌우 가장자리까지 바짝 다가가도 
       assert.equal(hit?.id, `exit-${interior.id}`, `${interior.id} 문턱 끝 dx=${dx}`);
     }
     assert.equal(findInteractable(arrival.x, arrival.y, map.interactables), undefined, `${interior.id} 입장 자리`);
+  }
+});
+
+test('물안개 나루 실내 문턱(±115px) 좌우 끝까지 나가기 범위가 닿고, interactablesInReach와 findInteractable 판정이 일치한다', () => {
+  for (const [id, map] of Object.entries(FERRY_INTERIOR_MAPS)) {
+    const exit = map.interactables.find((i) => i.enter);
+    assert.ok(exit && exit.reach, id);
+    assert.ok(exit.reach.rx >= 115, `${id} 문턱 폭(${exit.reach.rx}) >= 115`);
+    for (const dx of [-114, 0, 114]) {
+      const hit = findInteractable(exit.x + dx, exit.y + 10, map.interactables);
+      const list = interactablesInReach(exit.x + dx, exit.y + 10, map.interactables);
+      assert.equal(hit?.id, exit.id, `${id} dx=${dx}`);
+      assert.deepEqual(list.map((i) => i.id), [exit.id], `${id} interactablesInReach 일치 dx=${dx}`);
+    }
   }
 });

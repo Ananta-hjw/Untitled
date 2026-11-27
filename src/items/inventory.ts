@@ -1,3 +1,5 @@
+import type { MonsterKind } from '../combat/monsterTypes.ts';
+
 /**
  * 골드와 아이템.
  *
@@ -43,7 +45,7 @@ export const HERB_POUCH_BONUS = 10;
 export const ITEMS: Record<ItemId, ItemDef> = {
   potion: { id: 'potion', name: '회복 물약', description: '체력을 50 채운다.', kind: 'consumable', heal: 50, price: 20, sellPrice: 8 },
   lunch: { id: 'lunch', name: '도시락', description: '든든한 한 끼. 체력을 150 채운다.', kind: 'consumable', heal: 150, price: 55, sellPrice: 20 },
-  'slime-gel': { id: 'slime-gel', name: '슬라임 점액', description: '끈적한 재료. 잡화점에서 사 준다.', kind: 'material', sellPrice: 4 },
+  'slime-gel': { id: 'slime-gel', name: '슬라임 점액', description: '끈적한 재료. 대장간 1단계 승급 재료로 쓰거나 상점에 팔 수 있다.', kind: 'material', sellPrice: 4 },
   'travel-biscuit': { id: 'travel-biscuit', name: '여행용 건빵', description: '딱딱하지만 오래 가는 건빵. 체력을 30 채운다.', kind: 'consumable', heal: 30, price: 10, sellPrice: 4 },
   'blue-dew': { id: 'blue-dew', name: '푸른 이슬', description: '새벽 약초에서 받은 푸른 물. 마나를 40 채운다.', kind: 'consumable', mana: 40, price: 30, sellPrice: 12 },
   'antidote-herb': { id: 'antidote-herb', name: '해독 약초', description: '씹으면 몸이 가벼워진다. 잿빛 가루의 느려짐을 푼다.', kind: 'consumable', cures: 'slow', price: 15, sellPrice: 6 },
@@ -83,7 +85,7 @@ export function itemEffectText(id: ItemId): string {
   const def = ITEMS[id];
   if (def.note) return def.note;
   if (def.kind === 'keepsake') return '소중한 기념품 · 팔 수 없다';
-  if (def.kind !== 'consumable') return '재료 · 상점에 팔 수 있다';
+  if (def.kind !== 'consumable') return '승급 재료 · 상점 판매 가능';
   return [def.heal ? `체력 ${def.heal} 회복` : '', def.mana ? `마나 ${def.mana} 회복` : '', def.cures === 'slow' ? '느려짐 해소' : '']
     .filter(Boolean).join(' · ');
 }
@@ -199,7 +201,7 @@ export function slimeDrop(rand: () => number): Drop {
 }
 
 /** 몬스터 종류별 전리품(골드 + 승급 재료). */
-export function enemyDrop(kind: string | undefined, rand: () => number): Drop {
+export function enemyDrop(kind: MonsterKind | undefined, rand: () => number): Drop {
   if (kind === 'slime') return slimeDrop(rand);
   const gold = 5 + Math.floor(rand() * 5);
   const items: Drop['items'] = [];
@@ -207,7 +209,7 @@ export function enemyDrop(kind: string | undefined, rand: () => number): Drop {
     items.push({ id: 'iron-shard', count: 3 });
   } else if (kind === 'swamp-lurker') {
     items.push({ id: 'bronze-ingot', count: 2 });
-  } else if (kind === 'reed-stalker' || kind === 'mist-wraith') {
+  } else if (kind === 'reed-stalker' || kind === 'mist-phantom') {
     if (rand() < 0.35) items.push({ id: 'bronze-ingot', count: 1 });
   } else if (kind === 'ashen-moth' || kind === 'corrosion-tracker') {
     if (rand() < 0.35) items.push({ id: 'iron-shard', count: 1 });
