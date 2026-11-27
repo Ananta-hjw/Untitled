@@ -35,7 +35,7 @@ export const BOSS = {
   knockbackScale: 0.15,
   pool: { durationMs: 3800, rx: 95, ry: 52, tickMs: 600, damageScale: 0.15, slowMs: 900 },
   shot: {
-    count: 3, spreadDeg: 18, speed: 430, range: 600, windupMs: 700, recoverMs: 900, cooldownMs: 4500,
+    count: 3, spreadDeg: 18, speed: 640, range: 600, windupMs: 700, recoverMs: 900, cooldownMs: 4500,
     minDistance: 320, damageScale: 0.45, radiusX: 26, radiusY: 30,
     /** 떨어진 자리의 웅덩이 크기 (pool 대비) */
     poolScale: 0.6,

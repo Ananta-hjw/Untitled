@@ -69,6 +69,15 @@ export class CombatAudio {
     this.playTone(ctx, now, 'sine', 1320, 2240, 0.095, 0.075);
   }
 
+  /** 적이 치는 순간: 짧고 날 선 바람 소리 (heavy: 정예·보스의 묵직한 한 방) */
+  playEnemySwing(heavy = false): void {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    this.playNoise(ctx, now, heavy ? 0.11 : 0.07, heavy ? 1500 : 3200, 'bandpass', heavy ? 1.1 : 2.2, heavy ? 0.16 : 0.11);
+    this.playTone(ctx, now, 'triangle', heavy ? 820 : 1900, heavy ? 260 : 700, heavy ? 0.09 : 0.055, heavy ? 0.06 : 0.04);
+  }
+
   /** 공명 조각이 구슬에 빨려 들어갔을 때 맑은 종소리(가득 차면 화음) */
   playOrbAbsorb(full: boolean): void {
     const ctx = this.ensureContext();

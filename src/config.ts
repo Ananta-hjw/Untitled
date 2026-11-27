@@ -122,7 +122,7 @@ export const ENEMY = {
   strikeRangeX: 130,
   strikeRangeY: 44,
   windupMs: 480,
-  strikeMs: 110,
+  strikeMs: 80,
   returnMs: 220,
   recoverMs: 900,
   staggerMs: 420,

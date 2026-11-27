@@ -11,6 +11,7 @@ import { MONSTERS, WATER_SHOT, isCharger, isEliteKind, monsterKind, enemyHitReac
 import { ENEMY_COMBO, pickCombo, type ComboPattern } from './enemyCombo';
 import { buildMeleeLungeHit, plannedMeleeLunge, stepAimTracking, trackLockMs, trackingTurnRate } from './enemyTracking';
 import { FOG_CROW, fogEscape } from './fogCrow';
+import { STRIKE_FEEL, strikeAnticipation } from './strikeFeel';
 import { scaleMonster } from './monsterLevel';
 import { BOSS, fanDirections, insideEllipse, retreatDone, shouldVeil, wantsVolley, type BossPhase } from './bossPattern';
 import { BossHazards } from './BossHazards';
@@ -114,6 +115,12 @@ export class Enemy {
   private chillSpeed = 1;
   private chillWindup = 1;
   private deferredParry?: DeferredParry;
+  /** 이번 공격에서 치는 순간(예비 동작 끝)을 알렸는지, 씬이 아직 가져가지 않은 알림이 있는지 */
+  private swingCued = false;
+  private swingCue = false;
+  /** 돌진 잔상 (strikeFeel.ts) */
+  private readonly ghosts: Array<{ image: Phaser.GameObjects.Image; born: number }> = [];
+  private nextGhostAt = 0;
 
   constructor(scene: Phaser.Scene, key: EnemyKey, x: number, y: number, level = 1, boss = false) {
     this.scene = scene;
@@ -166,6 +173,7 @@ export class Enemy {
       pool: () => onHazard?.(this, 'pool', true, 0, 0),
     });
     this.updateDecoy(time);
+    this.updateGhosts(time);
     this.updateHitSquash(time);
     this.updateParryStun(time);
     this.updateProjectile(time, dt, player, area, onStrike);
@@ -680,6 +688,7 @@ export class Enemy {
 
   kill(): void {
     this.clearDecoy();
+    this.clearGhosts();
     this.hazards?.clear();
     this.hitAt = undefined;
     this.parryStunUntil = 0;
@@ -692,6 +701,7 @@ export class Enemy {
 
   respawn(x: number, y: number): void {
     this.clearDecoy();
+    this.clearGhosts();
     this.escapedAt = -Infinity;
     this.hitAt = undefined;
     this.parryStunUntil = 0;
@@ -709,6 +719,44 @@ export class Enemy {
     this.target.set(spawn.x + (this.patrolHome ? SENTRY_PATROL_HALF : 0), spawn.y);
     this.state = 'wander';
     this.timer = 0;
+  }
+
+  /** 치는 순간을 한 번 알려 준다 (씬이 빛줄기와 소리를 낸다) */
+  takeSwingCue(): boolean {
+    const cue = this.swingCue;
+    this.swingCue = false;
+    return cue;
+  }
+
+  /** 지금 겨눈 방향 (단위 벡터) */
+  get aimVector(): { x: number; y: number } {
+    return { x: this.aim.x, y: this.aim.y };
+  }
+
+  private spawnGhost(time: number): void {
+    const sprite = this.character.sprite;
+    if (!(sprite instanceof MonsterSprite) || time < this.nextGhostAt) return;
+    this.nextGhostAt = time + STRIKE_FEEL.ghostEveryMs;
+    if (this.ghosts.length >= STRIKE_FEEL.ghostMax) this.ghosts.shift()?.image.destroy();
+    const c = this.character;
+    const image = sprite.createAfterimage(c.x, c.y).setAlpha(STRIKE_FEEL.ghostAlpha).setDepth(c.y - 1);
+    this.ghosts.push({ image, born: time });
+  }
+
+  private updateGhosts(time: number): void {
+    for (let i = this.ghosts.length - 1; i >= 0; i--) {
+      const g = this.ghosts[i];
+      const age = (time - g.born) / STRIKE_FEEL.ghostLifeMs;
+      if (age >= 1 || age < 0) {
+        g.image.destroy();
+        this.ghosts.splice(i, 1);
+      } else g.image.setAlpha(STRIKE_FEEL.ghostAlpha * (1 - age));
+    }
+  }
+
+  private clearGhosts(): void {
+    for (const g of this.ghosts) g.image.destroy();
+    this.ghosts.length = 0;
   }
 
   private cancelStrike(): void {
@@ -742,6 +790,7 @@ export class Enemy {
       this.aim.y = dy / distance;
     }
     this.chargeProgress = 0;
+    this.swingCued = false;
     const base = this.comboWindups?.[this.comboIndex] ?? this.stats.windupMs;
     this.windupMs = base * (time < this.chillUntil ? this.chillWindup : 1);
     this.lungeDist = plannedMeleeLunge(this.kind, distance);
@@ -801,6 +850,14 @@ export class Enemy {
       onGlint?.(this, gx, gy, false);
     }
 
+    // 치는 순간: 몸이 하얗게 번쩍이고 씬이 날 선 빛줄기와 바람 소리를 낸다(strikeFeel.ts). 장전은 그 직전에 몸을 뒤로 당긴다.
+    const cock = strikeAnticipation(elapsed, windupMs) * STRIKE_FEEL.pullBack;
+    if (!this.swingCued && elapsed >= windupMs) {
+      this.swingCued = true;
+      this.swingCue = true;
+      c.flash(0xffffff);
+    }
+
     // 3) 근접 적 전진 스텝(Forward Lunge): 잠근 2D 방향으로 실제 몸을 훅 미끄러뜨려 걷기 날먹 회피를 차단한다.
     const meleeLunge = !this.waterJet && !isCharger(this.kind) && this.kind !== 'waterdrop-mushroom';
     if (meleeLunge && elapsed >= windupMs) {
@@ -831,7 +888,11 @@ export class Enemy {
             if (this.state !== 'windup') return;
           }
         }
+      } else if (isCharger(this.kind) && elapsed < windupMs) {
+        sprite.setPosition(-this.aim.x * cock, -this.aim.y * cock);
       } else if (isCharger(this.kind) && elapsed >= windupMs) {
+        sprite.setPosition(0, 0);
+        if (elapsed < strikeAt) this.spawnGhost(time);
         const progress = Math.min(1, (elapsed - windupMs) / strikeMs);
         if (progress > this.chargeProgress) {
           const fromX = c.x, fromY = c.y;
@@ -847,13 +908,13 @@ export class Enemy {
           }
         }
       } else if (meleeLunge) {
-        const reach = elapsed < windupMs ? 0 : elapsed < strikeAt ? 18 * ((elapsed - windupMs) / strikeMs) ** 2
+        const reach = elapsed < windupMs ? -cock : elapsed < strikeAt ? 18 * ((elapsed - windupMs) / strikeMs) ** 2
           : 18 * (1 - Math.min(1, (elapsed - strikeAt) / returnMs));
         sprite.setPosition(this.aim.x * reach, this.aim.y * reach);
       }
     } else if (elapsed < windupMs) {
       const p = 1 - (1 - elapsed / windupMs) ** 2;
-      sprite.setScale(1 + 0.25 * p, 1 - 0.3 * p);
+      sprite.setScale(1 + 0.25 * p, 1 - 0.3 * p).setPosition(-this.aim.x * cock, -this.aim.y * cock);
     } else if (elapsed < strikeAt) {
       const p = ((elapsed - windupMs) / strikeMs) ** 2;
       sprite.setPosition(this.aim.x * 18 * p, this.aim.y * 18 * p).setScale(1.25 - 0.35 * p, 0.7 + 0.45 * p);

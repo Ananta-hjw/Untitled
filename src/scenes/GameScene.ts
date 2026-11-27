@@ -1068,6 +1068,7 @@ export class GameScene extends Phaser.Scene {
       const defender = this.defenderTarget(enemy);
       enemy.update(time, dt, this.player, this.walkArea, this.nav, this.onEnemyStrike, this.onBossHazard,
         defender ? { x: defender.x, y: defender.y, alive: defender.canFight } : undefined, this.onEnemyGlint);
+      if (enemy.takeSwingCue()) this.onEnemySwing(enemy);
       this.applyKnockback(enemy.character, dt);
     }
     this.separateEnemies(dt);
@@ -4335,6 +4336,17 @@ export class GameScene extends Phaser.Scene {
     this.parrySlowOutDur = BLOCK.unboundSlowOutMs;
     this.parrySlowOutLeft = BLOCK.unboundSlowOutMs;
     this.drawHud();
+  }
+
+  /** 적이 치는 순간(combat/strikeFeel.ts): 앞쪽으로 날 선 빛줄기와 짧은 바람 소리. 보이는 것·소리만이고 판정은 바꾸지 않는다. */
+  private onEnemySwing(enemy: Enemy): void {
+    if (!this.player.alive || this.dialogue.isOpen || this.opening || this.playFestival) return;
+    const c = enemy.character, aim = enemy.aimVector;
+    // 돌진은 몸이 빛줄기를 지나쳐 가므로 더 앞쪽에 띄운다.
+    const lead = isCharger(enemy.kind) ? 120 : 46;
+    const x = c.x + aim.x * lead, y = c.y - Math.round((enemy.stats.height || 96) * 0.45) + aim.y * lead * 0.4;
+    this.impacts.thrustCone(x, y, aim.x, aim.y * VERTICAL_SPEED_RATIO, enemy.elite ? 0xffb6a0 : 0xfff2ea, this.now);
+    this.combatAudio.playEnemySwing(enemy.elite);
   }
 
   /** 적 공격이 닿기 직전 예고 안광 + 짧은 경고음 */
