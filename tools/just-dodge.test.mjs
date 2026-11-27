@@ -36,7 +36,7 @@ test('느린 화면은 정해진 배율로 시작해 끝에서 부드럽게 원�
   }
 });
 
-test('저스트 회피는 2배 반격 일섬을 열고 회피 대기 시간을 30% 단축한다', () => {
-  assert.equal(JUST_DODGE.counterDamage, 2);
+test('저스트 회피는 3배 반격 일섬을 열고 회피 대기 시간을 30% 단축한다', () => {
+  assert.equal(JUST_DODGE.counterDamage, 3);
   assert.equal(JUST_DODGE.cooldownRefundRatio, 0.3);
 });

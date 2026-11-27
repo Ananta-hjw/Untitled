@@ -3146,7 +3146,7 @@ test('1장 수확제 연출: 잔치에 모두 모이고 하늘 등불·경보·�
   assert.deepEqual(after, { map: 'village', festival: false, enemies: 6, sia: false, hud: true });
 });
 
-test('마나는 시간에 따라 자동 회복되며, 저스트 회피 일섬(2배)은 패링 2단(1.4배)보다 강하고 패링 3단(2.5배)보다 약하다', async () => {
+test('마나는 시간에 따라 자동 회복되며, 패링 2단(1.4배) < 패링 3단(2.5배) < 저스트 회피 일섬(3배) 순으로 강하다', async () => {
   await load('south-field');
   await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.length >= 1; })()`));
   const result = await evaluate(`(() => {
@@ -3184,8 +3184,8 @@ test('마나는 시간에 따라 자동 회복되며, 저스트 회피 일섬(2�
   assert.equal(result.regen, true);
   assert.ok(result.tier0 > 0, JSON.stringify(result));
   assert.ok(result.tier2 > result.tier0, JSON.stringify(result));
-  assert.ok(result.dodgeCounter > result.tier2, `회피 일섬(2배) > 패링 2단(1.4배): ${JSON.stringify(result)}`);
-  assert.ok(result.tier3 > result.dodgeCounter, `패링 3단(2.5배) > 회피 일섬(2배): ${JSON.stringify(result)}`);
+  assert.ok(result.tier3 > result.tier2, `패링 3단(2.5배) > 패링 2단(1.4배): ${JSON.stringify(result)}`);
+  assert.ok(result.dodgeCounter > result.tier3, `회피 일섬(3배) > 패링 3단(2.5배): ${JSON.stringify(result)}`);
 });
 
 test('여관의 로제타에게 쉬어 가거나 집 침대에서 쉬면 체력이 차고, 처음 화면에서 시작하면 그곳에서 이어진다', async () => {

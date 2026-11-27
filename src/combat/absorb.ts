@@ -19,7 +19,7 @@ export type AbsorbElement = 'force' | 'frost' | 'corrosion' | 'mist';
 
 export const ABSORB = {
   maxTier: 3,
-  /** 단수별 칼질 피해 배율 (0단: 기본 0.5배, 1단 0.9배, 2단 1.4배 < 회피 일섬 2배 < 3단 2.5배) */
+  /** 단수별 칼질 피해 배율 (0단: 기본 0.5배, 1단 0.9배, 2단 1.4배, 3단 2.5배; 회피 일섬은 3배) */
   damageScale: [0.5, 0.9, 1.4, 2.5],
   force: { knockbackScale: 1.7 },
   frost: { chillMs: [0, 1600, 2200, 2800], speedScale: 0.45, windupScale: 1.4 },

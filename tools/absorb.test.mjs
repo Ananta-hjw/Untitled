@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ABSORB, NO_ABSORB, elementReady, spendElement, absorbDamageScale, absorbElementOf, absorbParry, absorbReach, activeAbsorb, insidePool } from '../src/combat/absorb.ts';
+import { JUST_DODGE } from '../src/config.ts';
 
 test('막은 적의 속성: 딱정벌레는 서리, 부식 권속과 나방은 부식, 안개 계열은 안개, 나머지는 기운', () => {
   assert.equal(absorbElementOf('frost-beetle'), 'frost');
@@ -36,9 +37,9 @@ test('담은 힘은 시간 제한이 없고, 피격·불완전 막기 등으로 
   assert.equal(absorbParry(NO_ABSORB, 'force').tier, 1, '초기화 뒤 다시 막으면 1단부터 쌓인다');
 });
 
-test('기본 칼질은 0.5배, 1단 0.9배, 2단 1.4배, 3단 2.5배이고 2단 < 회피 일섬(2배) < 3단 위계를 지킨다', () => {
+test('기본 칼질은 0.5배, 1단 0.9배, 2단 1.4배, 3단 2.5배이고 회피 일섬(3배)이 3단보다 강하다', () => {
   assert.deepEqual([0, 1, 2, 3].map(absorbDamageScale), [0.5, 0.9, 1.4, 2.5]);
-  assert.ok(absorbDamageScale(2) < 2 && absorbDamageScale(3) > 2);
+  assert.ok(absorbDamageScale(2) < absorbDamageScale(3) && absorbDamageScale(3) < JUST_DODGE.counterDamage);
 });
 
 test('속성은 3단일 때만 실린다', () => {

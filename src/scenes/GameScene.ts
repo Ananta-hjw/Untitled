@@ -320,7 +320,7 @@ export class GameScene extends Phaser.Scene {
   private impacts!: ImpactEffects;
   /** 넉백으로 미끄러지는 캐릭터가 마지막으로 먼지를 일으킨 시각 */
   private readonly slideDustAt = new WeakMap<Character, number>();
-  /** 이 시각(게임 시계)까지 시작한 공격 한 번은 저스트 회피 일섬(2배)으로 나간다 */
+  /** 이 시각(게임 시계)까지 시작한 공격 한 번은 저스트 회피 일섬(3배)으로 나간다 */
   private counterUntil = 0;
   private nextGhostAt = 0;
   private readonly dodgeDirection = new Phaser.Math.Vector2();
@@ -2404,7 +2404,7 @@ export class GameScene extends Phaser.Scene {
       // 민첩(DEX)만큼 치명타 확률과 치명타 피해 배율이 오른다: 굴린 값을 확률 증가분만큼 낮춘다.
       const strike = strikeKind(trace.counter, finisher, Math.random() - (this.derived.critChance - HIT_FEEL.critChance));
       heaviest = heavierKind(heaviest, strike.kind);
-      // 일섬은 저스트 회피 전용이며 흡수 단수에 영향받지 않고 기본 공격력의 정확히 2배 피해를 준다.
+      // 일섬은 저스트 회피 전용이며 흡수 단수에 영향받지 않고 기본 공격력의 정확히 3배 피해를 준다.
       const stageMultiplier = trace.counter ? JUST_DODGE.counterDamage : combo.damage;
       const absorbScale = trace.counter ? 1 : absorbDamageScale(trace.absorb?.tier ?? 0);
       const damage = monsterDamageTaken(Math.round(Phaser.Math.Between(this.stats.damageMin, this.stats.damageMax) * stageMultiplier * critMultiplier(strike.crit, this.derived.critDamage) * this.resonanceDamage() * absorbScale), enemy.stats.defense);
@@ -4522,7 +4522,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.clearCombo();
   }
 
-  /** 저스트 회피 성공: 느린 화면, 다음 공격 일섬(2배), 회피 재사용 대기 30% 단축, 피한 적은 멈칫. */
+  /** 저스트 회피 성공: 느린 화면, 다음 공격 일섬(3배), 회피 재사용 대기 30% 단축, 피한 적은 멈칫. */
   private onJustDodge(enemy: Enemy): void {
     const now = this.now;
     this.justDodged = true;

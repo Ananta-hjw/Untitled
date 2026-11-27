@@ -150,7 +150,7 @@ export const JUST_DODGE = {
   slowMs: 650,
   rampMs: 250,
   counterMs: 1500,
-  counterDamage: 2,
+  counterDamage: 3,
   stunMs: 1300,
   cooldownRefundRatio: 0.3,
 };
