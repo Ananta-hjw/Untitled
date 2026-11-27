@@ -6,8 +6,8 @@ import { bossParryOutcome, type BossParryOutcome } from './parry';
 import { Character } from '../entities/Character';
 import type { NavGrid } from '../world/navGrid';
 import type { WalkArea } from '../world/walkArea';
-import { MonsterSprite } from './MonsterSprite';
-import { MONSTERS, WATER_SHOT, isCharger, isEliteKind, monsterKind, enemyHitReaches, type EnemyHit, type EnemyKey, type MonsterKind, type MonsterStats } from './monsterTypes';
+import { MonsterSprite, waterShotTexture } from './MonsterSprite';
+import { MONSTERS, WATER_SHOT, isCharger, isEliteKind, isWaterdropMushroom, monsterKind, enemyHitReaches, type EnemyHit, type EnemyKey, type MonsterKind, type MonsterStats } from './monsterTypes';
 import { ENEMY_COMBO, pickCombo, type ComboPattern } from './enemyCombo';
 import { buildMeleeLungeHit, plannedMeleeLunge, stepAimTracking, trackLockMs, trackingTurnRate } from './enemyTracking';
 import { FOG_CROW, fogEscape } from './fogCrow';
@@ -63,6 +63,7 @@ export class Enemy {
   private readonly patrolHome?: { x: number; y: number };
   private blink?: { x: number; y: number; start: number; moved: boolean };
   private readonly waterJet?: SwampWaterJet;
+  private readonly waterline?: { x: number; y: number };
   state: State = 'wander';
   /** 마지막 돌진이 닿은 시각(게임 시계). 저스트 회피 판정에 쓴다. */
   lastStrikeAt?: number;
@@ -128,6 +129,7 @@ export class Enemy {
     if (boss) this.hazards = new BossHazards(scene);
     this.kind = monsterKind(key);
     if (this.kind === 'stone-sentry') this.patrolHome = { x, y };
+    if (this.kind === 'river-fish-hunter') this.waterline = { x, y };
     if (this.kind === 'swamp-lurker') this.waterJet = new SwampWaterJet(scene);
     this.level = level;
     this.stats = scaleMonster<MonsterStats>(MONSTERS[this.kind ?? 'slime'], level);
@@ -135,7 +137,7 @@ export class Enemy {
     this.character = new Character(scene, x, y, {
       key,
       monster: this.kind,
-      shadowWidth: this.kind === 'mist-phantom' ? 0 : this.kind === 'fog-crow' ? 54 : 100,
+      shadowWidth: this.kind === 'mist-phantom' || this.kind === 'river-fish-hunter' ? 0 : this.kind === 'fog-crow' ? 54 : 100,
       maxHp: this.stats.hp,
       showHpBar: true,
       levelTag: level,
@@ -210,7 +212,7 @@ export class Enemy {
           this.state = 'chase';
           break;
         }
-        if (this.waterJet) {
+        if (this.waterJet || this.kind === 'river-fish-hunter') {
           c.setMotion(false);
           break;
         }
@@ -246,10 +248,11 @@ export class Enemy {
           this.startVolley(time, dx, dy);
           break;
         }
-        const ranged = this.kind === 'waterdrop-mushroom' || this.waterJet !== undefined;
+        const ranged = isWaterdropMushroom(this.kind) || this.waterJet !== undefined;
         const charge = isCharger(this.kind);
         const inRange = ranged ? Math.hypot(dx, dy) <= (this.waterJet ? SWAMP_JET.attackRange : 350) && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
           : charge ? Math.hypot(dx, dy) <= (this.kind === 'fog-crow' ? 165 : 250) && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
+          : this.kind === 'river-fish-hunter' ? Math.hypot(dx, dy) <= 145
           : Math.abs(dx) < ENEMY.attackRangeX && Math.abs(dy) < ENEMY.attackRangeY;
         if (inRange) {
           // 보스는 1페이즈 2연타(BOSS.chain), 2페이즈 3연타(BOSS.phaseTwoChain) 돌진을 잇달아 한다.
@@ -267,6 +270,10 @@ export class Enemy {
             this.waterJet.prepare(area, c, { x: c.x + mouth.x, y: c.y + mouth.y }, this.aim.x, this.aim.y, Math.hypot(dx, dy));
             this.waterJet.warn(0);
           }
+          break;
+        }
+        if (this.waterline) {
+          c.setMotion(false);
           break;
         }
         // 플레이어의 옆자리(같은 높이)로 붙는다.
@@ -634,6 +641,7 @@ export class Enemy {
   /** 페이즈 전환·안개 본체·잠복에는 직접 공격이 통하지 않는다. */
   get untouchable(): boolean {
     return this.state === 'roar' || this.kind === 'mist-weaver' || this.blink !== undefined
+      || (this.kind === 'river-fish-hunter' && this.character.sprite instanceof MonsterSprite && !this.character.sprite.riverExposed)
       || (this.character.sprite instanceof MonsterSprite && this.character.sprite.swampConcealed);
   }
 
@@ -696,6 +704,7 @@ export class Enemy {
     this.state = 'dead';
     this.cancelStrike();
     this.clearProjectile();
+    if (this.character.sprite instanceof MonsterSprite) this.character.sprite.showRiverDefeat();
     this.character.playDeath();
   }
 
@@ -708,7 +717,7 @@ export class Enemy {
     this.staggerMark.setVisible(false);
     this.clearProjectile();
     this.cancelStrike();
-    const spawn = this.patrolHome ?? { x, y };
+    const spawn = this.patrolHome ?? this.waterline ?? { x, y };
     this.character.revive(spawn.x, spawn.y);
     const sprite = this.character.sprite;
     if (sprite instanceof MonsterSprite && sprite.hasFade) sprite.playFade('materialize');
@@ -859,7 +868,7 @@ export class Enemy {
     }
 
     // 3) 근접 적 전진 스텝(Forward Lunge): 잠근 2D 방향으로 실제 몸을 훅 미끄러뜨려 걷기 날먹 회피를 차단한다.
-    const meleeLunge = !this.waterJet && !isCharger(this.kind) && this.kind !== 'waterdrop-mushroom';
+    const meleeLunge = !this.waterJet && !isCharger(this.kind) && !isWaterdropMushroom(this.kind);
     if (meleeLunge && elapsed >= windupMs) {
       if (this.lungeProgress === 0) {
         this.lungeStartX = c.x;
@@ -926,7 +935,7 @@ export class Enemy {
       this.strikeLanded = true;
       this.lastStrikeAt = this.attackStartedAt + strikeAt;
       if (sprite instanceof MonsterSprite) sprite.showAttack(strikeAt - 1, windupMs, strikeMs, returnMs);
-      if (this.kind === 'waterdrop-mushroom') this.fireProjectile(time);
+      if (isWaterdropMushroom(this.kind)) this.fireProjectile(time);
       else onStrike(this, buildMeleeLungeHit(this.kind, this.lungeStartX, this.lungeStartY, c.x, c.y, this.aim));
       if (this.state !== 'windup') return;
     }
@@ -1031,9 +1040,10 @@ export class Enemy {
   private fireProjectile(time: number): void {
     this.clearProjectile();
     const x = this.character.x + this.aim.x * 25, y = this.character.y + this.aim.y * 25;
-    const texture = this.scene.textures.get('monster-water-shot');
+    const key = waterShotTexture(this.kind);
+    const texture = this.scene.textures.get(key);
     if (!texture.has('bead')) texture.add('bead', 0, shotFrame.x, shotFrame.y, shotFrame.w, shotFrame.h);
-    const image = this.scene.add.image(x, y - 45, 'monster-water-shot', 'bead').setOrigin(0.8, 0.5).setDisplaySize(44, 24)
+    const image = this.scene.add.image(x, y - 45, key, 'bead').setOrigin(0.8, 0.5).setDisplaySize(44, 24)
       .setRotation(Math.atan2(this.aim.y, this.aim.x)).setDepth(y + 1);
     this.projectile = { image, x, y, dx: this.aim.x, dy: this.aim.y, expires: time + WATER_SHOT.lifetimeMs };
   }

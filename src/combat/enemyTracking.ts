@@ -36,6 +36,7 @@ const MELEE_LUNGE_BY_KIND: Partial<Record<MonsterKind, MeleeLungeConfig>> = {
   'corrosion-tracker': { distance: 96, stopGap: 40, reachForward: 60, radiusX: 76, radiusY: 60 },
   'mist-phantom': { distance: 96, stopGap: 40, reachForward: 60, radiusX: 76, radiusY: 60 },
   'ashen-moth': { distance: 84, stopGap: 42, reachForward: 56, radiusX: 74, radiusY: 58 },
+  'river-fish-hunter': { distance: 0, stopGap: 0, reachForward: 125, radiusX: 49, radiusY: 42 },
   'reed-stalker': { distance: 84, stopGap: 42, reachForward: 56, radiusX: 74, radiusY: 58 },
   'stone-sentry': { distance: 22, stopGap: 50, reachForward: 54, radiusX: 72, radiusY: 54 },
   'frost-beetle': { distance: 60, stopGap: 44, reachForward: 48, radiusX: 70, radiusY: 52 },
@@ -49,6 +50,7 @@ const TURN_RATE_BY_KIND: Partial<Record<MonsterKind, number>> = {
   'corrosion-executioner': 4.6,
   'iron-scale-lizard': 5.0,
   'waterdrop-mushroom': 5.0,
+  'foundry-waterdrop-mushroom': 5.0,
 };
 
 /**

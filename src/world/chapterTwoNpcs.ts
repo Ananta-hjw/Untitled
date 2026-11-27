@@ -50,11 +50,14 @@ export const SUCCESSOR_CAST: ReadonlyArray<{ id: SuccessorNpcId; name: string; r
   { id: 'razen', name: '라젠', role: '정보상', height: 152 },
 ];
 export type CastPreviewGroup = 'chapter2' | 'support' | 'successors' | 'all' | 'innkeeper' | FerryArtPreview;
+export function isFerryArtPreview(value: string | undefined): value is FerryArtPreview {
+  return value === 'rescue' || value === 'bell-carry' || value === 'rescue-aftermath';
+}
 export function isCastPreviewGroup(value: string | null): value is CastPreviewGroup {
-  return value !== null && ['chapter2', 'support', 'successors', 'all', 'innkeeper', 'rescue', 'bell-carry'].includes(value);
+  return value !== null && (isFerryArtPreview(value) || ['chapter2', 'support', 'successors', 'all', 'innkeeper'].includes(value));
 }
 export function previewCastNpcs(group: CastPreviewGroup, at: { x: number; y: number }): NpcDef[] {
-  if (group === 'rescue' || group === 'bell-carry') return [];
+  if (isFerryArtPreview(group)) return [];
   if (group === 'chapter2') return chapterTwoPreviewNpcs(at);
   if (group === 'innkeeper') return [{ ...FOG_INNKEEPER, ...at }];
   const successors: NpcDef[] = SUCCESSOR_CAST.map(n => ({ ...n, x: 0, y: 0, dialogue: `npc-${n.id}`, wander: 60 }));

@@ -13,10 +13,13 @@ test('남쪽 들판은 슬라임·버섯, 서쪽 숲길은 버섯·도마뱀이 
   }
 });
 
-test('모든 몬스터의 모든 방향·모션에 실사용 WebP와 프레임 좌표가 있다', () => {
+test('방향별 몬스터 시트에는 실사용 WebP와 프레임 좌표가 있다', () => {
   for (const kind of Object.keys(MONSTERS)) {
-    const root = new URL(`../src/assets/monsters/${kind}/`, import.meta.url);
-    const data = JSON.parse(readFileSync(new URL('animation_frames.json', root)));
+    if (kind === 'river-fish-hunter') continue;
+    const foundry = kind === 'foundry-waterdrop-mushroom';
+    const base = new URL(`../src/assets/monsters/${foundry ? 'waterdrop-mushroom' : kind}/`, import.meta.url);
+    const root = foundry ? new URL(`../src/assets/chapter2/${kind}/`, import.meta.url) : base;
+    const data = JSON.parse(readFileSync(new URL('animation_frames.json', base)));
     const actions = ['walk', 'attack'];
     assert.equal(data.frames.length, actions.length * 32, kind);
     for (const sheet of Object.keys(data.sheets)) assert.ok(existsSync(new URL(sheet.replace('.png', '.webp'), root)));
@@ -25,6 +28,18 @@ test('모든 몬스터의 모든 방향·모션에 실사용 WebP와 프레임 �
         assert.ok(data.frames.some(f => f.name === `${action}-${direction}-${pose}`));
       }
     }
+  }
+});
+
+test('주물터 버섯은 보라색 발사체를 쓰고 나루 물 마물에는 수면·공격 시트가 있다', () => {
+  const chapter = new URL('../src/assets/chapter2/', import.meta.url);
+  assert.ok(existsSync(new URL('foundry-waterdrop-mushroom/projectile.webp', chapter)));
+  const river = new URL('river-fish-hunter/', chapter);
+  assert.ok(existsSync(new URL('sd_idle.webp', river)));
+  for (const sheet of ['surface-idle', 'breach-attack']) {
+    const { frames } = JSON.parse(readFileSync(new URL(`${sheet}-frames.json`, river)));
+    assert.ok(existsSync(new URL(`${sheet}.webp`, river)));
+    assert.equal(frames.length, 4);
   }
 });
 
