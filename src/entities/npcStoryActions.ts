@@ -33,6 +33,9 @@ import fisherDaughterData from '../assets/characters/fisher-daughter/testimony-f
 import herbalistUrl from '../assets/characters/herbalist-elder/tend-patient.webp?url';
 import herbalistData from '../assets/characters/herbalist-elder/tend-patient-frames.json';
 
+import fishingIdleUrl from '../assets/chapter2/fishing-elder/fish-idle.webp?url';
+import fishingIdle from '../assets/chapter2/fishing-elder/fish-idle-frames.json';
+
 const SPECIAL_URLS = import.meta.glob<string>('../assets/characters/{bell-ringer,dor,evan,finn,marta,mill-apprentice,morgan}/*.webp',
   { eager: true, query: '?url', import: 'default' });
 const SPECIAL_DATA = import.meta.glob<{ frames: StoryFrame[] }>('../assets/characters/{bell-ringer,dor,evan,finn,marta,mill-apprentice,morgan}/*-frames.json',
@@ -73,6 +76,10 @@ const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
       fps: name === 'repair' ? 2 : 1, bodyHeight: skin === 'teon' ? 304 : 380,
       labelOffset: skin === 'teon' ? undefined : 125, onTalk: 'pause' as const,
     }]))])),
+  'fishing-elder': {
+    'fish-idle': { key: 'npc-fishing-elder-fish-idle', url: fishingIdleUrl, frames: fishingIdle.frames,
+      fps: fishingIdle.fps, bodyHeight: 255, onTalk: 'stop', loop: fishingIdle.loop },
+  },
   dor: { 'tend-fire': { ...specialAction('dor', 'tend-fire', 430, true), deferred: false, labelOffset: 118 } },
   evan: {
     ...Object.fromEntries(['defense', 'oar-swing', 'rowing', 'mooring', 'rope-pull', 'cocoon-guard', 'reunion']

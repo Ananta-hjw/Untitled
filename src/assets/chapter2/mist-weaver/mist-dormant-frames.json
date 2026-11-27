@@ -1,0 +1,42 @@
+{
+  "frames": [
+    {
+      "name": "recoil",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "unravel",
+      "x": 320,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "sink",
+      "x": 0,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "last-wisps",
+      "x": 320,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    }
+  ],
+  "fps": 7,
+  "loop": false
+}

@@ -5468,3 +5468,100 @@ test('1장 신규 시트: 시아의 매듭 대화와 개울가 전투에서 각 
   assert.deepEqual(stream.fairyFrames, ['blink-ready', 'blink-break', 'blink-trace', 'blink-return']);
   for (const key of ['moved', 'visible', 'cooldown', 'patrolled', 'route', 'strike']) assert.equal(stream[key], true, key);
 });
+
+test('낚시 노인은 나루에서 낚시를 하다가 대화 중 정면 SD와 자신의 초상화를 쓴다', async () => {
+  const map = 'ferry-village&companion=none';
+  await load(map);
+  const saved = await evaluate(`(() => {
+    const save = localStorage.getItem('untitled-rpg.quests');
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: {
+      'first-sword': {status:'done',count:1}, 'still-ferry': {status:'done',count:1}
+    } }));
+    return save;
+  })()`);
+  try {
+    await load(map);
+    const checks = await evaluate(`(() => {
+      const s = window.__game.scene.getScene('game');
+      const n = s.npcs.find(n => n.def.id === 'fishing-elder');
+      const first = n.figure.frame.name;
+      const tick = (n = 1) => { for (let i = 0; i < n; i++) s.update(0, 16); };
+      tick(20);
+      const fishing = n.figure.texture.key === 'npc-fishing-elder-fish-idle' && n.figure.frame.name !== first;
+      s.player.placeAt(n.spot.x, n.spot.y);
+      tick();
+      const reachable = s.walkArea.contains(n.x, n.y) && s.walkArea.contains(n.spot.x, n.spot.y) && s.primaryAction === 'talk';
+      s.onAttackKeyDown(); tick();
+      const dialogue = s.dialogue.isOpen && s.dialogue.portrait.texture.key === 'portrait-fishing-elder'
+        && n.figure.texture.key === 'npc-fishing-elder-idle';
+      while (s.dialogue.isOpen) s.dialogue.advance();
+      return { fishing, reachable, dialogue, resumed: n.figure.texture.key === 'npc-fishing-elder-fish-idle' };
+    })()`);
+    assert.deepEqual(checks, { fishing: true, reachable: true, dialogue: true, resumed: true });
+  } finally {
+    await evaluate(`(() => { const save = ${JSON.stringify(saved)};
+      if (save === null) localStorage.removeItem('untitled-rpg.quests');
+      else localStorage.setItem('untitled-rpg.quests', save);
+    })()`);
+  }
+});
+
+test('갈대밭 연습에서 시아의 환영과 안개 보스의 시트를 실제 행동으로 재생한다', async () => {
+  await load('reed-swamp&companion=none&monsters=mist-weaver');
+  const checks = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player;
+    const {caster, threads, effects} = s.mistWeaver;
+    const effect = s.children.getByName('mist-weaver-effect');
+    const apparition = s.children.getByName('chapter2-sia-apparition');
+    const ring = s.children.getByName('mist-weaver-cocoon-ring');
+    const ringImage = ring.list[0];
+    const tick = (n = 1) => { for (let i = 0; i < n; i++) s.update(0, 16); };
+    const arrivedFromMist = effect.texture.key === 'mist-weaver-form' && !caster.character.visible;
+    tick(35);
+    p.placeAt(apparition.x, apparition.y);
+    tick(); s.onAttackKeyDown(); tick();
+    const sawSia = s.dialogue.isOpen && s.dialogue.portrait.texture.key === 'portrait-sia';
+    while (s.dialogue.isOpen) s.dialogue.advance();
+    tick(36);
+    const dissolving = apparition.frame.name === 'dissolve' && apparition.visible;
+    tick(36);
+    const gone = !apparition.visible && !s.interactables.some(spot => spot.id === 'fog-sia-apparition');
+
+    // Start the extra skill cycle without waiting for the two thread casts covered by the preceding test.
+    threads.clear();
+    s.mistWeaver.threadCasts = 2;
+    s.mistWeaver.nextSkillAt = s.now;
+    p.placeAt(caster.character.x - 240, caster.character.y);
+    const beforeX = p.x;
+    tick(40);
+    const gust = effect.texture.key === 'mist-weaver-gust' && p.x < beforeX;
+    p.knockback.set(0, 0);
+    p.placeAt(caster.character.x - 130, caster.character.y);
+    s.mistWeaver.nextSkillAt = s.now + 100;
+    tick(28);
+    const opening = ring.visible && ringImage.frame.name === 'wide' && ringImage.rotation > 0;
+    for (let i = 0; !effects.bound && i < 140; i++) tick();
+    const cocoon = effects.bound && effect.texture.key === 'mist-weaver-wrap' && !ring.visible;
+    if (!cocoon) throw Error(JSON.stringify({ motion: effects.motion, texture: effect.texture.key,
+      ring: ring.visible, extraSkill: s.mistWeaver.extraSkill, t: s.now, next: s.mistWeaver.nextSkillAt, p: [p.x,p.y] }));
+    const beforeAttack = effects.motion.expires;
+    s.onAttackKeyDown();
+    tick(35);
+    const cutsCocoon = effects.bound && effects.motion.expires < beforeAttack;
+    tick(115);
+    const from = {x:caster.character.x,y:caster.character.y};
+    s.mistWeaver.nextSkillAt = s.now;
+    tick(2);
+    const disperses = !caster.character.visible && effect.frame.name === 'solid';
+    tick(70);
+    const reappears = caster.character.visible && caster.character.y !== from.y;
+    const bell = s.interactables.find(spot => spot.id === 'fog-shrine-bell');
+    p.placeAt(bell.x, bell.y);
+    tick(); s.onAttackKeyDown(); tick();
+    const dormancy = effects.sleeping && effect.texture.key === 'mist-weaver-dormant' && !caster.character.visible;
+    tick(50);
+    return {arrivedFromMist, sawSia, dissolving, gone, gust, opening, cocoon, cutsCocoon, disperses, reappears, dormancy,
+      ended: !effect.visible && !caster.character.visible && !threads.active};
+  })()`);
+  for (const [check, passed] of Object.entries(checks)) assert.equal(passed, true, check);
+});

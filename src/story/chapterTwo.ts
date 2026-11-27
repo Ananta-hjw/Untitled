@@ -46,6 +46,10 @@ export const FERRY_OUTSIDE_PEOPLE: NpcDef[] = [
   // 서브 퀘스트 "엉킨 그물"의 의뢰인: 어부의 집 앞 그물 건조대 곁 강가
   { id: 'ferry-fisher', name: '나루 어부', role: '나루의 어부', x: 2300, y: 2440, height: 146, dialogue: 'npc-ferry-fisher', facing: 'down-right' },
 ];
+const FISHING_ELDER: NpcDef = {
+  id: 'fishing-elder', name: '낚시 노인', role: '강가의 낚시꾼', x: 3080, y: 2845, height: 138,
+  dialogue: 'npc-fishing-elder', facing: 'down-right', storyAction: 'fish-idle', talkOffsetX: -42,
+};
 
 /**
  * 나루 여관(in-ferry-inn, 실내 원화의 픽셀 좌표) 안의 여관 주인과 아들 핀.
@@ -87,7 +91,7 @@ export const FERRY_HOUSE_PEOPLE: Partial<Record<MapId, NpcDef[]>> = {
   ],
 };
 
-export const FERRY_PEOPLE: NpcDef[] = [...FERRY_OUTSIDE_PEOPLE, ...FERRY_INN_PEOPLE, ...FERRY_SMITHY_PEOPLE,
+export const FERRY_PEOPLE: NpcDef[] = [...FERRY_OUTSIDE_PEOPLE, FISHING_ELDER, ...FERRY_INN_PEOPLE, ...FERRY_SMITHY_PEOPLE,
   ...Object.values(FERRY_HOUSE_PEOPLE).flat() as NpcDef[]];
 export const FERRY_INN: MapId = 'in-ferry-inn';
 
@@ -147,7 +151,10 @@ export function chapterTwoNpcs(state: QuestState, map: MapId): NpcDef[] {
       { ...finn, x: FERRY_INN_DOOR.x - 150, y: FERRY_INN_DOOR.y + 20, facing: 'right', storyAction: 'warn-father' },
     ];
   }
-  if (map === 'ferry-village') return FERRY_OUTSIDE_PEOPLE.map(n => ({ ...n }));
+  if (map === 'ferry-village') {
+    const people = state['still-ferry']?.status === 'done' ? [...FERRY_OUTSIDE_PEOPLE, FISHING_ELDER] : FERRY_OUTSIDE_PEOPLE;
+    return people.map(n => ({ ...n }));
+  }
   if (map === FERRY_INN) return FERRY_INN_PEOPLE.map(n => ({ ...n }));
   if (map === FERRY_SMITHY) return FERRY_SMITHY_PEOPLE.map(n => ({ ...n }));
   const house = FERRY_HOUSE_PEOPLE[map];

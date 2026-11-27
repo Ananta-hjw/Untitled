@@ -26,6 +26,11 @@ export const DIALOGUES = {
   'npc-toby': [{ speaker: '토비', portrait: 'toby', text: '풀무는 제가 맡을게요. 불이 약해지면 마르타 선생님이 바로 아시거든요.' }],
   'npc-bell-ringer': [{ speaker: '종을 울리던 사내', portrait: 'bell-ringer', text: '…시키는 대로 했을 뿐이야. 더는 묻지 마.' }],
   'npc-bell-ringer-mother': [{ speaker: '사내의 어머니', portrait: 'bell-ringer-mother', text: '우리 아들이 자꾸 늦게 오는구나. 내 약 때문에 무리하는 건 아닌지….' }],
+  'npc-fishing-elder': [{ speaker: '낚시 노인', portrait: 'fishing-elder', text: '찌를 가만히 보고 있으면 강물이 어떻게 흐르는지 보여. 던지는 것보다 기다리는 게 낚시지.' }],
+  'fog-sia-illusion': [
+    { speaker: '시아', portrait: 'sia', text: '오빠, 여기야.' },
+    hero('등불을 비춰도 그림자가 없어. …시아는 여기 없어.'),
+  ],
   'npc-ferry-fisher': [{ speaker: '나루 어부', portrait: 'ferry-fisher', text: '갈대밭 물가에 그물 세 개가 엉켰어. 마물이 어슬렁거려 손도 못 대고 있지.' }],
   'npc-innkeeper-wife': [{ speaker: '핀의 어머니', portrait: 'innkeeper-wife', text: '비만 오면 여관 지붕이 새요. 잘 마른 갈대를 얹으면 한동안은 버틸 텐데.' }],
   'npc-mill-apprentice': [{ speaker: '방앗간 젊은이', portrait: 'mill-apprentice', text: '형이… 군대에서 돌아오지 못한 친구 이름을 불렀어요.' }],
