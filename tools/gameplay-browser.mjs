@@ -2631,7 +2631,11 @@ test('패링마다 공명 구슬이 1/3씩 차고, 구슬 다섯 개가 다 차�
       e.character.placeAt(p.x + 80 * p.facing, p.y); e.character.facing = -p.facing;
       p.invulnerableUntil = 0; p.hp = p.maxHp; s.onEnemyStrike(e); return p.maxHp - p.hp;
     };
-    const parry = () => { s.parryReadyAt = 0; s.blockButton.pressed = true; step(); hit(); step(2); };
+    // 막기 한 번은 패링 한 번이다: 앞 패링의 히트스톱이 끝나야 다음 막기를 누를 수 있다(멈춘 동안 누른 입력은 처리되지 않는다).
+    const parry = () => {
+      for (let i = 0; i < 40 && s.hitStopLeft > 0; i++) step();
+      s.parryReadyAt = 0; s.blockButton.pressed = true; step(); hit(); step(2);
+    };
     // 구슬이 없으면 공명할 수 없다.
     s.resonanceButton.pressed = true; step();
     const noCharge = !s.resonating;
@@ -2867,7 +2871,8 @@ test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 
     const startDist = Math.hypot(c.x - p.x, c.y - p.y);
     s.joystick.vector.set(0, 0);
     let retreated = false;
-    for (let i = 0; i < 300 && boss.phase === 1; i++) {
+    // 포효를 시작하는 순간 2페이즈로 넘어가므로(다시 포효하지 않게) 포효·후퇴가 끝날 때까지 지켜본다.
+    for (let i = 0; i < 300 && (boss.state === 'roar' || boss.state === 'retreat'); i++) {
       step();
       if (boss.state === 'roar') roarFrames.add(c.sprite.image.frame.name);
       if (boss.state === 'retreat') retreated = true;
@@ -4670,7 +4675,7 @@ test('밤의 종소리: 여관에서 방을 얻으면 밤 연출 → 잠든 여�
     s.openDialogue(npc('fog-innkeeper').spot); flush();
     for (let i = 0; i < 200 && !s.opening; i++) { step(); await new Promise(r => setTimeout(r, 4)); }
     const inn = { opening: !!s.opening, shade: !!s.chapterShade, stage: !!s.nightBellStage, finn: npc('finn').figure.frame.name,
-      step: s.quests['night-bell'].step, rest: localStorage.getItem('untitled-rpg.rest') };
+      step: s.quests['night-bell'].step, rest: JSON.parse(localStorage.getItem('untitled-rpg.rest') ?? 'null')?.point ?? null };
     s.opening.skip(); await ready('ferry-village');
     const sleeper = npc('fog-innkeeper');
     const chase = { shade: !!s.chapterShade, phantoms: s.enemies.filter(e => e.kind === 'mist-phantom').length,
@@ -4696,7 +4701,8 @@ test('밤의 종소리: 여관에서 방을 얻으면 밤 연출 → 잠든 여�
     return { day, inn, chase, bank, river, hug, status, morning };
   })()`);
   assert.deepEqual(result.day, { people: ['finn', 'fog-innkeeper', 'innkeeper-wife'], marker: 'target', spot: true });
-  assert.deepEqual(result.inn, { opening: true, shade: true, stage: true, finn: 'watch-awake', step: 1, rest: null });
+  // 방을 얻는 순간 여관이 쉬는 자리가 된다(밤의 추격에서 쓰러지면 여관에서 다시 시작한다).
+  assert.deepEqual(result.inn, { opening: true, shade: true, stage: true, finn: 'watch-awake', step: 1, rest: 'ferry-inn' });
   assert.deepEqual(result.chase, { shade: true, phantoms: 3, sleeping: true, talkable: false, finn: 'warn-father', others: ['finn', 'fog-innkeeper'] });
   assert.deepEqual(result.bank, { step: 2, talkable: true, fog: 8 });
   assert.deepEqual(result.river, { opening: true, step: 3, stillAsleep: true });
@@ -5224,7 +5230,8 @@ test('갈대밭 늪에서 잠복 마물의 물줄기가 조준한 방향으로 �
       e.character.placeAt(x, y);
       p.revive(targetX, targetY);
       p.invulnerableUntil = 0;
-      tick(10);
+      // 물속에 숨어 있던 잠복 마물은 다 올라온 뒤에야 겨누기 시작한다.
+      for (let i = 0; i < 200 && e.state !== 'windup'; i++) tick(10);
     };
     scene.derived.evadeChance = 0;
     aim(1240, 825, 1500, 825);
