@@ -86,6 +86,8 @@ def build(name):
         'sheets': sheets, 'frames': frames,
         'anchorNote': 'Fixed idle silhouette center and baseline per direction; scales measured from idle area. Verify contact and projectile origins on game integration.',
     }
+    if name == 'blink-fairy':
+        data['animations']['walk'] = {'fps': 10, 'poses': [0, 1, 2, 3], 'source': 'walk', 'loop': True}
     if name == 'ashen-moth':
         data['anchorNote'] = 'Fixed idle silhouette pivot per direction for hover and attack. Flight height and lunge travel are applied in-game.'
     (ROOT / name / 'animation_frames.json').write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')

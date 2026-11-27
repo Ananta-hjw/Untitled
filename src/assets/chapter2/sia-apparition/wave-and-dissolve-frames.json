@@ -1,0 +1,42 @@
+{
+  "frames": [
+    {
+      "name": "wave",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "lower-hand",
+      "x": 320,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "dissolve",
+      "x": 0,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "last-wisps",
+      "x": 320,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    }
+  ],
+  "fps": 4,
+  "loop": false
+}

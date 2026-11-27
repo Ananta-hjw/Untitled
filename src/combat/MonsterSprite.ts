@@ -188,7 +188,7 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     }
     this.showFrame();
   }
-  /** 곧바로 그쪽을 본다 (서리 딱정벌레의 느린 몸 돌리기도 건너뛴다: 흘리기에 몸이 돌아갈 때) */
+  /** 곧바로 그쪽을 본다 (서리 딱정벌레의 느린 몸 돌리기도 건너뛴다) */
   snapFacing(dx: number, dy: number): void {
     const wanted = direction8(dx, dy, this.direction);
     this.direction = wanted;

@@ -2,13 +2,13 @@ import type Phaser from 'phaser';
 import atlasUrl from '../assets/items/icons.webp?url';
 import atlas from '../assets/items/icons.json';
 import { ITEMS, ITEM_IDS, type ItemId } from '../items/inventory';
+import { iconKey } from './icons';
 
 export const ITEM_ICON_TEXTURE = 'item-icons';
-/** 읽어 온 아틀라스 원본. 실제로 그리는 ITEM_ICON_TEXTURE는 이것에 임시 아이콘을 덧붙인 캔버스다. */
+/** 읽어 온 아틀라스 원본. 실제로 그리는 ITEM_ICON_TEXTURE는 이것에 개별 일러스트·임시 아이콘을 덧붙인 캔버스다. */
 const SOURCE_TEXTURE = 'item-icons-source';
 const TILE = 128;
 const GAP = 4;
-const CUSTOM_GEAR_ICONS = ['wildflower-bracelet'] as const;
 
 /** 아이템·장비 아이콘은 작은 아틀라스 한 장으로 읽고, 창을 다시 열어도 같은 텍스처를 쓴다. */
 export function preloadItemIcons(scene: Phaser.Scene): void {
@@ -16,29 +16,41 @@ export function preloadItemIcons(scene: Phaser.Scene): void {
 }
 
 /**
- * 아틀라스의 칸을 등록한다. 아틀라스에 아직 그림이 없는 아이템·장비는 같은 텍스처 아래쪽 줄에
- * 전용 벡터 그림 또는 임시 아이콘을 그려 넣는다. 그림이 아틀라스에 들어오면 저절로 그 그림으로 바뀐다.
+ * 아틀라스의 칸을 등록한다.
+ * - src/assets/icons/items/<id>.{png,webp}에 개별 일러스트가 있으면(preloadIcons로 선로딩됨) 그 그림을 우선 합쳐
+ *   ItemPanel·QuickSlotPanel·HUD 빠른 버튼과 CharacterPanel이 모두 동일한 아이콘을 표시하게 한다.
+ * - 개별 일러스트도 공용 아틀라스에도 없으면 전용 벡터 그림 또는 임시 아이콘을 그려 넣는다.
  */
 export function registerItemIcons(scene: Phaser.Scene): void {
   if (scene.textures.exists(ITEM_ICON_TEXTURE) || !scene.textures.exists(SOURCE_TEXTURE)) return;
   const source = scene.textures.get(SOURCE_TEXTURE).getSourceImage() as HTMLImageElement;
-  const missing: string[] = [
-    ...ITEM_IDS.filter((id) => !atlas.frames.some((f) => f.name === id)),
-    ...CUSTOM_GEAR_ICONS.filter((id) => !atlas.frames.some((f) => f.name === id)),
-  ];
+  const standalone = ITEM_IDS.filter((id) => scene.textures.exists(iconKey('items', id)));
+  const standaloneSet = new Set<string>(standalone);
+  const missing: string[] = ITEM_IDS.filter((id) => !standaloneSet.has(id) && !atlas.frames.some((f) => f.name === id));
+  const extra: string[] = [...standalone, ...missing];
   const extraTop = source.height + GAP;
-  const width = Math.max(source.width, GAP + missing.length * (TILE + GAP));
-  const canvas = scene.textures.createCanvas(ITEM_ICON_TEXTURE, width, extraTop + (missing.length ? TILE + GAP : 0));
+  const width = Math.max(source.width, GAP + extra.length * (TILE + GAP));
+  const canvas = scene.textures.createCanvas(ITEM_ICON_TEXTURE, width, extraTop + (extra.length ? TILE + GAP : 0));
   if (!canvas) return;
   const ctx = canvas.getContext();
   ctx.drawImage(source, 0, 0);
-  missing.forEach((id, i) => {
+  extra.forEach((id, i) => {
     const x = GAP + i * (TILE + GAP), y = extraTop;
-    if (!drawCustomIcon(ctx, x, y, id)) drawPlaceholder(ctx, x, y, id as ItemId);
+    if (standaloneSet.has(id)) {
+      const img = scene.textures.get(iconKey('items', id)).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+      const w = img.width || TILE, h = img.height || TILE;
+      const scale = Math.min((TILE - 8) / w, (TILE - 8) / h);
+      const dw = w * scale, dh = h * scale;
+      ctx.drawImage(img, x + (TILE - dw) / 2, y + (TILE - dh) / 2, dw, dh);
+    } else if (!drawCustomIcon(ctx, x, y, id)) {
+      drawPlaceholder(ctx, x, y, id as ItemId);
+    }
   });
   canvas.refresh();
-  for (const f of atlas.frames) canvas.add(f.name, 0, f.x, f.y, f.w, f.h);
-  missing.forEach((id, i) => canvas.add(id, 0, GAP + i * (TILE + GAP), extraTop, TILE, TILE));
+  for (const f of atlas.frames) {
+    if (!standaloneSet.has(f.name)) canvas.add(f.name, 0, f.x, f.y, f.w, f.h);
+  }
+  extra.forEach((id, i) => canvas.add(id, 0, GAP + i * (TILE + GAP), extraTop, TILE, TILE));
 }
 
 /** 1장 서브 퀘스트 보상(들꽃 팔찌·세레나의 도시락·시아의 조약돌·베르넬의 연구 메모)의 전용 아이콘 */

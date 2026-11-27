@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { QUESTS, currentObjective, continueMainQuest, markerFor, parseQuests, questDef, recordEvent, serializeQuests, talkTo, trackedQuests } from '../src/story/quests.ts';
-import { DUSK_MOTH_POINTS, RAID_WAVES, chapterCanTalk, chapterDialogue, hasDuskMoths, lineaRecovery, chapterPhase, chapterNpcs, chapterSpots, isDusk, raidSpawns, raidSpawnsAnyStep, raidWaveSize, villageSignDialogue } from '../src/story/chapterOne.ts';
+import { DUSK_MOTH_POINTS, RAID_WAVES, SIA_KNOT_SPOT, chapterCanTalk, chapterDialogue, hasDuskMoths, lineaRecovery, chapterPhase, chapterNpcs, chapterSpots, isDusk, raidSpawns, raidSpawnsAnyStep, raidWaveSize, villageSignDialogue } from '../src/story/chapterOne.ts';
 import { NPCS } from '../src/world/npcs.ts';
 import { guardsForMap } from '../src/world/guards.ts';
 import { MAPS, findExit, walkable } from '../src/world/maps.ts';
+import { findInteractable } from '../src/world/interactables.ts';
 
 const through = id => {
   const result = {};
@@ -401,4 +402,16 @@ test('첫날 서브 퀘스트를 했으면 메인 대사가 그 일을 기억한
   assert.deepEqual(gel.rewardEnhance, [{ slot: 'weapon', levels: 1 }]);
   assert.equal(gel.rewardGold, undefined);
   assert.ok(gel.done.some(l => /강화/.test(l.text)));
+});
+
+test('풀리지 않는 매듭 0단계 동안 시아는 리네아의 집 창문 앞 걸을 수 있는 자리에 서 있고 문 범위와 겹치지 않는다', () => {
+  const north = MAPS['village-north'];
+  assert.equal(walkable(north, SIA_KNOT_SPOT.x, SIA_KNOT_SPOT.y), true);
+  assert.equal(findInteractable(SIA_KNOT_SPOT.x, SIA_KNOT_SPOT.y, north.interactables), undefined);
+  const knotState = { ...through('festival-supplies'), 'sia-knot': { status: 'active', count: 0, step: 0 } };
+  const sia = chapterNpcs(north.npcs, knotState, 'village-north').find(n => n.id === 'sia');
+  assert.equal(sia.x, SIA_KNOT_SPOT.x);
+  assert.equal(sia.y, SIA_KNOT_SPOT.y);
+  assert.equal(sia.wander, undefined);
+  assert.equal(sia.facing, 'up');
 });

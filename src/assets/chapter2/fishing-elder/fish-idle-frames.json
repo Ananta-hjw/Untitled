@@ -1,0 +1,42 @@
+{
+  "frames": [
+    {
+      "name": "wait",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.366826,
+      "originY": 0.861244
+    },
+    {
+      "name": "line-twitch",
+      "x": 320,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.366826,
+      "originY": 0.861244
+    },
+    {
+      "name": "check-line",
+      "x": 0,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.366826,
+      "originY": 0.861244
+    },
+    {
+      "name": "settle",
+      "x": 320,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.366826,
+      "originY": 0.861244
+    }
+  ],
+  "fps": 4,
+  "loop": true
+}

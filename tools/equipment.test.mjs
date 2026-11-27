@@ -179,9 +179,13 @@ test('1장 끝 도란의 검 퀘스트만 무기 1단계 무료 승급(도란의
   assert.equal(weaponVisualForRank(granted.gear.rank.weapon), 'iron-sword');
   assert.equal(gearBonus(granted.gear).str, 6);
 
-  // 몬스터 전리품에서 승급 재료를 얻을 수 있다
+  // 몬스터 전리품에서 승급 재료를 얻을 수 있다 (2장 몬스터 포함)
   assert.ok(enemyDrop('corrosion-executioner', () => 0.5).items.some(i => i.id === 'iron-shard'));
+  assert.ok(enemyDrop('corrosion-tracker', () => 0.1).items.some(i => i.id === 'iron-shard'));
   assert.ok(enemyDrop('swamp-lurker', () => 0.5).items.some(i => i.id === 'bronze-ingot'));
+  assert.ok(enemyDrop('mist-phantom', () => 0.1).items.some(i => i.id === 'bronze-ingot'), '안개 환영은 청동 주괴를 떨군다');
+  assert.ok(enemyDrop('reed-stalker', () => 0.1).items.some(i => i.id === 'bronze-ingot'));
+  assert.ok(enemyDrop('ashen-moth', () => 0.1).items.some(i => i.id === 'iron-shard'));
 });
 
 test('장신구는 구매·판매·착용·해제가 되고 빈 장신구 칸부터 들어간다. 기본 5칸에는 끼거나 벗을 수 없다', () => {
@@ -277,6 +281,22 @@ test('상태·장비 저장은 무제한 강화와 승급 단계·장신구를 �
   assert.deepEqual(migrated.enhance, { weapon: 0, head: 0, body: 0, hands: 0, feet: 0 });
   assert.deepEqual(migrated.bag, { 'blue-bead': 1 });
   assert.deepEqual(migrated.equipped, { accessory1: 'wildflower-bracelet' });
+
+  // 예전(통합 강화 enhance만 있고 rank 없음) 저장에서 enhance >= 30도 rank=5, 잔여 강화 보존
+  const legacyHigh = JSON.stringify({
+    version: CHARACTER_SAVE_VERSION,
+    alloc: {},
+    gear: {
+      enhance: { weapon: 33, body: 12 },
+      bag: {},
+      equipped: {},
+    },
+  });
+  const migratedHigh = parseCharacter(legacyHigh, 5).gear;
+  assert.equal(migratedHigh.rank.weapon, MAX_RANK);
+  assert.equal(migratedHigh.enhance.weapon, 33 - MAX_RANK * 5);
+  assert.equal(migratedHigh.rank.body, 2);
+  assert.equal(migratedHigh.enhance.body, 2);
 });
 
 test('퀘스트 보상 강화는 비용 없이 지정 칸을 올리고 다른 칸과 승급은 그대로 둔다', () => {

@@ -150,17 +150,6 @@ export class CombatAudio {
     }
   }
 
-  /** 회전 베기 광역 칼바람 + 공명음 */
-  playSpinSlash(): void {
-    this.vibrate(16);
-    const ctx = this.ensureContext();
-    if (!ctx) return;
-    const now = ctx.currentTime;
-    this.playNoise(ctx, now, 0.14, 1350, 'bandpass', 0.9, 0.22);
-    this.playTone(ctx, now, 'sine', 210, 68, 0.16, 0.24);
-    this.playTone(ctx, now + 0.015, 'triangle', 740, 1180, 0.16, 0.09);
-  }
-
   /** 서리 딱정벌레 껍질 등 단단한 갑주에 튕겨 나갈 때의 차가운 "깡!" 소리 */
   playShellBlock(): void {
     this.vibrate(10);
@@ -170,11 +159,6 @@ export class CombatAudio {
     this.playNoise(ctx, now, 0.022, 3200, 'highpass', 1.0, 0.18);
     this.playTone(ctx, now, 'triangle', 2150, 1840, 0.16, 0.12);
     this.playTone(ctx, now, 'sine', 3180, 2900, 0.13, 0.08);
-  }
-
-  /** 패링 뒤 반격 일격을 꽂았을 때의 묵직한 베기음 */
-  playCounterHit(): void {
-    this.playHit('counter', false, false);
   }
 
   /** 보스 연속 패링 파훼: 마지막 타를 튕겨내며 터지는 웅장한 금속 화음 + 파열음 */

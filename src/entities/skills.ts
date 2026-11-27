@@ -3,10 +3,10 @@
  *
  * 기술은 이야기에서 배운다(퀘스트 보상 rewardSkill). 배운 기술은 비어 있는 첫 기술 칸에 저절로 들어간다.
  * 배운 기술과 칸 배치는 untitled-rpg.skills에 저장해 맵을 옮기거나 다시 켜도 이어진다.
- * 첫 기술은 2장 "떠날 채비"에서 루안에게 배우는 회전 베기다(docs/story-chapter2.md).
+ * (기존 '회전 베기'는 제거되었으며, 추후 새 기술을 등록할 수 있도록 구조만 유지한다.)
  */
 
-export type SkillId = 'spin';
+export type SkillId = string;
 
 export interface SkillDef {
   id: SkillId;
@@ -15,9 +15,7 @@ export interface SkillDef {
   label: string;
 }
 
-export const SKILLS: Record<SkillId, SkillDef> = {
-  spin: { id: 'spin', name: '회전 베기', label: '회전베기' },
-};
+export const SKILLS: Record<SkillId, SkillDef> = {};
 
 export function isSkillId(id: unknown): id is SkillId {
   return typeof id === 'string' && Object.hasOwn(SKILLS, id);

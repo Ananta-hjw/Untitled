@@ -46,6 +46,10 @@ export const FERRY_OUTSIDE_PEOPLE: NpcDef[] = [
   // 서브 퀘스트 "엉킨 그물"의 의뢰인: 어부의 집 앞 그물 건조대 곁 강가
   { id: 'ferry-fisher', name: '나루 어부', role: '나루의 어부', x: 2300, y: 2440, height: 146, dialogue: 'npc-ferry-fisher', facing: 'down-right' },
 ];
+const FISHING_ELDER: NpcDef = {
+  id: 'fishing-elder', name: '낚시 노인', role: '강가의 낚시꾼', x: 3080, y: 2845, height: 138,
+  dialogue: 'npc-fishing-elder', facing: 'down-right', storyAction: 'fish-idle', talkOffsetX: -42,
+};
 
 /**
  * 나루 여관(in-ferry-inn, 실내 원화의 픽셀 좌표) 안의 여관 주인과 아들 핀.
@@ -87,7 +91,7 @@ export const FERRY_HOUSE_PEOPLE: Partial<Record<MapId, NpcDef[]>> = {
   ],
 };
 
-export const FERRY_PEOPLE: NpcDef[] = [...FERRY_OUTSIDE_PEOPLE, ...FERRY_INN_PEOPLE, ...FERRY_SMITHY_PEOPLE,
+export const FERRY_PEOPLE: NpcDef[] = [...FERRY_OUTSIDE_PEOPLE, FISHING_ELDER, ...FERRY_INN_PEOPLE, ...FERRY_SMITHY_PEOPLE,
   ...Object.values(FERRY_HOUSE_PEOPLE).flat() as NpcDef[]];
 export const FERRY_INN: MapId = 'in-ferry-inn';
 
@@ -147,7 +151,10 @@ export function chapterTwoNpcs(state: QuestState, map: MapId): NpcDef[] {
       { ...finn, x: FERRY_INN_DOOR.x - 150, y: FERRY_INN_DOOR.y + 20, facing: 'right', storyAction: 'warn-father' },
     ];
   }
-  if (map === 'ferry-village') return FERRY_OUTSIDE_PEOPLE.map(n => ({ ...n }));
+  if (map === 'ferry-village') {
+    const people = state['still-ferry']?.status === 'done' ? [...FERRY_OUTSIDE_PEOPLE, FISHING_ELDER] : FERRY_OUTSIDE_PEOPLE;
+    return people.map(n => ({ ...n }));
+  }
   if (map === FERRY_INN) return FERRY_INN_PEOPLE.map(n => ({ ...n }));
   if (map === FERRY_SMITHY) return FERRY_SMITHY_PEOPLE.map(n => ({ ...n }));
   const house = FERRY_HOUSE_PEOPLE[map];
@@ -155,10 +162,12 @@ export function chapterTwoNpcs(state: QuestState, map: MapId): NpcDef[] {
   return [];
 }
 
-/** 퀘스트 6의 밤에 나루에 나오는 안개 환영 (여관 주인을 쫓는 동안만) */
+/** 퀘스트 6의 밤에 나루에 나오는 안개 환영 (여관 주인을 쫓는 동안만, 남은 처치 수만큼 배치) */
 export function ferryNightSpawns(state: QuestState, map: MapId): Array<{ key: 'mist-phantom'; x: number; y: number }> {
   if (map !== 'ferry-village' || ferryNightStep(state) !== 1) return [];
-  return FERRY_NIGHT_PHANTOMS.map(p => ({ key: 'mist-phantom', ...p }));
+  const slain = state['night-bell']?.count ?? 0;
+  const remain = Math.max(0, FERRY_NIGHT_PHANTOMS.length - slain);
+  return FERRY_NIGHT_PHANTOMS.slice(FERRY_NIGHT_PHANTOMS.length - remain).map(p => ({ key: 'mist-phantom', ...p }));
 }
 
 /** 서브 퀘스트 "새는 지붕"으로 여관 지붕을 고쳤는지 (나루 여관 그림을 고친 그림으로 바꾼다) */
@@ -223,12 +232,24 @@ export function chapterTwoDialogue(npc: NpcId, state: QuestState): DialogueLine[
     return [{ speaker: '핀', portrait: 'finn', text: '형, 아빠한테 방 달라고 해. 그리고 귀 꼭 막아.' }];
   }
   const departed = state.farewell?.status === 'done';
+  const missingOpen = !!state['missing-five'];
   const lines: Partial<Record<NpcId, DialogueLine[]>> = {
     vernel: [{ speaker: '베르넬', portrait: 'vernel', text: '유적 길을 다 치우려면 한참 걸려. 네가 돌아올 때쯤엔 들어갈 수 있게 해 둘게.' }],
     teon: [{ speaker: '테온', portrait: 'teon', text: '이번엔 여기 남을게. 남은 사람들은 내가 지킨다. …그러니까 너는 뒤돌아보지 말고 가.' }],
     ...(departed ? {
       linea: [{ speaker: '리네아', portrait: 'linea', text: '내 증상은 매일 일지에 적어 둘게. 시온, 무리하지 말고 꼭 돌아와.' }],
       herman: [{ speaker: '헤르만', portrait: 'herman', text: '마을 걱정은 말게. 고개 너머에서도 부디 몸 조심하게나.' }],
+    } : {}),
+    ...(ferryInnRepaired(state) ? {
+      'innkeeper-wife': [{ speaker: '핀의 어머니', portrait: 'innkeeper-wife', text: '갈대 덕분에 지붕에서 물이 뚝 그쳤어요. 정말 고마워요, 시온.' }],
+    } : {}),
+    ...(state['tangled-nets']?.status === 'done' ? {
+      'ferry-fisher': [{ speaker: '나루 어부', portrait: 'ferry-fisher', text: '그물 세 개가 말끔히 풀렸어. 덕분에 안개가 걷히면 바로 배를 띄울 수 있겠군.' }],
+    } : {}),
+    ...(missingOpen ? {
+      'mill-apprentice': [{ speaker: '방앗간 젊은이', portrait: 'mill-apprentice', text: '형이… 군대에서 돌아오지 못한 친구 이름을 불렀어요.' }],
+      'fisher-daughter': [{ speaker: '어부의 딸', portrait: 'fisher-daughter', text: '아빠가 강에서 잃은 형 이름을 불렀어.' }],
+      'herbalist-elder': [{ speaker: '약초 가게 할머니', portrait: 'herbalist-elder', text: '영감이 먼저 간 딸아이를 찾는다고 문을 열었지.' }],
     } : {}),
   };
   return lines[npc];

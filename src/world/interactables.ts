@@ -45,28 +45,30 @@ export const INTERACTABLES: Interactable[] = [
 
 const VERTICAL_RATIO = 0.6;
 
+function interactableDistance(x: number, y: number, item: Interactable): number {
+  if (item.reach) {
+    const { rx, up, down } = item.reach;
+    const dx = x - item.x;
+    const dy = y - item.y;
+    if (Math.abs(dx) > rx || dy < -up || dy > down) return Infinity;
+    // 문턱 사각형 안에서는 모서리 사각지대 없이 항상 닿고, 문 중심에 가까울수록 우선권을 갖는다.
+    const midY = (down - up) / 2;
+    const halfH = (up + down) / 2;
+    const nx = Math.abs(dx) / rx;
+    const ny = Math.abs(dy - midY) / halfH;
+    return Math.min(1, Math.max(nx, ny) ** 2);
+  }
+  const nx = (x - item.x) / item.radius;
+  const ny = (y - item.y) / (item.radius * VERTICAL_RATIO);
+  return nx * nx + ny * ny;
+}
+
 /** (x, y)에서 닿는 대상 중 가장 가까운 것. 없으면 undefined. */
 export function findInteractable(x: number, y: number, list: readonly Interactable[] = INTERACTABLES): Interactable | undefined {
   let best: Interactable | undefined;
   let bestDistance = 1;
   for (const item of list) {
-    let distance: number;
-    if (item.reach) {
-      const { rx, up, down } = item.reach;
-      const dx = x - item.x;
-      const dy = y - item.y;
-      if (Math.abs(dx) > rx || dy < -up || dy > down) continue;
-      // 문턱 사각형 안에서는 모서리 사각지대 없이 항상 닿고, 문 중심에 가까울수록 우선권을 갖는다.
-      const midY = (down - up) / 2;
-      const halfH = (up + down) / 2;
-      const nx = Math.abs(dx) / rx;
-      const ny = Math.abs(dy - midY) / halfH;
-      distance = Math.min(1, Math.max(nx, ny) ** 2);
-    } else {
-      const nx = (x - item.x) / item.radius;
-      const ny = (y - item.y) / (item.radius * VERTICAL_RATIO);
-      distance = nx * nx + ny * ny;
-    }
+    const distance = interactableDistance(x, y, item);
     if (distance <= bestDistance) {
       best = item;
       bestDistance = distance;
@@ -77,11 +79,11 @@ export function findInteractable(x: number, y: number, list: readonly Interactab
 
 /** (x, y)에서 닿는 대상 모두, 가까운 순서로 */
 export function interactablesInReach(x: number, y: number, list: readonly Interactable[] = INTERACTABLES): Interactable[] {
-  const reach = (item: Interactable) => {
-    const nx = (x - item.x) / item.radius, ny = (y - item.y) / (item.radius * VERTICAL_RATIO);
-    return nx * nx + ny * ny;
-  };
-  return list.filter(item => reach(item) <= 1).sort((a, b) => reach(a) - reach(b));
+  return list
+    .map(item => ({ item, d: interactableDistance(x, y, item) }))
+    .filter(e => e.d <= 1)
+    .sort((a, b) => a.d - b.d)
+    .map(e => e.item);
 }
 
 /**

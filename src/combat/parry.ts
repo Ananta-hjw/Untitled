@@ -48,6 +48,16 @@ export function recordParryWhiff(
   return { count: chained ? Math.min(maxTier, previous.count + 1) : 1, lastWhiffAt: whiffAt };
 }
 
+/**
+ * 원거리 공격(투사체·산탄·물줄기)을 패링했을 때 되돌려 보내는 단위 방향 벡터.
+ * 공격이 날아온 방향(hitDx, hitDy)의 정반대(원래 온 방향)로 그대로 반사한다.
+ */
+export function reflectDirection(hitDx: number, hitDy: number): { x: number; y: number } {
+  const len = Math.hypot(hitDx, hitDy);
+  if (len <= 1e-6) return { x: 1, y: 0 };
+  return { x: -hitDx / len, y: -hitDy / len };
+}
+
 /** 8방향 막기 1개 섹터의 반각(±22.5°, 총 45°) 코사인 기준. */
 const GUARD_SECTOR_COS = Math.cos(Math.PI / 8);
 

@@ -1,0 +1,42 @@
+{
+  "frames": [
+    {
+      "name": "gather",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "wrap",
+      "x": 320,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "hold",
+      "x": 0,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "break",
+      "x": 320,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    }
+  ],
+  "fps": 6,
+  "loop": false
+}

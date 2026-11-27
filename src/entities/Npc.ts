@@ -13,6 +13,8 @@ import {
   type Direction8, type DutyPoint, type NpcDef, type NpcSkin,
 } from '../world/npcs';
 
+import fishingElderIdleUrl from '../assets/chapter2/fishing-elder/sd_idle.webp?url';
+import fishingElderIdleData from '../assets/chapter2/fishing-elder/sd_idle.json';
 import fallenUrl from '../assets/characters/soldier/fallen.webp?url';
 import fallenData from '../assets/characters/soldier/fallen-frames.json';
 
@@ -30,6 +32,8 @@ const SHEET_URLS = import.meta.glob<string>('../assets/characters/*/walk_*-60.we
 const FRAME_DATA = import.meta.glob<WalkData>('../assets/characters/*/walk_frames.json', { eager: true, import: 'default' });
 const IDLE_URLS = import.meta.glob<string>('../assets/characters/*/sd_idle-256.webp', { eager: true, query: '?url', import: 'default' });
 const IDLE_DATA = import.meta.glob<IdleData>('../assets/characters/*/sd_idle.json', { eager: true, import: 'default' });
+const idleUrl = (id: NpcSkin) => id === 'fishing-elder' ? fishingElderIdleUrl : IDLE_URLS[`../assets/characters/${id}/sd_idle-256.webp`];
+const idleData = (id: NpcSkin) => id === 'fishing-elder' ? fishingElderIdleData : IDLE_DATA[`../assets/characters/${id}/sd_idle.json`];
 const COMBAT_URLS = import.meta.glob<string>('../assets/characters/*/combat.webp', { eager: true, query: '?url', import: 'default' });
 interface CombatFrame { name: string; x: number; y: number; w: number; h: number; originX: number; originY: number }
 const COMBAT_DATA = import.meta.glob<{ frames: CombatFrame[] }>('../assets/characters/*/combat-frames.json', { eager: true, import: 'default' });
@@ -71,7 +75,7 @@ export function preloadNpcs(scene: Phaser.Scene, npcs: readonly NpcDef[], previe
     }
     if (!walkData(id)) {
       const key = `npc-${id}-idle`;
-      if (!scene.textures.exists(key)) scene.load.image(key, IDLE_URLS[`../assets/characters/${id}/sd_idle-256.webp`]);
+      if (!scene.textures.exists(key)) scene.load.image(key, idleUrl(id));
       continue;
     }
     for (const sheet of ['walk_cardinal', 'walk_diagonal']) {
@@ -163,7 +167,7 @@ export class Npc extends Phaser.GameObjects.Container {
       for (const f of innSleepFrames.frames) if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
     }
     this.direction = def.facing ?? 'down';
-    this.idle = walkData(this.skin) ? undefined : IDLE_DATA[`../assets/characters/${this.skin}/sd_idle.json`];
+    this.idle = walkData(this.skin) ? undefined : idleData(this.skin);
     this.walk = walkData(this.skin) ?? {
       fps: 0, idlePose: 0, walkPoses: [0], referenceHeight: this.idle!.height, frames: [],
     };

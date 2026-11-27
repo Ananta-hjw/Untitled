@@ -515,9 +515,9 @@ export function parseGear(data: unknown): Gear {
         if (hasRank) {
           gear.enhance[slot] = sanitizeEnhanceLevel(value);
         } else {
-          // 이전 통합 강화형 저장(rank 없음): 5강마다 승급 1단계 + 나머지 강화로 변환
+          // 이전 통합 강화형 저장(rank 없음): 5강마다 승급 1단계 + 상한 초과분 포함 나머지 강화로 변환
           gear.rank[slot] = clampRank(Math.floor(value / 5));
-          gear.enhance[slot] = value % 5;
+          gear.enhance[slot] = sanitizeEnhanceLevel(value - gear.rank[slot] * 5);
         }
       }
     }

@@ -1,0 +1,45 @@
+{
+  "frames": [
+    {
+      "name": "notice-cocoon",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "reach-down",
+      "x": 320,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "extend",
+      "x": 0,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "curl-fingers",
+      "x": 320,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    }
+  ],
+  "fps": 4,
+  "loop": true,
+  "facing": "down-right",
+  "bodyHeight": 239,
+  "shadow": false
+}

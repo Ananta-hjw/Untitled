@@ -17,12 +17,12 @@
       "loop": true
     },
     "walk": {
-      "fps": 8,
+      "fps": 10,
       "poses": [
+        0,
         1,
         2,
-        3,
-        2
+        3
       ],
       "source": "walk",
       "loop": true

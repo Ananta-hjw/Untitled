@@ -1,0 +1,42 @@
+{
+  "frames": [
+    {
+      "name": "gather",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.499203
+    },
+    {
+      "name": "surge",
+      "x": 320,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.499203
+    },
+    {
+      "name": "push",
+      "x": 0,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.499203
+    },
+    {
+      "name": "fade",
+      "x": 320,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.499203
+    }
+  ],
+  "fps": 10,
+  "loop": false
+}

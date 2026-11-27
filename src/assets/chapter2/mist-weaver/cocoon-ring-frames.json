@@ -1,0 +1,43 @@
+{
+  "frames": [
+    {
+      "name": "wide",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.499203
+    },
+    {
+      "name": "closing",
+      "x": 320,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.499203
+    },
+    {
+      "name": "narrow",
+      "x": 0,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.499203
+    },
+    {
+      "name": "almost-closed",
+      "x": 320,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.499203
+    }
+  ],
+  "fps": 4,
+  "loop": false,
+  "gapDirectionDegrees": 0
+}

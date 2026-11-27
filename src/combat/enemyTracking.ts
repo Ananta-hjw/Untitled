@@ -63,8 +63,9 @@ export function trackLockMs(
 ): number {
   if (windupMs <= 0) return 0;
   const impactLeadAt = immediateStrike ? windupMs : windupMs + strikeMs;
-  const beforeGlint = Math.max(windupMs * 0.48, impactLeadAt - glintLeadMs);
-  return Math.min(windupMs * 0.72, beforeGlint);
+  // 안광이 번쩍이는 시점(impactLeadAt - glintLeadMs) 이후에는 절대 방향을 틀지 않도록 보장한다.
+  const atGlint = Math.max(windupMs * 0.3, impactLeadAt - glintLeadMs);
+  return Math.min(windupMs * 0.72, atGlint);
 }
 
 /** 몬스터별 지연 추적 최대 회전 속도 (rad/s). */

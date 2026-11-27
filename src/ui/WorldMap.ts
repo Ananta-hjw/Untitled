@@ -52,6 +52,10 @@ export class WorldMap {
       if (building.label) this.labels.push({ point: building,
         text: this.text(building.label, 16, '#fff4dd').setOrigin(.5, 0).setStroke('#142019', 4) });
     }
+    for (const prop of map.props) {
+      if (prop.label) this.labels.push({ point: prop,
+        text: this.text(prop.label, 15, '#fff4dd').setOrigin(.5, 0).setStroke('#142019', 4) });
+    }
     const passages = map.exits.map(exit => ({ point: exitPoint(map, exit), target: exit.to,
       direction: exitDirection(map, exitPoint(map, exit)) }));
     if (isIndoorMap(map)) {

@@ -6,8 +6,11 @@ import { NPCS, type Direction8, type DutyPoint, type NamedNpcId, type NpcDef, ty
 import { INTERIORS, interiorArtPoint, type InteriorId } from '../world/interiors.ts';
 import type { MapId } from '../world/maps.ts';
 import type { Interactable } from '../world/interactables.ts';
-import { BUILDINGS, LINEA_YARD } from '../world/villageLayout.ts';
+import { BUILDINGS, LINEA_HOME, LINEA_YARD } from '../world/villageLayout.ts';
 import { RAID_LEVELS } from '../combat/monsterLevel.ts';
+
+/** 1장 "풀리지 않는 매듭" 진행 중 시아가 리네아의 집 창문 앞에서 끈을 묶는 자리. */
+export const SIA_KNOT_SPOT = { x: LINEA_HOME.door.x - mapLength(145), y: LINEA_HOME.door.y + mapLength(10) };
 
 export type ChapterPhase = 'day' | 'raid' | 'aftermath';
 
@@ -33,9 +36,9 @@ const RAID_PLACES: Partial<Record<NamedNpcId, RaidPlace>> = {
   eila: { map: 'village', x: mapLength(1540), y: mapLength(1200) },
   herman: { map: 'village-north', ...mapPoint({ x: 1290, y: 600 }), facing: 'down' },
   doran: { map: 'village-north', ...mapPoint({ x: 2090, y: 600 }), facing: 'down' },
-  rosetta: { map: 'in-clinic', room: 'clinic', x: 790, y: 650, facing: 'left' },
+  rosetta: { map: 'in-clinic', room: 'clinic', x: 680, y: 560, facing: 'left' },
   merina: { map: 'in-clinic', room: 'clinic', x: 930, y: 650, facing: 'down' },
-  vernel: { map: 'in-chief', room: 'chief', x: 860, y: 540, facing: 'down' },
+  vernel: { map: 'in-chief', room: 'chief', x: 860, y: 450, facing: 'down' },
 };
 /** 습격 단계(village-raid의 step)가 이 값 이상이면 옮겨 간 자리 */
 const RAID_MOVES: Partial<Record<NamedNpcId, { fromStep: number; place: RaidPlace }>> = {
@@ -166,7 +169,13 @@ export function chapterNpcs(base: readonly NpcDef[], state: QuestState, map?: Ma
       ? [...placed.filter(n => !care.some(c => c.id === n.id)), ...care] : placed;
   }
   const people = base.map(n => n.id === 'doran' && n.inside === 'smithy' ? { ...n, storyAction: 'hammer' } : n);
-  if (phase === 'day') return people;
+  if (phase === 'day') {
+    const knotStep0 = state['sia-knot']?.status === 'active' && (state['sia-knot'].step ?? 0) === 0;
+    if (!knotStep0) return people;
+    return people.map(n => n.id === 'sia'
+      ? { ...n, x: SIA_KNOT_SPOT.x, y: SIA_KNOT_SPOT.y, wander: undefined, facing: 'up' as const }
+      : n);
+  }
   const placed = people.filter(n => !['sia', 'linea', 'eila', 'serena'].includes(n.id)).map(n => {
     if (n.id === 'ruan') return { ...n, ...mapPoint({ x: 1080, y: 1150 }), wander: undefined };
     if (n.id === 'merina') return { ...n, wander: undefined, storyAction: 'supplies' };

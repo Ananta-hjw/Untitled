@@ -37,10 +37,10 @@ export class QuickSlotPanel {
     this.slot = slot;
     this.active = true;
     this.title.setText(`슬롯 ${slot + 1} · ${slot === 0 ? 'Q' : 'R'} 아이템 등록`);
-    this.hint.setText('버튼을 길게 누르거나 가방에서 언제든 변경할 수 있어요.');
+    this.hint.setText('HUD 물약·도시락 버튼을 길게 누르면 언제든 변경할 수 있어요.');
     for (const row of this.rows) {
       const count = countOf(inventory, row.id), def = ITEMS[row.id];
-      row.text.setText(`${def.name}\n${itemEffectText(row.id)}\n보유 ${count}개`).setLineSpacing(6);
+      row.text.setText(`${def.name}\n${itemEffectText(row.id)} · ${count}개`).setLineSpacing(4);
       row.button.setText(slots[slot] === row.id ? '선택됨' : '등록').setAlpha(count > 0 ? 1 : .45);
       if (count > 0) row.button.setInteractive({ useHandCursor: true });
       else row.button.disableInteractive();
@@ -53,24 +53,28 @@ export class QuickSlotPanel {
   layout(width: number): void {
     this.width = width;
     this.shade.setSize(width, VIEW_HEIGHT); this.shade.input?.hitArea.setSize(width, VIEW_HEIGHT);
-    const w = Math.min(900, width - 80), x = (width - w) / 2, y = 76;
+    const w = Math.min(940, width - 64), x = (width - w) / 2, y = 44;
     const g = this.panel.clear();
-    g.fillStyle(0x10271f, .99).fillRoundedRect(x, y, w, 568, 18);
-    g.lineStyle(1, 0xcbb17c, .95).strokeRoundedRect(x, y, w, 568, 18);
-    this.title.setPosition(x + 36, y + 34);
-    const gap = 10, tile = (w - 48 - gap * (this.rows.length - 1)) / Math.max(1, this.rows.length);
+    g.fillStyle(0x10271f, .99).fillRoundedRect(x, y, w, 632, 18);
+    g.lineStyle(1, 0xcbb17c, .95).strokeRoundedRect(x, y, w, 632, 18);
+    this.title.setPosition(x + 32, y + 26);
+    const cols = 4, gapX = 12, gapY = 12;
+    const tileW = (w - 48 - gapX * (cols - 1)) / cols;
+    const tileH = 198;
+    const gridTop = y + 78;
     this.rows.forEach((r, i) => {
-      const tx = x + 24 + i * (tile + gap), cx = tx + tile / 2;
-      g.fillStyle(0x20392d, 1).fillRoundedRect(tx, y + 96, tile, 300, 10);
-      r.icon.setPosition(cx, y + 150).setDisplaySize(76, 76);
-      r.text.setPosition(cx, y + 196).setWordWrapWidth(tile - 12);
-      const buttonWidth = Math.min(140, tile - 16);
-      r.button.setPosition(cx, y + 356).setFixedSize(buttonWidth, 60);
-      r.button.input?.hitArea.setSize(buttonWidth, 60);
+      const col = i % cols, row = Math.floor(i / cols);
+      const tx = x + 24 + col * (tileW + gapX), ty = gridTop + row * (tileH + gapY), cx = tx + tileW / 2;
+      g.fillStyle(0x20392d, 1).fillRoundedRect(tx, ty, tileW, tileH, 10);
+      r.icon.setPosition(cx, ty + 42).setDisplaySize(64, 64);
+      r.text.setFontSize(16).setPosition(cx, ty + 80).setWordWrapWidth(tileW - 14);
+      const buttonWidth = Math.min(136, tileW - 20);
+      r.button.setPosition(cx, ty + tileH - 30).setFixedSize(buttonWidth, 44).setPadding(0, 8, 0, 0);
+      r.button.input?.hitArea.setSize(buttonWidth, 44);
     });
-    this.hint.setPosition(x + 36, y + 410).setWordWrapWidth(w - 72);
-    this.clear.setPosition(x + 132, y + 494);
-    this.cancel.setPosition(x + w - 132, y + 494);
+    this.hint.setPosition(x + 32, y + 498).setWordWrapWidth(w - 64);
+    this.clear.setPosition(x + 132, y + 576);
+    this.cancel.setPosition(x + w - 132, y + 576);
   }
   private visible(v: boolean): void {
     for (const o of [this.shade, this.panel, this.title, this.hint, this.clear, this.cancel]) o.setVisible(v);

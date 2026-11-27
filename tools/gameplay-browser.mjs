@@ -939,7 +939,7 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
       scroll: south.scroll, bottom: south.bottom, nameTop,
       skills: (() => { const mp = s.mp; s.skillButtons[0].pressed = true; s.update(0, 16);
         return { count: s.skillButtons.length, empty: s.skillSlots.every(x => x === null),
-          labels: s.skillButtons.every(b => b.text.text === ''), noSpin: s.spinHitAt === undefined && s.mp >= mp }; })(),
+          labels: s.skillButtons.every(b => b.text.text === ''), idle: s.mp >= mp }; })(),
       boundsHeight: camera.getBounds().height };
   })()`);
   assert.deepEqual(result.initial, { x: PLAYER_SPAWN.x, y: PLAYER_SPAWN.y, walkable: true, safe: true });
@@ -952,7 +952,7 @@ test('집 앞 마을에서 시작하고 새 지형과 세로 카메라 경계가
   assert.equal(result.ui.block, result.ui.width - 330);
   assert.ok(result.ui.dodge > result.ui.attack && result.ui.gap > 0, JSON.stringify(result.ui));
   // 기술 칸 다섯은 비어 있고, 눌러도 아무 기술도 나가지 않는다.
-  assert.deepEqual(result.skills, { count: 5, empty: true, labels: true, noSpin: true });
+  assert.deepEqual(result.skills, { count: 5, empty: true, labels: true, idle: true });
   assert.equal(result.ui.hp, 'HP 100 / 100');
   assert.equal(result.boundsHeight, WORLD_HEIGHT);
   assert.ok(result.scroll > 400 && result.bottom <= WORLD_HEIGHT);
@@ -1100,7 +1100,7 @@ test('공격이 닿기 직전의 회피만 저스트 회피가 되어 느린 화
       const nowAtDodge = s2.now;
       step(8);
       const outcome = { slow: s2.slowMotionLeft > 0 || s2.now - nowAtDodge < 8 * 16 * 0.9, justDodged: s2.justDodged,
-        counterReady: s2.counterUntil > s2.now, dodgeReady: s2.dodgeReadyAt <= s2.now, hpLost: hp - p2.hp,
+        counterReady: s2.counterUntil > s2.now, dodgeLeft: s2.dodgeReadyAt - s2.now, hpLost: hp - p2.hp,
         enemyState: e.state };
       // 반격: 창 안에서 시작한 공격은 반격으로 표시된다.
       p2.placeAt(e.character.x + 80, e.character.y); p2.endAttack(); s2.nextAttackAt = 0; s2.dodgeProgress = 1;
@@ -1113,7 +1113,8 @@ test('공격이 닿기 직전의 회피만 저스트 회피가 되어 느린 화
   assert.equal(result.just.justDodged, true);
   assert.equal(result.just.slow, true);
   assert.equal(result.just.counterReady, true);
-  assert.equal(result.just.dodgeReady, true);
+  assert.ok(result.just.dodgeLeft > 6000 && result.just.dodgeLeft < 7300, `저스트 회피 시 쿨다운 30% 단축(~7초 남음): ${result.just.dodgeLeft}`);
+  assert.ok(result.early.dodgeLeft > 9000, `일반 회피는 쿨다운 단축 없음: ${result.early.dodgeLeft}`);
   assert.equal(result.just.hpLost, 0);
   assert.equal(result.just.enemyState, 'recover');
   assert.equal(result.just.counterAttack, true);
@@ -2432,7 +2433,7 @@ test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공�
     // 회피 대기 시간이 3초 남은 상태에서 패링하면 1초 줄어든다.
     s.dodgeReadyAt = s.now + 3000;
     const front = strike(1);
-    const stunned = e.state, counter = s.counterUntil > s.now, again = s.now >= s.parryReadyAt;
+    const stunned = e.parryStunUntil > s.now, counter = s.counterUntil > s.now, again = s.now >= s.parryReadyAt;
     const dodgeLeft = s.dodgeReadyAt - s.now;
     settle(); parry();
     s.dodgeReadyAt = s.now + 400;
@@ -2455,7 +2456,8 @@ test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공�
   assert.equal(result.shield, true);
   assert.equal(result.front, 0, '패링하면 피해가 없다');
   assert.ok(result.open > 0, JSON.stringify(result));
-  assert.equal(result.counter, true);
+  assert.equal(result.stunned, false, '일반 정밀 패링은 기절을 주지 않는다');
+  assert.equal(result.counter, false, '일섬(counter)은 저스트 회피 전용이며 패링에서는 열리지 않는다');
   assert.equal(result.again, true, '패링에 성공하면 바로 다시 막을 수 있다');
   assert.ok(Math.abs(result.dodgeLeft - 2000) < 1, `패링하면 회피 대기 시간 1초 감소: ${result.dodgeLeft}`);
   assert.ok(result.dodgeFloor <= 0 && result.dodgeFloor > -1, `남은 시간이 1초보다 적으면 바로 회피할 수 있다: ${result.dodgeFloor}`);
@@ -2464,7 +2466,7 @@ test('막기는 누른 순간 잠깐만 막는 패링이다: 앞에서 온 공�
   assert.equal(result.evaded, 0);
 });
 
-test('연타와 흡수: 추적자는 예비 동작 중 따라오며 2연타를 하고, 둘 다 정밀 패링하면 연타가 이어지다 파훼되며, 3단(2.5배)이 3초 이어지고 첫 명중에만 부식 웅덩이가 남는다', async () => {
+test('연타와 흡수: 추적자는 예비 동작 중 따라오며 2연타를 하고, 둘 다 정밀 패링하면 연타가 이어지다 파훼되며, 3단(2.5배)이 5초 이어지고 첫 명중에만 부식 웅덩이가 남는다', async () => {
   await load('south-field&monsters=corrosion-tracker');
   await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.some(e => e.kind === 'corrosion-tracker'); })()`));
   const result = await evaluate(`(() => {
@@ -2522,50 +2524,58 @@ test('연타와 흡수: 추적자는 예비 동작 중 따라오며 2연타를 �
   assert.ok(result.stunLeft > 1200, `파훼 경직: ${result.stunLeft}`);
   assert.equal(result.hpAfterParries, result.maxHp);
   assert.equal(result.tierBefore, 3);
-  assert.equal(result.tierAfter, 3, '단수는 3초 동안 이어진다');
-  assert.equal(result.charged, false, '속성은 첫 명중에 쓰였다');
-  assert.ok(result.left > 0 && result.left < 3000, JSON.stringify(result));
+  assert.equal(result.tierAfter, 3, '단수는 5초 동안 이어진다');
+  assert.equal(result.charged, false, `속성은 첫 명중에 쓰였다: ${JSON.stringify(result)}`);
+  assert.ok(result.left > 0 && result.left < 5000, JSON.stringify(result));
   assert.equal(result.pools, 1, '부식 웅덩이가 남는다');
   assert.ok(result.damage > 0);
 });
 
-test('흘리기: 막는 순간 조이스틱을 기울이면 근접 공격이 그쪽 적에게 맞고, 공격한 적은 그쪽으로 밀려 몸이 돌아간다. 적 쪽으로 밀면 그냥 패링이다', async () => {
-  await load('south-field&monsters=corrosion-tracker');
-  await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.filter(e => e.kind === 'corrosion-tracker').length >= 2; })()`));
+test('원거리 공격 패링은 온 방향으로 그대로 되돌려 보내 사수를 맞히고, 근접 패링 시 조이스틱을 기울여도 흘리기가 발동하지 않는다', async () => {
+  await load('south-field&monsters=waterdrop-mushroom');
+  await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.some(e => e.kind === 'waterdrop-mushroom'); })()`));
   const result = await evaluate(`(() => {
     const g = window.__game, s = g.scene.getScene('game'), p = s.player;
     let t = performance.now();
     const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
-    const [a, b] = s.enemies.filter(x => x.kind === 'corrosion-tracker');
-    for (const other of s.enemies) if (other !== a && other !== b) other.character.placeAt(other.character.x, other.character.y + 2000);
-    s.enemies = [a, b];
+    const [shooter, bystander] = s.enemies.filter(x => x.kind === 'waterdrop-mushroom');
+    s.enemies = bystander ? [shooter, bystander] : [shooter];
     s.derived.evadeChance = 0;
-    const run = (input) => {
-      p.hp = p.maxHp; p.invulnerableUntil = 0;
-      a.state = 'wander'; b.state = 'wander';
-      a.character.placeAt(p.x + 80, p.y); a.character.facing = -1; a.character.knockback.set(0, 0);
-      b.character.placeAt(p.x + 20, p.y + 80); b.character.hp = b.character.maxHp;
+    p.revive(1000, 650); p.invulnerableUntil = 0;
+    shooter.character.revive(1260, 650); shooter.state = 'wander';
+    if (bystander) { bystander.character.revive(1020, 730); bystander.state = 'wander'; }
+    p.face(1); p.sprite.setAttackFacing('right');
+    s.parryReadyAt = 0; s.blockButton.pressed = true; step();
+    s.onEnemyStrike(shooter, { fromX: p.x + 40, fromY: p.y, toX: p.x, toY: p.y, radiusX: 30, radiusY: 30, dx: -1, dy: 0, melee: false });
+    const launched = s.reflectedShots.length;
+    const shotDx = s.reflectedShots[0]?.dx ?? 0;
+    const beforeHp = shooter.character.hp;
+    step(45);
+    const damage = beforeHp - shooter.character.hp;
+    // 근접 패링 시 조이스틱을 아래로 기울여도 흘리기(주변 적 타격)가 발동하지 않는다.
+    const bystanderBefore = bystander ? bystander.character.hp : 0;
+    if (bystander) {
+      s.blockButton.isDown = false; step(10);
+      p.invulnerableUntil = 0;
+      shooter.character.revive(p.x + 80, p.y); shooter.state = 'wander';
+      bystander.character.revive(p.x + 20, p.y + 80); bystander.state = 'wander';
       p.face(1); p.sprite.setAttackFacing('right');
       s.parryReadyAt = 0; s.blockButton.pressed = true; step();
-      s.joystick.vector.set(input.x, input.y);
-      s.onEnemyStrike(a);
+      s.joystick.vector.set(0, 1);
+      s.onEnemyStrike(shooter, { fromX: p.x + 80, fromY: p.y, toX: p.x, toY: p.y, radiusX: 60, radiusY: 40, dx: -1, dy: 0, melee: true });
       s.joystick.vector.set(0, 0);
-      return { bDamage: b.character.maxHp - b.character.hp, pushY: a.character.knockback.y, facingY: a.character.sprite.facingVector().y, hp: p.maxHp - p.hp };
-    };
-    const down = run({ x: 0, y: 1 });
-    step(60);
-    const toward = run({ x: 1, y: 0 });
-    return { down, toward };
+    }
+    const bystanderDamage = bystander ? bystanderBefore - bystander.character.hp : 0;
+    return { launched, shotDx, damage, bystanderDamage, heroLoss: p.maxHp - p.hp };
   })()`);
-  assert.equal(result.down.hp, 0);
-  assert.ok(result.down.bDamage > 0, `흘린 쪽의 적이 맞는다: ${JSON.stringify(result)}`);
-  assert.ok(result.down.pushY > 0, '공격한 적이 아래로 밀린다');
-  assert.ok(result.down.facingY > 0, '공격한 적의 몸이 흘린 쪽으로 돌아간다');
-  assert.equal(result.toward.hp, 0);
-  assert.equal(result.toward.bDamage, 0, '적 쪽으로 밀면 흘리기가 아니다');
+  assert.equal(result.heroLoss, 0);
+  assert.equal(result.launched, 1, '원거리 패링 시 반사탄이 생성된다');
+  assert.ok(result.shotDx > 0.9, '공격이 온 방향(+x)으로 곧장 반사된다');
+  assert.ok(result.damage > 0, `반사탄이 원래 사수를 맞힌다: ${JSON.stringify(result)}`);
+  assert.equal(result.bystanderDamage, 0, '흘리기 제거로 조이스틱을 기울여도 주변 적에게 튀지 않는다');
 });
 
-test('정예의 돌진은 정밀 패링해도 멈추지 않고 원래 가려던 자리까지 지나간 뒤 휘청이고, 보통 돌진(도마뱀)은 앞에서 멈춘다', async () => {
+test('정예의 돌진은 정밀 패링해도 멈추지 않고 원래 가려던 자리까지 지나가고(일반 패링 기절 없음), 보통 돌진(도마뱀)은 앞에서 멈춘다', async () => {
   const charge = async (kind) => {
     await load('south-field&monsters=' + kind);
     await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.some(e => e.kind === ${JSON.stringify(kind)}); })()`));
@@ -2597,7 +2607,8 @@ test('정예의 돌진은 정밀 패링해도 멈추지 않고 원래 가려던 
   assert.equal(elite.hp, 0, JSON.stringify(elite));
   assert.equal(elite.chain, 1, '정밀 패링');
   assert.ok(elite.endX < elite.heroX - 20, `주인공을 지나쳐 간다: ${JSON.stringify(elite)}`);
-  assert.equal(elite.stunned, true, '지나간 뒤 휘청인다');
+  assert.equal(elite.state, 'recover', '지나간 뒤 회복 상태로 전환');
+  assert.equal(elite.stunned, false, '단타 일반 정밀 패링은 기절을 주지 않는다');
   const lizard = await charge('iron-scale-lizard');
   assert.equal(lizard.elite, false);
   assert.equal(lizard.hp, 0, JSON.stringify(lizard));
@@ -3114,35 +3125,46 @@ test('1장 수확제 연출: 잔치에 모두 모이고 하늘 등불·경보·�
   assert.deepEqual(after, { map: 'village', festival: false, enemies: 6, sia: false, hud: true });
 });
 
-test('회전 베기는 마나를 써서 둘레의 적을 한꺼번에 베고, 마나가 모자라면 쓸 수 없으며, 마나는 다시 찬다', async () => {
+test('마나는 시간에 따라 자동 회복되며, 저스트 회피 일섬(2배)은 패링 2단(1.4배)보다 강하고 패링 3단(2.5배)보다 약하다', async () => {
   await load('south-field');
-  await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.length >= 3; })()`));
+  await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.length >= 1; })()`));
   const result = await evaluate(`(() => {
     const g = window.__game, s = g.scene.getScene('game'), p = s.player;
     let t = performance.now();
     const step = (n) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
-    // 기술은 배워야 칸에 들어간다. 아직 배우는 방법이 없어 시험에서 첫 칸에 직접 넣는다.
-    s.skillSlots[0] = 'spin'; s.refreshSkillButtons();
-    const [a, b, c] = s.enemies;
-    a.character.placeAt(p.x - 150, p.y); b.character.placeAt(p.x + 120, p.y + 40);
-    c.character.placeAt(p.x + 900, p.y);
-    const before = [a, b, c].map(e => e.character.hp);
     const full = s.mp === s.maxMp;
-    s.skillButtons[0].pressed = true;
-    step(2);
-    const spent = s.mp < s.maxMp - 10;
-    step(20);
-    const after = [a, b, c].map(e => e.character.hp);
-    // 마나가 모자라면 쓰지 못한다.
-    s.mp = 1; s.nextSpinAt = 0; step(60);
-    const low = s.mp;
-    s.skillButtons[0].pressed = true; step(2);
-    const blocked = s.spinHitAt === undefined && s.mp >= low;
-    // 저절로 찬다.
-    const regen = s.mp > low;
-    return { full, spent, hitNear: after[0] < before[0] && after[1] < before[1], missFar: after[2] === before[2], blocked, regen };
+    s.mp = 1;
+    step(40);
+    const regen = s.mp > 1;
+    const e = s.enemies[0];
+    s.enemies = [e];
+    e.character.setMaxHp(800, true);
+    p.face(1); p.sprite.setAttackFacing('right');
+    s.derived.critChance = 0;
+    s.stats = { ...s.stats, damageMin: 10, damageMax: 10 };
+    const hitWith = (tier, dodge) => {
+      step(30);
+      e.character.placeAt(p.x + 80, p.y);
+      s.absorb = tier > 0 ? { tier, element: 'force', until: s.now + 5000, charged: false } : { tier: 0, element: 'force', until: -Infinity, charged: false };
+      s.comboStage = 0; s.comboExpiresAt = 0; s.nextAttackAt = 0;
+      const before = e.character.hp;
+      if (dodge) { s.onJustDodge(e); s.hitStopLeft = 0; s.slowMotionLeft = 0; }
+      s.startAttack(s.now, 1, 0);
+      step(15);
+      return before - e.character.hp;
+    };
+    const tier0 = hitWith(0, false);
+    const tier2 = hitWith(2, false);
+    const dodgeCounter = hitWith(0, true);
+    const tier3 = hitWith(3, false);
+    return { full, regen, tier0, tier2, dodgeCounter, tier3 };
   })()`);
-  assert.deepEqual(result, { full: true, spent: true, hitNear: true, missFar: true, blocked: true, regen: true });
+  assert.equal(result.full, true);
+  assert.equal(result.regen, true);
+  assert.ok(result.tier0 > 0, JSON.stringify(result));
+  assert.ok(result.tier2 > result.tier0, JSON.stringify(result));
+  assert.ok(result.dodgeCounter > result.tier2, `회피 일섬(2배) > 패링 2단(1.4배): ${JSON.stringify(result)}`);
+  assert.ok(result.tier3 > result.dodgeCounter, `패링 3단(2.5배) > 회피 일섬(2배): ${JSON.stringify(result)}`);
 });
 
 test('여관의 로제타에게 쉬어 가거나 집 침대에서 쉬면 체력이 차고, 처음 화면에서 시작하면 그곳에서 이어진다', async () => {
@@ -3604,12 +3626,11 @@ test('빈 슬롯 등록·가방에서 교체·해제·저장이 가능하고 20�
   assert.deepEqual(result.restored.slots,[null,'lunch']);assert.ok(result.restored.cooldown>19000);
 });
 
-test('회피·막기·회전베기는 원형 대기가 줄어들고 메뉴에서는 멈추며 성공 초기화와 마나 부족을 구분한다', async () => {
+test('회피·막기는 원형 대기가 줄어들고 메뉴에서는 멈추며 저스트 회피 시 회피 대기가 30% 단축된다', async () => {
   await load('village');
   const result=await evaluate(`(()=>{
     const s=window.__game.scene.getScene('game');
     const tick=(n=1)=>{for(let i=0;i<n;i++)s.update(0,50);};
-    s.skillSlots[0]='spin';s.refreshSkillButtons();const skillButton=s.skillButtons[0];
     const state=b=>({seconds:b.cooldownSeconds,step:b.cooldownStep,visible:b.cooldownShade.visible});
     // 게임 시계가 소수 ms에서 시작해도(실제 프레임 간격에 따라 달라진다) 남은 초가 1초 더 보이지 않아야 한다.
     s.now=1573.3629902798957;
@@ -3617,30 +3638,26 @@ test('회피·막기·회전베기는 원형 대기가 줄어들고 메뉴에서
     tick(100);const half=state(s.dodgeButton);
     s.openPause();const pausedAt=s.now;tick(20);
     const frozen=s.now===pausedAt&&s.dodgeButton.cooldownStep===half.step;s.pauseMenu.close();
+    // 남은 5초에서 전체 대기(10초)의 30%(3초) 단축 → 약 2초 남음
     s.onJustDodge({interrupt(){}});s.hitStopLeft=0;s.slowMotionLeft=0;tick();
-    const reset=state(s.dodgeButton);
-    s.derived.dodgeCooldown=.5;s.dodgeButton.pressed=true;tick();const dex=state(s.dodgeButton);
+    const refunded=state(s.dodgeButton);
+    s.dodgeReadyAt=0;s.derived.dodgeCooldown=.5;s.dodgeButton.pressed=true;tick();const dex=state(s.dodgeButton);
     tick(8);s.blockButton.pressed=true;tick();const block=state(s.blockButton);
     // 헛막기 대기 BLOCK.cooldownMs(450ms)의 절반: 25ms씩 9번
     for(let i=0;i<9;i++)s.update(0,25);const blockHalf=state(s.blockButton);
     tick(12);const blockDone=state(s.blockButton);
-    s.mp=s.maxMp;skillButton.pressed=true;tick();const skill=state(skillButton);
-    const labels=[s.dodgeButton,skillButton].every(b=>{
-      const a=b.cooldownText.getBounds(),c=b.text.getBounds();return a.bottom<c.top&&c.bottom<b.image.y+b.size;
-    });
-    tick(10);const skillHalf=state(skillButton);
-    tick(12);s.mp=0;tick();const noMana=state(skillButton);
-    return {dodge,half,frozen,reset,dex,block,blockHalf,blockDone,skill,skillHalf,noMana,labels};
+    const a=s.dodgeButton.cooldownText.getBounds(),c=s.dodgeButton.text.getBounds();
+    const labels=a.bottom<c.top&&c.bottom<s.dodgeButton.image.y+s.dodgeButton.size;
+    return {dodge,half,frozen,refunded,dex,block,blockHalf,blockDone,labels};
   })()`);
   assert.deepEqual(result.dodge,{seconds:10,step:360,visible:true});
   assert.equal(result.half.seconds,5);assert.ok(Math.abs(result.half.step-180)<=1);
-  assert.equal(result.frozen,true);assert.equal(result.reset.visible,false);
+  assert.equal(result.frozen,true);
+  assert.equal(result.refunded.visible,true);assert.equal(result.refunded.seconds,2);assert.ok(Math.abs(result.refunded.step-72)<=4);
   assert.equal(result.dex.seconds,5);assert.equal(result.dex.step,360);
   assert.equal(result.block.visible,true);assert.equal(result.block.step,360);
   assert.ok(Math.abs(result.blockHalf.step-180)<=1);assert.equal(result.blockDone.visible,false);
-  assert.equal(result.skill.visible,true);assert.equal(result.skill.step,360);
-  assert.ok(result.skillHalf.step>0&&result.skillHalf.step<360);
-  assert.equal(result.noMana.visible,false);assert.equal(result.labels,true);
+  assert.equal(result.labels,true);
 });
 
 test('캐릭터 창·장비창·대장간은 기존 아이템과 승급·장신구 아이콘을 원본 비율로 재사용한다', async () => {
@@ -3687,6 +3704,10 @@ test('무기 강화는 외형을 바꾸지 않고, 무기 승급이 별도 레�
     for(let i=0;i<3;i++)s.enhanceGearSlot('weapon');
     const enhanceKeepsWood=h.weapon==='wooden-sword'&&s.character.gear.enhance.weapon===3;
     s.characterPanel.switchShopTab('promote');
+    // 1장 도란의 검 완료 전에는 승급이 잠겨 있다.
+    s.promoteGearSlot('weapon');
+    const lockedBeforeQuest=s.character.gear.rank.weapon===0&&h.weapon==='wooden-sword';
+    s.quests['first-sword']={status:'done',count:1};
     s.promoteGearSlot('weapon');
     s.characterPanel.close();
     h.play('hero-idle');const promoted=h.weapon==='iron-sword'&&h.weaponFront.frame.name==='iron-sword-hilt'&&!h.weaponBack.visible;
@@ -3714,9 +3735,9 @@ test('무기 강화는 외형을 바꾸지 않고, 무기 승급이 별도 레�
     const weaponCopies=ghost.list.filter(o=>o.texture.key.startsWith('hero-weapons'));const emptyGhost=weaponCopies.length===2&&weaponCopies.every(o=>!o.visible);ghost.destroy();
     s.scene.restart();g.step(performance.now(),16);g.step(performance.now()+16,16);
     const restored=s.player.sprite.weapon==='iron-sword'&&s.character.gear.rank.weapon===1&&s.character.gear.enhance.weapon===3;
-    return {enhanceKeepsWood,promoted,maxError:Math.max(...errors),copies,empty,emptyGhost,restored};
+    return {enhanceKeepsWood,lockedBeforeQuest,promoted,maxError:Math.max(...errors),copies,empty,emptyGhost,restored};
   })()`);
-  for(const key of ['enhanceKeepsWood','promoted','empty','emptyGhost','restored'])assert.equal(result[key],true,key);
+  for(const key of ['enhanceKeepsWood','lockedBeforeQuest','promoted','empty','emptyGhost','restored'])assert.equal(result[key],true,key);
   assert.ok(result.maxError<.001,JSON.stringify(result));
   // 잔상은 무기의 손잡이와 칼날 조각을 함께 복사한다(조각 순서는 자세마다 다르다).
   assert.ok(result.copies.includes('hero-weapons:iron-sword-grip')&&result.copies.includes('hero-weapons:iron-sword-blade'),JSON.stringify(result.copies));
@@ -3830,10 +3851,10 @@ test('타격 뒤 잠깐 멈춰도 세계 시계와 예약 입력·회피는 동�
   assert.equal(result.dodge,true);
 });
 
-test('막기는 콤보·후딜·회전 베기를 즉시 취소하고 남은 공격 판정과 전진을 없애며 재사용 대기는 유지한다', async () => {
+test('막기는 콤보·후딜을 즉시 취소하고 남은 공격 판정과 전진을 없애며 재사용 대기는 유지한다', async () => {
   await load();
   const result = await evaluate(`(async () => {
-    const { PLAYER, BLOCK, SPIN_SLASH } = await import('/src/config.ts');
+    const { PLAYER, BLOCK } = await import('/src/config.ts');
     const s = window.__game.scene.getScene('game'), p = s.player, h = p.sprite, e = s.enemies[0];
     s.enemies = [e]; s.derived.evadeChance = 0;
     let ownHits = 0; e.character.hurt = () => { ownHits++; return false; };
@@ -3841,7 +3862,7 @@ test('막기는 콤보·후딜·회전 베기를 즉시 취소하고 남은 공�
       p.revive(1000,650);e.character.revive(1100,650);s.now=1000;
       s.clearAttackInput();s.attackButton.isDown=false;s.joystick.vector.set(0,0);
       s.dodgeProgress=1;s.dodgeUntil=0;s.dodgeReadyAt=0;
-      s.parryUntil=0;s.parryReadyAt=0;s.blocking=false;s.spinHitAt=undefined;
+      s.parryUntil=0;s.parryReadyAt=0;s.blocking=false;
       s.comboStage=stage;s.comboExpiresAt=1e9;s.nextAttackAt=0;
       s.hitStopLeft=0;s.slowMotionLeft=0;ownHits=0;
     };
@@ -3863,22 +3884,14 @@ test('막기는 콤보·후딜·회전 베기를 즉시 취소하고 남은 공�
         const heldSafe=s.blocking&&!p.isAttacking&&p.x===x&&p.y===y&&ownHits===0;
         e.character.placeAt(p.x+80*p.facing,p.y);e.character.face(-p.facing);p.invulnerableUntil=0;
         const hp=p.hp;s.onEnemyStrike(e);
-        runs.push({stage,elapsed,canceled,cleared,immediate,heldSafe,protected:p.hp===hp&&s.counterUntil>s.now});
+        runs.push({stage,elapsed,canceled,cleared,immediate,heldSafe,protected:p.hp===hp&&s.parryChain.count>0&&s.counterUntil<=s.now});
       }
     }
     reset(0);s.startAttack(s.now,1);const trace=s.attackTrace,lunge=s.attackLunge;
     s.parryReadyAt=s.now+500;s.blockButton.pressed=true;s.updatePlayer(s.now,0);
     const cooldownKept=p.isAttacking&&!s.blocking&&s.attackTrace===trace&&s.attackLunge===lunge;
-    reset(0);s.mp=s.maxMp;s.nextSpinAt=0;s.startSpin(s.now);
-    const paid=s.mp,spinReady=s.nextSpinAt;s.now+=20;s.blockButton.pressed=true;s.updatePlayer(s.now,0);
-    const spinCanceled=!p.isAttacking&&s.spinHitAt===undefined&&s.blocking;
-    s.now+=SPIN_SLASH.hitDelayMs;s.updateSkill(s.now,10);
-    const noSpinHit=ownHits===0&&s.nextSpinAt===spinReady&&s.mp>=paid&&s.mp<s.maxMp;
-    reset(0);s.mp=s.maxMp;s.nextSpinAt=0;s.skillSlots[0]='spin';s.refreshSkillButtons();s.blockButton.pressed=true;s.skillButtons[0].pressed=true;
-    s.updatePlayer(s.now,0);s.updateSkill(s.now,0);
-    const skillPriority=s.blocking&&!p.isAttacking&&s.spinHitAt===undefined&&s.mp===s.maxMp;
     s.attackButton.isDown=false;
-    return {runs,cooldownKept,spinCanceled,noSpinHit,skillPriority};
+    return {runs,cooldownKept};
   })()`);
   assert.equal(result.runs.length, 9);
   for (const run of result.runs) {
@@ -3886,9 +3899,7 @@ test('막기는 콤보·후딜·회전 베기를 즉시 취소하고 남은 공�
       assert.equal(run[key], true, JSON.stringify({ key, ...run }));
     }
   }
-  for (const key of ['cooldownKept','spinCanceled','noSpinHit','skillPriority']) {
-    assert.equal(result[key], true, JSON.stringify(result));
-  }
+  assert.equal(result.cooldownKept, true, JSON.stringify(result));
 });
 
 test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 검날 접점에서 패링하며 종료·회피 시 복귀한다', async () => {
@@ -3902,7 +3913,7 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
     for(const [facing,dx,dy] of [['right',1,0],['left',-1,0],['down-right',1,1],['down-left',-1,1],['up-right',1,-1],['up-left',-1,-1]]){
       p.revive(1000,650);s.now=1000;s.clearAttackInput();s.joystick.vector.set(0,0);
       s.dodgeProgress=1;s.dodgeUntil=0;s.dodgeReadyAt=0;s.parryUntil=0;s.parryReadyAt=0;
-      s.spinHitAt=undefined;s.comboStage=0;s.comboExpiresAt=0;s.nextAttackAt=0;
+      s.comboStage=0;s.comboExpiresAt=0;s.nextAttackAt=0;
       h.setWeapon('iron-sword');s.startAttack(s.now,dx,dy);s.blockButton.pressed=true;
       s.updatePlayer(s.now,0);s.drawShield(s.now);
       const name=h.image.frame.name,texture=h.image.texture.key,mirror=h.image.scaleX<0;
@@ -3926,7 +3937,7 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
       const contact=contacts.at(-1),error=Math.hypot(contact.x-blade.base.x-(blade.tip.x-blade.base.x)*.55,contact.y-blade.base.y-(blade.tip.y-blade.base.y)*.55);
       // 정밀 패링 뒤 막기 자세는 반동(guardPoseUntil, 150ms)만큼 유지되고 그다음 돌아온다.
       s.now=Math.max(s.now,s.guardPoseUntil??0)+5;s.updatePlayer(s.now,0);s.drawShield(s.now);const restored=!h.isGuarding&&h.image.texture.key!=='hero-academy-guard';
-      runs.push({facing,name,texture,mirror,raised,slanted,palmDistance,palmVisible,held,wood,lengths,error,restored,protected:p.hp===hp&&s.counterUntil>s.now});
+      runs.push({facing,name,texture,mirror,raised,slanted,palmDistance,palmVisible,held,wood,lengths,error,restored,protected:p.hp===hp&&s.parryChain.count>0&&s.counterUntil<=s.now});
     }
     const verticalPoses=[];
     for(const dy of [-1,1]){
@@ -4265,28 +4276,18 @@ test('습격의 적 AI는 가까운 경비병을 추격하고 실시간 교전�
   for (const pose of ['attack','guard','hit']) assert.ok(result.poses.includes(pose),JSON.stringify(result));
 });
 
-test('퀘스트로 배운 기술은 빈 첫 칸에 들어가 쓸 수 있고, 맵을 다시 열어도 남는다', async () => {
+test('삭제된 회전 베기가 들어 있는 예전 저장을 불러오면 기술 칸을 안전하게 비운다', async () => {
   await load('south-field');
   const result = await evaluate(`(() => {
     const g = window.__game, s = g.scene.getScene('game');
-    localStorage.removeItem('untitled-rpg.skills');
-    const before = s.skillSlots.slice();
-    s.learnSkill('spin'); s.learnSkill('spin');
-    const learned = { slots: s.skillSlots.slice(), label: s.skillButtons[0].text.text, saved: JSON.parse(localStorage.getItem('untitled-rpg.skills')) };
+    localStorage.setItem('untitled-rpg.skills', JSON.stringify({ version: 1, learned: ['spin'], slots: ['spin', null, null, null, null] }));
     s.scene.restart(); g.step(performance.now(), 16); g.step(performance.now() + 16, 16);
     const r = g.scene.getScene('game');
     const restarted = { slots: r.skillSlots.slice(), label: r.skillButtons[0].text.text };
-    r.mp = r.maxMp; r.nextSpinAt = 0; r.skillButtons[0].pressed = true; r.update(r.now, 16);
-    const cast = r.spinHitAt !== undefined;
     localStorage.removeItem('untitled-rpg.skills');
-    return { before, learned, restarted, cast };
+    return { restarted };
   })()`);
-  assert.deepEqual(result.before, [null, null, null, null, null]);
-  assert.deepEqual(result.learned.slots, ['spin', null, null, null, null], '두 번 배워도 한 칸');
-  assert.equal(result.learned.label, '회전베기');
-  assert.deepEqual(result.learned.saved, { version: 1, learned: ['spin'], slots: ['spin', null, null, null, null] });
-  assert.deepEqual(result.restarted, { slots: ['spin', null, null, null, null], label: '회전베기' });
-  assert.equal(result.cast, true, '배운 칸을 누르면 회전 베기가 나간다');
+  assert.deepEqual(result.restarted, { slots: [null, null, null, null, null], label: '' });
 });
 
 test('페른의 수레는 여행 물품만 팔고, 푸른 이슬은 마나를, 해독 약초는 느려짐을 푼다', async () => {
@@ -4405,7 +4406,7 @@ test('2장 남문의 수레: 광장에 페른과 삭은 수레가 서고, 들판
   assert.equal(result.again, true, '그 뒤 평소 대화 뒤에도 수레가 열린다');
 });
 
-test('2장 떠날 채비: 루안에게 말하면 회전 베기가 기술 칸에 들어오고, 북쪽 사람들에게 인사하면 헤르만이 여비를 준다', async () => {
+test('2장 떠날 채비: 루안·세레나·리네아·에일라에게 인사하고 헤르만이 여비를 준다', async () => {
   await load('village');
   const result = await evaluate(`(async () => {
     const { QUESTS } = await import('/src/story/quests.ts');
@@ -4430,7 +4431,6 @@ test('2장 떠날 채비: 루안에게 말하면 회전 베기가 기술 칸에 
     const talk = id => { const n = s.npcs.find(n => n.def.id === id); s.openDialogue(n.spot); flush(); };
     await restart('village');
     const started = s.quests.farewell?.status;
-    const ruanMarker = s.npcs.find(n => n.def.id === 'ruan').questMarker?.text ?? null;
     talk('ruan');
     const skill = { slots: s.skillSlots.slice(), label: s.skillButtons[0].text.text };
     await restart('village-north');
@@ -4442,7 +4442,7 @@ test('2장 떠날 채비: 루안에게 말하면 회전 베기가 기술 칸에 
     return { started, skill, done, gold };
   })()`);
   assert.equal(result.started, 'active');
-  assert.deepEqual(result.skill, { slots: ['spin', null, null, null, null], label: '회전베기' });
+  assert.deepEqual(result.skill, { slots: [null, null, null, null, null], label: '' });
   assert.equal(result.done, 'done');
   assert.ok(result.gold >= 100, '여비 100 G');
 });
@@ -5486,4 +5486,191 @@ test('1장 신규 시트: 시아의 매듭 대화와 개울가 전투에서 각 
   })()`);
   assert.deepEqual(stream.fairyFrames, ['blink-ready', 'blink-break', 'blink-trace', 'blink-return']);
   for (const key of ['moved', 'visible', 'cooldown', 'patrolled', 'route', 'strike']) assert.equal(stream[key], true, key);
+});
+
+test('낚시 노인은 나루에서 낚시를 하다가 대화 중 정면 SD와 자신의 초상화를 쓴다', async () => {
+  const map = 'ferry-village&companion=none';
+  await load(map);
+  const saved = await evaluate(`(() => {
+    const save = localStorage.getItem('untitled-rpg.quests');
+    localStorage.setItem('untitled-rpg.quests', JSON.stringify({ version: 1, quests: {
+      'first-sword': {status:'done',count:1}, 'still-ferry': {status:'done',count:1}
+    } }));
+    return save;
+  })()`);
+  try {
+    await load(map);
+    const checks = await evaluate(`(() => {
+      const s = window.__game.scene.getScene('game');
+      const n = s.npcs.find(n => n.def.id === 'fishing-elder');
+      const first = n.figure.frame.name;
+      const tick = (n = 1) => { for (let i = 0; i < n; i++) s.update(0, 16); };
+      tick(20);
+      const fishing = n.figure.texture.key === 'npc-fishing-elder-fish-idle' && n.figure.frame.name !== first;
+      s.player.placeAt(n.spot.x, n.spot.y);
+      tick();
+      const reachable = s.walkArea.contains(n.x, n.y) && s.walkArea.contains(n.spot.x, n.spot.y) && s.primaryAction === 'talk';
+      s.onAttackKeyDown(); tick();
+      const dialogue = s.dialogue.isOpen && s.dialogue.portrait.texture.key === 'portrait-fishing-elder'
+        && n.figure.texture.key === 'npc-fishing-elder-idle';
+      while (s.dialogue.isOpen) s.dialogue.advance();
+      return { fishing, reachable, dialogue, resumed: n.figure.texture.key === 'npc-fishing-elder-fish-idle' };
+    })()`);
+    assert.deepEqual(checks, { fishing: true, reachable: true, dialogue: true, resumed: true });
+  } finally {
+    await evaluate(`(() => { const save = ${JSON.stringify(saved)};
+      if (save === null) localStorage.removeItem('untitled-rpg.quests');
+      else localStorage.setItem('untitled-rpg.quests', save);
+    })()`);
+  }
+});
+
+test('갈대밭 연습에서 시아의 환영과 안개 보스의 시트를 실제 행동으로 재생한다', async () => {
+  await load('reed-swamp&companion=none&monsters=mist-weaver');
+  const checks = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player;
+    const {caster, threads, effects} = s.mistWeaver;
+    const effect = s.children.getByName('mist-weaver-effect');
+    const apparition = s.children.getByName('chapter2-sia-apparition');
+    const ring = s.children.getByName('mist-weaver-cocoon-ring');
+    const ringImage = ring.list[0];
+    const tick = (n = 1) => { for (let i = 0; i < n; i++) s.update(0, 16); };
+    const arrivedFromMist = effect.texture.key === 'mist-weaver-form' && !caster.character.visible;
+    tick(35);
+    p.placeAt(apparition.x, apparition.y);
+    tick(); s.onAttackKeyDown(); tick();
+    const sawSia = s.dialogue.isOpen && s.dialogue.portrait.texture.key === 'portrait-sia';
+    while (s.dialogue.isOpen) s.dialogue.advance();
+    tick(36);
+    const dissolving = apparition.frame.name === 'dissolve' && apparition.visible;
+    tick(36);
+    const gone = !apparition.visible && !s.interactables.some(spot => spot.id === 'fog-sia-apparition');
+
+    // Start the extra skill cycle without waiting for the two thread casts covered by the preceding test.
+    threads.clear();
+    s.mistWeaver.threadCasts = 2;
+    s.mistWeaver.nextSkillAt = s.now;
+    p.placeAt(caster.character.x - 240, caster.character.y);
+    const beforeX = p.x;
+    tick(40);
+    const gust = effect.texture.key === 'mist-weaver-gust' && p.x < beforeX;
+    p.knockback.set(0, 0);
+    p.placeAt(caster.character.x - 130, caster.character.y);
+    s.mistWeaver.nextSkillAt = s.now + 100;
+    tick(28);
+    const opening = ring.visible && ringImage.frame.name === 'wide' && ringImage.rotation > 0;
+    for (let i = 0; !effects.bound && i < 140; i++) tick();
+    const cocoon = effects.bound && effect.texture.key === 'mist-weaver-wrap' && !ring.visible;
+    if (!cocoon) throw Error(JSON.stringify({ motion: effects.motion, texture: effect.texture.key,
+      ring: ring.visible, extraSkill: s.mistWeaver.extraSkill, t: s.now, next: s.mistWeaver.nextSkillAt, p: [p.x,p.y] }));
+    const beforeAttack = effects.motion.expires;
+    s.onAttackKeyDown();
+    tick(35);
+    const cutsCocoon = effects.bound && effects.motion.expires < beforeAttack;
+    tick(115);
+    const from = {x:caster.character.x,y:caster.character.y};
+    s.mistWeaver.nextSkillAt = s.now;
+    tick(2);
+    const disperses = !caster.character.visible && effect.frame.name === 'solid';
+    tick(70);
+    const reappears = caster.character.visible && caster.character.y !== from.y;
+    const bell = s.interactables.find(spot => spot.id === 'fog-shrine-bell');
+    p.placeAt(bell.x, bell.y);
+    tick(); s.onAttackKeyDown(); tick();
+    const dormancy = effects.sleeping && effect.texture.key === 'mist-weaver-dormant' && !caster.character.visible;
+    tick(50);
+    return {arrivedFromMist, sawSia, dissolving, gone, gust, opening, cocoon, cutsCocoon, disperses, reappears, dormancy,
+      ended: !effect.visible && !caster.character.visible && !threads.active};
+  })()`);
+  for (const [check, passed] of Object.entries(checks)) assert.equal(passed, true, check);
+});
+
+test('2단 패링(내상·회복), 헛막기 연타, 차지 패링, 보스 산탄 직선 반사, 방어구 4부위 승급이 실제 씬에서 정상 동작한다', async () => {
+  await load('south-field&monsters=corrosion-executioner');
+  await until(() => evaluate(`(() => { const g = window.__game, s = g.scene.getScene('game'); g.step(performance.now(), 16); return s.enemies.some(e => e.kind === 'corrosion-executioner'); })()`));
+  const result = await evaluate(`(async () => {
+    const { BLOCK } = await import('/src/config.ts');
+    const { armorAppearanceRank } = await import('/src/items/equipment.ts');
+    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
+    let t = performance.now();
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    const exec = s.enemies.find(x => x.kind === 'corrosion-executioner');
+    s.enemies = [exec];
+    s.derived.evadeChance = 0;
+    p.revive(1000, 650);
+    exec.character.revive(1260, 650);
+    exec.state = 'wander';
+    p.face(1); p.sprite.setAttackFacing('right');
+
+    // 1) 보스(돌진형)의 원거리 산탄(!hit.melee) 패링 시 온 방향으로 반사탄 발사
+    s.parryReadyAt = 0; s.blockButton.pressed = true; step();
+    const volleyParried = s.onEnemyStrike(exec, {
+      fromX: p.x + 30, fromY: p.y, toX: p.x, toY: p.y, radiusX: 30, radiusY: 30, dx: -1, dy: 0, damageScale: 0.45,
+    });
+    const volleyShots = s.reflectedShots.length;
+    const volleyDx = s.reflectedShots[0]?.dx ?? 0;
+    const execHpBefore = exec.character.hp;
+    step(40);
+    const volleyHit = exec.character.hp < execHpBefore;
+
+    // 2) 불완전 막기(perfectWindowMs+20ms) → 내상 발생(HP 감소, 치명적이지 않음)
+    s.blockButton.isDown = false; step(40);
+    p.hp = p.maxHp; p.invulnerableUntil = 0; s.internalDamage = 0;
+    exec.character.placeAt(p.x + 80, p.y);
+    s.parryReadyAt = 0; s.blockButton.pressed = true; s.updatePlayer(s.now, 0);
+    s.now += BLOCK.perfectWindowMs + 20;
+    s.onEnemyStrike(exec, { fromX: p.x + 80, fromY: p.y, toX: p.x, toY: p.y, radiusX: 60, radiusY: 40, dx: -1, dy: 0, melee: true });
+    const imperfectInternal = s.internalDamage > 0 && p.hp < p.maxHp && p.hp >= 1;
+
+    // 3) 헛막기 누적 → 다음 막기의 activePerfectWindowMs 축소(170 → 110)
+    s.blockButton.isDown = false;
+    s.parryReadyAt = 0; s.parryWhiff = { count: 0, lastWhiffAt: -Infinity };
+    s.blockButton.pressed = true; s.updatePlayer(s.now, 0);
+    s.now += BLOCK.windowMs + 10; s.updatePlayer(s.now, 0);
+    const afterWhiff = s.parryWhiff.count;
+    s.now += BLOCK.cooldownMs;
+    s.blockButton.pressed = true; s.updatePlayer(s.now, 0);
+    const shrunkWindow = s.activePerfectWindowMs < BLOCK.perfectWindowMs;
+
+    // 4) 차지 패링: chargeHoldMs 충전 후 해제 → unboundUntil 활성, 공격 시 반사 피해 + 긴 경직
+    s.blockButton.isDown = false;
+    s.now += BLOCK.cooldownMs + 50;
+    s.parryReadyAt = 0; s.blockNeedsRelease = false;
+    s.blockButton.pressed = true; s.blockButton.isDown = true; s.updatePlayer(s.now, 0);
+    s.now += BLOCK.chargeHoldMs + 20; s.updatePlayer(s.now, 0);
+    s.blockButton.isDown = false; s.updatePlayer(s.now, 0);
+    const unboundArmed = s.unboundUntil > s.now;
+    p.invulnerableUntil = 0;
+    const hpBeforeUnbound = exec.character.hp;
+    s.onEnemyStrike(exec, { fromX: p.x + 80, fromY: p.y, toX: p.x, toY: p.y, radiusX: 60, radiusY: 40, dx: -1, dy: 0, melee: true });
+    const unboundWorked = exec.character.hp < hpBeforeUnbound && exec.parryStunUntil > s.now;
+
+    // 5) 방어구 4부위(head/body/hands/feet) 모두 1단계 승급 시 armorAppearanceRank === 1
+    s.quests['first-sword'] = { status: 'done', count: 1 };
+    s.inventory = { gold: 50000, items: { 'iron-shard': 50, 'slime-gel': 50, 'bronze-ingot': 50 } };
+    s.openCharacterPanel('items', true);
+    for (const slot of ['head', 'body', 'hands']) s.promoteGearSlot(slot);
+    const armorBeforeFourth = armorAppearanceRank(s.character.gear);
+    s.promoteGearSlot('feet');
+    const armorAfterFourth = armorAppearanceRank(s.character.gear);
+    s.characterPanel.close();
+
+    return {
+      volleyParried, volleyShots, volleyDx, volleyHit,
+      imperfectInternal, afterWhiff, shrunkWindow,
+      unboundArmed, unboundWorked,
+      armorBeforeFourth, armorAfterFourth,
+    };
+  })()`);
+  assert.equal(result.volleyParried, true);
+  assert.equal(result.volleyShots, 1, '보스 산탄도 원거리 반사탄 생성');
+  assert.ok(result.volleyDx > 0.9, '산탄이 온 방향(+x)으로 반사');
+  assert.equal(result.volleyHit, true, '반사탄이 보스에게 명중');
+  assert.equal(result.imperfectInternal, true, '불완전 막기 내상 적용');
+  assert.equal(result.afterWhiff, 1, '헛막기 누적');
+  assert.equal(result.shrunkWindow, true, '연타 시 정밀 창 축소');
+  assert.equal(result.unboundArmed, true, '차지 패링 방출 창 활성');
+  assert.equal(result.unboundWorked, true, '차지 패링 발동');
+  assert.equal(result.armorBeforeFourth, 0);
+  assert.equal(result.armorAfterFourth, 1);
 });

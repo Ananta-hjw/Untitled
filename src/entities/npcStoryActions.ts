@@ -33,10 +33,28 @@ import fisherDaughterData from '../assets/characters/fisher-daughter/testimony-f
 import herbalistUrl from '../assets/characters/herbalist-elder/tend-patient.webp?url';
 import herbalistData from '../assets/characters/herbalist-elder/tend-patient-frames.json';
 
-const SPECIAL_URLS = import.meta.glob<string>('../assets/characters/{bell-ringer,dor,evan,finn,marta,mill-apprentice,morgan}/*.webp',
-  { eager: true, query: '?url', import: 'default' });
-const SPECIAL_DATA = import.meta.glob<{ frames: StoryFrame[] }>('../assets/characters/{bell-ringer,dor,evan,finn,marta,mill-apprentice,morgan}/*-frames.json',
-  { eager: true, import: 'default' });
+import fishingIdleUrl from '../assets/chapter2/fishing-elder/fish-idle.webp?url';
+import fishingIdle from '../assets/chapter2/fishing-elder/fish-idle-frames.json';
+
+// 실제 특수 동작 시트 18장만 명시적으로 묶어, 개별 원본 프레임·걷기/대기 중복 시트가 번들에 딸려 들어오지 않게 한다.
+const SPECIAL_URLS = import.meta.glob<string>([
+  '../assets/characters/bell-ringer/caught.webp',
+  '../assets/characters/dor/tend-fire.webp',
+  '../assets/characters/evan/{defense,oar-swing,rowing,mooring,rope-pull,cocoon-guard,reunion,riverbank}.webp',
+  '../assets/characters/finn/kite-flight.webp',
+  '../assets/characters/marta/{bell-repair,wax-earplugs}.webp',
+  '../assets/characters/mill-apprentice/bell-strike.webp',
+  '../assets/characters/morgan/{pole-row,work,bell-ring,confession}.webp',
+], { eager: true, query: '?url', import: 'default' });
+const SPECIAL_DATA = import.meta.glob<{ frames: StoryFrame[] }>([
+  '../assets/characters/bell-ringer/caught-frames.json',
+  '../assets/characters/dor/tend-fire-frames.json',
+  '../assets/characters/evan/{defense,oar-swing,rowing,mooring,rope-pull,cocoon-guard,reunion,riverbank}-frames.json',
+  '../assets/characters/finn/kite-flight-frames.json',
+  '../assets/characters/marta/{bell-repair,wax-earplugs}-frames.json',
+  '../assets/characters/mill-apprentice/bell-strike-frames.json',
+  '../assets/characters/morgan/{pole-row,work,bell-ring,confession}-frames.json',
+], { eager: true, import: 'default' });
 
 function specialAction(skin: NpcSkin, name: string, bodyHeight = 320, loop = false): StoryAction {
   const base = `../assets/characters/${skin}/${name}`;
@@ -73,6 +91,10 @@ const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
       fps: name === 'repair' ? 2 : 1, bodyHeight: skin === 'teon' ? 304 : 380,
       labelOffset: skin === 'teon' ? undefined : 125, onTalk: 'pause' as const,
     }]))])),
+  'fishing-elder': {
+    'fish-idle': { key: 'npc-fishing-elder-fish-idle', url: fishingIdleUrl, frames: fishingIdle.frames,
+      fps: fishingIdle.fps, bodyHeight: 255, onTalk: 'stop', loop: fishingIdle.loop },
+  },
   dor: { 'tend-fire': { ...specialAction('dor', 'tend-fire', 430, true), deferred: false, labelOffset: 118 } },
   evan: {
     ...Object.fromEntries(['defense', 'oar-swing', 'rowing', 'mooring', 'rope-pull', 'cocoon-guard', 'reunion']
