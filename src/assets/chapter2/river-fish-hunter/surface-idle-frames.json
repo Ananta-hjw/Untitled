@@ -1,0 +1,44 @@
+{
+  "frames": [
+    {
+      "name": "glide",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "fin-tilt",
+      "x": 320,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "dip",
+      "x": 0,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    },
+    {
+      "name": "resurface",
+      "x": 320,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.861244
+    }
+  ],
+  "fps": 4,
+  "loop": true,
+  "facing": "down-right",
+  "bodyHeight": 59
+}
