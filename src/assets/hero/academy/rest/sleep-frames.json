@@ -1,0 +1,43 @@
+{
+  "frames": [
+    {
+      "name": "asleep",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.870813
+    },
+    {
+      "name": "sit-up",
+      "x": 320,
+      "y": 0,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.870813
+    },
+    {
+      "name": "push-up",
+      "x": 0,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.870813
+    },
+    {
+      "name": "awake",
+      "x": 320,
+      "y": 320,
+      "w": 320,
+      "h": 320,
+      "originX": 0.5,
+      "originY": 0.870813
+    }
+  ],
+  "loop": false,
+  "facing": "down-right",
+  "bodyHeight": 242
+}

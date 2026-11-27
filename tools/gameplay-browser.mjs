@@ -4654,7 +4654,7 @@ test('밤의 종소리: 여관에서 방을 얻으면 밤 연출 → 잠든 여�
   const result = await evaluate(`(async () => {
     const g = window.__game;
     let s = g.scene.getScene('game'), t = performance.now();
-    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); s = g.scene.getScene('game'); };
+    const step = (n = 1) => { for (let i = 0; i < n; i++) g.headlessStep(t += 16, 16); s = g.scene.getScene('game'); };
     const ready = async map => {
       for (let i = 0; i < 400; i++) {
         step();
@@ -4667,8 +4667,13 @@ test('밤의 종소리: 여관에서 방을 얻으면 밤 연출 → 잠든 여�
     const npc = id => s.npcs.find(n => n.def.id === id);
     const day = { people: s.npcs.map(n => n.def.id).sort(), marker: npc('fog-innkeeper').questMarker,
       spot: s.walkArea.contains(npc('fog-innkeeper').spot.x, npc('fog-innkeeper').spot.y) };
+    const cues = [];
+    s.combatAudio.playRestCue = cue => cues.push(cue);
     s.openDialogue(npc('fog-innkeeper').spot); flush();
+    const bedroom = s.children.getByName('rest-bedroom-shot');
+    const asleep = bedroom?.getByName('rest-hero-pose').frame.name;
     for (let i = 0; i < 200 && !s.opening; i++) { step(); await new Promise(r => setTimeout(r, 4)); }
+    step();
     const inn = { opening: !!s.opening, shade: !!s.chapterShade, stage: !!s.nightBellStage, finn: npc('finn').figure.frame.name,
       step: s.quests['night-bell'].step, rest: localStorage.getItem('untitled-rpg.rest') };
     s.opening.skip(); await ready('ferry-village');
@@ -4693,8 +4698,10 @@ test('밤의 종소리: 여관에서 방을 얻으면 밤 연출 → 잠든 여�
     await ready('in-ferry-inn');
     const morning = { people: s.npcs.map(n => n.def.id).sort(), shade: !!s.chapterShade, rest: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
     localStorage.removeItem('untitled-rpg.quests');
-    return { day, inn, chase, bank, river, hug, status, morning };
-  })()`);
+    return { day, inn, chase, bank, river, hug, status, morning, asleep, cues };
+  })()`, 80000);
+  assert.equal(result.asleep, 'asleep');
+  assert.deepEqual(result.cues, ['room', 'bell']);
   assert.deepEqual(result.day, { people: ['finn', 'fog-innkeeper', 'innkeeper-wife'], marker: 'target', spot: true });
   assert.deepEqual(result.inn, { opening: true, shade: true, stage: true, finn: 'watch-awake', step: 1, rest: null });
   assert.deepEqual(result.chase, { shade: true, phantoms: 3, sleeping: true, talkable: false, finn: 'warn-father', others: ['finn', 'fog-innkeeper'] });
@@ -5773,4 +5780,62 @@ test('구출 후 확인 씬에서 배 위 여섯 명과 두 회복 동작을 재
   assert.equal(result.onDeck && result.registered, true);
   assert.deepEqual(result.first, ['resting', 'lean']);
   assert(result.later.every((name, i) => name !== result.first[i]));
+});
+
+test('집 휴식은 시온이 앉아 쉬는 시트와 서서히 차는 회복 막대를 보여 준다', async () => {
+  await load('in-home&companion=none');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player;
+    const saved = localStorage.getItem('untitled-rpg.rest');
+    p.hp = 12; s.mp = 2; s.drawHud();
+    const at = {x:p.x, y:p.y};
+    const pose = () => s.children.getByName('rest-hero-pose');
+    const hp = () => Number(s.hud.hpText.text.match(/HP (\\d+)/)[1]);
+    const tick = n => { for (let i=0; i<n; i++) s.update(0, 16); };
+    s.openDialogue(s.interactables.find(spot => spot.id === 'rest-home'));
+    s.storyChoice.accept();
+    const start = { locked: s.traveling, pose: pose()?.frame.name, hero: p.visible, saved: JSON.parse(localStorage.getItem('untitled-rpg.rest')).point };
+    tick(31);
+    const during = { pose: pose()?.frame.name, hp: hp(), max: p.maxHp, hidden: !p.visible };
+    s.openPause();
+    const inputLocked = !s.pauseMenu.isOpen;
+    tick(42);
+    const ends = { released: !s.traveling, artGone: !pose(), hero: p.visible, filled: hp() === p.maxHp && s.mp === s.maxMp,
+      samePlace: at.x === p.x && at.y === p.y };
+    if (saved === null) localStorage.removeItem('untitled-rpg.rest'); else localStorage.setItem('untitled-rpg.rest', saved);
+    return { start, during, ends, inputLocked };
+  })()`);
+  assert.deepEqual(result.start, {locked: true, pose: 'lower', hero: false, saved: 'home'});
+  assert.equal(result.during.pose, 'breathe');
+  assert(result.during.hp > 12 && result.during.hp < result.during.max);
+  assert.equal(result.during.hidden && result.inputLocked, true);
+  assert.deepEqual(result.ends, {released: true, artGone: true, hero: true, filled: true, samePlace: true});
+});
+
+test('여관 숙박은 눕고 어두워진 뒤 아침빛과 일어서는 시트를 보여 준다', async () => {
+  await load('in-inn&companion=none');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    const cues = [];
+    const saved = localStorage.getItem('untitled-rpg.rest');
+    s.combatAudio.playRestCue = cue => cues.push(cue);
+    const tick = n => { for (let i=0; i<n; i++) s.update(0, 16); };
+    s.restWithPresentation('inn');
+    const shot = s.children.getByName('rest-bedroom-shot');
+    const hero = shot.getByName('rest-hero-pose');
+    const veil = shot.getByName('rest-veil');
+    const initial = hero.frame.name;
+    tick(68);
+    const dark = veil.alpha > .9 && hero.frame.name === 'asleep';
+    tick(51);
+    const sits = hero.frame.name === 'sit-up';
+    tick(21);
+    const light = shot.getByName('rest-morning-light');
+    const stands = hero.frame.name === 'awake' && veil.alpha < .1 && light.commandBuffer.length > 0;
+    tick(34);
+    const finished = !s.traveling && !s.children.getByName('rest-bedroom-shot');
+    if (saved === null) localStorage.removeItem('untitled-rpg.rest'); else localStorage.setItem('untitled-rpg.rest', saved);
+    return { initial, dark, sits, stands, finished, cues };
+  })()`);
+  assert.deepEqual(result, {initial: 'asleep', dark: true, sits: true, stands: true, finished: true, cues: ['room', 'morning']});
 });
