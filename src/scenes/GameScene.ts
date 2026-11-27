@@ -70,7 +70,7 @@ import { allocate, deriveStats, mitigate, pointsLeft, totalStats, type DerivedSt
 import { CHARACTER_SAVE_KEY, newCharacter, parseCharacter, serializeCharacter, type CharacterData } from '../entities/characterData';
 import {
   GEAR, MAX_RANK, SLOT_INFO, addGear, armorAppearanceRank, buyGear, enhanceSlot, equip, gearBonus,
-  grantSlotRank, promoteSlotWithCost, promotionRecipe, rankLabel, sellGear, unequip, weaponAppearanceLabel,
+  grantEnhance, grantSlotRank, promoteSlotWithCost, promotionRecipe, rankLabel, sellGear, unequip, weaponAppearanceLabel,
   type EnhanceSlotId, type GearId, type GearShopId,
 } from '../items/equipment';
 import { weaponVisualForRank } from '../entities/weaponPose';
@@ -2722,6 +2722,7 @@ export class GameScene extends Phaser.Scene {
           quest.completed.rewardItems ?? [],
           quest.completed.rewardGear ?? [],
           quest.completed.rewardPromote ?? [],
+          quest.completed.rewardEnhance ?? [],
         );
         if (quest.completed.rewardSkill) this.learnSkill(quest.completed.rewardSkill);
         // 종소리의 밤이 끝나면 여관에서 아침을 맞는다.
@@ -2746,6 +2747,8 @@ export class GameScene extends Phaser.Scene {
       if (plainTalk && target.id === 'npc-marta' && this.mapId === FERRY_SMITHY && martaShopOpen(this.quests)) this.openCharacterPanel('items', true, false, 'marta');
       // 도란과 대장간에서 대화가 끝나면 장비 상점을 연다. 습격 중 야외나 퀘스트 수락·진행·완료 직후에는 열지 않는다.
       if (this.mapId === 'in-smithy' && !quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-doran') this.openCharacterPanel('items', true);
+      // '담금질 재료'를 끝내면 대장간 창을 열어 방금 받은 무료 강화와 강화 메뉴를 보여 준다.
+      if (this.mapId === 'in-smithy' && quest?.completed?.id === 'doran-gel') this.openCharacterPanel('items', true);
       // 로제타와의 평소 대화가 끝나면 쉬어 갈지 묻는다 (습격의 밤에는 묻지 않는다).
       // 치유소 또는 리네아의 집에서 에일라와 대화가 끝나면(퀘스트 수락·진행·완료 직후 제외) 치료해 줄지 묻는다.
       if (!quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-eila'
@@ -3348,8 +3351,9 @@ export class GameScene extends Phaser.Scene {
     items: Array<{ id: ItemId; count: number }>,
     gear: GearId[] = [],
     promote: Array<{ slot: EnhanceSlotId; targetRank: number }> = [],
+    enhance: Array<{ slot: EnhanceSlotId; levels: number }> = [],
   ): void {
-    if (gold === 0 && items.length === 0 && gear.length === 0 && promote.length === 0) return;
+    if (gold === 0 && items.length === 0 && gear.length === 0 && promote.length === 0 && enhance.length === 0) return;
     this.inventory = addGold(this.inventory, gold);
     for (const item of items) this.inventory = addItem(this.inventory, item.id, item.count);
     const promoteLabels: string[] = [];
@@ -3365,11 +3369,17 @@ export class GameScene extends Phaser.Scene {
       }
       this.character = { ...this.character, gear: nextGear };
     }
+    // 무료 강화 (1장 서브 '담금질 재료': 도란이 무기를 +1 강화해 준다)
+    for (const req of enhance) {
+      const res = grantEnhance(this.character.gear, req.slot, req.levels);
+      this.character = { ...this.character, gear: res.gear };
+      promoteLabels.push(`${SLOT_INFO[req.slot].name} 강화 +${res.level}!`);
+    }
     if (gear.length) {
       // 보상 장신구는 가방에 들어간다. 장비 창에서 장신구 칸에 낀다.
       for (const id of gear) this.character = { ...this.character, gear: addGear(this.character.gear, id) };
     }
-    if (promote.length) this.applyCharacterChange();
+    if (promote.length || enhance.length) this.applyCharacterChange();
     else if (gear.length) this.saveCharacter();
     const player = this.player;
     const labels = [

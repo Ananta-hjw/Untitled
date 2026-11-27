@@ -49,7 +49,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   'antidote-herb': { id: 'antidote-herb', name: '해독 약초', description: '씹으면 몸이 가벼워진다. 잿빛 가루의 느려짐을 푼다.', kind: 'consumable', cures: 'slow', price: 15, sellPrice: 6 },
   'serena-lunch': { id: 'serena-lunch', name: '세레나의 도시락', description: '세레나가 정성껏 싸 준 도시락. 체력을 220 채운다.', kind: 'consumable', heal: 220, sellPrice: 0 },
   'sia-pebble': { id: 'sia-pebble', name: '시아의 조약돌', description: '시아가 개울가에서 오빠 몫으로 하나 더 주워 둔 매끈한 조약돌.', kind: 'keepsake', sellPrice: 0 },
-  'vernel-memo': { id: 'vernel-memo', name: '베르넬의 연구 메모', description: '들판 석판 조각에 새겨진 낯선 유적 표식을 베르넬이 옮겨 적은 쪽지.', kind: 'keepsake', sellPrice: 0 },
+  'vernel-memo': { id: 'vernel-memo', name: '베르넬의 연구 메모', description: '들판 석판 조각에 새겨진 낯선 유적 표식을 베르넬이 옮겨 적은 쪽지. 헤르만 촌장 집안의 서신에도 같은 표식이 있었다.', kind: 'keepsake', sellPrice: 0 },
   'dried-fig': { id: 'dried-fig', name: '말린 무화과', description: '페른이 남쪽 장터에서 떼어 온 달콤한 무화과. 체력을 90 채운다.', kind: 'consumable', heal: 90, price: 35, sellPrice: 14 },
   'dried-fish': { id: 'dried-fish', name: '말린 생선', description: '나루 어부가 바람에 말린 강 생선. 짭짤해서 힘이 난다. 체력을 70 채운다.', kind: 'consumable', heal: 70, sellPrice: 10 },
   'linea-letter-paper': { id: 'linea-letter-paper', name: '리네아의 편지지', description: '리네아가 새 공책에서 떼어 준 편지지. "가는 곳마다 한 장씩 써 보내."', kind: 'keepsake', sellPrice: 0 },

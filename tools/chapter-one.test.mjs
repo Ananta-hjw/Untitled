@@ -370,3 +370,35 @@ test('1장 첫날 서브 퀘스트 5종은 마지막 수련 뒤 열리고, 모�
     for (const s of subs) assert.notEqual(markerFor(s.npc, phaseState), 'sub-new', `${s.id} 첫날 이후 비노출`);
   }
 });
+
+test('첫날 서브 퀘스트를 했으면 메인 대사가 그 일을 기억한다: 베르넬의 연구 메모와 서신, 도란의 점액과 검', () => {
+  // 봉인된 서신: 헤르만에게 서신을 받은 뒤 베르넬에게 간다.
+  const letter = (extra) => {
+    let state = { ...through('missing-sia'), ...extra };
+    state = talkTo('herman', state).state;
+    return talkTo('vernel', state);
+  };
+  const plain = letter({});
+  assert.equal(plain.completed?.id, 'sealed-letter');
+  assert.ok(plain.lines.some(l => /석판 조각이 나왔다던데/.test(l.text)), '메모가 없으면 석판 소문만 듣는다');
+  assert.ok(!plain.lines.some(l => /연구 메모/.test(l.text)));
+  const memo = letter({ 'vernel-tablet': { status: 'done', count: 1 } });
+  assert.equal(memo.completed?.id, 'sealed-letter');
+  assert.ok(memo.lines.some(l => /연구 메모를 꺼낸다/.test(l.text)), '메모를 꺼내 같은 표식임을 확인한다');
+  assert.ok(memo.lines.some(l => /…똑같아/.test(l.text)));
+
+  // 도란의 검: 담금질 재료를 했으면 그 점액으로 검을 담금질했다고 말한다.
+  const sword = talkTo('doran', through('sealed-letter'));
+  assert.equal(sword.completed?.id, 'first-sword');
+  assert.ok(!sword.lines.some(l => /점액/.test(l.text)));
+  const gelSword = talkTo('doran', { ...through('sealed-letter'), 'doran-gel': { status: 'done', count: 5 } });
+  assert.equal(gelSword.completed?.id, 'first-sword');
+  assert.ok(gelSword.lines.some(l => /슬라임 점액/.test(l.text)));
+  assert.equal(gelSword.lines.at(-1).text, sword.lines.at(-1).text, '그 밖의 흐름(완료 대사)은 같다');
+
+  // 담금질 재료의 보상은 골드 대신 무기 무료 강화 +1이고, 완료 대사가 강화를 알려 준다.
+  const gel = QUESTS.find(q => q.id === 'doran-gel');
+  assert.deepEqual(gel.rewardEnhance, [{ slot: 'weapon', levels: 1 }]);
+  assert.equal(gel.rewardGold, undefined);
+  assert.ok(gel.done.some(l => /강화/.test(l.text)));
+});

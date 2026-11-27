@@ -11,7 +11,8 @@ import type { SkillId } from '../entities/skills.ts';
  *
  * 마을 사람에게 말을 걸면 퀘스트를 받고(!), 목표를 채운 뒤 다시 말을 걸면 완료한다(?).
  * 목표는 게임에서 일어나는 일(QuestEvent)을 센다. 다단계 목표와 조사·습격 이벤트는 chapterOne.ts 및 GameScene이 연결한다.
- * 보상은 경험치와 골드, 아이템이다. 장신구·무기 강화처럼 아직 없는 기능의 보상은 골드로 대신한다.
+ * 보상은 경험치, 골드, 아이템, 장신구, 기술, 장비 칸의 무료 강화·승급이다.
+ * 앞서 끝낸 다른 퀘스트에 따라 대사가 달라질 수 있다(LineVariant: 서브 퀘스트를 했으면 메인 대사가 그 일을 기억한다).
  * 이 파일은 Phaser를 쓰지 않아 tools/quests.test.mjs가 직접 불러 검사한다.
  */
 
@@ -65,6 +66,16 @@ export interface QuestObjective {
   night?: boolean;
   /** 이 단계를 마친 대화 뒤에 그 자리에서 보는 연출 (퀘스트 6: 여관의 밤, 물가에서 깨어남) */
   cutscene?: 'night-bell' | 'river-wake';
+  /** ifDone 퀘스트를 끝냈으면 lines 대신 쓰는 대사 */
+  linesIf?: LineVariant[];
+}
+
+/** 앞서 ifDone 퀘스트를 끝냈으면 기본 대사 대신 쓰는 대사 (앞의 것이 먼저) */
+export interface LineVariant { ifDone: QuestId; lines: DialogueLine[] }
+
+/** variants 중 조건(끝낸 퀘스트)이 맞는 첫 대사, 없으면 기본 대사 */
+export function pickLines(base: DialogueLine[], variants: LineVariant[] | undefined, state: QuestState): DialogueLine[] {
+  return variants?.find(v => state[v.ifDone]?.status === 'done')?.lines ?? base;
 }
 
 export interface QuestDef {
@@ -98,6 +109,8 @@ export interface QuestDef {
   rewardGear?: GearId[];
   /** 보상 칸 승급 (1장 완료 '도란의 검' 등 스토리 이벤트 전용: 지정 칸을 최소 targetRank까지 무료 승급) */
   rewardPromote?: Array<{ slot: EnhanceSlotId; targetRank: number }>;
+  /** 보상 칸 강화 (무료로 levels만큼 +강화. 1장 서브 '담금질 재료') */
+  rewardEnhance?: Array<{ slot: EnhanceSlotId; levels: number }>;
   /** 보상 기술 (entities/skills.ts). 비어 있는 첫 기술 칸에 들어간다. */
   rewardSkill?: SkillId;
   offer: DialogueLine[];
@@ -107,6 +120,8 @@ export interface QuestDef {
   remindersByNpc?: Partial<Record<NpcId, DialogueLine[]>>;
   /** talk 목표: 그 사람에게 말을 걸었을 때 */
   target?: DialogueLine[];
+  /** ifDone 퀘스트를 끝냈으면 target 대신 쓰는 대사 */
+  targetIf?: LineVariant[];
   done: DialogueLine[];
 }
 
@@ -374,7 +389,20 @@ export const QUESTS: QuestDef[] = [
     objective: { label: '헤르만에게 오래된 서신 확인하기', need: 1, event: 'talk', npc: 'herman' },
     steps: [
       { label: '헤르만에게 오래된 서신 확인하기', need: 1, event: 'talk', npc: 'herman', lines: [line('herman', '헤르만', '우리 집안이 대대로 지켜 온 서신이다. 때가 오면 열라고 했지. 이제 열어야겠네.'), hero('뭐라고 쓰여 있나요?'), line('herman', '헤르만', '너무 오래된 글자라 읽을 수가 없구나. 베르넬에게 보여 주겠나?')] },
-      { label: '베르넬에게 서신의 표식 보여 주기', need: 1, event: 'talk', npc: 'vernel', lines: [line('vernel', '베르넬', '글자 전체는 모르겠어. 하지만 이 표식은… 북쪽 유적에서 본 것과 같아.'), hero('그곳에 가면 실마리를 찾을 수 있을까요?')] },
+      { label: '베르넬에게 서신의 표식 보여 주기', need: 1, event: 'talk', npc: 'vernel',
+        lines: [
+          line('vernel', '베르넬', '글자 전체는 모르겠어. 하지만 이 표식은… 북쪽 유적에서 본 것과 같아.'),
+          line('vernel', '베르넬', '그러고 보니 며칠 전 들판에서도 이런 무늬가 새겨진 석판 조각이 나왔다던데. 우연은 아닐지도 몰라.'),
+          hero('그곳에 가면 실마리를 찾을 수 있을까요?'),
+        ],
+        // 첫날 '이상한 돌조각'을 했으면 그때 받은 연구 메모로 같은 표식임을 알아본다.
+        linesIf: [{ ifDone: 'vernel-tablet', lines: [
+          line('vernel', '베르넬', '글자 전체는 모르겠어. 하지만 이 표식은…'),
+          hero('(연구 메모를 꺼낸다) 이거… 그날 들판 석판에서 옮겨 적어 주신 거요.'),
+          line('vernel', '베르넬', '…똑같아. 석판은 들판에서, 서신은 촌장님 집안에서 나왔는데 같은 표식이라니.'),
+          line('vernel', '베르넬', '둘 다 이 마을을 처음 세운 사람과 이어져 있다는 뜻이겠지. 북쪽 유적 입구에도 같은 무늬가 있었어.'),
+          hero('그곳에 가면 실마리를 찾을 수 있을까요?'),
+        ] }] },
     ],
     rewardXp: 25,
     offer: [line('eila', '에일라', '우선 촌장님께 가 보렴. 서신은 베르넬이 알아볼 수 있을지도 몰라.')],
@@ -397,6 +425,18 @@ export const QUESTS: QuestDef[] = [
       line('doran', '도란', '아, 에일라가 전해 달라더라. 리네아가 좀 안정돼서 이제 자기 집에서 쉬게 할 거래. 세레나랑 함께 옮긴다더군.'),
       line('doran', '도란', '시아 데려와라. 리네아도 고칠 방법 찾고. 날이 무뎌지면 언제든 돌아와서 맡겨.'),
     ],
+    // 첫날 '담금질 재료'를 했으면 그때 모은 점액이 이 검이 된다.
+    targetIf: [{ ifDone: 'doran-gel', lines: [
+      line('doran', '도란', '왔냐. …앉아라, 아니 서 있어도 되고.'),
+      line('doran', '도란', '앞으로도 그런 밤을 견디려면, 네 손에 맞는 검이 있어야지. 밤새 두들겼다. 받아라.'),
+      hero('이걸… 저한테요?'),
+      line('doran', '도란', '언젠가 네 검 한 자루 두들겨 주겠다고 했잖냐. 생각보다 일찍 오긴 했다만.'),
+      line('doran', '도란', '그리고 네가 모아 온 그 슬라임 점액 말이다. 남은 걸로 이 검을 담금질했다. …정말 효과가 있더라고!'),
+      hero('그게 진짜였어요?'),
+      line('doran', '도란', '나도 몰랐다. 하하!'),
+      line('doran', '도란', '아, 에일라가 전해 달라더라. 리네아가 좀 안정돼서 이제 자기 집에서 쉬게 할 거래. 세레나랑 함께 옮긴다더군.'),
+      line('doran', '도란', '시아 데려와라. 리네아도 고칠 방법 찾고. 날이 무뎌지면 언제든 돌아와서 맡겨.'),
+    ] }],
     done: [line('doran', '도란', '무기 칸을 1단계 진화(도란의 검)로 승급해 뒀다. 강화나 추가 승급이 필요하면 언제든 대장간으로 와라.')],
   },
   // ---------------------------------------------------------------- 2장: 물안개 나루의 종소리
@@ -727,7 +767,7 @@ export const QUESTS: QuestDef[] = [
   {
     id: 'doran-gel', title: '담금질 재료', giver: 'doran',
     objective: { label: '슬라임 처치 (점액 모으기)', need: 5, event: 'kill', monster: 'slime' },
-    rewardXp: 20, rewardGold: 30,
+    rewardXp: 20, rewardEnhance: [{ slot: 'weapon', levels: 1 }],
     offer: [
       line('doran', '도란', '마침 잘 왔다! 슬라임 점액이 담금질에 그만이거든.'),
       line('doran', '도란', '아무 데서나 다섯 마리만 잡아서 점액 좀 모아 와라.'),
@@ -735,7 +775,10 @@ export const QUESTS: QuestDef[] = [
       line('doran', '도란', '정말인지는 해 보면 알지! 하하!'),
     ],
     reminder: [line('doran', '도란', '점액은 아직이냐? 다섯 마리 분이다.')],
-    done: [line('doran', '도란', '오, 이 끈적한 것 좀 봐라. 좋아, 이걸로 한번 두들겨 보자고!')],
+    done: [
+      line('doran', '도란', '오, 이 끈적한 것 좀 봐라. 좋아, 이걸로 네 칼 한번 담금질해 주마. 이번엔 공짜다!'),
+      line('doran', '도란', '앞으로는 골드만 가져오면 언제든 날을 세워 주지. 강화라고 하는 거다. 많이 두들길수록 단단해져.'),
+    ],
   },
   {
     id: 'teon-lunch', title: '초소 도시락', giver: 'teon',
@@ -935,7 +978,7 @@ export function talkTo(npc: NpcId, state: QuestState): TalkResult | undefined {
   const talkStep = (def: QuestDef): TalkResult => {
     const objective = currentObjective(def, state[def.id]);
     const next = advance(state, def, 1);
-    const lines = objective.lines ?? def.target ?? [];
+    const lines = objective.lines ? pickLines(objective.lines, objective.linesIf, state) : pickLines(def.target ?? [], def.targetIf, state);
     if (def.completeOnTarget && next[def.id]?.status === 'ready') return { ...finish(next, def, lines), stepDone: objective };
     return { lines, state: next, progressed: def, stepDone: objective };
   };

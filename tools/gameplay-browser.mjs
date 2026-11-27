@@ -5103,6 +5103,25 @@ test('복구 상점 주민은 작업 그림을 유지하고 대화·거래·재�
   }
 });
 
+test('담금질 재료를 도란에게 보고하면 무기가 무료로 +1 강화되고 대장간 창이 열린다', async () => {
+  await load('in-smithy');
+  await evaluate(`localStorage.setItem('untitled-rpg.quests',JSON.stringify({version:1,quests:{'ruan-training':{status:'done',count:3},'doran-gel':{status:'ready',count:5}}}))`);
+  await load('in-smithy');
+  const result = await evaluate(`(() => {
+    const s=window.__game.scene.getScene('game'),n=s.npcs.find(n=>n.def.id==='doran');
+    const before=s.character.gear.enhance.weapon??0,gold=s.inventory.gold;
+    s.openDialogue(n.spot);
+    while(s.dialogue.isOpen)s.dialogue.advance();
+    return {before,after:s.character.gear.enhance.weapon,gold,goldAfter:s.inventory.gold,status:s.quests['doran-gel'].status,panel:s.characterPanel.isOpen,
+      saved:JSON.parse(localStorage.getItem('untitled-rpg.character')).gear.enhance.weapon};
+  })()`);
+  assert.equal(result.status, 'done');
+  assert.equal(result.after, result.before + 1, JSON.stringify(result));
+  assert.equal(result.saved, result.after, '강화가 저장된다');
+  assert.equal(result.goldAfter, result.gold, '골드는 그대로다(비용도 보상도 없다)');
+  assert.equal(result.panel, true, '대장간 창이 열린다');
+});
+
 test('헤르만과 베르넬은 기록·조사 동작에서 걷기로 전환하고 다음 현장에서 작업을 재개한다', async () => {
   await load('village');
   await evaluate(`localStorage.setItem('untitled-rpg.quests',JSON.stringify({version:1,quests:{'village-raid':{status:'done',count:0}}}))`);

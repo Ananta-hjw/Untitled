@@ -365,6 +365,12 @@ export function promoteSlotWithCost(inv: Inventory, gear: Gear, slot: EnhanceSlo
  * 스토리 이벤트 승급(1장 완료 '도란의 검' 전용):
  * 지정 칸을 무료로 최소 targetRank(1단계 진화)까지 승급한다. 이미 targetRank 이상이면 +1(최대 5단계).
  */
+/** 퀘스트 보상: 지정 칸을 비용 없이 levels만큼 +강화한다. */
+export function grantEnhance(gear: Gear, slot: EnhanceSlotId, levels: number): { gear: Gear; level: number } {
+  const level = sanitizeEnhanceLevel(sanitizeEnhanceLevel(gear.enhance[slot]) + Math.max(0, Math.floor(levels)));
+  return { gear: { ...gear, enhance: { ...gear.enhance, [slot]: level } }, level };
+}
+
 export function grantSlotRank(gear: Gear, slot: EnhanceSlotId, targetRank: number): { gear: Gear; rank: number; appearanceChanged: boolean; armorStage: number } {
   const current = clampRank(gear.rank[slot]);
   const desired = current < targetRank ? targetRank : current + 1;

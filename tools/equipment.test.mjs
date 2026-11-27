@@ -3,7 +3,7 @@ import test from 'node:test';
 import {
   ACCESSORY_SLOT_IDS, ARMOR_SLOT_IDS, ENHANCE_SLOT_IDS, GEAR, GEAR_IDS, MAX_RANK, PROMOTION_STAGES, SLOT_IDS,
   addGear, armorAppearanceLabel, armorAppearanceRank, armorPromotionStatus, buyGear, canAffordPromotion, canSmithyWork,
-  enhanceCost, enhanceSlot, equip, gearBonus, gearForSale, grantSlotRank, isArmorSlot, isEnhanceSlot,
+  enhanceCost, enhanceSlot, equip, gearBonus, gearForSale, grantEnhance, grantSlotRank, isArmorSlot, isEnhanceSlot,
   promoteSlotWithCost, promotionRecipe, rankLabel, sellGear, slotDisplayName, slotFor, slotIconId, slotStats,
   startingGear, unequip, weaponAppearanceLabel, zeroSlotLevels,
 } from '../src/items/equipment.ts';
@@ -277,4 +277,15 @@ test('상태·장비 저장은 무제한 강화와 승급 단계·장신구를 �
   assert.deepEqual(migrated.enhance, { weapon: 0, head: 0, body: 0, hands: 0, feet: 0 });
   assert.deepEqual(migrated.bag, { 'blue-bead': 1 });
   assert.deepEqual(migrated.equipped, { accessory1: 'wildflower-bracelet' });
+});
+
+test('퀘스트 보상 강화는 비용 없이 지정 칸을 올리고 다른 칸과 승급은 그대로 둔다', () => {
+  const gear = startingGear();
+  const { gear: next, level } = grantEnhance(gear, 'weapon', 1);
+  assert.equal(level, (gear.enhance.weapon ?? 0) + 1);
+  assert.equal(next.enhance.weapon, level);
+  assert.equal(next.enhance.body, gear.enhance.body);
+  assert.deepEqual(next.rank, gear.rank);
+  assert.equal(grantEnhance(next, 'weapon', 2).level, level + 2);
+  assert.equal(grantEnhance(next, 'weapon', -3).level, level, '음수는 올리지도 내리지도 않는다');
 });
