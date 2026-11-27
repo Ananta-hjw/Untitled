@@ -3629,7 +3629,7 @@ export class GameScene extends Phaser.Scene {
         if (result !== 'miss') {
           this.impacts.impact(defender.x, defender.y-65, Math.sign(c.x-defender.x), 0,
             result === 'blocked' ? 'counter' : 'normal', now, defender.y+2);
-          if (result === 'blocked' && !hit) enemy.interrupt(now, NPC_COMBAT.blockStunMs);
+          if (result === 'blocked' && (!hit || hit.melee)) enemy.interrupt(now, NPC_COMBAT.blockStunMs);
           return true;
         }
       }
@@ -3666,8 +3666,12 @@ export class GameScene extends Phaser.Scene {
       this.triggerUnboundCounter(enemy, impactX, impactY, awayX, awayY, enemyPushX, enemyPushY);
       return true;
     }
-    // 2단 패링: 앞쪽(바라보는 쪽)에서 온 공격을 정밀 패링(0~activePerfectWindowMs) 또는 불완전 막기(그 이후~windowMs)로 받아낸다.
-    const inFront = (sourceX - player.x) * player.facing >= 0;
+    // 2단 패링: 앞쪽(바라보는 쪽 — 상·하 막기 포함)에서 온 공격을 정밀 패링 또는 불완전 막기로 받아낸다.
+    const heroDir = player.sprite instanceof HeroSprite ? player.sprite.lookDirection : (player.facing < 0 ? 'left' : 'right');
+    const sourceY = hit ? player.y - hit.dy : c.y;
+    const inFront = heroDir === 'up' ? sourceY <= player.y + 8
+      : heroDir === 'down' ? sourceY >= player.y - 8
+      : (sourceX - player.x) * player.facing >= 0;
     const grade = gradeParry(this.blocking, now - this.parryStartedAt, inFront, this.activePerfectWindowMs);
     if (grade !== 'none') {
       const x = impactX, y = impactY;
