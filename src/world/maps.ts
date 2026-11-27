@@ -231,6 +231,9 @@ const EAST_STREAM: GameMap = {
     { key: 'slime-blue', ...mapPoint({ x: 2000, y: 650 }) },
     { key: 'slime-green', ...mapPoint({ x: 900, y: 1100 }) },
     { key: 'slime-green', ...mapPoint({ x: 1450, y: 1350 }) },
+    { key: 'blink-fairy', ...mapPoint({ x: 1260, y: 1060 }) },
+    { key: 'blink-fairy', ...mapPoint({ x: 2220, y: 550 }) },
+    { key: 'stone-sentry', ...mapPoint({ x: 1840, y: 870 }) },
   ],
   exits: [
     { to: 'village', zone: mapRect({ left: 0, top: 820, right: 110, bottom: 1000 }),

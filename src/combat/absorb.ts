@@ -44,7 +44,7 @@ export function absorbElementOf(kind: MonsterKind | undefined): AbsorbElement {
   switch (kind) {
     case 'frost-beetle': return 'frost';
     case 'corrosion-tracker': case 'corrosion-executioner': case 'ashen-moth': return 'corrosion';
-    case 'mist-phantom': case 'fog-crow': case 'mist-weaver': return 'mist';
+    case 'mist-phantom': case 'fog-crow': case 'mist-weaver': case 'blink-fairy': return 'mist';
     default: return 'force';
   }
 }

@@ -17,6 +17,10 @@ import { BOSS, fanDirections, insideEllipse, retreatDone, shouldVeil, wantsVolle
 import { BossHazards } from './BossHazards';
 import { SWAMP_JET, SwampWaterJet } from './SwampWaterJet';
 
+const FAIRY_BLINK = { cooldownMs: 2400, durationMs: 540, escapeDistance: 190, minPlayerDistance: 125 };
+const SENTRY_PATROL_HALF = 92;
+const BOSS_CAST_POSE_MS = 140;
+
 type State = 'wander' | 'chase' | 'windup' | 'recover' | 'roar' | 'retreat' | 'volley' | 'veil' | 'dead';
 
 /** 보스의 부식 효과가 주인공에게 닿았는지 알린다 (웅덩이 틱, 장막이 터질 때). hit: 장막 범위 안이었는지 */
@@ -56,6 +60,8 @@ export class Enemy {
   private lungeStartX = 0;
   private lungeStartY = 0;
   private projectile?: { image: Phaser.GameObjects.Image; x: number; y: number; dx: number; dy: number; expires: number };
+  private readonly patrolHome?: { x: number; y: number };
+  private blink?: { x: number; y: number; start: number; moved: boolean };
   private readonly waterJet?: SwampWaterJet;
   state: State = 'wander';
   /** 마지막 돌진이 닿은 시각(게임 시계). 저스트 회피 판정에 쓴다. */
@@ -115,6 +121,7 @@ export class Enemy {
     this.boss = boss;
     if (boss) this.hazards = new BossHazards(scene);
     this.kind = monsterKind(key);
+    if (this.kind === 'stone-sentry') this.patrolHome = { x, y };
     if (this.kind === 'swamp-lurker') this.waterJet = new SwampWaterJet(scene);
     this.level = level;
     this.stats = scaleMonster<MonsterStats>(MONSTERS[this.kind ?? 'slime'], level);
@@ -131,7 +138,7 @@ export class Enemy {
     this.staggerMark = scene.add.graphics().setVisible(false);
     // 안개 환영은 안개 한 줄기에서 몸이 생기며 나타난다.
     if (this.character.sprite instanceof MonsterSprite) this.character.sprite.playFade('materialize');
-    this.target.set(x, y);
+    this.target.set(x + (this.patrolHome ? SENTRY_PATROL_HALF : 0), y);
     this.wanderSpeed = Phaser.Math.Between(50, 80);
     this.timer = Phaser.Math.Between(300, 1800);
   }
@@ -167,11 +174,16 @@ export class Enemy {
     // 안개 환영은 안개에서 몸이 다 생길 때까지 움직이지 않는다.
     if (c.sprite instanceof MonsterSprite && c.sprite.materializing) return;
 
+    if (this.blink && this.updateBlink(time, area)) return;
+
     const opponent = chaseTarget ?? player;
     const dx = opponent.x - c.x;
     const dy = opponent.y - c.y;
     // 보스는 나타나면 주인공이 어디 있든 쫓는다.
-    const playerNear = opponent.alive && (this.boss || (Math.abs(dx) < ENEMY.aggroX && Math.abs(dy) < ENEMY.aggroY));
+    const playerNear = opponent.alive && (this.patrolHome
+      ? Math.abs(dx) < ENEMY.attackRangeX && Math.abs(dy) < ENEMY.attackRangeY
+        && area.hasClearPath(c.x, c.y, opponent.x, opponent.y)
+      : this.boss || (Math.abs(dx) < ENEMY.aggroX && Math.abs(dy) < ENEMY.aggroY));
     if (this.waterJet && c.sprite instanceof MonsterSprite) {
       if (playerNear && c.sprite.swampConcealed) c.sprite.setMovement(dx, dy);
       const transitioning = c.sprite.setSwampBurrowed(this.state === 'wander' && !playerNear);
@@ -196,17 +208,21 @@ export class Enemy {
           c.setMotion(false);
           break;
         }
-        if (!this.stepToward(this.target.x, this.target.y, this.wanderSpeed * dt, area)) {
-          area.randomPoint(this.target);
+        const pace = this.patrolHome ? this.stats.speed : this.wanderSpeed;
+        if (!this.stepToward(this.target.x, this.target.y, pace * dt, area)) {
+          if (this.patrolHome) {
+            const side = this.target.x > this.patrolHome.x ? -1 : 1;
+            this.target.set(this.patrolHome.x + side * SENTRY_PATROL_HALF, this.patrolHome.y);
+          } else area.randomPoint(this.target);
           this.timer = time + Phaser.Math.Between(600, 2400);
         }
         break;
       }
 
       case 'chase': {
-        if (!opponent.alive || (!this.boss && Math.abs(dx) > ENEMY.aggroX * 1.5)) {
+        if (!opponent.alive || (this.patrolHome ? !playerNear : !this.boss && Math.abs(dx) > ENEMY.aggroX * 1.5)) {
           this.state = 'wander';
-          this.target.set(c.x, c.y);
+          if (!this.patrolHome) this.target.set(c.x, c.y);
           break;
         }
         // 2페이즈: 체력이 1/4 아래로 처음 떨어지면 부식의 장막, 멀리 있으면 부식 산탄
@@ -263,6 +279,7 @@ export class Enemy {
       case 'recover':
         c.setMotion(false);
         if (time < this.timer) break;
+        if (c.sprite instanceof MonsterSprite) c.sprite.endSpecial();
         if (this.chainPending && opponent.alive) {
           // 연속 공격의 다음 타: 쉬는 동안 움직인 주인공 쪽을 다시 겨눈다.
           this.chainPending = false;
@@ -289,10 +306,8 @@ export class Enemy {
           onGlint?.(this, c.x + this.aim.x * 36, c.y - Math.round((this.stats.height || 120) * 0.56), false);
         }
         c.setMotion(false, this.aim.x);
-        const t = 1 - Math.max(0, this.timer - time) / BOSS.shot.windupMs;
-        c.sprite.setScale(1 + 0.12 * t, 1 - 0.14 * t);
         if (time >= this.timer) {
-          c.sprite.setScale(1);
+          if (c.sprite instanceof MonsterSprite) c.sprite.showSpecial('volley-cast', 'volley-recover', BOSS_CAST_POSE_MS);
           this.hazards?.fire(c.x, c.y, this.volleyDirs);
           this.shotReadyAt = time + BOSS.shot.cooldownMs;
           this.volleyStartedAt = undefined;
@@ -314,6 +329,7 @@ export class Enemy {
         }
         if (time >= this.timer) {
           c.sprite.setPosition(0, 0);
+          if (c.sprite instanceof MonsterSprite) c.sprite.showSpecial('veil-cast', 'veil-recover', BOSS_CAST_POSE_MS);
           this.hazards?.burstVeil(time);
           const distance = Math.hypot(dx, dy) || 1;
           onHazard?.(this, 'veil', insideEllipse(dx, dy, BOSS.veil.rx, BOSS.veil.ry), dx / distance, dy / distance);
@@ -325,12 +341,15 @@ export class Enemy {
       }
 
       case 'roar': {
-        // 포효: 제자리에서 몸을 크게 부풀렸다 줄인다.
         c.setMotion(false, dx);
-        const pulse = Math.abs(Math.sin((time - (this.timer - BOSS.roarMs)) / 90));
-        c.sprite.setScale(1 + 0.12 * pulse, 1 + 0.08 * pulse);
-        if (time >= this.timer) {
-          c.sprite.setScale(1);
+        const remaining = this.timer - time;
+        if (c.sprite instanceof MonsterSprite) {
+          c.sprite.setMovement(dx, dy);
+          if (remaining <= 0) c.sprite.endSpecial();
+          else c.sprite.showSpecial(remaining > BOSS.roarMs * 0.72 ? 'roar-windup'
+            : remaining > BOSS.roarMs * 0.26 ? 'roar-cast' : 'roar-recover');
+        }
+        if (remaining <= 0) {
           this.state = 'retreat';
           this.retreatStartedAt = time;
         }
@@ -498,6 +517,22 @@ export class Enemy {
 
   /** 칼에 맞았을 때: 그 자리에서 납작해졌다가 출렁이며 돌아온다 (게임 시계 기준). */
   onHit(time: number, area?: WalkArea, threat?: { x: number; y: number }): void {
+    if (this.kind === 'blink-fairy' && this.character.alive && area && threat
+      && !this.blink && time - this.escapedAt >= FAIRY_BLINK.cooldownMs) {
+      const c = this.character;
+      const point = fogEscape(c, threat, (x, y) => area.hasClearPath(c.x, c.y, x, y)
+        && [[0, 0], [-18, 0], [18, 0], [0, -12], [0, 12]].every(([dx, dy]) => area.contains(x + dx, y + dy)), FAIRY_BLINK);
+      if (point && c.sprite instanceof MonsterSprite) {
+        this.interrupt(time, FAIRY_BLINK.durationMs);
+        this.escapedAt = time;
+        this.blink = { ...point, start: time, moved: false };
+        this.hitAt = undefined;
+        c.knockback.set(0, 0);
+        c.setMotion(false);
+        c.sprite.showSpecial('blink-ready');
+        return;
+      }
+    }
     if (this.kind === 'fog-crow' && this.character.alive && area && threat && time - this.escapedAt >= FOG_CROW.cooldownMs) {
       const c = this.character;
       const point = fogEscape(c, threat, (x, y) => area.hasClearPath(c.x, c.y, x, y)
@@ -531,6 +566,26 @@ export class Enemy {
     this.decoy = undefined;
   }
 
+  private updateBlink(time: number, area: WalkArea): boolean {
+    const blink = this.blink!;
+    const c = this.character;
+    if (!(c.sprite instanceof MonsterSprite)) return false;
+    const elapsed = time - blink.start;
+    if (elapsed >= 280 && !blink.moved) {
+      blink.moved = true;
+      if (area.contains(blink.x, blink.y)) c.placeAt(blink.x, blink.y);
+    }
+    c.setConcealed(elapsed >= 200 && elapsed < 340);
+    if (elapsed >= FAIRY_BLINK.durationMs) {
+      this.blink = undefined;
+      c.sprite.endSpecial();
+      return false;
+    }
+    c.sprite.showSpecial(elapsed < 80 ? 'blink-ready' : elapsed < 200 ? 'blink-break'
+      : elapsed < 340 ? 'blink-trace' : 'blink-return');
+    return true;
+  }
+
   private updateHitSquash(time: number): void {
     if (this.hitAt === undefined || this.state === 'windup' || this.state === 'volley') return;
     const { scaleX, scaleY } = hitSquash(time - this.hitAt);
@@ -540,7 +595,7 @@ export class Enemy {
 
   /** 페이즈 전환·안개 본체·잠복에는 직접 공격이 통하지 않는다. */
   get untouchable(): boolean {
-    return this.state === 'roar' || this.kind === 'mist-weaver'
+    return this.state === 'roar' || this.kind === 'mist-weaver' || this.blink !== undefined
       || (this.character.sprite instanceof MonsterSprite && this.character.sprite.swampConcealed);
   }
 
@@ -556,7 +611,10 @@ export class Enemy {
     this.timer = time + BOSS.shot.windupMs;
     this.hazards?.showAim(c.x, c.y, this.volleyDirs, time, this.timer);
     c.setMotion(false, dx);
-    if (c.sprite instanceof MonsterSprite) c.sprite.setMovement(dx, dy);
+    if (c.sprite instanceof MonsterSprite) {
+      c.sprite.setMovement(dx, dy);
+      c.sprite.showSpecial('volley-windup');
+    }
   }
 
   private startVeil(time: number): void {
@@ -569,6 +627,7 @@ export class Enemy {
     this.timer = time + BOSS.veil.telegraphMs;
     this.hazards?.startVeil(c.x, c.y, time);
     c.setMotion(false);
+    if (c.sprite instanceof MonsterSprite) c.sprite.showSpecial('veil-windup');
   }
 
   /** 보스 2페이즈 전환: 하던 공격을 멈추고 포효한 뒤 물러난다. */
@@ -585,6 +644,7 @@ export class Enemy {
     this.character.knockback.set(0, 0);
     this.state = 'roar';
     this.timer = time + BOSS.roarMs;
+    if (this.character.sprite instanceof MonsterSprite) this.character.sprite.showSpecial('roar-windup');
   }
 
   kill(): void {
@@ -607,19 +667,23 @@ export class Enemy {
     this.staggerMark.setVisible(false);
     this.clearProjectile();
     this.cancelStrike();
-    this.character.revive(x, y);
+    const spawn = this.patrolHome ?? { x, y };
+    this.character.revive(spawn.x, spawn.y);
     const sprite = this.character.sprite;
     if (sprite instanceof MonsterSprite && sprite.hasFade) sprite.playFade('materialize');
     else {
       this.character.setAlpha(0);
       this.scene.tweens.add({ targets: this.character, alpha: 1, duration: 400 });
     }
-    this.target.set(x, y);
+    this.target.set(spawn.x + (this.patrolHome ? SENTRY_PATROL_HALF : 0), spawn.y);
     this.state = 'wander';
     this.timer = 0;
   }
 
   private cancelStrike(): void {
+    if (this.blink) this.character.setConcealed(false);
+    this.blink = undefined;
+    if (this.character.sprite instanceof MonsterSprite) this.character.sprite.endSpecial();
     this.deferredParry = undefined;
     this.attackStartedAt = undefined;
     this.volleyStartedAt = undefined;

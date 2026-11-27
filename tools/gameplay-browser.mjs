@@ -2844,6 +2844,7 @@ test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 
     // 절반 아래로: 포효, 주인공도 멈춘다.
     c.hp = Math.floor(c.maxHp / 2) + 3; c.hurt(5); s.resolveEnemyHit(boss, false, 1, 0, 300);
     const roar = { state: boss.state, untouchable: boss.untouchable, until: s.bossRoarUntil > s.now };
+    const roarFrames = new Set([c.sprite.image.frame.name]);
     const before = { x: p.x, y: p.y };
     s.joystick.vector.set(1, 0);
     step(20);
@@ -2851,7 +2852,11 @@ test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 
     const startDist = Math.hypot(c.x - p.x, c.y - p.y);
     s.joystick.vector.set(0, 0);
     let retreated = false;
-    for (let i = 0; i < 300 && boss.phase === 1; i++) { step(); if (boss.state === 'retreat') retreated = true; }
+    for (let i = 0; i < 300 && boss.phase === 1; i++) {
+      step();
+      if (boss.state === 'roar') roarFrames.add(c.sprite.image.frame.name);
+      if (boss.state === 'retreat') retreated = true;
+    }
     const endDist = Math.hypot(c.x - p.x, c.y - p.y);
     const phase = boss.phase;
     // 쓰러뜨리면 막대가 사라지고 다음 단계(북쪽 골목 살피기)로
@@ -2859,7 +2864,7 @@ test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 
     const after = { bar: s.bossHud.barVisible, boss: !!s.boss, step: s.quests['village-raid'].step };
     localStorage.removeItem('untitled-rpg.quests');
     return { warning, appearedAfter, spawned, gap1, gap2, chargePoses: [...chargePoses], returnedToWalk,
-      armored, roar, frozen, retreated, farther: endDist > startDist + 150, phase, after };
+      armored, roar, roarFrames: [...roarFrames], frozen, retreated, farther: endDist > startDist + 150, phase, after };
   })()`);
   assert.equal(result.warning, true, '보스 등장 경고가 먼저 뜬다');
   assert.ok(result.appearedAfter >= 2700 && result.appearedAfter <= 3000, String(result.appearedAfter));
@@ -2870,6 +2875,7 @@ test('1장 보스 부식의 집행자: 경고 뒤 등장하고, 1초 쉬고 두 
   assert.equal(result.returnedToWalk, true, '돌진이 끝나면 기본 자세로 돌아온다');
   assert.equal(result.armored, true);
   assert.deepEqual(result.roar, { state: 'roar', untouchable: true, until: true });
+  assert.deepEqual(result.roarFrames, ['roar-windup', 'roar-cast', 'roar-recover']);
   assert.equal(result.frozen, true, '포효하는 동안 주인공도 움직이지 못한다');
   assert.equal(result.retreated, true);
   assert.equal(result.farther, true, '물러나 거리를 벌린다');
@@ -2975,19 +2981,24 @@ test('보스 2페이즈: 멀면 부식 산탄 3발(빗나가면 웅덩이), 돌�
     s.quests = { 'festival-eve': { status: 'done', count: 1 }, 'village-raid': { status: 'active', count: 8, step: 4 } }; s.saveQuests(); return true; })()`);
   await load('village-north');
   const result = await evaluate(`(() => {
-    const g = window.__game, s = g.scene.getScene('game'), p = s.player;
-    let t = performance.now();
-    const step = (n = 1) => { for (let i = 0; i < n; i++) g.step(t += 16, 16); };
+    const s = window.__game.scene.getScene('game'), p = s.player;
+    const step = (n = 1) => { for (let i = 0; i < n; i++) s.update(0, 16); };
     for (let i = 0; i < 400 && !s.boss; i++) step();
     const boss = s.boss, c = boss.character, hz = boss.hazards;
     boss.phase = 2; s.derived.evadeChance = 0;
     p.invulnerableUntil = Infinity;
     // 부식 산탄: 멀리 서 있으면 겨눈 뒤 세 발. 쏜 뒤 비켜서면 떨어진 자리에 웅덩이가 남는다.
     p.placeAt(c.x - 460, c.y);
+    const skillFrames = new Set();
     let volley = false, fired = 0;
-    for (let i = 0; i < 200 && !fired; i++) { step(); if (boss.state === 'volley') volley = true; fired = hz.shotCount; }
+    for (let i = 0; i < 200 && !fired; i++) {
+      step();
+      if (boss.state === 'volley') volley = true;
+      fired = hz.shotCount;
+      skillFrames.add(c.sprite.image.frame.name);
+    }
     p.placeAt(c.x - 120, c.y - 320);
-    for (let i = 0; i < 150 && hz.shotCount; i++) step();
+    for (let i = 0; i < 150 && hz.shotCount; i++) { step(); skillFrames.add(c.sprite.image.frame.name); }
     const shotPools = hz.poolCount;
     // 웅덩이 위: 작은 피해와 둔화, 무적 시간은 주지 않는다.
     const pool = hz.pools[0];
@@ -3009,18 +3020,25 @@ test('보스 2페이즈: 멀면 부식 산탄 3발(빗나가면 웅덩이), 돌�
     for (let i = 0; i < 30 && !veil; i++) { step(); veil = boss.state === 'veil'; }
     // 장막이 터지기 전까지는 웅덩이·산탄 없이 기다린다(주인공은 범위 안).
     const hp1 = p.hp;
-    for (let i = 0; i < 200 && boss.state === 'veil'; i++) { p.placeAt(c.x - 120, c.y); step(); }
+    for (let i = 0; i < 200 && boss.state === 'veil'; i++) {
+      p.placeAt(c.x - 120, c.y); step(); skillFrames.add(c.sprite.image.frame.name);
+    }
     const veilHurt = hp1 - p.hp;
+    for (let i = 0; i < 80 && c.sprite.image.frame.name === 'veil-cast'; i++) step();
+    skillFrames.add(c.sprite.image.frame.name);
     boss.state = 'chase'; step(5);
     const once = boss.state !== 'veil';
     const log = s.damageLog.entries.map(e => e.name);
     c.hp = 0; s.resolveEnemyHit(boss, true, 1, 0, 0);
     const cleared = hz.poolCount === 0 && hz.shotCount === 0;
     localStorage.removeItem('untitled-rpg.quests');
-    return { volley, fired, shotPools, poolHurt, slowed, noInvuln, chargePool, veil, veilHurt, once, log, cleared };
+    return { volley, fired, shotPools, poolHurt, slowed, noInvuln, chargePool, veil, veilHurt, once, log, cleared, skillFrames: [...skillFrames] };
   })()`);
   assert.equal(result.volley, true);
   assert.equal(result.fired, 3);
+  for (const skill of ['volley', 'veil']) {
+    for (const pose of ['windup', 'cast', 'recover']) assert.ok(result.skillFrames.includes(skill + '-' + pose), JSON.stringify(result.skillFrames));
+  }
   assert.ok(result.shotPools >= 3, `빗나간 산탄 웅덩이 ${result.shotPools}`);
   assert.ok(result.poolHurt > 0 && result.poolHurt < 30, `웅덩이 피해 ${result.poolHurt}`);
   assert.equal(result.slowed, true);
@@ -5384,4 +5402,61 @@ test('나루의 후반부 원화와 늪 마물의 잠복·출현을 재생한다
   assert.equal(swamp.emerge, 'monster-swamp-lurker-emerge');
   assert.equal(swamp.ready, 'chase');
   assert.match(swamp.frame, /^monster-swamp-lurker-walk_/);
+});
+
+test('1장 신규 시트: 시아의 매듭 대화와 개울가 전투에서 각 동작을 재생한다', { timeout: 120000 }, async () => {
+  await load('village-north&companion=none');
+  const knot = await evaluate(`(() => {
+    const scene = window.__game.scene.getScene('game');
+    scene.quests = { 'sia-knot': {status: 'active', count: 0, step: 0} };
+    const sia = scene.npcs.find(n => n.def.id === 'sia');
+    scene.openDialogue(sia.spot);
+    const frames = new Set();
+    while (scene.dialogue.isOpen) {
+      if (sia.figure.texture.key === 'npc-sia-knot') frames.add(sia.figure.frame.name);
+      scene.dialogue.advance();
+    }
+    const result = { frames: [...frames], step: scene.quests['sia-knot'].step, idle: !sia.currentStoryAction };
+    localStorage.removeItem('untitled-rpg.quests');
+    return result;
+  })()`);
+  assert.deepEqual(knot, { frames: ['take-cord', 'first-wrap', 'second-wrap', 'finish-knot'], step: 1, idle: true });
+
+  await load('east-stream&companion=none');
+  const stream = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game'), p = s.player;
+    const fairy = s.enemies.find(e => e.kind === 'blink-fairy');
+    const stone = s.enemies.find(e => e.kind === 'stone-sentry');
+    const tick = (e, t, dt = .016) => e.update(t, dt, p, s.walkArea, s.nav, () => false);
+    p.placeAt(fairy.character.x - 100, fairy.character.y);
+    const left = fairy.character.x;
+    const fairyFrames = new Set();
+    const remember = () => fairyFrames.add(fairy.character.sprite.image.frame.name);
+    fairy.onHit(1000, s.walkArea, p); remember();
+    for (const offset of [120, 240, 300, 380]) { tick(fairy, 1000 + offset); remember(); }
+    const moved = fairy.character.x > left && s.walkArea.contains(fairy.character.x, fairy.character.y);
+    tick(fairy, 1600);
+    const visible = !fairy.untouchable && fairy.character.sprite.image.frame.name.startsWith('walk-');
+    fairy.onHit(1610, s.walkArea, p);
+    const cooldown = !fairy.untouchable;
+    p.placeAt(stone.character.x - 800, stone.character.y);
+    const home = { x: stone.character.x, y: stone.character.y };
+    let min = home.x, max = home.x, patrolled = false;
+    for (let i = 0; i < 600; i++) {
+      tick(stone, 2000 + i * 30, .03);
+      min = Math.min(min, stone.character.x); max = Math.max(max, stone.character.x);
+      patrolled ||= /^walk-(left|right)-[123]$/.test(stone.character.sprite.image.frame.name);
+    }
+    p.placeAt(stone.character.x - 68, stone.character.y);
+    const stoneFrames = new Set();
+    for (let i = 0; i < 60; i++) {
+      tick(stone, 20010 + i * 30, .03);
+      stoneFrames.add(stone.character.sprite.image.frame.name);
+    }
+    return { fairyFrames: [...fairyFrames], moved, visible, cooldown, patrolled,
+      route: min >= home.x - 94 && min < home.x - 65 && max <= home.x + 94 && max > home.x + 65,
+      strike: stoneFrames.has('attack-left-2') };
+  })()`);
+  assert.deepEqual(stream.fairyFrames, ['blink-ready', 'blink-break', 'blink-trace', 'blink-return']);
+  for (const key of ['moved', 'visible', 'cooldown', 'patrolled', 'route', 'strike']) assert.equal(stream[key], true, key);
 });

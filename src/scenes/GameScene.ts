@@ -2676,10 +2676,12 @@ export class GameScene extends Phaser.Scene {
     const signLines = target.id === 'village-sign' ? villageSignDialogue(this.quests) : undefined;
     const lines = quest?.lines.length ? quest.lines
       : signLines ?? ((npc && (chapterTwoDialogue(npc, this.quests) ?? chapterDialogue(npc, this.quests))) || (target.dialogue ? DIALOGUES[target.dialogue] : []));
-    const witnesses = npc && quest?.progressed?.id === 'missing-five' ? FERRY_WITNESS_POSES[npc] : undefined;
+    const dialoguePoses = npc === 'sia' && quest?.progressed?.id === 'sia-knot'
+      ? ['take-cord', 'first-wrap', 'second-wrap', 'finish-knot']
+      : npc && quest?.progressed?.id === 'missing-five' ? FERRY_WITNESS_POSES[npc] : undefined;
     const previousPose = talked?.currentStoryAction;
     this.dialogue.open(lines, () => {
-      if (witnesses) talked?.setStoryAction(previousPose);
+      if (dialoguePoses) talked?.setStoryAction(previousPose);
       if (quest) {
         this.quests = quest.state;
         this.saveQuests();
@@ -2781,7 +2783,7 @@ export class GameScene extends Phaser.Scene {
           this.travel({ to: 'village', arrive: at, zone: { left: 0, top: 0, right: 0, bottom: 0 }, label: '', labelAt: at });
         }
       }
-    }, witnesses ? index => talked?.setStoryAction(witnesses[Math.min(index, witnesses.length - 1)]) : undefined);
+    }, dialoguePoses ? index => talked?.setStoryAction(dialoguePoses[Math.min(index, dialoguePoses.length - 1)]) : undefined);
   }
 
   /**

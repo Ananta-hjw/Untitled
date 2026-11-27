@@ -8,6 +8,8 @@ import bellowsData from '../assets/characters/toby/bellows-frames.json';
 import cocoonUrl from '../assets/characters/toby/cocoon-512.webp?url';
 import tobySleepwalkUrl from '../assets/characters/toby/sleepwalk.webp?url';
 import tobySleepwalkData from '../assets/characters/toby/sleepwalk-frames.json';
+import siaKnotUrl from '../assets/characters/sia/knot.webp?url';
+import siaKnotData from '../assets/characters/sia/knot-frames.json';
 import lineaRecoveryUrl from '../assets/characters/linea/recovery.webp?url';
 import lineaRecoveryData from '../assets/characters/linea/recovery-frames.json';
 import eilaTreatmentUrl from '../assets/characters/eila/treatment.webp?url';
@@ -101,6 +103,10 @@ const ACTIONS: Partial<Record<NpcSkin, Record<string, StoryAction>>> = {
     key: 'npc-eila-treatment', url: eilaTreatmentUrl,
     frames: eilaTreatmentData.frames.filter(f => f.name.startsWith(name === 'mix-herbs' ? 'mix-' : 'treat-')),
     fps: 2, bodyHeight: 304, onTalk: 'pause' as const, flipX: name === 'treat-right',
+  }])),
+  sia: Object.fromEntries(siaKnotData.frames.map(frame => [frame.name, {
+    key: 'npc-sia-knot', url: siaKnotUrl, frames: [frame], fps: 0,
+    bodyHeight: siaKnotData.bodyHeight, onTalk: 'keep' as const,
   }])),
   linea: Object.fromEntries(lineaRecoveryData.frames.map(frame => [frame.name, {
     key: 'npc-linea-recovery', url: lineaRecoveryUrl, frames: [frame], fps: 0,

@@ -7,6 +7,16 @@ import weaverShadowUrl from '../assets/monsters/mist-weaver/shadowless-pounce-sh
 import swampBurrow from '../assets/monsters/swamp-lurker/burrow-frames.json';
 import swampEmerge from '../assets/monsters/swamp-lurker/emerge-frames.json';
 
+import blinkFrames from '../assets/monsters/blink-fairy/blink-frames.json';
+import executionerMotion from '../assets/monsters/corrosion-executioner/skill-motion-frames.json';
+
+const SPECIAL_ATLASES = {
+  'blink-fairy': { sheet: 'blink', data: blinkFrames },
+  'corrosion-executioner': { sheet: 'skill-motion', data: executionerMotion },
+};
+const specialAtlas = (kind: MonsterKind) =>
+  kind === 'blink-fairy' || kind === 'corrosion-executioner' ? SPECIAL_ATLASES[kind] : undefined;
+
 interface Frame {
   name: string; animation: string; direction: string; pose: number; sheet: string;
   x: number; y: number; w: number; h: number; originX: number; originY: number; scale: number;
@@ -49,6 +59,10 @@ export function preloadMonsters(scene: Phaser.Scene, spawns: readonly { key: Ene
       const key = keyFor(kind, sheet);
       if (!scene.textures.exists(key)) scene.load.image(key, URLS[`../assets/monsters/${kind}/${sheet.replace('.png', '.webp')}`]);
     }
+    const special = specialAtlas(kind);
+    if (special && !scene.textures.exists(keyFor(kind, special.sheet))) {
+      scene.load.image(keyFor(kind, special.sheet), URLS[`../assets/monsters/${kind}/${special.sheet}.webp`]);
+    }
     if (kind === 'fog-crow' && !scene.textures.exists('monster-fog-afterimage')) {
       scene.load.image('monster-fog-afterimage', URLS['../assets/monsters/fog-crow/afterimage-512.webp']);
     }
@@ -77,6 +91,7 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   private motion: 'idle' | 'walk' = 'idle';
   private elapsed = 0;
   private attackPose?: number;
+  private special?: { name: string; next?: string; remaining: number };
   /** 서리 딱정벌레가 마지막으로 몸을 돌린 시각(이 스프라이트가 받은 게임 시간 누계) */
   private turnedAt = -Infinity;
   private clock = 0;
@@ -110,6 +125,14 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     // 나방은 땅에서 조금 떠서 난다. 그림자는 바닥(컨테이너 원점)에 그대로 남는다.
     if (kind === 'ashen-moth') this.image.setY(-28);
     if (kind === 'fog-crow') this.image.setY(-12);
+    if (kind === 'blink-fairy') this.image.setY(-16);
+    const special = specialAtlas(kind);
+    if (special) {
+      const texture = scene.textures.get(keyFor(kind, special.sheet));
+      for (const f of special.data.frames) {
+        if (!texture.has(f.name)) texture.add(f.name, 0, f.x, f.y, f.w, f.h);
+      }
+    }
     this.add(this.image);
     if (kind === 'swamp-lurker') {
       for (const [name, frames] of Object.entries(SWAMP_TRANSITIONS)) {
@@ -220,6 +243,9 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
   advance(deltaMs: number): void {
     this.elapsed += deltaMs * this.anims.timeScale;
     this.clock += deltaMs;
+    if (this.special?.next && (this.special.remaining -= deltaMs) <= 0) {
+      this.showSpecial(this.special.next);
+    }
     if (this.swampMotion) {
       this.swampMotion.elapsed += deltaMs;
       if (this.swampMotion.phase === 'emerge' && this.swampMotion.elapsed >= SWAMP_FRAME_MS * swampEmerge.frames.length) {
@@ -233,6 +259,18 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     }
     this.showFrame();
   }
+  showSpecial(name: string, next?: string, remaining = 0): void {
+    if (!specialAtlas(this.kind)) return;
+    this.special = { name, next, remaining };
+    this.showFrame();
+  }
+
+  endSpecial(): void {
+    if (!this.special) return;
+    this.special = undefined;
+    this.showFrame();
+  }
+
   showAttack(elapsed: number, windup: number, strike: number, recovery: number): void {
     this.attackPose = elapsed < windup ? 1 : elapsed < windup + strike ? 2 : elapsed < windup + strike + recovery ? 3 : undefined;
     this.showFrame();
@@ -261,7 +299,14 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
         .setScale(MONSTERS[this.kind].height / 270).setFlipX(this.direction.endsWith('left'));
       return;
     }
-    const flight = this.kind === 'fog-crow';
+    if (this.special) {
+      const atlas = specialAtlas(this.kind)!;
+      const frame = atlas.data.frames.find(f => f.name === this.special?.name)!;
+      this.image.setTexture(keyFor(this.kind, atlas.sheet), frame.name).setOrigin(frame.originX, frame.originY)
+        .setScale(MONSTERS[this.kind].height / atlas.data.bodyHeight).setFlipX(this.direction.endsWith('left'));
+      return;
+    }
+    const flight = this.kind === 'fog-crow' || this.kind === 'blink-fairy';
     const cycle = this.sheetData.animations?.walk;
     const poses = flight ? (cycle?.poses ?? [0, 1, 2, 3]) : [1, 2, 3, 2];
     const animate = this.motion === 'walk' || flight;

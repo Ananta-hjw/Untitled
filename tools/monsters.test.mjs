@@ -49,7 +49,7 @@ test('혼합 사냥터에서도 슬라임 전용 의뢰는 버섯·도마뱀·�
 });
 
 
-test('사냥터는 종류별 다섯 마리이며 야외와 실내의 월드 크기를 유지한다', () => {
+test('사냥터는 정해진 마릿수와 야외·실내의 월드 크기를 유지한다', () => {
   assert.deepEqual([WORLD_WIDTH, WORLD_HEIGHT], [3432, 2288]);
   for (const id of ['south-field', 'west-forest', 'east-stream']) {
     const counts = {};
@@ -57,7 +57,8 @@ test('사냥터는 종류별 다섯 마리이며 야외와 실내의 월드 크�
       const kind = monsterKind(enemy.key);
       counts[kind] = (counts[kind] ?? 0) + 1;
     }
-    assert.ok(Object.values(counts).every(count => count === 5), id);
+    if (id === 'east-stream') assert.deepEqual(counts, { slime: 5, 'blink-fairy': 2, 'stone-sentry': 1 });
+    else assert.ok(Object.values(counts).every(count => count === 5), id);
     assert.ok(MAPS[id].bounds.right > 2400 && MAPS[id].bounds.bottom > 1600, id);
   }
   for(const id of ['village','village-north']) {

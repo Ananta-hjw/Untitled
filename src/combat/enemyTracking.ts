@@ -37,12 +37,14 @@ const MELEE_LUNGE_BY_KIND: Partial<Record<MonsterKind, MeleeLungeConfig>> = {
   'mist-phantom': { distance: 96, stopGap: 40, reachForward: 60, radiusX: 76, radiusY: 60 },
   'ashen-moth': { distance: 84, stopGap: 42, reachForward: 56, radiusX: 74, radiusY: 58 },
   'reed-stalker': { distance: 84, stopGap: 42, reachForward: 56, radiusX: 74, radiusY: 58 },
+  'stone-sentry': { distance: 22, stopGap: 50, reachForward: 54, radiusX: 72, radiusY: 54 },
   'frost-beetle': { distance: 60, stopGap: 44, reachForward: 48, radiusX: 70, radiusY: 52 },
 };
 
 const TURN_RATE_BY_KIND: Partial<Record<MonsterKind, number>> = {
   // 서리 딱정벌레는 느리게 돌아 등 뒤를 잡는 개성을 유지한다.
   'frost-beetle': 2.2,
+  'stone-sentry': 2.4,
   'swamp-lurker': 3.2,
   'corrosion-executioner': 4.6,
   'iron-scale-lizard': 5.0,
