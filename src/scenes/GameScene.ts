@@ -136,7 +136,7 @@ import { GUIDE_SAVE_KEY, activeLesson, lessonToShow, parseSeenLessons, serialize
 import { maxCharge } from '../combat/resonance';
 import {
   currentObjective, MARKER_PRIORITY, QUEST_SAVE_KEY, markerFor, parseQuests, recordEvent, serializeQuests, talkTo, type QuestEvent, type QuestMarker, type QuestState,
-  type InspectSpot,
+  type InspectSpot, type QuestDef,
 } from '../story/quests';
 import { GUARDS, guardsForMap } from '../world/guards';
 import { defenderRecovery, loadDefenderInjuries, saveDefenderInjuries } from '../story/defenderRecovery';
@@ -2852,6 +2852,11 @@ export class GameScene extends Phaser.Scene {
       if (dialoguePoses) talked?.setStoryAction(previousPose);
       if (talked?.def.id === 'fishing-elder') talked.setStoryAction(talked.def.storyAction);
       if (npc === 'sia' && quest?.progressed?.id === 'sia-knot') talked?.release();
+      // 서브 퀘스트는 의뢰를 다 들은 뒤 받을지 고른다. '나중에'를 고르면 받지 않은 채 남고, 다시 말을 걸면 또 묻는다.
+      if (quest?.accepted && !quest.accepted.main) {
+        this.offerSideQuest(quest.accepted, quest.state, () => this.afterTalk(target, undefined));
+        return;
+      }
       if (quest) {
         this.quests = quest.state;
         this.saveQuests();
@@ -2892,58 +2897,7 @@ export class GameScene extends Phaser.Scene {
         const p = this.quests[quest.progressed.id]!;
         this.hud.showCallout(`${quest.progressed.title}: ${p.status === 'ready' ? '보고하러 가기' : currentObjective(quest.progressed, p).label}`);
       }
-      // 메리나와의 평소 대화가 끝나면 잡화점을 연다.
-      if (!quest && target.id === 'npc-merina') this.openItemPanel('shop');
-      // 페른: "남문의 수레"를 끝낸 대화 뒤, 그리고 그 뒤의 평소 대화 뒤에 수레(상점)를 연다.
-      // 진행 안내(서브 퀘스트를 받은 뒤의 재촉 대사)는 평소 대화처럼 본다. "행상인의 짐"을 끝낸 뒤에도 바로 연다(말린 무화과).
-      const plainTalk = !quest?.accepted && !quest?.completed && !quest?.progressed;
-      if (target.id === 'npc-fern' && fernShopOpen(this.quests)
-        && (plainTalk || quest?.completed?.id === 'fern-cart' || quest?.completed?.id === 'fern-cover')) this.openFernShop();
-      // 마르타: "멈춘 나루"를 끝낸 뒤 대장간 안에서 평소 대화가 끝나면 청동 장비를 판다.
-      if (plainTalk && target.id === 'npc-marta' && this.mapId === FERRY_SMITHY && martaShopOpen(this.quests)) this.openCharacterPanel('items', true, false, 'marta');
-      // 도란과 대장간에서 대화가 끝나면 장비 상점을 연다. 습격 중 야외나 퀘스트 수락·진행·완료 직후에는 열지 않는다.
-      if (this.mapId === 'in-smithy' && !quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-doran') this.openCharacterPanel('items', true);
-      // '담금질 재료'를 끝내면 대장간 창을 열어 방금 받은 무료 강화와 강화 메뉴를 보여 준다.
-      if (this.mapId === 'in-smithy' && quest?.completed?.id === 'doran-gel') this.openCharacterPanel('items', true);
-      // 로제타와의 평소 대화가 끝나면 쉬어 갈지 묻는다 (습격의 밤에는 묻지 않는다).
-      // 치유소 또는 리네아의 집에서 에일라와 대화가 끝나면(퀘스트 수락·진행·완료 직후 제외) 치료해 줄지 묻는다.
-      if (!quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-eila'
-        && (this.mapId === 'in-clinic' || this.mapId === 'in-linea')) {
-        this.storyChoice?.open(() => this.healAtClinic(), {
-          title: '에일라의 치료',
-          text: '다친 데가 있으면 봐 줄게.',
-          summary: '체력·마나 모두 회복 · 잿빛 둔화 해제\n약초 기운: 처음 맞을 때까지 최대 체력 +10%',
-          yes: '치료받기', no: '괜찮아요',
-        });
-      }
-      if (plainTalk && target.id === 'npc-dor' && shelterRestOpen(this.quests)) {
-        this.storyChoice?.open(() => this.restWithPresentation('shelter'), {
-          title: '고개 쉼터에서 쉬어 가기',
-          text: '도르가 모닥불에 장작을 한 아름 더 얹는다.',
-          summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  동쪽 고갯길 고개 쉼터`,
-          hint: '휴식은 무료이며 퀘스트 진행과 시간대는 바뀌지 않습니다.',
-          yes: '쉬어 가기', no: '돌아가기',
-        });
-      }
-      // 나루 여관 주인: 평소 대화나 퀘스트 안내(진행·완료가 아닌 대화) 뒤에 쉬어 갈지 묻는다.
-      if (!quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-fog-innkeeper' && ferryInnRestOpen(this.quests)) {
-        this.storyChoice?.open(() => this.restWithPresentation('ferry-inn'), {
-          title: '나루 여관에서 잠자기',
-          text: '여관 주인이 강 쪽 창을 닫고 방을 내준다.',
-          summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  물안개 나루 여관`,
-          hint: '숙박은 무료입니다. 일반 숙박은 퀘스트 진행과 필드 시간대에 영향을 주지 않습니다.',
-          yes: '잠자기', no: '돌아가기',
-        });
-      }
-      if (!quest && target.id === 'npc-rosetta' && canRest(this.quests)) {
-        this.storyChoice?.open(() => this.restWithPresentation('inn'), {
-          title: '여관에서 잠자기',
-          text: '로제타가 준비한 방에서 잠시 쉬어 가세요.',
-          summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  로웬 마을 여관`,
-          hint: '숙박은 무료입니다. 일반 숙박은 퀘스트 진행과 필드 시간대에 영향을 주지 않습니다.',
-          yes: '잠자기', no: '돌아가기',
-        });
-      }
+      this.afterTalk(target, quest);
       // 대화를 넘기려고 누른 공격 키가 닫힌 뒤 공격으로 이어지지 않게 한다.
       this.clearAttackInput();
       this.dodgeButton.consumePress();
@@ -4363,6 +4317,90 @@ export class GameScene extends Phaser.Scene {
     this.parrySlowOutDur = BLOCK.unboundSlowOutMs;
     this.parrySlowOutLeft = BLOCK.unboundSlowOutMs;
     this.drawHud();
+  }
+
+  /**
+   * 대화가 끝난 뒤 그 사람에게 이어지는 일: 상점 열기, 쉬어 가기·치료 묻기.
+   * 서브 퀘스트 의뢰를 '나중에'로 미뤘을 때는 평소 대화처럼 이어 간다(quest 없이 부른다).
+   */
+  private afterTalk(target: Interactable, quest: ReturnType<typeof talkTo>): void {
+    // 메리나와의 평소 대화가 끝나면 잡화점을 연다.
+    if (!quest && target.id === 'npc-merina') this.openItemPanel('shop');
+    // 페른: "남문의 수레"를 끝낸 대화 뒤, 그리고 그 뒤의 평소 대화 뒤에 수레(상점)를 연다.
+    // 진행 안내(서브 퀘스트를 받은 뒤의 재촉 대사)는 평소 대화처럼 본다. "행상인의 짐"을 끝낸 뒤에도 바로 연다(말린 무화과).
+    const plainTalk = !quest?.accepted && !quest?.completed && !quest?.progressed;
+    if (target.id === 'npc-fern' && fernShopOpen(this.quests)
+      && (plainTalk || quest?.completed?.id === 'fern-cart' || quest?.completed?.id === 'fern-cover')) this.openFernShop();
+    // 마르타: "멈춘 나루"를 끝낸 뒤 대장간 안에서 평소 대화가 끝나면 청동 장비를 판다.
+    if (plainTalk && target.id === 'npc-marta' && this.mapId === FERRY_SMITHY && martaShopOpen(this.quests)) this.openCharacterPanel('items', true, false, 'marta');
+    // 도란과 대장간에서 대화가 끝나면 장비 상점을 연다. 습격 중 야외나 퀘스트 수락·진행·완료 직후에는 열지 않는다.
+    if (this.mapId === 'in-smithy' && !quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-doran') this.openCharacterPanel('items', true);
+    // '담금질 재료'를 끝내면 대장간 창을 열어 방금 받은 무료 강화와 강화 메뉴를 보여 준다.
+    if (this.mapId === 'in-smithy' && quest?.completed?.id === 'doran-gel') this.openCharacterPanel('items', true);
+    // 로제타와의 평소 대화가 끝나면 쉬어 갈지 묻는다 (습격의 밤에는 묻지 않는다).
+    // 치유소 또는 리네아의 집에서 에일라와 대화가 끝나면(퀘스트 수락·진행·완료 직후 제외) 치료해 줄지 묻는다.
+    if (!quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-eila'
+      && (this.mapId === 'in-clinic' || this.mapId === 'in-linea')) {
+      this.storyChoice?.open(() => this.healAtClinic(), {
+        title: '에일라의 치료',
+        text: '다친 데가 있으면 봐 줄게.',
+        summary: '체력·마나 모두 회복 · 잿빛 둔화 해제\n약초 기운: 처음 맞을 때까지 최대 체력 +10%',
+        yes: '치료받기', no: '괜찮아요',
+      });
+    }
+    if (plainTalk && target.id === 'npc-dor' && shelterRestOpen(this.quests)) {
+      this.storyChoice?.open(() => this.restWithPresentation('shelter'), {
+        title: '고개 쉼터에서 쉬어 가기',
+        text: '도르가 모닥불에 장작을 한 아름 더 얹는다.',
+        summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  동쪽 고갯길 고개 쉼터`,
+        hint: '휴식은 무료이며 퀘스트 진행과 시간대는 바뀌지 않습니다.',
+        yes: '쉬어 가기', no: '돌아가기',
+      });
+    }
+    // 나루 여관 주인: 평소 대화나 퀘스트 안내(진행·완료가 아닌 대화) 뒤에 쉬어 갈지 묻는다.
+    if (!quest?.accepted && !quest?.completed && !quest?.progressed && target.id === 'npc-fog-innkeeper' && ferryInnRestOpen(this.quests)) {
+      this.storyChoice?.open(() => this.restWithPresentation('ferry-inn'), {
+        title: '나루 여관에서 잠자기',
+        text: '여관 주인이 강 쪽 창을 닫고 방을 내준다.',
+        summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  물안개 나루 여관`,
+        hint: '숙박은 무료입니다. 일반 숙박은 퀘스트 진행과 필드 시간대에 영향을 주지 않습니다.',
+        yes: '잠자기', no: '돌아가기',
+      });
+    }
+    if (!quest && target.id === 'npc-rosetta' && canRest(this.quests)) {
+      this.storyChoice?.open(() => this.restWithPresentation('inn'), {
+        title: '여관에서 잠자기',
+        text: '로제타가 준비한 방에서 잠시 쉬어 가세요.',
+        summary: `체력 회복  ·  ${this.player.hp} / ${this.player.maxHp} → ${this.player.maxHp} / ${this.player.maxHp}\n다음 시작 위치  ·  로웬 마을 여관`,
+        hint: '숙박은 무료입니다. 일반 숙박은 퀘스트 진행과 필드 시간대에 영향을 주지 않습니다.',
+        yes: '잠자기', no: '돌아가기',
+      });
+    }
+  }
+
+  /** 서브 퀘스트 수락 창: 수락하면 그때 진행 중이 되어 필드에 재료 자리가 생긴다. */
+  private offerSideQuest(def: QuestDef, accepted: QuestState, onLater: () => void): void {
+    const first = currentObjective(def, accepted[def.id]);
+    const steps = def.steps?.length ?? 1;
+    const rewards = [
+      `경험치 ${def.rewardXp}`,
+      def.rewardGold ? `${def.rewardGold} G` : '',
+      ...(def.rewardItems ?? []).map(i => `${ITEMS[i.id].name}${i.count > 1 ? ` ×${i.count}` : ''}`),
+      ...(def.rewardGear ?? []).map(id => GEAR[id].name),
+      ...(def.rewardEnhance ?? []).map(e => `${SLOT_INFO[e.slot].name} 무료 강화 +${e.levels}`),
+    ].filter(Boolean);
+    this.storyChoice?.open(() => {
+      this.quests = { ...this.quests, [def.id]: accepted[def.id]! };
+      this.saveQuests();
+      this.refreshQuests();
+      this.hud.showCallout(`새 퀘스트: ${def.title}`);
+    }, {
+      title: `서브 퀘스트 · ${def.title}`,
+      text: '이 의뢰를 받을까요?',
+      summary: `할 일  ·  ${first.label}${steps > 1 ? ` (외 ${steps - 1}단계)` : ''}\n보상  ·  ${rewards.join(', ')}`,
+      hint: '나중에 받으려면 다시 말을 걸면 됩니다.',
+      yes: '수락', no: '나중에',
+    }, onLater);
   }
 
   /** 적이 치는 순간(combat/strikeFeel.ts): 앞쪽으로 날 선 빛줄기와 짧은 바람 소리. 보이는 것·소리만이고 판정은 바꾸지 않는다. */

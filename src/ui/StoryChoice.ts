@@ -28,6 +28,7 @@ export class StoryChoice {
   private picks: ChoiceOption[] = [];
   private readonly scene: Phaser.Scene;
   private callback?: () => void;
+  private cancelCallback?: () => void;
   private width = 0;
   private hasSummary = false;
 
@@ -48,8 +49,10 @@ export class StoryChoice {
 
   get isOpen(): boolean { return this.callback !== undefined; }
 
-  open(callback: () => void, prompt: ChoicePrompt = FESTIVAL): void {
+  /** onCancel: 아니오(취소·Esc·뒤로 가기)를 골랐을 때 */
+  open(callback: () => void, prompt: ChoicePrompt = FESTIVAL, onCancel?: () => void): void {
     this.callback = callback;
+    this.cancelCallback = onCancel;
     this.hasSummary = !!prompt.summary;
     this.title.setText(prompt.title ?? '확인');
     this.text.setText(prompt.text);
@@ -71,6 +74,7 @@ export class StoryChoice {
     this.picks = options.slice(0, MAX_OPTIONS);
     if (this.picks.length === 0) return;
     this.callback = this.picks[0].onPick;
+    this.cancelCallback = undefined;
     this.hasSummary = false;
     this.title.setText(title);
     this.text.setText('');
@@ -93,6 +97,7 @@ export class StoryChoice {
   }
 
   accept(): void {
+    this.cancelCallback = undefined;
     const callback = this.callback;
     if (!callback) return;
     this.hide();
@@ -102,8 +107,11 @@ export class StoryChoice {
 
   cancel(): void {
     if (!this.isOpen) return;
+    const onCancel = this.cancelCallback;
+    this.cancelCallback = undefined;
     this.hide();
     this.onClose();
+    onCancel?.();
   }
 
   layout(width: number): void {

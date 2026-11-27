@@ -2371,11 +2371,10 @@ test('캐릭터 창: 포인트로 능력치를 올리고, 도란에게 장비를
     s.characterPanel.close();
     // 도란과 평소 대화를 마치면 대장간이 열린다.
     const doran = s.npcs.find(n => n.def.id === 'doran');
-    // 처음에는 도란이 퀘스트를 준다(그 대화 뒤에는 열지 않는다). 다시 말을 걸면 대장간이 열린다.
-    for (let i = 0; i < 2; i++) {
-      s.openDialogue(doran.spot);
-      while (s.dialogue.isOpen) s.dialogue.advance();
-    }
+    // 처음에는 도란이 서브 퀘스트를 권한다. '나중에'를 고르면 평소 대화처럼 대장간이 열린다.
+    s.openDialogue(doran.spot);
+    while (s.dialogue.isOpen) s.dialogue.advance();
+    if (s.storyChoice.isOpen) s.storyChoice.cancel();
     const smithy = s.characterPanel.isOpen && s.characterPanel.mode === 'smithy' && s.characterPanel.currentShopTab === 'enhance';
     // 도란의 대장간에서 장갑 칸을 강화(+1)하고, 장신구 탭에서 네잎 부적을 사서 장신구 칸에 낀다.
     s.enhanceGearSlot('hands');
@@ -3982,7 +3981,7 @@ test('공격 버튼 하나가 가까운 대상에 따라 대화·입장으로 �
     const pointer={id:22,x:b.image.x,y:b.image.y};
     s.input.emit('pointerdown',pointer);s.update(0,16);
     const opened=s.dialogue.isOpen&&!p.isAttacking&&s.attackBufferedUntil===undefined;
-    s.input.emit('pointerup',pointer);s.dialogue.close();
+    s.input.emit('pointerup',pointer);s.dialogue.close();if(s.storyChoice.isOpen)s.storyChoice.cancel();
     // 대화를 닫는 동안 누르고 있던 공격 키는 멀어져도 떼기 전까지 공격하지 않는다.
     s.attackKeys[0].isDown=true;
     p.placeAt(10,10);s.update(0,16);
@@ -4388,6 +4387,7 @@ test('2장 남문의 수레: 광장에 페른과 삭은 수레가 서고, 들판
     const done = s.quests['fern-cart']?.status, herbs = s.inventory.items['antidote-herb'] ?? 0;
     // 남문의 수레 뒤 첫 대화는 서브 퀘스트 "행상인의 짐" 제안, 그다음 평소 대화 뒤에 수레가 열린다
     s.openDialogue(fern2.spot); flush();
+    if (s.storyChoice.isOpen) s.storyChoice.accept();
     const cover = s.quests['fern-cover']?.status;
     if (s.storyChoice.isOpen) s.storyChoice.cancel();
     if (s.itemPanel.isOpen) s.itemPanel.close();
@@ -4846,7 +4846,13 @@ test('사라진 다섯·새는 지붕·엉킨 그물: 증인은 각자 집에서
       }
       throw Error('맵 재시작 시간 초과: ' + map);
     };
-    const flush = () => { while (s.dialogue.isOpen) s.dialogue.advance(); if (s.storyChoice?.isOpen) s.storyChoice.cancel(); if (s.characterPanel?.isOpen) s.characterPanel.close(); };
+    // 서브 퀘스트 수락 창은 받고, 쉬어 가기 같은 다른 창은 닫는다.
+    const flush = () => {
+      while (s.dialogue.isOpen) s.dialogue.advance();
+      if (s.storyChoice?.isOpen && s.storyChoice.title.text.startsWith('서브 퀘스트')) s.storyChoice.accept();
+      if (s.storyChoice?.isOpen) s.storyChoice.cancel();
+      if (s.characterPanel?.isOpen) s.characterPanel.close();
+    };
     const witnessPoses = {};
     const talk = id => {
       const n = s.npcs.find(n => n.def.id === id);
@@ -4987,6 +4993,7 @@ test('2장 고개의 쉼터: 까마귀 넷 뒤 도르와 하룻밤을 보내 쉼
     const done = s.quests['pass-shelter'].status;
     // 끝낸 뒤 첫 대화는 서브 퀘스트 "쉼터의 약초" 제안, 그다음 평소 대화 뒤에 쉬어 갈지 묻는다
     s.openDialogue(dor.spot); while (s.dialogue.isOpen) s.dialogue.advance();
+    if (s.storyChoice?.isOpen) s.storyChoice.accept();
     const herbs = s.quests['dor-herbs']?.status;
     s.openDialogue(dor.spot); while (s.dialogue.isOpen) s.dialogue.advance();
     const offer = herbs === 'active' && s.storyChoice?.isOpen;
@@ -5114,6 +5121,40 @@ test('복구 상점 주민은 작업 그림을 유지하고 대화·거래·재�
     await load(map);
     assert.equal(await evaluate(`window.__game.scene.getScene('game').npcs.find(n=>n.def.id===${JSON.stringify(id)}).currentStoryAction`),action);
   }
+});
+
+test('서브 퀘스트는 의뢰를 들은 뒤 수락해야 받는다: 나중에를 고르면 받지 않은 채 남고 들판에 재료 자리도 생기지 않는다', async () => {
+  await load('village-north');
+  await evaluate(`localStorage.setItem('untitled-rpg.quests',JSON.stringify({version:1,quests:{'ruan-training':{status:'done',count:3}}}))`);
+  await load('village-north');
+  const result = await evaluate(`(() => {
+    const s = window.__game.scene.getScene('game');
+    const linea = s.npcs.find(n => n.def.id === 'linea');
+    const talk = () => { s.openDialogue(linea.spot); while (s.dialogue.isOpen) s.dialogue.advance(); };
+    talk();
+    const asked = s.storyChoice.isOpen, title = s.storyChoice.title.text;
+    s.storyChoice.cancel();
+    const later = { status: s.quests['linea-flowers']?.status ?? null, marker: linea.questMarker };
+    talk();
+    const askedAgain = s.storyChoice.isOpen;
+    s.storyChoice.accept();
+    const accepted = s.quests['linea-flowers']?.status, saved = JSON.parse(localStorage.getItem('untitled-rpg.quests')).quests['linea-flowers']?.status;
+    return { asked, title, later, askedAgain, accepted, saved };
+  })()`);
+  assert.equal(result.asked, true, '의뢰 대사가 끝나면 수락 창이 뜬다');
+  assert.match(result.title, /리네아|들꽃|서브 퀘스트/);
+  assert.deepEqual(result.later, { status: null, marker: 'sub-new' }, '나중에를 고르면 받지 않고 초록 표시가 남는다');
+  assert.equal(result.askedAgain, true, '다시 말을 걸면 또 묻는다');
+  assert.equal(result.accepted, 'active');
+  assert.equal(result.saved, 'active');
+  // 받지 않은 동안에는 들판에 들꽃 자리가 없다(받은 뒤에만 생긴다).
+  const field = async (state) => {
+    await evaluate(`localStorage.setItem('untitled-rpg.quests',JSON.stringify({version:1,quests:${JSON.stringify(state)}}))`);
+    await load('south-field');
+    return evaluate(`window.__game.scene.getScene('game').interactables.some(i => i.id === 'story-wildflower')`);
+  };
+  assert.equal(await field({ 'ruan-training': { status: 'done', count: 3 } }), false);
+  assert.equal(await field({ 'ruan-training': { status: 'done', count: 3 }, 'linea-flowers': { status: 'active', count: 0 } }), true);
 });
 
 test('담금질 재료를 도란에게 보고하면 무기가 무료로 +1 강화되고 대장간 창이 열린다', async () => {
