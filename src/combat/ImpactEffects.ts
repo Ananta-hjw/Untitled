@@ -21,6 +21,7 @@ const TEX = {
   flash: 'fx-flash',
   streak: 'fx-streak',
   ring: 'fx-ring',
+  parryCrescent: 'fx-parry-crescent',
   dust: 'fx-dust',
   drop: 'fx-drop',
   star: 'fx-star',
@@ -175,13 +176,34 @@ export class ImpactEffects {
     }
   }
 
-  /**
-   * 나인솔즈 스타일 패링 충돌 연출.
-   * - 정밀 패링: 짧은 어두운 임팩트 프레임 위로 눈부신 백금/청백·금빛 십자 별빛, X자 검격 섬광, 이중 충격파와 고속 불꽃.
-   * - 연속 파훼('chainBreak'): 보스 연타 마지막 타 파훼 시 금빛-백금 대형 폭발.
-   * - 차지 패링('unbound'): 붉은 강공격·장막을 부수는 초대형 암적·금빛 임팩트 프레임과 전방위 충격파.
-   * - 불완전 막기: 임팩트 프레임 없이 둔탁한 주황 불꽃과 흙먼지만 튄다.
-   */
+  /** 연속 정밀 패링의 접점: 은백색 불꽃 → 검날을 따라가는 초승달 → 한 번 퍼지는 금빛 고리. */
+  parryClash(x: number, y: number, bladeAngle: number, sourceAngle: number, chain: number, now: number): void {
+    const depthOverride = DEPTH_UI - 1;
+    if (chain === 1) {
+      this.spawn(TEX.flash, now, { x, y, life: 85, scale0: 0.18, scale1: 0.37, alpha0: 0.86, tint: 0xf2f8ff, depthOverride });
+      for (const offset of [-0.9, -0.38, 0.22, 0.74]) {
+        const angle = sourceAngle + offset;
+        this.spawn(TEX.streak, now, {
+          x, y, life: 115, vx: Math.cos(angle) * 265, vy: Math.sin(angle) * 265,
+          scale0: 0.28, scale1: 0.08, alpha0: 0.95, tint: 0xe2edff, drag: 5, rotation: angle, depthOverride,
+        });
+      }
+      return;
+    }
+    if (chain === 2) {
+      this.spawn(TEX.flash, now, { x, y, life: 85, scale0: 0.19, scale1: 0.38, alpha0: 0.8, tint: 0xfff5d8, depthOverride });
+      // 초승달의 볼록한 면을 공격이 들어온 쪽으로 돌리고 긴 축을 검날에 맞춘다.
+      const rotation = Math.sin(sourceAngle - bladeAngle) > 0 ? bladeAngle + Math.PI : bladeAngle;
+      this.spawn(TEX.parryCrescent, now, {
+        x, y, life: 155, scale0: 0.46, scale1: 0.75, alpha0: 0.94, tint: 0xffdf9e, rotation, depthOverride,
+      });
+      return;
+    }
+    this.spawn(TEX.ring, now, { x, y, life: 190, scale0: 0.29, scale1: 0.92, alpha0: 0.94, tint: 0xffcd65, depthOverride });
+    this.spawn(TEX.star, now, { x, y, life: 110, scale0: 0.31, scale1: 0.11, alpha0: 1, tint: 0xffffff, rotation: bladeAngle, depthOverride });
+  }
+
+  /** 불완전 막기, 차지 패링, 흡수한 힘을 방출할 때의 섬광과 충격파. */
   parryBurst(
     x: number,
     y: number,
@@ -254,7 +276,7 @@ export class ImpactEffects {
     this.spawn(TEX.ring, now, { x, y, life: unbound ? 360 : 280, scale0: 0.35, scale1: 2.8 * boost, alpha0: 0.72, tint: secondary, depthOffset: 400 });
     this.spawn(TEX.ring, now, { x, y: groundY, life: unbound ? 380 : 290, scale0: 0.3, scale1: 2.8 * boost, alpha0: 0.88, tint: color, flat: 0.4, depthOffset: -1 });
 
-    // 고속 스파크(정밀 18줄기 / 연속 파훼 24줄기 / 차지 패링 30줄기)
+    // 고속 스파크(흡수 방출 18~24줄기 / 차지 패링 30줄기)
     const sparkCount = unbound ? 30 : chainBreak ? 24 : 18;
     for (let i = 0; i < sparkCount; i++) {
       const spread = (!unbound && i < 12) ? base + (Math.random() - 0.5) * 2.1 : Math.random() * Math.PI * 2;
@@ -459,6 +481,14 @@ function makeTextures(scene: Phaser.Scene): void {
   // 충격파 고리
   g.clear().lineStyle(6, 0xffffff, 0.9).strokeCircle(64, 64, 58).lineStyle(14, 0xffffff, 0.25).strokeCircle(64, 64, 52);
   g.generateTexture(TEX.ring, 128, 128);
+  // 양 끝이 가늘어지는 초승달. 긴 축을 실제 검날에 맞춰 회전시킨다.
+  const arc = Array.from({ length: 25 }, (_, i) => {
+    const t = i / 24;
+    return new Phaser.Math.Vector2(4 + 120 * t, 28 - 18 * Math.sin(Math.PI * t));
+  });
+  const inner = arc.map(({ x, y }, i) => new Phaser.Math.Vector2(x, y + 8 * Math.sin(Math.PI * i / 24))).reverse();
+  g.clear().lineStyle(5, 0xffffff, 0.19).strokePoints(arc).fillStyle(0xffffff, 1).fillPoints([...arc, ...inner], true);
+  g.generateTexture(TEX.parryCrescent, 128, 56);
   // 파편 방울
   g.clear().fillStyle(0xffffff, 1).fillCircle(9, 9, 8).fillStyle(0xffffff, 0.5).fillCircle(9, 9, 9);
   g.generateTexture(TEX.drop, 18, 18);

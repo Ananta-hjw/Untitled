@@ -3790,8 +3790,10 @@ export class GameScene extends Phaser.Scene {
     const enemyPushX = Math.sign(c.x - player.x) || -awayX;
     const enemyPushY = Math.sign(c.y - player.y) * 0.25;
     const blade = player.sprite instanceof HeroSprite ? player.sprite.getBlade() : undefined;
-    const impactX = blade ? blade.base.x + (blade.tip.x - blade.base.x) * 0.55 : player.x + player.facing * 60;
-    const impactY = blade ? blade.base.y + (blade.tip.y - blade.base.y) * 0.55 : player.y - 95;
+    const bladeDx = blade ? blade.tip.x - blade.base.x : 0;
+    const bladeDy = blade ? blade.tip.y - blade.base.y : 0;
+    const impactX = blade ? blade.base.x + bladeDx * 0.55 : player.x + player.facing * 60;
+    const impactY = blade ? blade.base.y + bladeDy * 0.55 : player.y - 95;
     const heroDir = player.sprite instanceof HeroSprite ? player.sprite.lookDirection : (player.facing < 0 ? 'left' : 'right');
     const incomingFromX = hit ? -hit.dx : c.x - player.x;
     const incomingFromY = hit ? -hit.dy : c.y - player.y;
@@ -3839,14 +3841,15 @@ export class GameScene extends Phaser.Scene {
         // 흡수: 막아 낸 적의 힘과 속성을 칼에 담는다(연속 패링 파훼는 한 단 더).
         this.gainAbsorb(enemy, chainBreak ? 2 : 1);
 
+        const sourceAngle = Math.atan2(incomingFromY, incomingFromX);
+        const bladeAngle = bladeDx || bladeDy ? Math.atan2(bladeDy, bladeDx) : sourceAngle + Math.PI / 2;
+        this.impacts.parryClash(x, y, bladeAngle, sourceAngle, chain, now);
         if (chainBreak) {
           this.combatAudio.playChainBreak();
-          this.impacts.parryBurst(x, y, -awayX, -awayY, 'chainBreak', chain, now, player.y + 2);
           player.flash(0xfff0a0);
           this.hud.showCallout('연속 패링 파훼!', { color: '#ffe47a', stroke: '#4a1c04', scale: 1.58 });
         } else {
           this.combatAudio.playParry('perfect', chain);
-          this.impacts.parryBurst(x, y, -awayX, -awayY, 'perfect', chain, now, player.y + 2);
           player.flash(chain >= 2 ? 0xfff0b0 : 0xd0f4ff);
           const label = continuing ? `연속 패링 ${step}/${total}!`
             : ranged ? '투사체 반사!'

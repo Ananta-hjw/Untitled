@@ -3923,16 +3923,22 @@ test('막기는 콤보·후딜을 즉시 취소하고 남은 공격 판정과 �
   assert.equal(result.cooldownKept, true, JSON.stringify(result));
 });
 
-test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 검날 접점에서 패링하며 종료·회피 시 복귀한다', async () => {
+test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 검날 접점에서 단계별 패링 효과를 그리며 종료·회피 시 복귀한다', async () => {
   await load();
   const result = await evaluate(`(() => {
     const s=window.__game.scene.getScene('game'),p=s.player,h=p.sprite,e=s.enemies[0],runs=[];
     s.enemies=[];s.derived.evadeChance=0;
-    // 패링 접점은 parryBurst(x, y, ...)가 그린다(2단 패링 도입 뒤 반격 impact 대신).
-    const contacts=[],burst=s.impacts.parryBurst;
-    s.impacts.parryBurst=(...args)=>{contacts.push({x:args[0],y:args[1]});return burst.apply(s.impacts,args);};
+    const contacts=[],clash=s.impacts.parryClash;
+    s.impacts.parryClash=(x,y,bladeAngle,sourceAngle,chain,now)=>{
+      clash.call(s.impacts,x,y,bladeAngle,sourceAngle,chain,now);
+      const effects=s.impacts.particles.filter(p=>p.born===now&&p.image.visible&&p.image.x===x&&p.image.y===y);
+      const crescent=effects.find(p=>p.image.texture.key==='fx-parry-crescent');
+      contacts.push({x,y,chain,shapes:effects.map(p=>p.image.texture.key).sort(),
+        crescentAngle:crescent?.image.rotation});
+    };
+    const starts=[1000,1400,1800,2200,4200,4600];
     for(const [facing,dx,dy] of [['right',1,0],['left',-1,0],['down-right',1,1],['down-left',-1,1],['up-right',1,-1],['up-left',-1,-1]]){
-      p.revive(1000,650);s.now=1000;s.clearAttackInput();s.joystick.vector.set(0,0);
+      p.revive(1000,650);s.now=starts[runs.length];s.clearAttackInput();s.joystick.vector.set(0,0);
       s.dodgeProgress=1;s.dodgeUntil=0;s.dodgeReadyAt=0;s.parryUntil=0;s.parryReadyAt=0;
       s.comboStage=0;s.comboExpiresAt=0;s.nextAttackAt=0;
       h.setWeapon('iron-sword');s.startAttack(s.now,dx,dy);s.blockButton.pressed=true;
@@ -3956,9 +3962,10 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
       e.character.revive(p.x+80*dx/dlen,p.y+40*dy/dlen);e.character.face(-dx);p.invulnerableUntil=0;const hp=p.hp;
       s.onEnemyStrike(e,{fromX:e.character.x,fromY:e.character.y,toX:p.x,toY:p.y,radiusX:80,radiusY:60,dx:-dx/dlen,dy:-dy/dlen,melee:true});
       const contact=contacts.at(-1),error=Math.hypot(contact.x-blade.base.x-(blade.tip.x-blade.base.x)*.55,contact.y-blade.base.y-(blade.tip.y-blade.base.y)*.55);
+      const aligned=contact.crescentAngle===undefined||Math.abs(Math.sin(contact.crescentAngle-Math.atan2(vy,vx)))<.001;
       // 정밀 패링 뒤 막기 자세는 반동(guardPoseUntil, 150ms)만큼 유지되고 그다음 돌아온다.
       s.now=Math.max(s.now,s.guardPoseUntil??0)+5;s.updatePlayer(s.now,0);s.drawShield(s.now);const restored=!h.isGuarding&&h.image.texture.key!=='hero-academy-guard';
-      runs.push({facing,name,texture,mirror,raised,slanted,palmDistance,palmVisible,held,wood,lengths,error,restored,protected:p.hp===hp&&s.parryChain.count>0&&s.counterUntil<=s.now});
+      runs.push({facing,name,texture,mirror,raised,slanted,palmDistance,palmVisible,held,wood,lengths,error,aligned,chain:contact.chain,shapes:contact.shapes,restored,protected:p.hp===hp&&s.parryChain.count>0&&s.counterUntil<=s.now});
     }
     const verticalPoses=[];
     for(const dy of [-1,1]){
@@ -3972,13 +3979,20 @@ test('검 막기 자세는 여섯 방향에서 장착 검을 들어 올리고 �
     const unequipped=!h.weaponFront.visible&&!h.weaponBack.visible&&!h.supportHand.visible&&Math.hypot(empty.tip.x-empty.base.x,empty.tip.y-empty.base.y)===0;
     s.dodgeButton.pressed=true;s.updatePlayer(s.now,0);s.drawShield(s.now);
     const dodged=p.dodging&&!h.isGuarding&&h.image.texture.key!=='hero-academy-guard';
-    s.impacts.parryBurst=burst;return {runs,unequipped,dodged,verticalPoses};
+    s.impacts.parryClash=clash;return {runs,unequipped,dodged,verticalPoses};
   })()`);
+  assert.deepEqual(result.runs.map(run=>run.chain),[1,2,3,4,1,2]);
+  const shapes=[
+    ['fx-flash','fx-streak','fx-streak','fx-streak','fx-streak'],
+    ['fx-flash','fx-parry-crescent'],
+    ['fx-ring','fx-star'],
+  ];
   for (const run of result.runs) {
     assert.equal(run.texture, 'hero-academy-guard');
     assert.equal(run.name, run.facing.startsWith('up') ? 'guard-up-back' : run.facing.startsWith('down') ? 'guard-down' : 'guard-side');
     assert.equal(run.mirror, run.facing.includes('left'));
-    for (const key of ['raised','slanted','palmVisible','held','wood','restored','protected']) assert.equal(run[key],true,JSON.stringify({key,...run}));
+    for (const key of ['raised','slanted','palmVisible','held','wood','aligned','restored','protected']) assert.equal(run[key],true,JSON.stringify({key,...run}));
+    assert.deepEqual(run.shapes,shapes[Math.min(run.chain,3)-1]);
     assert.ok(run.error<.001,JSON.stringify(run));
     assert.ok(run.palmDistance<.75,JSON.stringify(run));
     assert.ok(run.lengths.every(n=>Math.abs(n-75)<.001),JSON.stringify(run));
